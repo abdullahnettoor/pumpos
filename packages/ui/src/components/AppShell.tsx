@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
 import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
@@ -70,6 +70,22 @@ export interface AppShellProps {
 /** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
 export const RAIL_BREAKPOINT = 1200;
 export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
+
+/**
+ * ⌘\ on a Mac, Ctrl+\ elsewhere, toggles the sidebar (#604). Either modifier
+ * is accepted on any platform; Shift or Alt makes it some other shortcut.
+ */
+export function isSidebarShortcut(
+  e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
+): boolean {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return false;
+  return e.key === '\\' || e.code === 'Backslash';
+}
+
+const SIDEBAR_SHORTCUT_LABEL =
+  typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+    ? '⌘\\'
+    : 'Ctrl+\\';
 
 function readCollapsed(): boolean {
   try {
@@ -208,6 +224,24 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   };
 
+  // The shortcut reads the latest toggle without re-binding on every render.
+  const toggleRef = useRef(toggleCollapsed);
+  const narrowRef = useRef(narrow);
+  useEffect(() => {
+    toggleRef.current = toggleCollapsed;
+    narrowRef.current = narrow;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isSidebarShortcut(e)) return;
+      e.preventDefault();
+      // Below the rail breakpoint the rail is forced: nothing to toggle.
+      if (!narrowRef.current) toggleRef.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const businessDate = useStationBusinessDate(selectedStation?.settings);
   const badges = useSidebarBadges(
     selectedStation?.id,
@@ -290,7 +324,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
         {/* Sidebar Rail */}
         <aside
-          className="no-print"
+          className="no-print relative"
           style={{
             width: collapsed ? '60px' : '220px',
             backgroundColor: 'var(--bg-surface-alt)',
@@ -302,7 +336,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           }}
         >
           {/* Navigation links — grouped, collapsible-friendly */}
-          <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 py-3">
+          <nav id="app-sidebar-nav" aria-label="Main" className="flex-1 overflow-y-auto px-2 py-3">
             {groupedNav.map((group, gi) => (
               <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
                 {!collapsed && group.heading && (
@@ -352,7 +386,10 @@ export const AppShell: React.FC<AppShellProps> = ({
               onClick={toggleCollapsed}
               disabled={narrow}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={collapsed ? 'Expand sidebar' : undefined}
+              aria-expanded={!collapsed}
+              aria-controls="app-sidebar-nav"
+              aria-keyshortcuts={'Meta+\\ Control+\\'}
+              title={`${collapsed ? 'Expand' : 'Collapse'} sidebar (${SIDEBAR_SHORTCUT_LABEL})`}
               className={cn(
                 'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent',
                 collapsed ? 'justify-center px-0' : 'gap-3 px-3',
@@ -364,6 +401,26 @@ export const AppShell: React.FC<AppShellProps> = ({
               {!collapsed && <span>Collapse</span>}
             </button>
           </div>
+          {/*
+            The sidebar's right edge (#604): hovering highlights it and a click
+            toggles collapse. A pointer shortcut only: the Collapse button above
+            (with ⌘\ / Ctrl+\) is the keyboard and screen-reader control, so
+            the edge stays out of the tab order and the accessibility tree.
+          */}
+          {!narrow && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              aria-label="Sidebar edge"
+              data-testid="sidebar-edge"
+              onClick={toggleCollapsed}
+              title={`${collapsed ? 'Expand' : 'Collapse'} sidebar (${SIDEBAR_SHORTCUT_LABEL})`}
+              className="group absolute inset-y-0 -right-1.5 z-10 w-3 cursor-pointer"
+            >
+              <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors group-hover:bg-brand" />
+            </button>
+          )}
         </aside>
 
         {/* Content canvas */}
