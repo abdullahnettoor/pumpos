@@ -242,7 +242,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
                 <dt className="text-ink-muted">Expected office cash</dt>
                 <dd className="font-mono tabular-nums text-ink-strong">
                   {confirming ? (
-                    <StatusChip status="saving" size="sm" />
+                    <StatusChip status="saving" size="sm" className="font-sans" />
                   ) : (
                     formatMoney(cashLines.expectedOfficeCash)
                   )}
