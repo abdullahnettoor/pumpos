@@ -49,6 +49,18 @@ describe('useRoutePath', () => {
     expect(result.current[0]).toBe('/sales');
   });
 
+  it('replaces the history entry when asked, rather than adding one (#576)', () => {
+    const { result } = renderHook(() => useRoutePath('/dashboard'));
+    act(() => result.current[1]('/accounts/sbi'));
+    const before = window.history.length;
+    act(() => result.current[1]('/accounts/sbi?from=2026-09-01&to=2026-09-30', { replace: true }));
+    expect(window.location.hash).toBe('#/accounts/sbi?from=2026-09-01&to=2026-09-30');
+    expect(window.history.length).toBe(before);
+    // The next plain navigation pushes again.
+    act(() => result.current[1]('/accounts'));
+    expect(window.history.length).toBe(before + 1);
+  });
+
   describe('renamed routes', () => {
     it.each(Object.entries(LEGACY_ROUTES))('a reload of #%s lands on %s', (oldPath, newPath) => {
       window.history.replaceState(null, '', `/#${oldPath}`);

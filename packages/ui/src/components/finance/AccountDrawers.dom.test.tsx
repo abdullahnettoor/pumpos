@@ -7,7 +7,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { publishNavIntent, __resetNavIntentForTests } from '../../nav-intent/store.js';
 import { queryKeys } from '../../query/hooks.js';
-import { AccountsPanel } from './AccountsPanel.js';
+import { AccountsRoute } from '../../test/AccountsRoute.js';
 
 /**
  * The Accounts drawers keep their behaviour through the #530 move (#572
@@ -82,6 +82,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   __resetNavIntentForTests();
+  window.history.replaceState(null, '', '/');
 });
 
 const drawer = () => document.querySelector('.drawer-container') as HTMLElement;
@@ -106,7 +107,8 @@ const MONEY_KEYS = [
 
 async function renderPage(intent?: Parameters<typeof publishNavIntent>[0]) {
   if (intent) act(() => publishNavIntent(intent));
-  const r = renderWithProviders(<AccountsPanel selectedStation={station} />);
+  // `{ openAccountId }` lands on the account's page (#576).
+  const r = renderWithProviders(<AccountsRoute selectedStation={station} />);
   const spy = vi.spyOn(r.queryClient, 'invalidateQueries');
   await screen.findByRole('table');
   return spy;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PageFrame } from './PageFrame.js';
 import { NAV_PAGES, ROUTES } from '../../nav-intent/routes.js';
 import { Tabs } from '../../pump-ds/tabs/index.js';
@@ -69,6 +69,42 @@ describe('PageFrame', () => {
     // Actions sit on the title row, not under it.
     expect(action.closest('header')).toBe(title.closest('header'));
     expect(tabs.closest('header')).toBeNull();
+  });
+
+  it('a detail page names its parent in the back slot: a link top-left, above the title (#576)', () => {
+    const onClick = vi.fn();
+    render(
+      <PageFrame
+        route={ROUTES.accounts}
+        title="SBI Current"
+        back={{ label: 'Accounts', href: '#/accounts', onClick }}
+        actions={<button type="button">Add entry</button>}
+      >
+        content
+      </PageFrame>,
+    );
+    const link = screen.getByRole('link', { name: 'Accounts' });
+    const title = screen.getByRole('heading', { level: 1 });
+    expect(link.getAttribute('href')).toBe('#/accounts');
+    expect(before(link, title)).toBe(true);
+    // In the title's column, left of the actions, not on a row of its own.
+    expect(link.closest('header')).toBe(title.closest('header'));
+    expect(title.parentElement!.contains(link)).toBe(true);
+    expect(before(link, screen.getByRole('button', { name: 'Add entry' }))).toBe(true);
+    // A plain click navigates in-app; a modified click is the browser's.
+    fireEvent.click(link);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(link, { ctrlKey: true });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // 12px, the smallest text the app shows.
+    expect(link.getAttribute('class')).toMatch(/text-\[12px\]/);
+  });
+
+  it('has no back link unless a page asks for one', () => {
+    const { container } = render(<PageFrame route={ROUTES.accounts}>content</PageFrame>);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(container.querySelector('[data-page-header-slot="back"]')).toBeNull();
   });
 
   it('renders no empty slot wrappers when a page has no tabs or toolbar', () => {

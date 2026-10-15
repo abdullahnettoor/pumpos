@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { LEGACY_ROUTES, NAV_GROUPS, NAV_PAGES, ROUTES, resolveRoute } from './routes.js';
+import {
+  LEGACY_ROUTES,
+  NAV_GROUPS,
+  NAV_PAGES,
+  ROUTES,
+  accountRoute,
+  navTarget,
+  pageRoute,
+  parseAccountRoute,
+  resolveRoute,
+} from './routes.js';
 import { CONCEPT_ICON } from '../pump-ds/icon/concepts.js';
 import { ICON_REGISTRY } from '../pump-ds/icon/registry.js';
 
@@ -52,5 +62,56 @@ describe('concept → icon map (#540)', () => {
     expect(CONCEPT_ICON.decantations).toBe('truck');
     expect(CONCEPT_ICON['by-category']).toBe('pie');
     expect(CONCEPT_ICON.collections).toBe(CONCEPT_ICON.payments);
+  });
+});
+
+describe("an account's route (#576)", () => {
+  it('names the account, and its period only when it has one', () => {
+    expect(accountRoute('sbi')).toBe('/accounts/sbi');
+    expect(accountRoute('a b/c')).toBe('/accounts/a%20b%2Fc');
+    expect(accountRoute('sbi', { from: '2026-09-01', to: '2026-09-30' })).toBe(
+      '/accounts/sbi?from=2026-09-01&to=2026-09-30',
+    );
+  });
+
+  it('reads back what it wrote', () => {
+    expect(parseAccountRoute(accountRoute('a b/c'))).toEqual({ accountId: 'a b/c', range: null });
+    expect(
+      parseAccountRoute(accountRoute('sbi', { from: '2026-09-01', to: '2026-09-30' })),
+    ).toEqual({ accountId: 'sbi', range: { from: '2026-09-01', to: '2026-09-30' } });
+  });
+
+  it.each([
+    ['/accounts/sbi?from=2026-09-30&to=2026-09-01', 'out of order'],
+    ['/accounts/sbi?from=2026-09-01', 'half a period'],
+    ['/accounts/sbi?from=yesterday&to=2026-09-01', 'not a date'],
+  ])('drops a period that is %s (%s)', (path) => {
+    expect(parseAccountRoute(path)).toEqual({ accountId: 'sbi', range: null });
+  });
+
+  it.each(['/accounts', '/accounts/', '/accounts/sbi/extra', '/customers/sbi', '/accounts/%E0%A4'])(
+    '%s is not an account route',
+    (path) => {
+      expect(parseAccountRoute(path)).toBeNull();
+    },
+  );
+
+  it('belongs to the Accounts page, for the shell and the sidebar', () => {
+    expect(pageRoute('/accounts/sbi?from=2026-09-01&to=2026-09-30')).toBe(ROUTES.accounts);
+    expect(pageRoute('/accounts')).toBe(ROUTES.accounts);
+    expect(pageRoute('/setup/station')).toBe(ROUTES.station);
+    expect(pageRoute('/design-system')).toBe('/design-system');
+  });
+
+  it('{ openAccountId } is a navigation to the route, and keeps any other intent', () => {
+    expect(navTarget(ROUTES.accounts, { openAccountId: 'sbi' })).toEqual({
+      path: '/accounts/sbi',
+      intent: null,
+    });
+    expect(navTarget(ROUTES.reports, { openReportsTab: 'gst' })).toEqual({
+      path: ROUTES.reports,
+      intent: { openReportsTab: 'gst' },
+    });
+    expect(navTarget(ROUTES.shifts)).toEqual({ path: ROUTES.shifts, intent: null });
   });
 });

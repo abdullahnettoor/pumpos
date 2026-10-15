@@ -40,6 +40,8 @@ import {
   useRoutePath,
   NAV_PAGES,
   ROUTES,
+  navTarget,
+  pageRoute,
   type NavItem,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -69,8 +71,10 @@ const App: React.FC = () => {
   // Deep-link intents travel through the nav-intent store; see console/App.tsx.
   const navigate = useCallback(
     (path: string, intent?: import('@pump/ui').NavIntent) => {
-      setCurrentPath(path);
-      publishNavIntent(intent);
+      // `{ openAccountId }` is an address of its own: `/accounts/<id>` (#576).
+      const target = navTarget(path, intent);
+      setCurrentPath(target.path);
+      publishNavIntent(target.intent);
     },
     [setCurrentPath],
   );
@@ -466,7 +470,8 @@ const App: React.FC = () => {
       );
     }
 
-    switch (currentPath) {
+    // A detail route (`/accounts/<id>`) renders its page.
+    switch (pageRoute(currentPath)) {
       case '/dashboard':
         return (
           <DashboardOverview
@@ -512,7 +517,13 @@ const App: React.FC = () => {
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
-        return <AccountsPanel selectedStation={selectedStation} />;
+        return (
+          <AccountsPanel
+            selectedStation={selectedStation}
+            route={currentPath}
+            onNavigate={setCurrentPath}
+          />
+        );
       case '/customers':
         return <CustomersList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/reports':

@@ -14,12 +14,14 @@ import {
   publishNavIntent,
   __resetNavIntentForTests,
 } from '../../nav-intent/store.js';
-import { AccountsPanel } from './AccountsPanel.js';
+import { accountRoute } from '../../nav-intent/routes.js';
+import { AccountsRoute } from '../../test/AccountsRoute.js';
 
 /**
  * Accounts on the shared modules (#530): Page Frame with tabs Accounts · Daily
  * cash book · Transfers; the balance list, each statement and the transfers
- * list on layout B; one account-type display; per-section Retry.
+ * list on layout B; one account-type display; per-section Retry. An account's
+ * statement is its own page at `/accounts/<id>` (#576).
  */
 
 const station = {
@@ -139,7 +141,12 @@ const API = {
   '/finance/movements': { data: MOVEMENTS },
 };
 
-const render = () => renderWithProviders(<AccountsPanel selectedStation={station} />);
+/** The page, on the real hash route; pass a route to start there (a reload or a shared link). */
+const render = (route?: string) => {
+  if (route) window.history.replaceState(null, '', `/#${route}`);
+  return renderWithProviders(<AccountsRoute selectedStation={station} />);
+};
+const hash = () => window.location.hash.replace(/^#/, '');
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/;
 const tileLabels = () => Array.from(document.querySelectorAll('[data-alert], .kpi-value')).length;
 const primaryButtons = () =>
@@ -153,6 +160,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   __resetNavIntentForTests();
+  window.history.replaceState(null, '', '/');
 });
 
 describe('Accounts › Accounts, a balance list (#530)', () => {
@@ -221,17 +229,18 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
     expect(document.querySelector('[data-alert]')).toBeNull();
   });
 
-  it('a row opens the statement by click or keyboard; All accounts goes back', async () => {
+  it("a row opens the account's page by click or keyboard; ‹ Accounts goes back", async () => {
     render();
     await screen.findByRole('table');
     const row = screen.getByRole('row', { name: 'SBI Current statement' });
     expect(row.getAttribute('tabindex')).toBe('0');
     fireEvent.keyDown(row, { key: 'Enter' });
     await screen.findByRole('table', { name: 'SBI Current statement' });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('SBI Current');
-    expect(screen.getByRole('tab', { name: /Accounts/, selected: true })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /All accounts/ }));
+    expect(hash()).toBe('/accounts/sbi');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('SBI Current');
+    fireEvent.click(screen.getByRole('link', { name: /Accounts/ }));
     expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+    await waitFor(() => expect(hash()).toBe('/accounts'));
   });
 
   it("each section has its own Retry when the accounts can't load", async () => {
@@ -251,64 +260,163 @@ describe('Accounts › Accounts, a balance list (#530)', () => {
   });
 });
 
-describe('Accounts › an account statement (#530)', () => {
-  it('opens from a deep link, on the Statement module, with fixed tiles above it', async () => {
-    act(() => publishNavIntent({ openAccountId: 'sbi' }));
-    render();
+describe("Accounts › an account's page (#576)", () => {
+  const backLink = () => screen.getByRole('link', { name: /Accounts/ });
+
+  it('a shared link opens the page: back link, name and type, balance, its own actions, no tabs', async () => {
+    render(accountRoute('sbi'));
     const table = await screen.findByRole('table', { name: 'SBI Current statement' });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('SBI Current');
-    // Its type, as the one chip, under the title.
-    expect(screen.getByText('Bank').closest('span[class*="bg-"]')!.getAttribute('class')).toMatch(
-      /bg-surface-alt/,
-    );
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1.textContent).toBe('SBI CurrentBank');
+    // The type is a neutral chip beside the name.
+    expect(
+      within(h1).getByText('Bank').closest('span[class*="bg-"]')!.getAttribute('class'),
+    ).toMatch(/bg-surface-alt/);
+    // ‹ Accounts sits top-left, above the title, in the header.
+    const link = backLink();
+    expect(link.getAttribute('href')).toBe('#/accounts');
+    expect(link.closest('header')).toBe(h1.closest('header'));
+    expect(link.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The balance is the subtitle; the tiles don't repeat it.
+    expect(h1.parentElement!.textContent).toContain('Balance ₹5,000.00');
+    expect(screen.queryByText('Now')).toBeNull();
     await waitFor(() => expect(screen.getAllByText(monthName)).toHaveLength(2));
-    expect(screen.getByText('Now')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Statement period/ })).toBeTruthy();
-    expect(table.querySelector('tfoot')!.textContent).toContain('₹5,000.00');
-    // Its own actions sit in the statement's header; the page keeps one primary.
-    const header = screen.getByTestId('section-header-statement');
+    expect(screen.queryByRole('tablist')).toBeNull();
+    // Its actions are the page's: Add entry is the one primary, no Settle for a bank.
+    const header = h1.closest('header')!;
     expect(within(header).getByRole('button', { name: /Add entry/ })).toBeTruthy();
     expect(within(header).queryByRole('button', { name: /Settle to bank/ })).toBeNull();
-    expect(primaryButtons().map((b) => b.textContent)).toEqual(['New transfer']);
+    expect(primaryButtons().map((b) => b.textContent)).toEqual(['Add entry']);
+    expect(screen.queryByRole('button', { name: /New transfer/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Statement period/ })).toBeTruthy();
+    expect(table.querySelector('tfoot')!.textContent).toContain('₹5,000.00');
     expect(document.body.textContent).not.toMatch(ISO_DATE);
   });
 
-  it('picks the deep link up once: leaving and coming back shows the list', async () => {
-    act(() => publishNavIntent({ openAccountId: 'sbi' }));
-    const first = render();
-    await screen.findByRole('table', { name: 'SBI Current statement' });
-    await waitFor(() => expect(getNavIntentState().intent).toBeNull());
-    // Still on the statement after the intent is cleared.
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('SBI Current');
-    first.unmount();
-    render();
-    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+  it('an overdrawn balance reads red in the subtitle', async () => {
+    stubApi({ ...API, '/finance/accounts/bob/ledger': { data: { ...LEDGER, entries: [] } } });
+    render(accountRoute('bob'));
+    await screen.findByRole('table', { name: 'Bank of Baroda statement' });
+    const subtitle = screen.getByRole('heading', { level: 1 }).parentElement!;
+    expect(subtitle.textContent).toContain('Balance −₹200.00 · overdrawn');
+    expect(within(subtitle).getByText('−₹200.00').getAttribute('class')).toMatch(/text-danger-fg/);
   });
 
-  it('says "Account not found" for an id that matches no account', async () => {
-    act(() => publishNavIntent({ openAccountId: 'gone' }));
-    render();
-    expect(await screen.findByText('Account not found')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /All accounts/ }));
-    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
-  });
-
-  it('a clearing account adds Settle to bank to the statement header', async () => {
+  it('a clearing account adds Settle to bank (secondary) to the page actions', async () => {
     stubApi({ ...API, '/finance/accounts/pos/ledger': { data: { ...LEDGER, entries: [] } } });
-    act(() => publishNavIntent({ openAccountId: 'pos' }));
-    render();
-    await screen.findByText('Account statement');
-    const header = await screen.findByTestId('section-header-statement');
+    render(accountRoute('pos'));
+    await screen.findByRole('table', { name: 'HDFC POS statement' });
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')!;
     expect(within(header).getByRole('button', { name: /Settle to bank/ })).toBeTruthy();
-    expect(within(header).getByRole('button', { name: /Add entry/ })).toBeTruthy();
+    expect(primaryButtons().map((b) => b.textContent)).toEqual(['Add entry']);
+  });
+
+  it('browser back and forward move between the list and the page', async () => {
+    render();
+    fireEvent.click(await screen.findByRole('row', { name: 'SBI Current statement' }));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    act(() => window.history.back());
+    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+    expect(hash()).toBe('/accounts');
+    act(() => window.history.forward());
+    expect(await screen.findByRole('table', { name: 'SBI Current statement' })).toBeTruthy();
+    expect(hash()).toBe('/accounts/sbi');
+  });
+
+  it('the period lives in the address: a reload keeps it, a change replaces the entry', async () => {
+    const fetchMock = stubApi(API);
+    render(accountRoute('sbi', { from: '2026-09-01', to: '2026-09-15' }));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    const ledgerUrls = () =>
+      fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/sbi/ledger'));
+    expect(ledgerUrls().some((u) => u.includes('from=2026-09-01&to=2026-09-15'))).toBe(true);
+
+    const before = window.history.length;
+    fireEvent.click(screen.getByRole('button', { name: /Statement period/ }));
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: /This month/ }));
+    // Back to the default period: the address drops it, in place.
+    await waitFor(() => expect(hash()).toBe('/accounts/sbi'));
+    expect(window.history.length).toBe(before);
+  });
+
+  it('coming back keeps the tab the list was on', async () => {
+    act(() => publishNavIntent({ openAccountsTab: 'cash-book' }));
+    render();
+    await screen.findByRole('tab', { name: /Daily cash book/, selected: true });
+    act(() => {
+      window.location.hash = `#${accountRoute('sbi')}`;
+    });
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    act(() => window.history.back());
+    expect(
+      await screen.findByRole('tab', { name: /Daily cash book/, selected: true }),
+    ).toBeTruthy();
+  });
+
+  it("coming back keeps the list's scroll position; the page opens at its top", async () => {
+    window.history.replaceState(null, '', '/');
+    const r = renderWithProviders(
+      <div data-testid="canvas" style={{ overflowY: 'auto', height: 200 }}>
+        <AccountsRoute selectedStation={station} />
+      </div>,
+    );
+    const canvas = r.getByTestId('canvas');
+    const row = await screen.findByRole('row', { name: 'SBI Current statement' });
+    canvas.scrollTop = 320;
+    fireEvent.scroll(canvas);
+    fireEvent.click(row);
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    expect(canvas.scrollTop).toBe(0);
+    fireEvent.click(screen.getByRole('link', { name: /Accounts/ }));
+    await screen.findByRole('row', { name: 'SBI Current statement' });
+    expect(canvas.scrollTop).toBe(320);
+  });
+
+  it('Alt+← returns to the list, but not while typing', async () => {
+    render(accountRoute('sbi'));
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: 'ArrowLeft', altKey: true });
+    expect(hash()).toBe('/accounts/sbi');
+    input.remove();
+    fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true });
+    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+    expect(hash()).toBe('/accounts');
+  });
+
+  it('says "Account not found" for an id that matches no account, with a way back', async () => {
+    render(accountRoute('gone'));
+    expect(
+      (await screen.findByRole('heading', { level: 1, name: 'Account not found' })).textContent,
+    ).toBe('Account not found');
+    expect(screen.queryByRole('tablist')).toBeNull();
+    fireEvent.click(backLink());
+    expect(await screen.findByRole('row', { name: 'SBI Current statement' })).toBeTruthy();
+    expect(hash()).toBe('/accounts');
+  });
+
+  it("an { openAccountId } intent published to the store lands on the account's route", async () => {
+    act(() => publishNavIntent({ openAccountId: 'sbi' }));
+    render();
+    await screen.findByRole('table', { name: 'SBI Current statement' });
+    await waitFor(() => expect(hash()).toBe('/accounts/sbi'));
+    await waitFor(() => expect(getNavIntentState().intent).toBeNull());
   });
 
   it("the statement's own Retry when its ledger can't load", async () => {
     stubApi({ ...API, '/finance/accounts/sbi/ledger': 'fail' });
-    act(() => publishNavIntent({ openAccountId: 'sbi' }));
-    render();
+    render(accountRoute('sbi'));
     await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0));
     expect(screen.getAllByRole('alert')[0].textContent).toMatch(/Couldn.t load account/);
+  });
+
+  it('the page\'s Retry when the accounts can\'t load (never "not found")', async () => {
+    stubApi({ ...API, '/finance/accounts': 'fail' });
+    render(accountRoute('sbi'));
+    await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0));
+    expect(screen.getAllByRole('alert')[0].textContent).toMatch(/Couldn.t load account/);
+    expect(screen.queryByText('Account not found')).toBeNull();
   });
 });
 
@@ -404,6 +512,7 @@ describe('Accounts › Daily cash book (#530)', () => {
     for (const file of [
       '../reports/DailyCashBook.tsx',
       './AccountsPanel.tsx',
+      './AccountPage.tsx',
       './AccountsList.tsx',
       './AccountStatement.tsx',
       './TransfersView.tsx',
