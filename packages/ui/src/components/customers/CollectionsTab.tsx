@@ -17,6 +17,7 @@ import {
   type FilterChipOption,
 } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 import { countOf, inWindow, type EntryClock } from '../../utils/ledgerWindow.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { buildCollectionColumns, methodLabel, type CollectionRow } from './columns.js';
@@ -46,6 +47,8 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
   const [method, setMethod] = useState('all');
+  // A collection just recorded is highlighted when it lands (#606).
+  const flashing = useFlashingRows();
   const all = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const columns = useMemo(() => buildCollectionColumns(), []);
 
@@ -176,6 +179,7 @@ export const CollectionsTab: React.FC<CollectionsTabProps> = ({
             columns={columns}
             rows={rows}
             rowKey={(r) => r.id}
+            flashRowIds={flashing}
             totalRow
             title="collections"
           />

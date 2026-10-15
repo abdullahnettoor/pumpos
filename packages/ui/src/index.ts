@@ -146,6 +146,7 @@ export type {
   ToastApi,
   ToastVariant,
   ToastOptions,
+  ToastAction,
 } from './components/primitives/ToastProvider.js';
 export { Skeleton, SkeletonGrid } from './pump-ds/skeleton/index.js';
 export type { SkeletonProps, SkeletonGridProps } from './pump-ds/skeleton/index.js';

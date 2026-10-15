@@ -22,6 +22,7 @@ import { formatVariance } from '../../utils/variance.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';
 import { drawerColumns, drawerTotalRow } from './DrawerReconciliationTable.js';
 import type { HandoverWrites } from './handoverWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 import {
   cashCountDefaults,
   cashCountSchema,
@@ -266,6 +267,7 @@ export const HandoversStep: React.FC<HandoversStepProps> = ({
   writes,
 }) => {
   const pending = rows.filter((r) => r.pending).length;
+  const flashing = useFlashingRows();
   const columns = React.useMemo(
     () => drawerColumns(onOpenHandover, writes),
     [onOpenHandover, writes],
@@ -282,6 +284,7 @@ export const HandoversStep: React.FC<HandoversStepProps> = ({
             columns={columns}
             rows={rows}
             rowKey={(r) => r.key}
+            flashRowIds={flashing}
             emptyMessage="No attendant drawers on this shift."
             totalRow={drawerTotalRow(rows, total)}
           />

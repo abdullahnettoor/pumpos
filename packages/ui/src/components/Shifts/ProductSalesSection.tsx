@@ -13,13 +13,13 @@ import {
 } from '../../pump-ds/index.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { mutationKeys, useDeleteHandoverProductSale } from '../../query/hooks.js';
 import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { formatMoney } from '../../utils/format.js';
+import { flashRows, useFlashingRows } from '../../utils/rowFlash.js';
 import type { ProductSales, ProductSalesRow } from './liveShiftModel.js';
 import { notSavedMessage } from './handoverWrites.js';
 import {
@@ -77,7 +77,6 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
   billed,
 }) => {
   const confirm = useConfirm();
-  const toast = useToast();
   const runTask = useRunTask();
   const remove = useDeleteHandoverProductSale(stationId);
   // Each row's save or removal in flight, or refused (#606), from the writes themselves.
@@ -87,6 +86,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
     removeWriteKey,
     shiftId,
   );
+  const flashing = useFlashingRows();
   const rows = useMemo(
     () =>
       sales.rows.map((r) => ({
@@ -125,7 +125,8 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
         { stationId, saleId: sale.id },
         (idempotencyKey) => remove.mutateAsync({ saleId: sale.id, shiftId, idempotencyKey }),
       );
-      toast.success('Handover product sale removed.');
+      // The row updating, and its highlight, confirm it (#606): no toast.
+      if (sale.attendantId) flashRows([sale.attendantId]);
     } catch {
       // The row says it was not removed, and why (#606).
     }
@@ -251,6 +252,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
           columns={columns}
           rows={rows}
           rowKey={(r) => r.attendantId ?? 'unassigned'}
+          flashRowIds={flashing}
           totalRow={totalRow}
           title="product sales"
         />

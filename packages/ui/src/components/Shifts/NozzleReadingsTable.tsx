@@ -22,6 +22,7 @@ import {
   type StaffAssignmentInput,
 } from './liveShiftModel.js';
 import { notSavedMessage, type HandoverWrites } from './handoverWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
 
 export interface NozzleReadingsTableProps {
   groups: NozzleGroup[];
@@ -83,6 +84,8 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
     [products, nozzleCount],
   );
   const shown = useMemo(() => filterNozzleGroups(groups, product), [groups, product]);
+  // The Drawer a Handover just saved is tinted for a moment (#606).
+  const flashing = useFlashingRows();
 
   // The total sums handed-over Drawers only and says which it leaves out.
   const totalRow = useMemo<TotalRow>(() => {
@@ -99,6 +102,7 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
         const failed = notSavedMessage(write);
         return {
           key: g.key,
+          flash: flashing.has(g.key),
           muted: !!g.assignment && !g.handover,
           rows: g.rows,
           header: (
@@ -141,7 +145,7 @@ export const NozzleReadingsTable: React.FC<NozzleReadingsTableProps> = ({
           ),
         };
       }),
-    [shown, timeZone, onOpenHandover, writes],
+    [shown, timeZone, onOpenHandover, writes, flashing],
   );
 
   return (

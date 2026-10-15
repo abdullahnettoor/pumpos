@@ -7,6 +7,7 @@ import {
 } from '@pump/shared';
 import type { Concept } from '../pump-ds/icon/index.js';
 import { formatBusinessDate } from '../utils/format.js';
+import { ROUTES, type RoutePath } from '../nav-intent/routes.js';
 
 /**
  * The five Office Records (ADR 0005) and the one definition each has (#526):
@@ -24,6 +25,8 @@ export interface OfficeRecordKindDef {
   concept: Concept;
   /** The confirmation toast. */
   saved: string;
+  /** The page that lists it, for the toast's "View" (#606). */
+  list: { route: RoutePath; label: string };
   /** "Money goes out of" or "Money comes into" the Funding Account. */
   accountHint: string;
   /** The preview's name for the record's date, and where the record shows. */
@@ -55,6 +58,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record expense',
     concept: 'expenses',
     saved: 'Expense recorded.',
+    list: { route: ROUTES.expenses, label: 'View expenses' },
     accountHint: OUT,
     dating: OFFICE_DATING,
   },
@@ -63,6 +67,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record income',
     concept: 'income',
     saved: 'Income recorded.',
+    list: { route: ROUTES.income, label: 'View income' },
     accountHint: IN,
     dating: OFFICE_DATING,
   },
@@ -71,6 +76,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record collection',
     concept: 'collections',
     saved: 'Collection recorded.',
+    list: { route: ROUTES.customers, label: 'View customers' },
     accountHint: IN,
     dating: OFFICE_DATING,
   },
@@ -79,6 +85,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record purchase',
     concept: 'purchases',
     saved: 'Purchase recorded.',
+    list: { route: ROUTES.suppliers, label: 'View suppliers' },
     accountHint: OUT,
     dating: {
       dateLabel: 'Invoice date',
@@ -90,6 +97,7 @@ export const OFFICE_RECORD_KINDS: Record<OfficeRecordKind, OfficeRecordKindDef> 
     title: 'Record supplier payment',
     concept: 'payments',
     saved: 'Supplier payment recorded.',
+    list: { route: ROUTES.suppliers, label: 'View suppliers' },
     accountHint: OUT,
     dating: OFFICE_DATING,
   },

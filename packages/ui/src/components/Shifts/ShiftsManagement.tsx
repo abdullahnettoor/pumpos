@@ -39,7 +39,7 @@ import {
   tabPanelProps,
   type TabItem,
 } from '../../pump-ds/index.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
@@ -445,7 +445,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         'Shift opened, but the screen could not be refreshed.',
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to open shift');
+      toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
+        title: 'Shift not opened',
+      });
     } finally {
       setIsOpening(false);
     }

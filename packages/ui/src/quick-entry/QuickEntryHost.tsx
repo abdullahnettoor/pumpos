@@ -15,6 +15,7 @@ import { officeSubmitKeys, sendKeyed } from '../office-records/submitKeys.js';
 import { OfficeRecordDrawer } from '../office-records/OfficeRecordDrawer.js';
 import { isOfficeRecordKind } from '../office-records/kinds.js';
 import { productSaleLabels } from './productSaleLabels.js';
+import { ROUTES, currentPage, goToRoute } from '../nav-intent/routes.js';
 import { useQuickEntry, closeQuickEntry } from './store.js';
 
 const txService = new CloudTransactionService();
@@ -188,7 +189,14 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({
       await sendKeyed(saleKeys.session, { stationId, payload }, (idempotencyKey) =>
         recordSale.mutateAsync({ payload, idempotencyKey, labels }),
       );
-      toast.success('Sale recorded.');
+      // Secondary to the seller's Product sales row (#606); from another page,
+      // the way to it.
+      toast.success(
+        'Sale recorded.',
+        currentPage() === ROUTES.shifts
+          ? undefined
+          : { action: { label: 'View shift', onClick: () => goToRoute(ROUTES.shifts) } },
+      );
       close();
     } catch (err: any) {
       setError(err.message || 'Failed to record the product sale');

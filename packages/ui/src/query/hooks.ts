@@ -29,6 +29,7 @@ import {
 } from '../services/cloud.js';
 import { resolveTankLevelSettings, type TankLevelSettings } from '@pump/shared';
 import { patchQueryData } from './patches/applyPatch.js';
+import { flashRows } from '../utils/rowFlash.js';
 import {
   billedSaleRow,
   handoverProductSaleRow,
@@ -1783,6 +1784,8 @@ export function useRecordProductSale(stationId: string | null | undefined) {
           (list) => withBilledSale(list, row),
         );
       }
+      // The seller's Product sales row confirms it (#606).
+      flashRows([answer?.sale?.attendantId]);
       void invalidate(stationId);
     },
   });

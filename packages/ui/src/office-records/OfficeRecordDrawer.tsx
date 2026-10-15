@@ -45,6 +45,7 @@ import { PreviewCards, PreviewStrip, type PreviewViewProps } from './PreviewPane
 import { officeRecordRequest, type OfficeRecordSubmission } from './send.js';
 import { officeSubmitKeys } from './submitKeys.js';
 import { useMediaQuery } from './useMediaQuery.js';
+import { currentPage, goToRoute } from '../nav-intent/routes.js';
 import { officeRecordLabels, useRecordOfficeRecord } from './useRecordOfficeRecord.js';
 import { usePriorRecords } from './usePriorRecords.js';
 
@@ -237,7 +238,15 @@ const OfficeRecordSession: React.FC<
     session.settle();
     setSubmitting(false);
     const paidToo = submission.kind === 'purchase' && !!submission.payment;
-    toast.success(paidToo ? 'Purchase and supplier payment recorded.' : def.saved);
+    // Secondary to the row it adds (step 1). Recorded from another page, the
+    // toast offers the way to the list (#606).
+    const away = currentPage() !== def.list.route;
+    toast.success(
+      paidToo ? 'Purchase and supplier payment recorded.' : def.saved,
+      away
+        ? { action: { label: def.list.label, onClick: () => goToRoute(def.list.route) } }
+        : undefined,
+    );
     runTask(
       invalidateOperational(stationId),
       `${def.label} recorded, but the screen could not be refreshed.`,

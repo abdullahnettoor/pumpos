@@ -125,6 +125,8 @@
 
   /* Shell dimensions */
   --status-bar-height: 26px;
+  /* Where the toast stack sits above the screen's bottom edge (#606); mobile sets its dock. */
+  --toast-offset: var(--status-bar-height);
 }
 
 @media not print {

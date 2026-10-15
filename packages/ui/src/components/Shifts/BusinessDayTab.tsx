@@ -19,7 +19,7 @@ import {
   type TotalRow,
 } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   CloudShiftService,
@@ -406,7 +406,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         'Day closed, but the screen could not be refreshed.',
       );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to close the business day.');
+      toast.error(withNextStep(err.message, 'Nothing was sealed. Try closing it again.'), {
+        title: 'Day not closed',
+        action: {
+          label: 'Try again',
+          onClick: () => runTask(handleCloseDay(), 'Could not close the day.'),
+        },
+      });
     } finally {
       setClosing(false);
     }

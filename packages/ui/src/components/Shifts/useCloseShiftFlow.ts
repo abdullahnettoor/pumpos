@@ -17,7 +17,7 @@ import {
 } from '../../query/stockCountMutation.js';
 import { inr } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
 import {
@@ -324,7 +324,9 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
     if (!activeShift) return;
     const errors = figures.readingErrors;
     if (errors.length > 0) {
-      toast.error(errors[0]);
+      toast.error(withNextStep(errors[0], 'Correct it in that Drawer’s handover, then close.'), {
+        title: 'Cannot close yet',
+      });
       return;
     }
     if (!hasCloseProgress(draft)) setConfirmWarningsChecked(false);
@@ -423,7 +425,9 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
       } else if (stationId) {
         savePendingTankDipWorkflow(stationId, null);
       }
-      toast.error(err.message || 'Failed to close shift');
+      toast.error(withNextStep(err.message, 'Check the figures and close again.'), {
+        title: 'Shift not closed',
+      });
     } finally {
       setIsClosing(false);
     }

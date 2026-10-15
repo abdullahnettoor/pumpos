@@ -29,7 +29,6 @@ import {
   useMerchandiseHandovers,
   useMerchandiseSales,
 } from '../../query/hooks.js';
-import { useToast } from '../primitives/ToastProvider.js';
 import {
   CloudTransactionService,
   type RecordHandoverPayload,
@@ -44,6 +43,8 @@ import {
 import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
 import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { flashRows } from '../../utils/rowFlash.js';
+import { DRAWER_KEY } from './liveShiftInputs.js';
 import { CloseNote } from './CloseShiftSteps.js';
 import { denominationCountError } from './closeShiftModel.js';
 import { HandoverProductSaleDrawer } from './HandoverProductSaleDrawer.js';
@@ -219,7 +220,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // declared needs one explicit confirmation before submit.
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
-  const toast = useToast();
   // One Idempotency-Key session per drawer open (#534): a retry after a lost
   // answer reuses the key, even when edited (the server refuses an edited
   // retry). A customer sale added or voided changes what the server would
@@ -813,11 +813,12 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       }
       acceptedFormFingerprintRef.current = JSON.stringify(getValues());
       setAcceptedResult(result);
+      // The Drawer's row on the board and the close page confirms it (#606).
+      flashRows([DRAWER_KEY(userId, duId)]);
       onSaveSuccess();
     } catch (err: any) {
-      const message = err.message || 'Failed to save attendant handover';
-      setError(message);
-      toast.error(message);
+      // Said in the drawer and on the Drawer's row on the board (#606): no toast.
+      setError(err.message || 'Could not save the handover. Check the figures and try again.');
     } finally {
       setSubmitting(false);
     }
