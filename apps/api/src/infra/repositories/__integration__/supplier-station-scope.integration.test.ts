@@ -225,9 +225,12 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
 
     it("never shows another organization's supplier or rows", async () => {
       expect((await listAt(HIGHWAY)).has(FOREIGN)).toBe(false);
-      // A foreign Station id reaches only this Organization's shared suppliers, at zero.
-      const foreign = await listAt(FOREIGN_STATION);
-      expect([...foreign.entries()]).toEqual([[LUBE, 0]]);
+    });
+
+    it("refuses another organization's Station, even to an Owner", async () => {
+      const res = await get(owner(), `/transactions/suppliers?stationId=${FOREIGN_STATION}`);
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
     });
 
     it('refuses a Station the caller is not assigned to', async () => {
@@ -261,6 +264,17 @@ describe.skipIf(!CONNECTION)('Suppliers per Station through the routes (#575)', 
         `/transactions/suppliers/${LUBE}/ledger?stationId=${HIGHWAY}`,
       );
       expect(res.status).toBe(403);
+    });
+
+    it("refuses another organization's Station, even to an Owner, ranged and all-time", async () => {
+      for (const url of [
+        `/transactions/suppliers/${LUBE}/ledger?stationId=${FOREIGN_STATION}`,
+        `/transactions/suppliers/${LUBE}/ledger?stationId=${FOREIGN_STATION}&from=2026-10-01&to=2026-10-31`,
+      ]) {
+        const res = await get(owner(), url);
+        expect(res.status).toBe(404);
+        expect(res.body.success).toBe(false);
+      }
     });
   });
 

@@ -287,6 +287,30 @@ const DEFAULT_INCOME_CATEGORIES = [
 // ====================================================
 
 /**
+ * The Station a supplier read is scoped to (#575) must be one of the caller's
+ * Organization and one the caller may access. Resolved under
+ * `organization_id` FIRST: `isAuthorizedForStation` waves Owners through
+ * without looking at the station, so it alone would let another
+ * Organization's Station id through (#235). Null when the read may go ahead.
+ */
+async function refuseSupplierStation(
+  c: Context<{ Variables: Variables }>,
+  stationId: string,
+): Promise<Response | null> {
+  const user = c.var.user;
+  if (!(await stationExistsInOrg(c.var.db, user.organizationId, stationId))) {
+    return stationNotFound(c);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  return null;
+}
+
+/**
  * GET /transactions/suppliers?activeOnly=&stationId=
  *
  * The supplier list with each supplier's `currentBalance` (Σ purchases − Σ
@@ -301,14 +325,10 @@ transactionsRouter.get('/suppliers', async (c) => {
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
   const stationId = c.req.query('stationId') || undefined;
-  if (
-    stationId &&
-    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
-  )
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
 
   // Aggregated in SQL (one row per supplier) + run alongside the list query.
   const balanceScope = [eq(schema.supplierTransactions.organizationId, user.organizationId)];
@@ -457,14 +477,10 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const user = c.var.user;
   const supplierId = c.req.param('id');
   const stationId = c.req.query('stationId') || undefined;
-  if (
-    stationId &&
-    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
-  )
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
   const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
   if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json(
