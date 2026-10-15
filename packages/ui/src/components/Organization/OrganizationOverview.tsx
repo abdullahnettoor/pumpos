@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { Station, reachableStations, showStationDropdown } from '@pump/shared';
+import { Station, reachableStations, showStationDropdown, stationLimitMessage } from '@pump/shared';
 import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
+import { Button, Icon } from '../../pump-ds/index.js';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PageFrame } from '../page-frame/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
+import { MemberDrawer } from '../StationSetup/TeamMemberDrawers.js';
+import { useAccess } from '../../query/hooks.js';
+import { stationCapacity } from './organizationModel.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
 import { StationsTab } from './StationsTab.js';
@@ -24,7 +29,8 @@ export interface OrganizationOverviewProps {
 
 /**
  * Owner-only organization workspace (#538): Page Frame with tabs Stations ·
- * Team · Activity · Profile · Desktop app. Each tab loads in its own Data
+ * Team · Activity · Profile · Desktop app, and the same page actions on every
+ * tab (Add team member, Onboard station). Each tab loads in its own Data
  * Sections. Per-station configuration still lives in Station for whichever
  * station is active.
  */
@@ -53,45 +59,103 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
     reachableStations({ role: 'Owner', assignedStationIds: [] }, stations),
   );
 
+  // Onboarding is refused at the station Limit (Access Document); the API
+  // enforces it regardless of what is rendered here.
+  const { data: access } = useAccess();
+  const capacity = stationCapacity(access);
+  const capacityMessage = capacity?.reached ? stationLimitMessage(capacity.value) : undefined;
+  const onboard = () => onNavigate('/onboarding');
+
+  // A new member's drawer mounts fresh per open (keyed): its form and its
+  // submit key start new.
+  const [memberOpen, setMemberOpen] = useState(false);
+  const [memberKey, setMemberKey] = useState(0);
+  const addMember = () => {
+    setMemberKey((k) => k + 1);
+    setMemberOpen(true);
+  };
+
+  // The same page actions on every tab (#515).
+  const actions = (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<ConceptIcon concept="stations" />}
+        disabled={capacity?.reached === true}
+        title={capacityMessage}
+        onClick={onboard}
+      >
+        Onboard station
+      </Button>
+      <Button
+        variant="primary"
+        size="sm"
+        leftIcon={<Icon name="plus" size="sm" />}
+        onClick={addMember}
+      >
+        Add team member
+      </Button>
+    </>
+  );
+
   return (
-    <PageFrame
-      route={ROUTES.organization}
-      subtitle="Manage your stations and team across the organization."
-      tabs={
-        <Tabs
-          id={TABS_ID}
-          aria-label="Organization"
-          activeId={tab}
-          onChange={(id) => setTab(id as OrgTab)}
-          tabs={[
-            { id: 'stations', label: 'Stations', concept: 'stations', badge: stations.length },
-            { id: 'team', label: 'Team', concept: 'team' },
-            { id: 'activity', label: 'Activity', concept: 'activity' },
-            { id: 'profile', label: 'Profile', concept: 'profile' },
-            ...(showDesktopTab
-              ? [{ id: 'desktop', label: 'Desktop app', concept: 'desktop-app' } satisfies TabItem]
-              : []),
-          ]}
-        />
-      }
-    >
-      <div {...tabPanelProps(TABS_ID, tab)}>
-        {tab === 'stations' && (
-          <StationsTab
-            stations={stations}
-            selectedStation={selectedStation}
-            canSwitchStation={canSwitchStation}
-            onStationChange={onStationChange}
-            onOnboard={() => onNavigate('/onboarding')}
-            onConfigure={() => onNavigate(ROUTES.station)}
-            onInviteTeam={() => setTab('team')}
+    <>
+      <PageFrame
+        route={ROUTES.organization}
+        subtitle="Manage your stations and team across the organization."
+        actions={actions}
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Organization"
+            activeId={tab}
+            onChange={(id) => setTab(id as OrgTab)}
+            tabs={[
+              { id: 'stations', label: 'Stations', concept: 'stations', badge: stations.length },
+              { id: 'team', label: 'Team', concept: 'team' },
+              { id: 'activity', label: 'Activity', concept: 'activity' },
+              { id: 'profile', label: 'Profile', concept: 'profile' },
+              ...(showDesktopTab
+                ? [
+                    {
+                      id: 'desktop',
+                      label: 'Desktop app',
+                      concept: 'desktop-app',
+                    } satisfies TabItem,
+                  ]
+                : []),
+            ]}
           />
-        )}
-        {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
-        {tab === 'activity' && <ActivityFeed stations={stations} />}
-        {tab === 'profile' && <OrgProfile />}
-        {tab === 'desktop' && showDesktopTab && <DesktopAppPanel />}
-      </div>
-    </PageFrame>
+        }
+      >
+        <div {...tabPanelProps(TABS_ID, tab)}>
+          {tab === 'stations' && (
+            <StationsTab
+              stations={stations}
+              selectedStation={selectedStation}
+              canSwitchStation={canSwitchStation}
+              onStationChange={onStationChange}
+              onOnboard={onboard}
+              onConfigure={() => onNavigate(ROUTES.station)}
+              onInviteTeam={() => setTab('team')}
+            />
+          )}
+          {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
+          {tab === 'activity' && (
+            <ActivityFeed stations={stations} timeZone={selectedStation?.settings?.timezone} />
+          )}
+          {tab === 'profile' && <OrgProfile />}
+          {tab === 'desktop' && showDesktopTab && <DesktopAppPanel />}
+        </div>
+      </PageFrame>
+      <MemberDrawer
+        key={memberKey}
+        isOpen={memberOpen}
+        editingUser={null}
+        currentStationId={selectedStation?.id ?? null}
+        onClose={() => setMemberOpen(false)}
+      />
+    </>
   );
 };

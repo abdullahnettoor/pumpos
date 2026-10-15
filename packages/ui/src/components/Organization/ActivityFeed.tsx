@@ -18,7 +18,7 @@ import type {
   ActivityGroupSummary,
   ActivityTone,
 } from '../../services/cloud.js';
-import { formatTime } from '../../utils/format.js';
+import { formatClockInZone } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { groupActivityByDay } from './organizationModel.js';
 
@@ -36,6 +36,8 @@ const MAX_STATION_CHIPS = 4;
 
 export interface ActivityFeedProps {
   stations: Station[];
+  /** The active Station's timezone: days and times read in it, not the browser's. */
+  timeZone?: string;
 }
 
 const RelatedEvent: React.FC<{ event: ActivityEventItem; primary: ActivityEventItem }> = ({
@@ -61,7 +63,8 @@ const ActivityRow: React.FC<{
   group: ActivityGroupSummary;
   expanded: boolean;
   onToggle: () => void;
-}> = ({ group, expanded, onToggle }) => {
+  timeZone?: string;
+}> = ({ group, expanded, onToggle, timeZone }) => {
   const { primary } = group;
   const detail = useActivityGroup(expanded ? group.groupId : null);
   const detailId = `activity-group-${group.groupId}`;
@@ -108,7 +111,7 @@ const ActivityRow: React.FC<{
         )}
       </div>
       <span className="shrink-0 whitespace-nowrap font-mono text-[12px] text-ink-faint">
-        {formatTime(primary.recordedAt)}
+        {formatClockInZone(primary.recordedAt, timeZone)}
       </span>
     </li>
   );
@@ -116,10 +119,10 @@ const ActivityRow: React.FC<{
 
 /**
  * Organization › Activity (#538): the business-event feed (Owner-only,
- * org-scoped) in day groups. The station filter sits in the feed's header;
+ * org-scoped) in day groups, by the active Station's calendar and clock. The station filter sits in the feed's header;
  * each day heading carries the date, so a row shows only its time.
  */
-export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
+export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations, timeZone }) => {
   const runTask = useRunTask();
   const [stationId, setStationId] = useState('');
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
@@ -128,7 +131,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
     () => activity.data?.pages.flatMap((page) => page.items) ?? [],
     [activity.data],
   );
-  const days = useMemo(() => groupActivityByDay(groups, (g) => g.primary.recordedAt), [groups]);
+  const days = useMemo(
+    () => groupActivityByDay(groups, (g) => g.primary.recordedAt, { timeZone }),
+    [groups, timeZone],
+  );
 
   const toggleGroup = (groupId: string) =>
     setExpandedGroupId((current) => (current === groupId ? null : groupId));
@@ -211,6 +217,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
                   group={group}
                   expanded={expandedGroupId === group.groupId}
                   onToggle={() => toggleGroup(group.groupId)}
+                  timeZone={timeZone}
                 />
               ))}
             </ul>

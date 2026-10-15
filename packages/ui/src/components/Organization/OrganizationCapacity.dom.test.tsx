@@ -3,10 +3,10 @@
  */
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import type { AccessDocument } from '@pump/shared';
-import { QueryProvider } from '../../query/queryClient.js';
+import { renderWithProviders } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
 import { OrganizationOverview } from './OrganizationOverview.js';
 
@@ -49,15 +49,14 @@ function renderOverview(access: AccessDocument | undefined) {
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   if (access) client.setQueryData(queryKeys.access(), access);
-  return render(
-    <QueryProvider client={client}>
-      <OrganizationOverview
-        stations={[]}
-        selectedStation={null}
-        onStationChange={() => {}}
-        onNavigate={() => {}}
-      />
-    </QueryProvider>,
+  return renderWithProviders(
+    <OrganizationOverview
+      stations={[]}
+      selectedStation={null}
+      onStationChange={() => {}}
+      onNavigate={() => {}}
+    />,
+    { queryClient: client },
   );
 }
 

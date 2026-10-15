@@ -16,10 +16,9 @@ import {
   type TableColumn,
 } from '../../pump-ds/index.js';
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
-import { useAccess } from '../../query/hooks.js';
+import { useAccess, useStations } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import { TileSection } from '../customers/TileSection.js';
-import { stationLimitMessage } from '@pump/shared';
 import {
   buildStationRows,
   filterStations,
@@ -35,6 +34,7 @@ export interface StationsTabProps {
   /** A switch is offered only when more than one station can be reached. */
   canSwitchStation: boolean;
   onStationChange: (station: Station) => void;
+  /** The getting-started prompt's onboarding link (the page actions carry the same). */
   onOnboard: () => void;
   onConfigure: () => void;
   onInviteTeam: () => void;
@@ -83,7 +83,7 @@ const buildColumns = (
       <span className="flex items-center justify-end gap-2">
         {r.active ? (
           <>
-            <Chip tone="neutral" size="xs">
+            <Chip tone="neutral" size="md">
               Current station
             </Chip>
             <Button variant="secondary" size="xs" onClick={onConfigure}>
@@ -104,7 +104,9 @@ const buildColumns = (
  * Organization › Stations (#538): a list, layout B. Station usage against the
  * plan's Limit (Access Document) and how many are ready sit on top; the status
  * filter sits in the list's header. Until a station is operational a
- * getting-started prompt leads the tab.
+ * getting-started prompt leads the tab. Each region waits on its own query
+ * (the stations cache, the Access Document), so a failed load shows Retry
+ * there and never a false "No stations yet".
  */
 export const StationsTab: React.FC<StationsTabProps> = ({
   stations,
@@ -121,7 +123,12 @@ export const StationsTab: React.FC<StationsTabProps> = ({
   // enforces the Limit regardless of what is rendered here.
   const accessQ = useAccess();
   const capacity = stationCapacity(accessQ.data);
-  const capacityMessage = capacity?.reached ? stationLimitMessage(capacity.value) : undefined;
+  // The usage tile shows while the document loads or fails (with Retry), and
+  // after it loads only for a Role the server sent the plan to.
+  const showUsage = !!capacity || accessQ.isError || accessQ.isPending;
+  // The list arrives as a prop from the same stations cache; the query is
+  // read here for its loading and error state.
+  const stationsQ = useStations();
 
   const all = useMemo(
     () => buildStationRows(stations, selectedStation?.id),
@@ -149,19 +156,6 @@ export const StationsTab: React.FC<StationsTabProps> = ({
     { value: 'setup', label: 'In setup', count: counts.setup },
   ];
 
-  const onboardButton = (primary: boolean) => (
-    <Button
-      variant={primary ? 'primary' : 'secondary'}
-      size="sm"
-      leftIcon={primary ? <ConceptIcon concept="stations" /> : <Icon name="plus" size="sm" />}
-      disabled={capacity?.reached === true}
-      title={capacityMessage}
-      onClick={onOnboard}
-    >
-      Onboard station
-    </Button>
-  );
-
   return (
     <div className="flex flex-col gap-4">
       {/* Getting started: shown until the first station is operational. */}
@@ -180,7 +174,16 @@ export const StationsTab: React.FC<StationsTabProps> = ({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {onboardButton(true)}
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<ConceptIcon concept="stations" />}
+              disabled={capacity?.reached === true}
+              title={capacity?.reached ? capacity.hint : undefined}
+              onClick={onOnboard}
+            >
+              Onboard station
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -193,30 +196,34 @@ export const StationsTab: React.FC<StationsTabProps> = ({
         </section>
       )}
 
-      {(capacity || stations.length > 0) && (
+      {(showUsage || stations.length > 0) && (
         <KpiStrip columns="auto">
-          {capacity && (
+          {showUsage && (
             <TileSection title="station usage" query={accessQ}>
-              <KpiTile
-                label="Stations on plan"
-                scope="now"
-                alert={capacity.reached ? 'warning' : undefined}
-                value={`${capacity.used} of ${capacity.value}`}
-                hint={capacity.hint}
-              />
+              {capacity && (
+                <KpiTile
+                  label="Stations on plan"
+                  scope="now"
+                  alert={capacity.reached ? 'warning' : undefined}
+                  value={`${capacity.used} of ${capacity.value}`}
+                  hint={capacity.hint}
+                />
+              )}
             </TileSection>
           )}
           {stations.length > 0 && (
-            <KpiTile
-              label="Ready for operations"
-              scope="now"
-              value={`${counts.ready} of ${counts.all}`}
-              hint={
-                counts.setup > 0
-                  ? `${stationsWord(counts.setup)} still in setup`
-                  : 'All operational'
-              }
-            />
+            <TileSection title="stations" query={stationsQ}>
+              <KpiTile
+                label="Ready for operations"
+                scope="now"
+                value={`${counts.ready} of ${counts.all}`}
+                hint={
+                  counts.setup > 0
+                    ? `${stationsWord(counts.setup)} still in setup`
+                    : 'All operational'
+                }
+              />
+            </TileSection>
           )}
         </KpiStrip>
       )}
@@ -234,18 +241,11 @@ export const StationsTab: React.FC<StationsTabProps> = ({
                 onChange={setFilter}
               />
             ),
-            actions: (
-              <>
-                {capacityMessage && (
-                  <span className="text-[12px] text-ink-muted">{capacityMessage}</span>
-                )}
-                {onboardButton(!welcome)}
-              </>
-            ),
           }}
         />
         <DataSection
           title="stations"
+          query={stationsQ}
           placeholderHeight={160}
           flush
           isEmpty={rows.length === 0}

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildStationRows,
   filterMembers,
@@ -67,7 +67,7 @@ describe('stationCapacity', () => {
         plan: 'CORE',
         limits: { station_count: { used: 1, value: 1, reached: true } },
       })?.hint,
-    ).toBe('Plan limit reached');
+    ).toBe('This plan includes one Station. Contact PumpOS to add another.');
   });
 });
 
@@ -135,18 +135,40 @@ describe('team', () => {
 });
 
 describe('groupActivityByDay', () => {
-  const now = new Date(2026, 9, 15, 12, 0);
-  const at = (d: number, h: number) => new Date(2026, 9, d, h, 0).toISOString();
+  // 15 Oct 2026, 12:00 IST.
+  const now = new Date('2026-10-15T06:30:00Z');
+  const tz = 'Asia/Kolkata';
+  let original: string | undefined;
+  beforeEach(() => {
+    // A runner far from IST: a browser-local reading would put events on the wrong day.
+    original = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+  });
+  afterEach(() => {
+    process.env.TZ = original;
+  });
 
-  it('heads each day in words, keeping the feed order', () => {
-    const items = [at(15, 9), at(15, 1), at(14, 20), at(13, 8)];
-    const days = groupActivityByDay(items, (i) => i, now);
+  it('heads each day in words by the station calendar, keeping the feed order', () => {
+    const items = [
+      '2026-10-15T03:30:00Z', // 09:00 IST, 15 Oct
+      '2026-10-14T19:00:00Z', // 00:30 IST, 15 Oct (still 14 Oct in UTC and LA)
+      '2026-10-14T18:00:00Z', // 23:30 IST, 14 Oct
+      '2026-10-13T02:30:00Z', // 08:00 IST, 13 Oct
+    ];
+    const days = groupActivityByDay(items, (i) => i, { timeZone: tz, now });
     expect(days.map((d) => d.label)).toEqual(['Today', 'Yesterday', 'Tue 13 Oct']);
     expect(days[0].items).toEqual([items[0], items[1]]);
+    expect(days[1].items).toEqual([items[2]]);
     for (const d of days) expect(d.label).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
+  it('puts an event just after the station midnight on the new day', () => {
+    // 20:00 UTC on the 14th is 01:30 on the 15th in Kolkata.
+    const days = groupActivityByDay(['2026-10-14T20:00:00Z'], (i) => i, { timeZone: tz, now });
+    expect(days[0]).toMatchObject({ key: '2026-10-15', label: 'Today' });
+  });
+
   it('keeps an unreadable time apart', () => {
-    expect(groupActivityByDay(['nope'], (i) => i, now)[0].label).toBe('Undated');
+    expect(groupActivityByDay(['nope'], (i) => i, { timeZone: tz, now })[0].label).toBe('Undated');
   });
 });

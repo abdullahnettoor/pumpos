@@ -23,7 +23,7 @@ const OptionRow: React.FC<{ option: DownloadOption; onDownloaded?: () => void }>
         <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-strong">
           {option.label}
           {option.recommended && (
-            <Chip tone="neutral" size="xs">
+            <Chip tone="neutral" size="md">
               Recommended
             </Chip>
           )}

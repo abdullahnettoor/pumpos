@@ -1,4 +1,12 @@
-import { stationState, type PumpState, type Role, type StationStatusState } from '@pump/shared';
+import {
+  resolveEntryDate,
+  shiftBusinessDate,
+  stationLimitMessage,
+  stationState,
+  type PumpState,
+  type Role,
+  type StationStatusState,
+} from '@pump/shared';
 import { formatShortDay } from '../../utils/format.js';
 
 /**
@@ -60,7 +68,7 @@ export interface StationCapacity {
   used: number;
   value: number;
   reached: boolean;
-  /** "2 more on this plan" / "Plan limit reached". */
+  /** "2 more on this plan", or at the Limit what to do (`stationLimitMessage`). */
   hint: string;
 }
 
@@ -80,7 +88,7 @@ export function stationCapacity(
     used: limit.used,
     value: limit.value,
     reached: limit.reached,
-    hint: limit.reached ? 'Plan limit reached' : `${left} more on this plan`,
+    hint: limit.reached ? stationLimitMessage(limit.value) : `${left} more on this plan`,
   };
 }
 
@@ -145,31 +153,30 @@ export function filterMembers<T extends MemberLike>(
 // --- Activity ---------------------------------------------------------------
 
 export interface ActivityDay<T> {
-  /** Local calendar date, `YYYY-MM-DD`: a key, never shown. */
+  /** Station calendar date, `YYYY-MM-DD`: a key, never shown. */
   key: string;
   /** "Today", "Yesterday", or "Mon 13 Oct". */
   label: string;
   items: T[];
 }
 
-const localDate = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
 /**
  * The feed in day groups, newest first as it arrives, each headed by a readable
- * day. Days are the viewer's local calendar (the feed spans every station).
+ * day. Days are the active Station's calendar (`resolveEntryDate`: plain
+ * midnight in its timezone, no Day Start), never the browser's.
  */
 export function groupActivityByDay<T>(
   items: readonly T[],
   recordedAt: (item: T) => string,
-  now: Date = new Date(),
+  opts: { timeZone?: string | null; now?: Date } = {},
 ): ActivityDay<T>[] {
-  const today = localDate(now);
-  const yesterday = localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  const { timeZone } = opts;
+  const today = resolveEntryDate({ now: opts.now, timeZone });
+  const yesterday = shiftBusinessDate(today, -1);
   const days: ActivityDay<T>[] = [];
   for (const item of items) {
     const at = new Date(recordedAt(item));
-    const key = Number.isNaN(at.getTime()) ? 'unknown' : localDate(at);
+    const key = Number.isNaN(at.getTime()) ? 'unknown' : resolveEntryDate({ now: at, timeZone });
     let day = days.find((d) => d.key === key);
     if (!day) {
       const label =

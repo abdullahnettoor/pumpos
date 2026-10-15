@@ -4,7 +4,7 @@ import { organizationUpdateSchema, type OrganizationUpdateValues } from '@pump/s
 import { useOrganization, queryKeys } from '../../query/hooks.js';
 import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
-import { useKeyedSaves } from '../../office-records/useKeyedSaves.js';
+import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { Field, TextInput } from '../primitives/Field.js';
 import { Button, DataSection, Form, SectionHeader } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -29,7 +29,8 @@ export const OrgProfile: React.FC = () => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const save = useKeyedSaves();
+  // One submit key per visit to the form; a saved answer renews it.
+  const save = useKeyedSave('organization:update');
   const {
     register,
     handleSubmit,
@@ -56,7 +57,7 @@ export const OrgProfile: React.FC = () => {
 
   const onSubmit = async (values: OrganizationUpdateValues) => {
     try {
-      await save('organization:update', values, (idempotencyKey) =>
+      await save(values, (idempotencyKey) =>
         orgService.updateOrganization(values, { idempotencyKey }),
       );
     } catch (e: any) {
