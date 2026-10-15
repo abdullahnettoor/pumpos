@@ -1,136 +1,144 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
-import { queryKeys, TIER, useProducts } from '../../query/hooks.js';
-import { Product, PRODUCT_UNITS } from '@pump/shared';
-import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
+import { queryKeys, useProducts } from '../../query/hooks.js';
+import { Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
+import {
+  Button,
+  Chip,
+  ConceptIcon,
+  DataSection,
+  EmptyState,
+  Form,
+  Icon,
+  InteractiveTable,
+  SearchInput,
+  SectionHeader,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { Field, MoneyInput, NumberInput, Select, TextInput } from '../primitives/Field.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { ProductImportDrawer } from './ProductImportDrawer.js';
-import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import type { ColumnDef } from '@tanstack/react-table';
 import { useRunTask } from '../../utils/runTask.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const productService = new CloudProductService();
 
+type ProductType = Product['productType'];
+
+const Faint: React.FC = () => <span className="text-ink-faint">—</span>;
+
+const taxText = (p: any): string => {
+  const cat = p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
+  return cat === 'FUEL_VAT'
+    ? `VAT ${p.taxConfig?.vat_rate || 0}%`
+    : cat === 'GST'
+      ? `GST ${p.taxConfig?.gst_rate || 0}%`
+      : cat === 'EXEMPT'
+        ? 'Exempt'
+        : '—';
+};
+
 const buildProductColumns = (
-  startEdit: (p: any) => void,
+  startEdit: (p: Product) => void,
   archive: (id: string) => void,
-): ColumnDef<any, any>[] => [
+): TableColumn<Product>[] => [
   {
-    accessorKey: 'name',
+    id: 'name',
     header: 'Name',
-    cell: ({ getValue }) => (
-      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span>
-    ),
+    kind: 'text',
+    value: (p) => p.name,
+    cell: (p) => <span className="font-semibold text-ink-strong">{p.name}</span>,
   },
   {
-    accessorKey: 'brand',
+    id: 'brand',
     header: 'Brand',
-    cell: ({ getValue }) => (
-      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-        {(getValue() as string) || '—'}
-      </span>
-    ),
+    kind: 'text',
+    value: (p) => p.brand,
+    cell: (p) => (p.brand ? <span className="text-ink-muted">{p.brand}</span> : <Faint />),
   },
   {
-    accessorKey: 'code',
+    id: 'code',
     header: 'Code',
-    cell: ({ getValue }) => (
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-        {getValue() as string}
-      </span>
-    ),
+    kind: 'text',
+    value: (p) => p.code,
+    cell: (p) => <span className="font-mono">{p.code}</span>,
   },
   {
-    accessorKey: 'productType',
+    id: 'type',
     header: 'Type',
-    cell: ({ getValue }) => {
-      const t = getValue() as string;
-      return (
-        <Chip tone={t === 'FUEL' ? 'info' : t === 'LUBRICANT' ? 'success' : 'neutral'} size="sm">
-          {t}
-        </Chip>
-      );
-    },
+    kind: 'text',
+    value: (p) => p.productType,
+    cell: (p) => (
+      <Chip tone="neutral" size="md">
+        {p.productType}
+      </Chip>
+    ),
   },
   {
     id: 'tax',
     header: 'Tax',
-    cell: ({ row }) => {
-      const p = row.original;
-      const cat = p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
-      const text =
-        cat === 'FUEL_VAT'
-          ? `VAT ${p.taxConfig?.vat_rate || 0}%`
-          : cat === 'GST'
-            ? `GST ${p.taxConfig?.gst_rate || 0}%`
-            : cat === 'EXEMPT'
-              ? 'Exempt'
-              : '—';
-      return <span style={{ fontFamily: 'var(--font-mono)' }}>{text}</span>;
-    },
+    kind: 'text',
+    value: taxText,
+    cell: (p) => <span className="font-mono">{taxText(p)}</span>,
   },
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => {
-      const p = row.original;
-      return (
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={() => startEdit(p)}
-            style={{
-              height: '24px',
-              padding: '0 8px',
-              fontSize: '11px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-strong)',
-              color: 'var(--text-default)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Edit
-          </button>
-          {p.isActive && (
-            <button
-              onClick={() => archive(p.id)}
-              style={{
-                height: '24px',
-                padding: '0 8px',
-                fontSize: '11px',
-                backgroundColor: 'var(--state-danger-bg)',
-                border: '1px solid rgba(159, 63, 54, 0.2)',
-                color: 'var(--state-danger-fg)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Archive
-            </button>
-          )}
-        </div>
-      );
-    },
+    kind: 'text',
+    sortable: false,
+    width: '150px',
+    value: () => null,
+    cell: (p) => (
+      <span className="flex justify-end gap-1.5">
+        <Button variant="secondary" size="xs" onClick={() => startEdit(p)}>
+          Edit
+        </Button>
+        {p.isActive && (
+          <Button variant="ghost" size="xs" onClick={() => archive(p.id)}>
+            Archive
+          </Button>
+        )}
+      </span>
+    ),
   },
 ];
 
-export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
+export interface ProductsCatalogProps extends CreateRequestProps {
+  selectedStation?: any | null;
+  /** A fresh number per "Import CSV" pick in the Station page's Add ▾ menu. */
+  importRequest?: number;
+  onImportHandled?: () => void;
+}
+
+export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   selectedStation,
+  createRequest,
+  onCreateHandled,
+  importRequest,
+  onImportHandled,
 }) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  // State, not a ref: startEdit is handed to the column builder during render.
+  const [session, setSession] = useState<SubmitKeySession | null>(null);
   const confirm = useConfirm();
   // Read through the shared hook instead of copying the list into local state
   // behind an effect — that pattern was the source of this file's
   // immutability + exhaustive-deps violations, and it bypassed the tiered cache.
   const productsQ = useProducts();
   const products: Product[] = (productsQ.data as Product[]) ?? [];
-  const loading = productsQ.isPending;
   const refreshProducts = () => qc.invalidateQueries({ queryKey: queryKeys.products() });
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -154,9 +162,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
   >('FUEL');
   const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
-  const [taxCategory, setTaxCategory] = useState<'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE'>(
-    'FUEL_VAT',
-  );
+  const [taxCategory, setTaxCategory] = useState<TaxCategory>('FUEL_VAT');
   const [unit, setUnit] = useState('L');
   const [brand, setBrand] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
@@ -169,29 +175,19 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 
   const handleQuickAdd = async (type: 'MS' | 'HSD') => {
     try {
-      if (type === 'MS') {
-        await productService.createProduct({
-          name: 'Petrol (MS)',
-          code: 'MS',
-          productType: 'FUEL',
-          stockTracked: true,
-          taxCategory: 'FUEL_VAT',
-          unit: 'L',
-          taxConfig: { vat_rate: 0, hsn_code: '2710' },
-          isActive: true,
-        });
-      } else {
-        await productService.createProduct({
-          name: 'Diesel (HSD)',
-          code: 'HSD',
-          productType: 'FUEL',
-          stockTracked: true,
-          taxCategory: 'FUEL_VAT',
-          unit: 'L',
-          taxConfig: { vat_rate: 0, hsn_code: '2710' },
-          isActive: true,
-        });
-      }
+      const body = {
+        name: type === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)',
+        code: type,
+        productType: 'FUEL',
+        stockTracked: true,
+        taxCategory: 'FUEL_VAT',
+        unit: 'L',
+        taxConfig: { vat_rate: 0, hsn_code: '2710' },
+        isActive: true,
+      };
+      await sendKeyed(officeSubmitKeys.session('setup:products:new'), body, (idempotencyKey) =>
+        productService.createProduct(body, { idempotencyKey }),
+      );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
@@ -241,7 +237,12 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
       };
 
       if (editingProduct) {
-        await productService.updateProduct(editingProduct.id, payload);
+        const id = editingProduct.id;
+        await sendKeyed(
+          session ?? officeSubmitKeys.session(`setup:products:${id}`),
+          payload,
+          (idempotencyKey) => productService.updateProduct(id, payload, { idempotencyKey }),
+        );
       } else {
         // Opening cost basis is only seeded at creation; thereafter it is
         // maintained as a rolling weighted-average from purchases (FB1).
@@ -252,7 +253,11 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           payload.openingStock = Number(openingStock);
           payload.stationId = selectedStation?.id ?? undefined;
         }
-        await productService.createProduct(payload);
+        await sendKeyed(
+          session ?? officeSubmitKeys.session('setup:products:new'),
+          payload,
+          (idempotencyKey) => productService.createProduct(payload, { idempotencyKey }),
+        );
       }
 
       resetForm();
@@ -271,18 +276,14 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     setProductType(p.productType);
     setInventoryType(p.inventoryType);
     setStockTracked(p.stockTracked);
-    setTaxCategory((p as any).taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
+    setTaxCategory(p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
     setUnit(p.unit);
-    setBrand((p as any).brand ?? '');
-    setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
-    setCostPrice(
-      (p as any).costBasis != null && Number((p as any).costBasis) > 0
-        ? String((p as any).costBasis)
-        : '',
-    );
+    setBrand(p.brand ?? '');
+    setSellingPrice(p.sellingPrice != null ? String(p.sellingPrice) : '');
+    setCostPrice(p.costBasis != null && Number(p.costBasis) > 0 ? String(p.costBasis) : '');
     // taxConfig is a jsonb column; normalize in case it arrives as a JSON string
     // so the GST rate / HSN / inclusive flag reliably repopulate on edit.
-    const rawTc = (p as any).taxConfig;
+    const rawTc = p.taxConfig;
     const tc =
       (typeof rawTc === 'string'
         ? (() => {
@@ -298,6 +299,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     setPriceInclusive(tc.price_inclusive !== false);
     setVatRate(tc.vat_rate != null ? Number(tc.vat_rate) : 0);
     setIsCodeEdited(true);
+    setSession(officeSubmitKeys.session(`setup:products:${p.id}`));
     setIsFormOpen(true);
   };
 
@@ -312,7 +314,11 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     )
       return;
     try {
-      await productService.archiveProduct(id);
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:products:${id}`),
+        { isActive: false },
+        (idempotencyKey) => productService.archiveProduct(id, { idempotencyKey }),
+      );
       runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
@@ -340,49 +346,46 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
     setIsCodeEdited(false);
   };
 
-  if (loading)
-    return (
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-        Loading catalog data...
-      </div>
-    );
+  const openCreate = () => {
+    resetForm();
+    setSession(officeSubmitKeys.session('setup:products:new'));
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens the add drawer or the CSV import.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
+  useCreateRequest(importRequest, () => setIsImportOpen(true), onImportHandled);
 
   const hasMS = products.some((p) => p.code === 'MS');
   const hasHSD = products.some((p) => p.code === 'HSD');
+  const visible = products.filter((p) => {
+    if (filterType && p.productType !== filterType) return false;
+    if (filterText) {
+      const q = filterText.toLowerCase();
+      const hay = `${p.name} ${p.code} ${p.brand ?? ''} ${p.category ?? ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const filtered = !!filterType || !!filterText.trim();
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      className="animate-fade-in"
-    >
-      {(!hasMS || !hasHSD) && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface-alt)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            padding: '12px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '4px',
-          }}
-        >
+    <section className="flex flex-col gap-2">
+      {productsQ.data && (!hasMS || !hasHSD) && (
+        <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border-soft bg-surface-alt px-4 py-3">
           <div>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            <span className="text-[13px] font-semibold text-ink-strong">
               Quick Add Standard Indian Fuels
             </span>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            <p className="mt-0.5 text-[12px] text-ink-muted">
               Add pre-configured products for standard Indian petroleum fuels with correct units and
               tax-exempt defaults.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="flex gap-2">
             {!hasMS && (
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="xs"
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
@@ -393,7 +396,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             {!hasHSD && (
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="xs"
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
@@ -405,36 +408,80 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         </div>
       )}
 
-      {/* Catalog Header Info & Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Products Catalogue
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Manage fuels, lubricants, shop inventory, or services.
-          </p>
-        </div>
-        {!isFormOpen && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" size="sm" onClick={() => setIsImportOpen(true)}>
-              Import CSV
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Icon name="plus" size="sm" />}
-              onClick={() => {
-                resetForm();
-                setIsFormOpen(true);
-              }}
+      <SectionHeader
+        title="Products catalogue"
+        subtitle={
+          productsQ.data
+            ? filtered
+              ? `${visible.length} of ${products.length}`
+              : countOf(products.length, 'product', 'products')
+            : undefined
+        }
+        controls={{
+          search: (
+            <div className="w-[240px]">
+              <SearchInput
+                inputSize="sm"
+                value={filterText}
+                onChange={setFilterText}
+                placeholder="Search name, code, brand…"
+              />
+            </div>
+          ),
+          filters: (
+            <Select
+              aria-label="Product type"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
             >
-              Add Product
-            </Button>
+              <option value="">All Types</option>
+              <option value="FUEL">FUEL</option>
+              <option value="LUBRICANT">LUBRICANT</option>
+              <option value="ADDITIVE">ADDITIVE</option>
+              <option value="ACCESSORY">ACCESSORY</option>
+              <option value="CONSUMABLE">CONSUMABLE</option>
+              <option value="SPARE_PART">SPARE PART</option>
+              <option value="SERVICE">SERVICE</option>
+              <option value="OTHER">OTHER</option>
+            </Select>
+          ),
+        }}
+      />
+      <p className="px-0.5 text-[12px] text-ink-muted">
+        Manage fuels, lubricants, shop inventory, or services.
+      </p>
+      <DataSection
+        title="products"
+        query={productsQ}
+        placeholderHeight={240}
+        flush
+        isEmpty={visible.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="products" size="md" />}
+              title={products.length === 0 ? 'No products yet' : 'No matching products'}
+              description={
+                products.length === 0
+                  ? 'No products added to the catalogue yet.'
+                  : 'Try a different search or type.'
+              }
+            />
           </div>
-        )}
-      </div>
-      {/* Product Creation/Edit Drawer */}
+        }
+      >
+        <InteractiveTable
+          bare
+          columns={buildProductColumns(startEdit, (id) =>
+            runTask(handleArchive(id), 'Could not archive the product.'),
+          )}
+          rows={visible}
+          rowKey={(r) => r.id}
+          title="products"
+        />
+      </DataSection>
+
       <Drawer
         isOpen={isFormOpen}
         onClose={() => {
@@ -443,76 +490,34 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         }}
         title={editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
       >
-        <Form
-          onSubmit={handleCreateOrUpdate}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Product Name *
-            </label>
-            <input
+        <Form onSubmit={handleCreateOrUpdate} className="flex flex-col">
+          <Field label="Product Name" required>
+            <TextInput
               type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="e.g. Petrol (MS) or Engine Oil 4T"
               required
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Product Code *
-            </label>
-            <input
+          <Field label="Product Code" required>
+            <TextInput
               type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
               placeholder="e.g. MS or HSD"
               required
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Product Type *
-            </label>
-            <select
+          <Field label="Product Type" required>
+            <Select
               value={productType}
               onChange={(e) => {
-                const val = e.target.value as
-                  | 'FUEL'
-                  | 'LUBRICANT'
-                  | 'ADDITIVE'
-                  | 'ACCESSORY'
-                  | 'CONSUMABLE'
-                  | 'SPARE_PART'
-                  | 'SERVICE'
-                  | 'OTHER';
+                const val = e.target.value as ProductType;
                 setProductType(val);
                 setInventoryType(val === 'FUEL' ? 'BULK' : val === 'SERVICE' ? 'NONE' : 'ITEM');
-              }}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
               }}
             >
               <option value="FUEL">FUEL</option>
@@ -523,48 +528,22 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
               <option value="SPARE_PART">SPARE PART</option>
               <option value="SERVICE">SERVICE</option>
               <option value="OTHER">OTHER</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Inventory Engine *
-            </label>
-            <select
+          <Field label="Inventory Engine" required>
+            <Select
               value={inventoryType}
               onChange={(e) => setInventoryType(e.target.value as 'BULK' | 'ITEM' | 'NONE')}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
-              }}
             >
               <option value="BULK">Bulk (fuel tanks)</option>
               <option value="ITEM">Item (packaged stock)</option>
               <option value="NONE">None (service / non-stocked)</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Sales Unit *
-            </label>
-            <select
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              required
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
-              }}
-            >
+          <Field label="Sales Unit" required>
+            <Select value={unit} onChange={(e) => setUnit(e.target.value)} required>
               {!PRODUCT_UNITS.some((u) => u.value === unit) && unit && (
                 <option value={unit}>{unit}</option>
               )}
@@ -573,173 +552,93 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
                   {u.label}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Brand / Company
-            </label>
-            <input
+          <Field label="Brand / Company">
+            <TextInput
               type="text"
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               placeholder="e.g. Castrol, Shell, Exide"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Selling Price (₹){productType === 'FUEL' ? ' — fuel uses price schedule' : ''}
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="any"
+          <Field
+            label={`Selling Price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}
+          >
+            <MoneyInput
               value={sellingPrice}
               onChange={(e) => setSellingPrice(e.target.value)}
               placeholder="Optional — prefills merchandise sales"
               disabled={productType === 'FUEL'}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-                fontFamily: 'var(--font-mono)',
-              }}
             />
-          </div>
+          </Field>
 
           {productType !== 'FUEL' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Cost Price ex-GST (₹)
-                {editingProduct ? ' — maintained by purchases' : ' — opening cost'}
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="any"
+            <Field
+              label={`Cost Price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
+              hint={
+                editingProduct
+                  ? 'Cost basis updates automatically as a weighted-average from purchases.'
+                  : 'Enter the pre-tax (ex-GST) purchase cost — input GST is creditable, not a cost. Leave blank if unknown.'
+              }
+            >
+              <MoneyInput
                 value={costPrice}
                 onChange={(e) => setCostPrice(e.target.value)}
                 placeholder="Opening pre-tax cost per unit — seeds margin"
                 disabled={!!editingProduct}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  fontFamily: 'var(--font-mono)',
-                  opacity: editingProduct ? 0.6 : 1,
-                }}
               />
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-                {editingProduct
-                  ? 'Cost basis updates automatically as a weighted-average from purchases.'
-                  : 'Enter the pre-tax (ex-GST) purchase cost — input GST is creditable, not a cost. Leave blank if unknown.'}
-              </span>
-            </div>
+            </Field>
           )}
 
           {productType !== 'FUEL' && !editingProduct && inventoryType === 'ITEM' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Opening Stock ({unit || 'units'})
-              </label>
-              <input
-                type="number"
-                step="any"
-                min={0}
+            <Field
+              label={`Opening Stock (${unit || 'units'})`}
+              hint={
+                selectedStation
+                  ? 'Posts an opening balance to inventory for this station. Leave blank if none.'
+                  : 'Select a station to record opening stock.'
+              }
+            >
+              <NumberInput
                 value={openingStock}
                 onChange={(e) => setOpeningStock(e.target.value)}
                 placeholder="Quantity on hand at start"
                 disabled={!selectedStation}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  fontFamily: 'var(--font-mono)',
-                }}
               />
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-                {selectedStation
-                  ? 'Posts an opening balance to inventory for this station. Leave blank if none.'
-                  : 'Select a station to record opening stock.'}
-              </span>
-            </div>
+            </Field>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '4px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Checkbox
-                label="Track Inventory (Maintain stock levels automatically)"
-                checked={stockTracked}
-                onChange={(e) => setStockTracked(e.target.checked)}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Tax Category
-              </label>
-              <select
-                value={taxCategory}
-                onChange={(e) => setTaxCategory(e.target.value as any)}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              >
-                <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
-                <option value="GST">GST (lubricants / merchandise)</option>
-                <option value="EXEMPT">GST Exempt</option>
-                <option value="NON_TAXABLE">Non-Taxable</option>
-              </select>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Petrol/diesel attract state VAT (no input credit); lubes &amp; merchandise attract
-                GST.
-              </span>
-            </div>
+          <div className="mb-4">
+            <Checkbox
+              label="Track Inventory (Maintain stock levels automatically)"
+              checked={stockTracked}
+              onChange={(e) => setStockTracked(e.target.checked)}
+            />
           </div>
 
-          {(taxCategory === 'GST' || taxCategory === 'FUEL_VAT') && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                borderTop: '1px solid var(--border-soft)',
-                paddingTop: '12px',
-              }}
+          <Field
+            label="Tax Category"
+            hint="Petrol/diesel attract state VAT (no input credit); lubes & merchandise attract GST."
+          >
+            <Select
+              value={taxCategory}
+              onChange={(e) => setTaxCategory(e.target.value as TaxCategory)}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
+              <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
+              <option value="GST">GST (lubricants / merchandise)</option>
+              <option value="EXEMPT">GST Exempt</option>
+              <option value="NON_TAXABLE">Non-Taxable</option>
+            </Select>
+          </Field>
+
+          {(taxCategory === 'GST' || taxCategory === 'FUEL_VAT') && (
+            <div className="flex flex-col border-t border-border-soft pt-3">
+              <Field label={taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}>
+                <NumberInput
+                  step="1"
                   value={taxCategory === 'GST' ? gstRate : vatRate}
                   onChange={(e) =>
                     taxCategory === 'GST'
@@ -747,29 +646,19 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
                       : setVatRate(parseFloat(e.target.value) || 0)
                   }
                 />
-              </div>
+              </Field>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {taxCategory === 'GST' ? 'HSN / SAC Code' : 'HSN Code'}
-                </label>
-                <input
+              <Field label={taxCategory === 'GST' ? 'HSN / SAC Code' : 'HSN Code'}>
+                <TextInput
                   type="text"
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
                   value={hsnCode}
                   onChange={(e) => setHsnCode(e.target.value)}
                   placeholder="e.g. 2710"
                 />
-              </div>
+              </Field>
 
               {taxCategory === 'GST' && (
-                <div>
+                <div className="mb-4">
                   <Checkbox
                     label="Selling price is tax-inclusive (MRP)"
                     description="Retail MRP includes GST — tax is extracted from the price, not added on top. Turn off for pre-tax (B2B) rates."
@@ -781,112 +670,33 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
-              type="submit"
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {editingProduct ? 'Save Changes' : 'Create Item'}
-            </button>
-            <button
+          <div className="flex justify-end gap-2 border-t border-border-soft pt-4">
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 resetForm();
                 setIsFormOpen(false);
               }}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
             >
               Cancel
-            </button>
+            </Button>
+            <Button type="submit" variant="primary">
+              {editingProduct ? 'Save Changes' : 'Create Item'}
+            </Button>
           </div>
         </Form>
       </Drawer>
-
-      {/* Product List Table */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          style={{
-            height: '32px',
-            padding: '0 8px',
-            borderRadius: 'var(--radius-input)',
-            border: '1px solid var(--border-strong)',
-            fontSize: '13px',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <option value="">All Types</option>
-          <option value="FUEL">FUEL</option>
-          <option value="LUBRICANT">LUBRICANT</option>
-          <option value="ADDITIVE">ADDITIVE</option>
-          <option value="ACCESSORY">ACCESSORY</option>
-          <option value="CONSUMABLE">CONSUMABLE</option>
-          <option value="SPARE_PART">SPARE PART</option>
-          <option value="SERVICE">SERVICE</option>
-          <option value="OTHER">OTHER</option>
-        </select>
-        <input
-          type="text"
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Search name, code, brand…"
-          style={{
-            flex: 1,
-            minWidth: '220px',
-            height: '32px',
-            padding: '0 8px',
-            borderRadius: 'var(--radius-input)',
-            border: '1px solid var(--border-strong)',
-            fontSize: '13px',
-          }}
-        />
-      </div>
-      <DataTable
-        columns={buildProductColumns(startEdit, (id) =>
-          runTask(handleArchive(id), 'Could not archive the product.'),
-        )}
-        data={products.filter((p) => {
-          if (filterType && p.productType !== filterType) return false;
-          if (filterText) {
-            const q = filterText.toLowerCase();
-            const hay =
-              `${p.name} ${p.code} ${(p as any).brand ?? ''} ${(p as any).category ?? ''}`.toLowerCase();
-            if (!hay.includes(q)) return false;
-          }
-          return true;
-        })}
-        emptyMessage="No products added to the catalogue yet."
-        getRowId={(r: any) => r.id}
-      />
 
       <ProductImportDrawer
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         existingProducts={products}
         selectedStation={selectedStation}
-        onImported={() => refreshProducts()}
+        onImported={() =>
+          runTask(refreshProducts(), 'Imported, but the product list could not be refreshed.')
+        }
       />
-    </div>
+    </section>
   );
 };

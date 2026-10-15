@@ -12,9 +12,7 @@ const noop = () => {};
 
 /** The schedule grid is the one auto-fill `minmax(...)` track on the step. */
 const scheduleGrid = (container: HTMLElement): HTMLElement => {
-  const grid = Array.from(container.querySelectorAll<HTMLElement>('div')).find((el) =>
-    el.style.gridTemplateColumns.includes('minmax'),
-  );
+  const grid = container.querySelector<HTMLElement>('[data-testid="schedule-grid"]');
   if (!grid) throw new Error('schedule grid not found');
   return grid;
 };
@@ -45,16 +43,7 @@ const renderStep = (isTwentyFourSeven: boolean) => {
       },
     },
   };
-  return render(
-    <Step2BusinessRules
-      draft={draft}
-      updateDraft={noop}
-      syncTwentyFourSeven={noop}
-      panelStyle={{}}
-      fieldLabelStyle={{}}
-      inputStyle={{}}
-    />,
-  );
+  return render(<Step2BusinessRules draft={draft} updateDraft={noop} syncTwentyFourSeven={noop} />);
 };
 
 describe('Step2BusinessRules keeps schedule time controls inside their day card', () => {
@@ -70,22 +59,22 @@ describe('Step2BusinessRules keeps schedule time controls inside their day card'
     expect(timeInputs).toHaveLength(14);
 
     for (const input of timeInputs) {
-      expect(input.style.minWidth).toBe('0');
-      expect(input.style.boxSizing).toBe('border-box');
-      expect(input.style.width).toBe('100%');
+      expect(input.classList).toContain('min-w-0');
+      expect(input.classList).toContain('box-border');
+      expect(input.classList).toContain('w-full');
 
       // The flex column wrapping the control must also be allowed to shrink,
       // otherwise the input's intrinsic width still forces the card open.
       const wrapper = input.parentElement as HTMLElement;
-      expect(wrapper.style.minWidth).toBe('0');
+      expect(wrapper.classList).toContain('min-w-0');
     }
   });
 
   it('uses a card track that can pack below the intrinsic control width', () => {
     const { container } = renderStep(false);
     const grid = scheduleGrid(container);
-    expect(grid.style.display).toBe('grid');
-    const match = grid.style.gridTemplateColumns.match(/minmax\((\d+)px/);
+    expect(grid.classList).toContain('grid');
+    const match = grid.className.match(/minmax\((\d+)px/);
     expect(match).not.toBeNull();
     expect(Number(match![1])).toBeLessThanOrEqual(160);
   });

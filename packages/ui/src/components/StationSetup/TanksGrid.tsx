@@ -1,24 +1,47 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CloudTankService, CloudProductService } from '../../services/cloud.js';
-import { queryKeys, TIER, useProducts, useTanks } from '../../query/hooks.js';
+import { CloudTankService } from '../../services/cloud.js';
+import { queryKeys, useProducts, useTanks } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
-import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
+import {
+  Button,
+  Chip,
+  ConceptIcon,
+  DataSection,
+  EmptyState,
+  Form,
+  InteractiveTable,
+  SectionHeader,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { Field, NumberInput, Select, TextInput } from '../primitives/Field.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const tankService = new CloudTankService();
-const productService = new CloudProductService();
 
-export interface TanksGridProps {
+export interface TanksGridProps extends CreateRequestProps {
   stationId: string;
 }
 
-export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
+export const TanksGrid: React.FC<TanksGridProps> = ({
+  stationId,
+  createRequest,
+  onCreateHandled,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
   // Shared hooks instead of a loader copying into local state behind an effect.
   const tanksQ = useTanks(stationId);
   const productsQ = useProducts();
@@ -26,7 +49,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const fuelProducts: Product[] = ((productsQ.data as Product[]) ?? []).filter(
     (p) => p.productType === 'FUEL' && p.isActive,
   );
-  const loading = tanksQ.isPending || productsQ.isPending;
+  const productOf = (t: Tank) => fuelProducts.find((p) => p.id === t.productId);
   const refreshTanks = () => qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId ?? '') });
   const [isFormOpen, setIsFormOpen] = useState(false);
 
@@ -54,12 +77,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       return;
     }
     try {
-      await tankService.createTank({
-        stationId,
-        name,
-        productId,
-        capacity,
-      });
+      const body = { stationId, name, productId, capacity };
+      await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session(`setup:tanks:${stationId}`),
+        body,
+        (idempotencyKey) => tankService.createTank(body, { idempotencyKey }),
+      );
       setIsFormOpen(false);
       resetForm();
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
@@ -91,12 +114,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           ? `Petrol Tank ${sameProductTanksCount + 1}`
           : `Diesel Tank ${sameProductTanksCount + 1}`;
 
-      await tankService.createTank({
-        stationId,
-        name: tankName,
-        productId: fuel.id,
-        capacity: cap,
-      });
+      const body = { stationId, name: tankName, productId: fuel.id, capacity: cap };
+      // A session per action: the shared store hands an unsettled key back
+      // only for the same body, so Petrol never lends its key to Diesel.
+      await sendKeyed(
+        officeSubmitKeys.session(`setup:tanks:${stationId}`),
+        body,
+        (idempotencyKey) => tankService.createTank(body, { idempotencyKey }),
+      );
 
       runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
@@ -119,6 +144,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     setName(fuelCode === 'MS' ? 'Petrol Tank 1' : 'Diesel Tank 1');
     setCapacity(fuelCode === 'MS' ? 15000 : 20000);
     setProductId(fuel.id);
+    sessionRef.current = officeSubmitKeys.session(`setup:tanks:${stationId}`);
     setIsFormOpen(true);
   };
 
@@ -130,357 +156,146 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     setCapacity(20000);
   };
 
-  if (loading)
-    return (
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-        Loading storage tanks...
+  const columns: TableColumn<Tank>[] = [
+    { id: 'name', header: 'Tank', kind: 'text', value: (t) => t.name, emphasis: true },
+    {
+      id: 'product',
+      header: 'Fuel',
+      kind: 'text',
+      value: (t) => productOf(t)?.name ?? 'Unknown',
+      cell: (t) => (
+        <Chip tone="neutral" size="md">
+          {productOf(t)?.name || 'Unknown'}
+        </Chip>
+      ),
+    },
+    {
+      id: 'capacity',
+      header: 'Capacity',
+      kind: 'qty',
+      value: (t) => t.capacity,
+      unit: (t) => productOf(t)?.unit || 'L',
+      total: false,
+    },
+  ];
+
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
+  const openCreate = () => {
+    resetForm();
+    sessionRef.current = officeSubmitKeys.session(`setup:tanks:${stationId}`);
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
+
+  const quickAdd = (code: 'MS' | 'HSD', label: string, value: string, set: (v: string) => void) =>
+    fuelProducts.some((p) => p.code === code) && (
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] font-semibold text-ink-strong">{label}</span>
+        <NumberInput
+          className="w-[110px]"
+          placeholder="Capacity"
+          aria-label={`${label} capacity`}
+          value={value}
+          onChange={(e) => set(e.target.value)}
+          disabled={quickSubmitting}
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={quickSubmitting}
+          onClick={() => runTask(handleQuickAdd(code, value), 'Could not add the tank.')}
+        >
+          Quick Add
+        </Button>
       </div>
     );
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      className="animate-fade-in"
-    >
-      {/* Tanks Header & Add button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Storage Tanks
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Monitor underground fuel reserves, capacity, and product configurations.
-          </p>
-        </div>
-        {!isFormOpen && (
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Icon name="plus" size="sm" />}
-            onClick={() => {
-              resetForm();
-              setIsFormOpen(true);
-            }}
-          >
-            Add Tank
-          </Button>
-        )}
-      </div>
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Storage tanks"
+        subtitle={tanksQ.data ? countOf(tanks.length, 'tank', 'tanks') : undefined}
+      />
 
-      {/* Quick Add Tanks Panel */}
       {fuelProducts.length > 0 && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface-alt)',
-            padding: '14px 20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--border-soft)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-              Quick Add Storage Tanks
-            </span>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Add a new Petrol or Diesel underground storage tank instantly by entering its
-              capacity:
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center' }}>
-            {/* Petrol Quick Add */}
-            {fuelProducts.some((p) => p.code === 'MS') && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Petrol Tank (MS):
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Capacity"
-                  value={quickPetrolCapacity}
-                  onChange={(e) => setQuickPetrolCapacity(e.target.value)}
-                  disabled={quickSubmitting}
-                  style={{
-                    width: '100px',
-                    height: '28px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '12px',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    runTask(handleQuickAdd('MS', quickPetrolCapacity), 'Could not add the tank.')
-                  }
-                  disabled={quickSubmitting}
-                  style={{
-                    height: '28px',
-                    padding: '0 12px',
-                    backgroundColor: 'var(--brand-primary)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 'var(--radius-button)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: quickSubmitting ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  Quick Add
-                </button>
-              </div>
-            )}
-
-            {/* Diesel Quick Add */}
-            {fuelProducts.some((p) => p.code === 'HSD') && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Diesel Tank (HSD):
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Capacity"
-                  value={quickDieselCapacity}
-                  onChange={(e) => setQuickDieselCapacity(e.target.value)}
-                  disabled={quickSubmitting}
-                  style={{
-                    width: '100px',
-                    height: '28px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '12px',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    runTask(handleQuickAdd('HSD', quickDieselCapacity), 'Could not add the tank.')
-                  }
-                  disabled={quickSubmitting}
-                  style={{
-                    height: '28px',
-                    padding: '0 12px',
-                    backgroundColor: 'var(--brand-primary)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 'var(--radius-button)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: quickSubmitting ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  Quick Add
-                </button>
-              </div>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-border-soft bg-surface-alt px-4 py-3">
+          <span className="text-[12px] text-ink-muted">Quick add a tank by capacity:</span>
+          {quickAdd('MS', 'Petrol Tank (MS)', quickPetrolCapacity, setQuickPetrolCapacity)}
+          {quickAdd('HSD', 'Diesel Tank (HSD)', quickDieselCapacity, setQuickDieselCapacity)}
         </div>
       )}
 
-      {/* Tank Creation/Edit Drawer */}
-      <Drawer
-        isOpen={isFormOpen}
-        onClose={() => {
-          resetForm();
-          setIsFormOpen(false);
-        }}
-        title="Add Storage Tank"
+      <DataSection
+        title="storage tanks"
+        query={[tanksQ, productsQ]}
+        placeholderHeight={160}
+        flush
+        isEmpty={tanks.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="tanks" size="md" />}
+              title="No storage tanks"
+              description="Add the underground tanks at this station to link nozzles to them."
+            />
+          </div>
+        }
       >
-        <Form
-          onSubmit={handleCreate}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Tank Identifier *
-            </label>
-            <input
-              type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
+        <InteractiveTable
+          bare
+          columns={columns}
+          rows={tanks}
+          rowKey={(t) => t.id}
+          title="storage tanks"
+        />
+      </DataSection>
+
+      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add Storage Tank">
+        <Form onSubmit={handleCreate} className="flex flex-col">
+          <Field label="Tank Identifier" required>
+            <TextInput
               placeholder="e.g. Tank 1"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Linked Fuel Product *
-            </label>
-            <select
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
-              }}
-            >
+          </Field>
+          <Field label="Linked Fuel Product" required>
+            <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
               {fuelProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.code})
                 </option>
               ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Capacity ({fuelProducts.find((p) => p.id === productId)?.unit || 'L'}) *
-            </label>
-            <input
-              type="number"
-              min="0"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
+            </Select>
+          </Field>
+          <Field
+            label={`Capacity (${fuelProducts.find((p) => p.id === productId)?.unit || 'L'})`}
+            required
+          >
+            <NumberInput
               value={capacity}
               onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
               placeholder="e.g. 15000"
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
-              type="submit"
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
+          </Field>
+          <div className="flex gap-3 pt-2">
+            <Button type="submit" variant="primary" className="flex-1">
               Create Tank
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                resetForm();
-                setIsFormOpen(false);
-              }}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
+            </Button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
               Cancel
-            </button>
+            </Button>
           </div>
         </Form>
       </Drawer>
-
-      {/* Tanks Grid View */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: '16px',
-        }}
-      >
-        {tanks.map((t) => {
-          const product = fuelProducts.find((p) => p.id === t.productId);
-          return (
-            <div
-              key={t.id}
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                padding: '18px',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid var(--border-soft)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
-              }}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>
-                  {t.name}
-                </span>
-                <Chip tone="info" size="sm">
-                  {product?.name || 'Unknown'}
-                </Chip>
-              </div>
-              <div>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  Capacity
-                </span>
-                <p
-                  style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    color: 'var(--text-strong)',
-                    fontFamily: 'var(--font-mono)',
-                    marginTop: '2px',
-                  }}
-                >
-                  {t.capacity.toLocaleString()} {product?.unit || 'L'}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-
-        {tanks.length === 0 && (
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: '32px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              backgroundColor: 'var(--bg-surface)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-soft)',
-            }}
-          >
-            No storage tanks configured for this location yet.
-          </div>
-        )}
-      </div>
-    </div>
+    </section>
   );
 };

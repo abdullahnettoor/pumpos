@@ -1,114 +1,69 @@
 import React from 'react';
 import { OnboardingDraft } from '@pump/shared';
+import { Field, NumberInput, Textarea, TextInput } from '../../primitives/Field.js';
+import { OnboardingStep, STEP_PANEL } from './stepLayout.js';
 
 interface Step1StationBasicsProps {
   draft: OnboardingDraft;
   updateDraft: (updater: (prev: OnboardingDraft) => OnboardingDraft) => void;
-  panelStyle: React.CSSProperties;
-  fieldLabelStyle: React.CSSProperties;
-  inputStyle: React.CSSProperties;
-  textAreaStyle: React.CSSProperties;
 }
 
-export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
-  draft,
-  updateDraft,
-  panelStyle,
-  fieldLabelStyle,
-  inputStyle,
-  textAreaStyle,
-}) => {
+export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, updateDraft }) => {
+  const setStation = (patch: Partial<OnboardingDraft['station']>) =>
+    updateDraft((prev) => ({ ...prev, station: { ...prev.station, ...patch } }));
+
   return (
-    <div style={{ ...panelStyle, gap: '20px' }}>
-      <div>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
-          Station Basics
-        </h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          Capture the core station identity once, then finish all provisioning in one smooth submit.
-        </p>
-      </div>
+    <OnboardingStep
+      title="Station Basics"
+      subtitle="Capture the core station identity once, then finish all provisioning in one smooth submit."
+    >
+      <div className={STEP_PANEL}>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Station Name" htmlFor="onb-station-name" required>
+            <TextInput
+              id="onb-station-name"
+              value={draft.station.name}
+              onChange={(e) => setStation({ name: e.target.value })}
+              placeholder="e.g. Shell Gachibowli"
+            />
+          </Field>
+          <Field label="Station Code" htmlFor="onb-station-code" required>
+            <TextInput
+              id="onb-station-code"
+              value={draft.station.code}
+              onChange={(e) => setStation({ code: e.target.value.toUpperCase() })}
+              placeholder="e.g. SH-HYD-01"
+            />
+          </Field>
+        </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={fieldLabelStyle}>Station Name *</label>
-          <input
-            type="text"
-            value={draft.station.name}
-            onChange={(e) =>
-              updateDraft((prev) => ({
-                ...prev,
-                station: { ...prev.station, name: e.target.value },
-              }))
-            }
-            style={inputStyle}
-            placeholder="e.g. Shell Gachibowli"
+        <Field label="Station Address" htmlFor="onb-station-address">
+          <Textarea
+            id="onb-station-address"
+            value={draft.station.address || ''}
+            onChange={(e) => setStation({ address: e.target.value })}
+            placeholder="Address or landmark"
           />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={fieldLabelStyle}>Station Code *</label>
-          <input
-            type="text"
-            value={draft.station.code}
-            onChange={(e) =>
-              updateDraft((prev) => ({
-                ...prev,
-                station: { ...prev.station, code: e.target.value.toUpperCase() },
-              }))
-            }
-            style={inputStyle}
-            placeholder="e.g. SH-HYD-01"
-          />
-        </div>
-      </div>
+        </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <label style={fieldLabelStyle}>Station Address</label>
-        <textarea
-          value={draft.station.address || ''}
-          onChange={(e) =>
-            updateDraft((prev) => ({
-              ...prev,
-              station: { ...prev.station, address: e.target.value },
-            }))
-          }
-          style={textAreaStyle}
-          placeholder="Address or landmark"
-        />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={fieldLabelStyle}>Contact Phone</label>
-          <input
-            type="text"
-            value={draft.station.phone || ''}
-            onChange={(e) =>
-              updateDraft((prev) => ({
-                ...prev,
-                station: { ...prev.station, phone: e.target.value },
-              }))
-            }
-            style={inputStyle}
-            placeholder="+91 9876543210"
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={fieldLabelStyle}>Shift Grace Period (Minutes)</label>
-          <input
-            type="number"
-            min={0}
-            value={draft.station.shiftGraceMinutes}
-            onChange={(e) =>
-              updateDraft((prev) => ({
-                ...prev,
-                station: { ...prev.station, shiftGraceMinutes: Number(e.target.value) || 0 },
-              }))
-            }
-            style={inputStyle}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Contact Phone" htmlFor="onb-station-phone">
+            <TextInput
+              id="onb-station-phone"
+              value={draft.station.phone || ''}
+              onChange={(e) => setStation({ phone: e.target.value })}
+              placeholder="+91 9876543210"
+            />
+          </Field>
+          <Field label="Shift Grace Period (Minutes)" htmlFor="onb-station-grace">
+            <NumberInput
+              id="onb-station-grace"
+              value={draft.station.shiftGraceMinutes}
+              onChange={(e) => setStation({ shiftGraceMinutes: Number(e.target.value) || 0 })}
+            />
+          </Field>
         </div>
       </div>
-    </div>
+    </OnboardingStep>
   );
 };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingProductDraft } from '@pump/shared';
-import { Chip, Button, Icon } from '../../../pump-ds/index.js';
+import { Chip, Button, EmptyState, Icon, SectionHeader } from '../../../pump-ds/index.js';
+import { OnboardingStep } from './stepLayout.js';
 
 interface Step3FuelsCatalogProps {
   draft: OnboardingDraft;
@@ -10,7 +11,6 @@ interface Step3FuelsCatalogProps {
   onAddProduct: () => void;
   onEditProduct: (product: OnboardingProductDraft) => void;
   onRemoveProduct: (draftId: string) => void;
-  panelStyle: React.CSSProperties;
 }
 
 export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
@@ -21,27 +21,13 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
   onAddProduct,
   onEditProduct,
   onRemoveProduct,
-  panelStyle,
 }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div
-        style={{
-          ...panelStyle,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Fuels & Rates
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Configure the fuel products sold at this station and their current selling rates.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+    <OnboardingStep
+      title="Fuels & Rates"
+      subtitle="Configure the fuel products sold at this station and their current selling rates."
+      actions={
+        <>
           {!hasQuickMs && (
             <Button
               type="button"
@@ -64,108 +50,68 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
               Diesel (HSD)
             </Button>
           )}
-          <Button type="button" variant="primary" size="sm" onClick={onAddProduct}>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddProduct}>
             Add Fuel
           </Button>
-        </div>
-      </div>
-
-      {draft.products.length === 0 ? (
-        <div
-          style={{
-            ...panelStyle,
-            padding: '40px',
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            fontSize: '13px',
-          }}
-        >
-          No fuel products added yet. Click "Petrol (MS)" or "Add Fuel" to begin.
-        </div>
-      ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: '16px',
-          }}
-        >
-          {draft.products.map((product) => (
-            <div
-              key={product.draftId}
-              style={{
-                backgroundColor: 'var(--bg-surface)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-card)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                justifyContent: 'space-between',
-              }}
-            >
+        </>
+      }
+    >
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Fuels" subtitle={draft.products.length || undefined} />
+        {draft.products.length === 0 ? (
+          <EmptyState
+            title="No fuel products added yet"
+            description='Click "Petrol (MS)" or "Add Fuel" to begin.'
+          />
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+            {draft.products.map((product) => (
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                }}
+                key={product.draftId}
+                className="flex flex-col justify-between gap-3 rounded-card border border-border-soft bg-surface p-4"
               >
-                <div>
-                  <h4 style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
-                    {product.name || 'Untitled fuel'}
-                  </h4>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {product.code || '—'}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="text-[14px] font-semibold text-ink-strong">
+                      {product.name || 'Untitled fuel'}
+                    </h4>
+                    <span className="font-mono text-[12px] text-ink-muted">
+                      {product.code || '—'}
+                    </span>
+                  </div>
+                  <Chip tone="neutral" size="md">
+                    {product.taxCategory === 'FUEL_VAT' ? 'Fuel VAT' : product.taxCategory}
+                  </Chip>
+                </div>
+
+                <div className="mt-1 flex items-center justify-between border-t border-border-soft pt-2.5">
+                  <span className="text-[12px] text-ink-muted">
+                    Unit: <strong className="text-ink-strong">{product.unit}</strong>
                   </span>
-                </div>
-                <Chip tone={product.taxCategory === 'FUEL_VAT' ? 'info' : 'warning'} size="sm">
-                  {product.taxCategory === 'FUEL_VAT' ? 'Fuel VAT' : product.taxCategory}
-                </Chip>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderTop: '1px solid var(--border-soft)',
-                  paddingTop: '10px',
-                  marginTop: '4px',
-                }}
-              >
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Unit: <strong style={{ color: 'var(--text-strong)' }}>{product.unit}</strong>
-                </span>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => onEditProduct(product)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="xs"
-                    onClick={() => onRemoveProduct(product.draftId)}
-                  >
-                    Remove
-                  </Button>
+                  <div className="flex gap-1.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="xs"
+                      onClick={() => onEditProduct(product)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="xs"
+                      onClick={() => onRemoveProduct(product.draftId)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </OnboardingStep>
   );
 };
