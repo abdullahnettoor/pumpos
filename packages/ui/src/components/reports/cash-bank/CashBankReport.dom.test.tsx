@@ -112,7 +112,7 @@ describe('Reports › Cash & bank summary (#531)', () => {
     const cash = within(tableOf('cash'));
     expect(cash.getByText('Cash in Hand')).toBeTruthy();
     expect(cash.getByText('Petty Cash')).toBeTruthy();
-    expect(cash.getByText('Cash total excl. transfers between cash accounts')).toBeTruthy();
+    expect(cash.getByText('Cash total excl. transfers within cash')).toBeTruthy();
     const bank = within(tableOf('bank'));
     expect(bank.getByText('HDFC ••4512')).toBeTruthy();
     // A cash deposit moved money between the groups: Bank's total keeps it.

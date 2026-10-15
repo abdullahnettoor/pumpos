@@ -41,7 +41,9 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantReportEntry>[] = [
     header: 'Attendant',
     kind: 'text',
     emphasis: true,
+    width: '13%',
     value: (a) => a.attendantName,
+    cell: (a) => <span className="whitespace-nowrap">{a.attendantName}</span>,
   },
   {
     id: 'shifts',
@@ -51,6 +53,14 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantReportEntry>[] = [
     total: false,
     value: (a) => a.shiftsWorked,
     cell: (a) => String(a.shiftsWorked),
+  },
+  {
+    id: 'variance',
+    header: 'Variance',
+    kind: 'money',
+    total: false,
+    value: (a) => a.totals.varianceAmount,
+    cell: (a) => <VarianceChip amount={a.totals.varianceAmount} size="md" />,
   },
   { id: 'cash', header: 'Cash', kind: 'money', value: (a) => a.totals.cashHandedOver },
   { id: 'card', header: 'Card', kind: 'money', value: (a) => a.totals.cardHandedOver },
@@ -70,12 +80,4 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantReportEntry>[] = [
     value: (a) => a.totals.handoverProductSales,
   },
   { id: 'creditSales', header: 'Credit sales', kind: 'money', value: (a) => a.totals.creditSales },
-  {
-    id: 'variance',
-    header: 'Variance',
-    kind: 'money',
-    total: false,
-    value: (a) => a.totals.varianceAmount,
-    cell: (a) => <VarianceChip amount={a.totals.varianceAmount} size="md" />,
-  },
 ];

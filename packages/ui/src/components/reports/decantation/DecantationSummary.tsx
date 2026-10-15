@@ -102,6 +102,12 @@ const PRODUCT_COLUMNS: TableColumn<DecantationReportProductTotal>[] = [
     kind: 'qty',
     unit: 'L',
     value: (p) => (p.shortVarianceQty > 0 ? -p.shortVarianceQty : null),
+    cell: (p) =>
+      p.shortVarianceQty > 0 ? (
+        <span className="whitespace-nowrap">{formatQuantity(-p.shortVarianceQty, 'L')}</span>
+      ) : (
+        '—'
+      ),
   },
   {
     id: 'excess',
@@ -110,7 +116,13 @@ const PRODUCT_COLUMNS: TableColumn<DecantationReportProductTotal>[] = [
     unit: 'L',
     value: (p) => (p.excessVarianceQty > 0 ? p.excessVarianceQty : null),
     cell: (p) =>
-      p.excessVarianceQty > 0 ? formatQuantity(p.excessVarianceQty, 'L', { plus: true }) : '—',
+      p.excessVarianceQty > 0 ? (
+        <span className="whitespace-nowrap">
+          {formatQuantity(p.excessVarianceQty, 'L', { plus: true })}
+        </span>
+      ) : (
+        '—'
+      ),
   },
   { id: 'pending', header: 'Not yet settled', kind: 'text', value: pendingText },
   { id: 'visits', header: 'Visits', kind: 'text', value: visitsText },

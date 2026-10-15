@@ -51,7 +51,7 @@ describe('CashBankDoc (#531)', () => {
     expect(groups[0].rows[0][0].detail).toBeUndefined();
     expect(groups[1].rows[0][0].detail).toBe('Bank');
     expect(groups[0].total.map((c) => c.text)).toEqual([
-      'Cash total excl. transfers between cash accounts',
+      'Cash total excl. transfers within cash',
       '₹1,000.00',
       '₹0.00',
       '₹0.00',

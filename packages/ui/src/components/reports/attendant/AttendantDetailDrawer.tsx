@@ -232,7 +232,7 @@ export const AttendantDetailDrawer: React.FC<{
         <div className="flex flex-col gap-3">
           {/* Shifts worked moved into the cash tile's hint: the day sections
               below count them again, one heading each. */}
-          <KpiStrip>
+          <KpiStrip columns={2}>
             <KpiTile
               size="sm"
               label="Net variance"

@@ -305,12 +305,12 @@ describe('AttendantHandoverReportPanel list', () => {
       <AttendantHandoverReportPanel selectedStation={{ id: 'st-1', name: 'Apex Station' }} />,
     );
 
-  it('lists attendants in a table whose total says it leaves open shifts out', () => {
+  it('lists attendants in a table whose total says it leaves variance out', () => {
     renderPanel();
 
     const table = screen.getByRole('table');
     const total = within(table).getByRole('rowheader');
-    expect(total.textContent).toBe('Total excl. open shifts');
+    expect(total.textContent).toBe('Total excl. variance');
     // The variance reads in the shared vocabulary, not a hand-coloured figure.
     const chip = table.querySelector('[data-variance]');
     expect(chip?.getAttribute('data-variance')).toBe('short');

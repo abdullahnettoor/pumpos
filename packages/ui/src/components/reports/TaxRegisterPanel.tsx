@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSalesTaxRegister } from '../../query/hooks.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatDate, formatMoney } from '../../utils/format.js';
 import { InfoTip } from '../primitives/InfoTip.js';
 import {
   ControlBar,
@@ -48,11 +48,19 @@ interface SalesTaxRow {
 const figure = (v: number | string | null | undefined) => Number(v || 0);
 
 const GST_COLUMNS: TableColumn<SalesTaxRow>[] = [
-  { id: 'date', header: 'Date', kind: 'date', value: (r) => r.businessDate, width: '11%' },
+  {
+    id: 'date',
+    header: 'Date',
+    kind: 'date',
+    value: (r) => r.businessDate,
+    width: '11%',
+    cell: (r) => <span className="whitespace-nowrap">{formatDate(r.businessDate)}</span>,
+  },
   { id: 'document', header: 'Document', kind: 'text', value: (r) => r.documentNumber },
   {
     id: 'product',
     header: 'Product',
+    width: '20%',
     kind: 'text',
     value: (r) => r.productName,
     cell: (r) => (
@@ -84,11 +92,19 @@ const GST_COLUMNS: TableColumn<SalesTaxRow>[] = [
 ];
 
 const VAT_COLUMNS: TableColumn<SalesTaxRow>[] = [
-  { id: 'date', header: 'Date', kind: 'date', value: (r) => r.businessDate, width: '11%' },
+  {
+    id: 'date',
+    header: 'Date',
+    kind: 'date',
+    value: (r) => r.businessDate,
+    width: '11%',
+    cell: (r) => <span className="whitespace-nowrap">{formatDate(r.businessDate)}</span>,
+  },
   { id: 'document', header: 'Document', kind: 'text', value: (r) => r.documentNumber },
   {
     id: 'product',
     header: 'Product',
+    width: '20%',
     kind: 'text',
     value: (r) => r.productName,
     cell: (r) => <span className="font-semibold text-ink-strong">{r.productName}</span>,
@@ -218,6 +234,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
         >
           <InteractiveTable
             bare
+            dense
             columns={GST_COLUMNS}
             rows={gstSaleRows}
             rowKey={(r) => r.id}
@@ -248,6 +265,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({
         >
           <InteractiveTable
             bare
+            dense
             columns={VAT_COLUMNS}
             rows={vatSaleRows}
             rowKey={(r) => r.id}

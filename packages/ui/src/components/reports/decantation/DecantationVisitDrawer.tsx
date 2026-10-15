@@ -173,9 +173,7 @@ const Fact: React.FC<{ label: string; children: React.ReactNode; mono?: boolean 
 }) => (
   <div className="flex min-w-0 flex-col gap-0.5">
     <dt className="text-[12px] text-ink-muted">{label}</dt>
-    <dd className={mono ? 'truncate font-mono text-ink-strong' : 'truncate text-ink-strong'}>
-      {children}
-    </dd>
+    <dd className={mono ? 'font-mono text-ink-strong' : 'text-ink-strong'}>{children}</dd>
   </div>
 );
 
@@ -234,9 +232,7 @@ export const DecantationVisitDrawer: React.FC<{
             </div>
             <ul className="flex flex-col gap-0.5">
               {visit.flags.map((f, i) => (
-                <li key={`${f.code}:${i}`}>
-                  <span className="font-mono">{f.code}</span>: {f.message}
-                </li>
+                <li key={`${f.code}:${i}`}>{f.message}</li>
               ))}
             </ul>
           </div>

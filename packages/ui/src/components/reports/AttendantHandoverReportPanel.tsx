@@ -29,7 +29,8 @@ export interface AttendantHandoverReportPanelProps {
 }
 
 /** Every figure comes from closed shifts; an open shift is not in the report yet. */
-const TOTAL_ROW: TotalRow = { label: 'Total excl. open shifts' };
+// Variance is not added up across attendants (see ATTENDANT_COLUMNS).
+const TOTAL_ROW: TotalRow = { label: 'Total excl. variance' };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 

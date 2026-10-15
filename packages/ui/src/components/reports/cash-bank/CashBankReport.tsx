@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useFinanceMovements } from '../../../query/hooks.js';
 import type { NavIntent } from '../../../nav-intent/store.js';
 import { ROUTES } from '../../../nav-intent/routes.js';
-import { formatMoney } from '../../../utils/format.js';
+import { formatCompactMoney, formatMoney } from '../../../utils/format.js';
 import { accountTypeDetail } from '../../../utils/ledgerLabels.js';
 import { countOf } from '../../../utils/ledgerWindow.js';
 import { useRunTask } from '../../../utils/runTask.js';
@@ -47,7 +47,7 @@ const COLUMNS: TableColumn<CashBankAccountRow>[] = [
     id: 'account',
     header: 'Account',
     kind: 'text',
-    width: '32%',
+    width: '36%',
     value: (a) => a.accountName,
     cell: (a) => {
       const detail = accountTypeDetail(a.accountName, a.accountType);
@@ -230,7 +230,7 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
             value={formatMoney(summary.total.moneyIn)}
             hint={
               movedBetween > 0
-                ? `excl. ${formatMoney(movedBetween)} moved between accounts`
+                ? `excl. ${formatCompactMoney(movedBetween)} moved between them`
                 : 'Cash + Bank'
             }
           />
@@ -240,7 +240,7 @@ export const CashBankReport: React.FC<CashBankReportProps> = ({ selectedStation,
             value={formatMoney(summary.total.moneyOut)}
             hint={
               summary.deposited > 0
-                ? `${formatMoney(summary.deposited)} cash deposited to bank`
+                ? `${formatCompactMoney(summary.deposited)} cash banked`
                 : 'Cash + Bank'
             }
           />
