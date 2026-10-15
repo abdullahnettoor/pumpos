@@ -20,7 +20,10 @@ import {
   MERCHANDISE_STOCK_COLUMNS,
   NOZZLE_COLUMNS,
   SHIFT_COLUMNS,
+  attendantTotalNotes,
   attendantTotalRow,
+  shiftTotalNotes,
+  totalNote,
   dssrCellTone,
   dssrTiles,
   fuelTotalRow,
@@ -64,11 +67,14 @@ function Table<T>({
   columns,
   rows,
   totalRow,
+  notes = [],
   empty,
 }: {
   columns: TableColumn<T>[];
   rows: T[];
   totalRow?: TotalRow;
+  /** Why the total row shows `—` or a blank; printed full width under the table. */
+  notes?: string[];
   empty: string;
 }) {
   if (rows.length === 0) {
@@ -81,7 +87,13 @@ function Table<T>({
     );
   }
   const t = pdfTable(columns, rows, totalRow, toneOf);
-  return <TableView columns={t.columns} rows={t.rows} total={t.total} />;
+  const note = totalNote(notes);
+  return (
+    <>
+      <TableView columns={t.columns} rows={t.rows} total={t.total} />
+      {note && <Text style={[s.label, { marginTop: 4 }]}>{note}</Text>}
+    </>
+  );
 }
 
 const FigureRow = ({ label, value }: { label: string; value: string }) => (
@@ -120,7 +132,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
   meta: (day) => {
     const cells = totalTexts(FUEL_PRODUCT_COLUMNS, day.fuel.rows, fuelTotalRow(day.fuel))?.cells;
     const total = (id: string) => cells?.[FUEL_PRODUCT_COLUMNS.findIndex((c) => c.id === id)] ?? '';
-    const notes = fuelTotalNotes(day.fuel);
+    const note = totalNote(fuelTotalNotes(day.fuel));
     return (
       <View key="meta">
         <View style={s.metaBox}>
@@ -129,9 +141,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
           <MetaCell label="Testing volume" value={total('testing')} />
           <MetaCell label="Fuel sales" value={total('salesValue')} />
         </View>
-        {notes.length > 0 && (
-          <Text style={[s.label, { marginTop: 4 }]}>Totals: {notes.join('; ')}.</Text>
-        )}
+        {note && <Text style={[s.label, { marginTop: 4 }]}>{note}</Text>}
       </View>
     );
   },
@@ -171,6 +181,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
         columns={FUEL_PRODUCT_COLUMNS}
         rows={day.fuel.rows}
         totalRow={fuelTotalRow(day.fuel)}
+        notes={fuelTotalNotes(day.fuel)}
         empty={DSSR_EMPTY.fuel}
       />
     </View>
@@ -202,6 +213,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
         columns={SHIFT_COLUMNS}
         rows={day.shifts}
         totalRow={shiftTotalRow(day)}
+        notes={shiftTotalNotes(day)}
         empty={DSSR_EMPTY.shifts}
       />
       {/* Attendant (Handover) variance per Attendant/DU across the day (#287). */}
@@ -212,6 +224,7 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
             columns={ATTENDANT_COLUMNS}
             rows={day.attendants}
             totalRow={attendantTotalRow(day)}
+            notes={attendantTotalNotes(day)}
             empty=""
           />
         </>

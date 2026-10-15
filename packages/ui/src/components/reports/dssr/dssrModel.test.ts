@@ -4,7 +4,11 @@ import {
   FUEL_PRODUCT_COLUMNS,
   SHIFT_COLUMNS,
   ATTENDANT_COLUMNS,
+  attendantTotalNotes,
   attendantTotalRow,
+  fuelTotalNotes,
+  shiftTotalNotes,
+  totalNote,
   fuelTotalRow,
   shiftTotalRow,
 } from './dssrColumns.js';
@@ -58,7 +62,7 @@ describe('readDssrDay', () => {
     expect(day.fuelStock.map((r) => r.status)).toEqual(['short', 'surplus', 'balanced']);
   });
 
-  it('never adds volumes across units: the total row says so', () => {
+  it('never adds volumes across units: the note under the total says so', () => {
     const day = readDssrDay({
       snapshotData: {
         fuel: {
@@ -69,13 +73,10 @@ describe('readDssrDay', () => {
         },
       },
     });
-    const total = fuelTotalRow(day.fuel);
-    expect(typeof total === 'object' && total.label).toBe(
-      'Total (volumes not added across L and kg)',
-    );
+    expect(totalNote(fuelTotalNotes(day.fuel))).toBe('Total: volumes not added across L and kg.');
   });
 
-  it('labels the shift total when older shifts carry no attendant variance', () => {
+  it('notes the shifts the attendant total leaves out', () => {
     const day = readDssrDay({
       businessDate: '2026-10-09',
       snapshotData: {
@@ -87,10 +88,9 @@ describe('readDssrDay', () => {
         drawer: { totalCashVariance: 0, totalAttendantVariance: -5 },
       },
     });
-    const total = shiftTotalRow(day);
-    expect(typeof total === 'object' && total.label).toBe(
-      'Total (attendant var. excl. 1 shift without a separate attendant variance)',
-    );
+    expect(shiftTotalNotes(day)).toEqual([
+      'attendant var. excl. 1 shift without a separate attendant variance',
+    ]);
     expect(day.shifts.map((s) => s.label)).toEqual(['20261009-1', '20261009-2']);
   });
 
@@ -146,11 +146,12 @@ describe('readDssrDay', () => {
       },
     });
     expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(0, 4)).toEqual([
-      'Total (volumes not added across L and kg)',
+      'Total',
       '',
       '',
       '—',
     ]);
+    expect(shiftTotalNotes(day)).toEqual(['volumes not added across L and kg']);
   });
 
   it('leaves a variance total the snapshot lacks blank, never summing the rows, and says why', () => {
@@ -160,33 +161,38 @@ describe('readDssrDay', () => {
       drawer: { attendants: [{ attendantName: 'Ravi', variance: -4 }] },
     });
     expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells).toEqual([
-      'Total (variance totals not stored for this day)',
+      'Total',
       '',
       '',
       '149.50 L',
       '',
       '',
     ]);
+    expect(shiftTotalNotes(day)).toEqual(['variance totals not stored for this day']);
     expect(totalTexts(ATTENDANT_COLUMNS, day.attendants, attendantTotalRow(day))?.cells).toEqual([
-      'Total (variance total not stored for this day)',
+      'Total',
       '',
     ]);
+    expect(attendantTotalNotes(day)).toEqual(['variance total not stored for this day']);
     const officeOnly = shiftDay({
       fuel,
       drawer: { totalCashVariance: -7, attendants: [{ attendantName: 'Ravi', variance: -4 }] },
     });
+    expect(shiftTotalNotes(officeOnly)).toEqual(['attendant var. total not stored for this day']);
     expect(totalTexts(SHIFT_COLUMNS, officeOnly.shifts, shiftTotalRow(officeOnly))?.cells).toEqual([
-      'Total (attendant var. total not stored for this day)',
+      'Total',
       '',
       '',
       '149.50 L',
       '',
       '−₹7.00',
     ]);
-    const stored = shiftDay({});
+    const stored = shiftDay({ fuel });
     expect(
       totalTexts(ATTENDANT_COLUMNS, stored.attendants, attendantTotalRow(stored))?.cells,
     ).toEqual(['Total', '−₹3.00']);
+    expect(attendantTotalNotes(stored)).toEqual([]);
+    expect(totalNote(shiftTotalNotes(stored))).toBeNull();
   });
 
   /* #583 review round 2: a net volume the snapshot does not store is never gross − testing. */
@@ -201,13 +207,15 @@ describe('readDssrDay', () => {
     });
     expect(day.fuel.totals.net).toBeNull();
     expect(totalTexts(SHIFT_COLUMNS, day.shifts, shiftTotalRow(day))?.cells.slice(0, 4)).toEqual([
-      'Total (net volume not stored for this day)',
+      'Total',
       '',
       '',
       '',
     ]);
+    expect(shiftTotalNotes(day)).toEqual(['net volume not stored for this day']);
+    expect(fuelTotalNotes(day.fuel)).toEqual(['net volume not stored for this day']);
     expect(totalTexts(FUEL_PRODUCT_COLUMNS, day.fuel.rows, fuelTotalRow(day.fuel))?.cells).toEqual([
-      'Total (net volume not stored for this day)',
+      'Total',
       '160.00 L',
       '10.00 L',
       '',

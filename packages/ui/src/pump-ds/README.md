@@ -78,8 +78,9 @@ a time — never in place.
   figures in `values` and never sums a column, for a report whose totals are
   stored (the DSR). A column missing from `values` is blank, and `null`
   prints `—` (a figure that is not added up, such as volumes across L and
-  kg). Say why in the `label`. `units` names a qty figure's unit when it is
-  not the rows' own (the DSR's shift total takes the day's fuel unit).
+  kg). Keep the label `Total` and say why in a note under the table (the DSR
+  does). `units` names a qty figure's unit when it is not the rows' own (the
+  DSR's shift total takes the day's fuel unit).
 - **Sorting** puts empty and broken values last in either direction.
 - **PDF.** `cellText` and `totalTexts` read a cell and the total row as plain
   text, for a PDF that prints the screen's table (the DSR, #580). A column whose

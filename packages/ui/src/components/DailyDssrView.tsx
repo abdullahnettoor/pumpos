@@ -44,7 +44,11 @@ import {
   DSSR_COGS_NOTE,
   DSSR_EMPTY,
   DSSR_TITLES,
+  attendantTotalNotes,
   attendantTotalRow,
+  fuelTotalNotes,
+  shiftTotalNotes,
+  totalNote,
   dssrTiles,
   fuelTotalRow,
   shiftTotalRow,
@@ -299,6 +303,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
           title="fuel sales"
           emptyMessage={DSSR_EMPTY.fuel}
         />
+        <TotalNote rows={day.fuel.rows.length} notes={fuelTotalNotes(day.fuel)} />
       </section>
 
       <section className="flex flex-col gap-2">
@@ -346,6 +351,7 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
           title="included shifts"
           emptyMessage={DSSR_EMPTY.shifts}
         />
+        <TotalNote rows={day.shifts.length} notes={shiftTotalNotes(day)} />
       </section>
 
       {/* Attendant (Handover) variance per Attendant/DU for the day (#287). */}
@@ -359,10 +365,21 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
             totalRow={attendantTotalRow(day)}
             title="attendant variance"
           />
+          <TotalNote rows={day.attendants.length} notes={attendantTotalNotes(day)} />
         </section>
       )}
     </div>
   );
+};
+
+/**
+ * Why a total row shows `—` or a blank, as one full-width line under the
+ * table; the PDF prints the same line. Only under a table with rows, where
+ * the total row shows.
+ */
+const TotalNote: React.FC<{ rows: number; notes: string[] }> = ({ rows, notes }) => {
+  const note = rows > 0 ? totalNote(notes) : null;
+  return note ? <ReportNote className="max-w-none">{note}</ReportNote> : null;
 };
 
 /**

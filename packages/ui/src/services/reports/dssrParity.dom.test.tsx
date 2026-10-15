@@ -8,7 +8,7 @@ import {
   DSSR_NOT_STORED_FIXTURE,
   DSSR_PARITY_FIXTURE,
 } from '../../test/dssrFixture.js';
-import { readPdf } from '../../test/pdfTree.js';
+import { readPdf, type PdfText } from '../../test/pdfTree.js';
 import { DailyDssrView } from '../../components/DailyDssrView.js';
 import { DSSR_EMPTY } from '../../components/reports/dssr/dssrColumns.js';
 import type { DssrRow } from '../../components/reports/dssr/dssrModel.js';
@@ -52,6 +52,27 @@ const renderBoth = (fixture: DssrRow) => {
   return readPdf(<DssrDoc dssr={fixture} config={DEFAULT_DSSR_CONFIG} />);
 };
 
+const NOTE = /^Total: /;
+
+/** The note under each screen table (`Total: …`), or null where there is none. */
+const screenNotes = (): (string | null)[] =>
+  screen.queryAllByRole('table').map((table) => {
+    const section = table.closest('section');
+    const notes = Array.from(section?.querySelectorAll('p') ?? []).map(text);
+    return notes.find((n) => NOTE.test(n)) ?? null;
+  });
+
+/** The line the PDF prints right under each table, when it is a total note. */
+const pdfNotes = (pdf: PdfText): (string | null)[] => {
+  let at = 0;
+  return pdf.tables.map((t) => {
+    const start = pdf.lines.indexOf(t.headers.join(' | '), at);
+    at = start + 1 + t.rows.length + t.totals.length;
+    const next = pdf.lines[at];
+    return next && NOTE.test(next) ? next : null;
+  });
+};
+
 const days: Record<string, DssrRow> = {
   'a full day': DSSR_PARITY_FIXTURE,
   'an empty day': DSSR_EMPTY_DAY_FIXTURE,
@@ -68,6 +89,8 @@ describe.each(Object.entries(days))('DSR screen and PDF parity (#580): %s', (_na
       expect(printed.headers).toEqual(headers.map((h) => h.toUpperCase()));
       expect([...printed.rows, ...printed.totals]).toEqual(body);
     });
+    // The note under each table, saying why a total is `—` or blank.
+    expect(pdfNotes(pdf)).toEqual(screenNotes());
   });
 
   it('prints the same section titles, tiles and sales lines', () => {
@@ -110,17 +133,21 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
     const pdf = renderBoth(DSSR_PARITY_FIXTURE);
     const [fuel] = pdf.tables;
     expect(fuel.rows[0][1]).toBe('2,405.13 L');
-    expect(fuel.totals[0][0]).toBe('Total (volumes not added across L and kg)');
+    expect(fuel.totals[0]).toEqual(['Total', '—', '—', '—', '₹3,98,000.25']);
     expect(pdf.tables.flatMap((t) => t.rows.map((r) => r[r.length - 1]))).toEqual(
       expect.arrayContaining(['Short', 'Surplus', 'Balanced']),
     );
     // The shift total is the snapshot's: no net volume across L and kg.
     const shifts = pdf.tables.find((t) => t.headers[0] === 'SHIFT');
-    expect(shifts?.totals[0].slice(0, 4)).toEqual([
-      'Total (volumes not added across L and kg; attendant var. excl. 1 shift without a separate attendant variance)',
-      '',
-      '',
-      '—',
+    expect(shifts?.totals[0].slice(0, 4)).toEqual(['Total', '', '', '—']);
+    // The reasons sit under the tables, one line each, not in the total label.
+    expect(pdfNotes(pdf)).toEqual([
+      'Total: volumes not added across L and kg.',
+      null,
+      null,
+      null,
+      'Total: volumes not added across L and kg; attendant var. excl. 1 shift without a separate attendant variance.',
+      null,
     ]);
   });
 
@@ -133,20 +160,17 @@ describe('DSR screen and PDF parity (#580): the words they once disagreed on', (
     expect(pdf.tables).toHaveLength(0);
   });
 
-  it('a total the snapshot does not store is blank in both, and the label says why', () => {
+  it('a total the snapshot does not store is blank in both, and the note says why', () => {
     const pdf = renderBoth(DSSR_NOT_STORED_FIXTURE);
     const [fuel, shifts, attendants] = pdf.tables;
-    expect(fuel.totals[0]).toEqual([
-      'Total (net volume not stored for this day)',
-      '310.00 kg',
-      '10.00 kg',
-      '',
-      '₹25,000.00',
+    expect(fuel.totals[0]).toEqual(['Total', '310.00 kg', '10.00 kg', '', '₹25,000.00']);
+    expect(shifts.totals[0]).toEqual(['Total', '', '', '', '', '']);
+    expect(attendants.totals[0]).toEqual(['Total', '']);
+    expect(pdfNotes(pdf)).toEqual([
+      'Total: net volume not stored for this day.',
+      'Total: net volume not stored for this day; variance totals not stored for this day.',
+      'Total: variance total not stored for this day.',
     ]);
-    expect(shifts.totals[0].slice(3)).toEqual(['', '', '']);
-    expect(shifts.totals[0][0]).toBe(
-      'Total (net volume not stored for this day; variance totals not stored for this day)',
-    );
-    expect(attendants.totals[0]).toEqual(['Total (variance total not stored for this day)', '']);
+    expect(screenNotes()).toEqual(pdfNotes(pdf));
   });
 });

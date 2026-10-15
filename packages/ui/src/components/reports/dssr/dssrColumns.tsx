@@ -140,29 +140,33 @@ const notStored = (what: string) => `${what} not stored for this day`;
 const dayUnit = (fuel: DssrDay['fuel']): string | null =>
   fuel.units.length === 1 ? fuel.units[0] : null;
 
-/** `Total`, with the reasons a figure in it is `—` or blank. */
-const totalLabel = (notes: (string | false | null)[]): string => {
-  const reasons = notes.filter(Boolean);
-  return reasons.length > 0 ? `Total (${reasons.join('; ')})` : 'Total';
-};
+/**
+ * The note printed under a table whose total row has a `—` or a blank cell,
+ * saying why (#583): the total row's label stays `Total`, and the reasons
+ * read as one full-width line, on screen and in the PDF alike. Null when
+ * every total is printed.
+ */
+export function totalNote(notes: string[]): string | null {
+  return notes.length > 0 ? `Total: ${notes.join('; ')}.` : null;
+}
+
+const reasons = (notes: (string | false | null)[]): string[] =>
+  notes.filter((n): n is string => !!n);
 
 /** Why the fuel totals show `—` or a blank: volumes across units, a net volume not stored. */
 export function fuelTotalNotes(fuel: DssrDay['fuel']): string[] {
   const mixed = fuelUnitsNote(fuel);
-  return [mixed, !mixed && fuel.totals.net == null && notStored('net volume')].filter(
-    (n): n is string => !!n,
-  );
+  return reasons([mixed, !mixed && fuel.totals.net == null && notStored('net volume')]);
 }
 
 /**
  * The fuel total row carries the snapshot's own totals. Volumes are never
- * added across units (L and kg), so on a mixed day the label says so and the
- * volume cells read `—`. A net volume the snapshot does not store is blank,
- * never gross − testing, and the label says why.
+ * added across units (L and kg), so on a mixed day the volume cells read `—`.
+ * A net volume the snapshot does not store is blank, never gross − testing.
+ * `fuelTotalNotes` says why, under the table.
  */
 export function fuelTotalRow(fuel: DssrDay['fuel']): TotalRow {
   return {
-    label: totalLabel(fuelTotalNotes(fuel)),
     values: {
       gross: fuel.totals.gross,
       testing: fuel.totals.testing,
@@ -258,34 +262,37 @@ export const SHIFT_COLUMNS: TableColumn<ShiftRow>[] = [
   },
 ];
 
+/** Why the shift totals show `—` or a blank, and which shifts the attendant total leaves out. */
+export function shiftTotalNotes(day: DssrDay): string[] {
+  const mixed = fuelUnitsNote(day.fuel);
+  const { attendantVariance, officeVariance } = day.drawerTotals;
+  const withoutAttendant = day.shifts.filter((s) => s.attendantVariance == null).length;
+  return reasons([
+    mixed,
+    !mixed && day.fuel.totals.net == null && notStored('net volume'),
+    attendantVariance == null && officeVariance == null
+      ? notStored('variance totals')
+      : attendantVariance == null
+        ? notStored('attendant var. total')
+        : officeVariance == null && notStored('office count var. total'),
+    withoutAttendant > 0 &&
+      `attendant var. excl. ${withoutAttendant} ${withoutAttendant === 1 ? 'shift' : 'shifts'} without a separate attendant variance`,
+  ]);
+}
+
 /**
  * The day's shift totals, as stored with the snapshot: net volume is the
  * day's net fuel volume (`fuel.totalNetVolume`) in the day's fuel unit, the
  * variances the drawer totals. Nothing is summed from the rows. On a
  * mixed-unit day the net volume reads `—`, as the fuel total does; a total
- * the snapshot lacks is blank. The label gives the reason for each, and says
- * when a shift has no separate attendant variance (closed before #287).
+ * the snapshot lacks is blank. `shiftTotalNotes` says why, under the table.
  */
 export function shiftTotalRow(day: DssrDay): TotalRow {
   const mixed = fuelUnitsNote(day.fuel);
   const net = day.fuel.totals.net;
   const unit = dayUnit(day.fuel);
   const { attendantVariance, officeVariance } = day.drawerTotals;
-  const withoutAttendant = day.shifts.filter((s) => s.attendantVariance == null).length;
-  const missingVariance =
-    attendantVariance == null && officeVariance == null
-      ? notStored('variance totals')
-      : attendantVariance == null
-        ? notStored('attendant var. total')
-        : officeVariance == null && notStored('office count var. total');
   return {
-    label: totalLabel([
-      mixed,
-      !mixed && net == null && notStored('net volume'),
-      missingVariance,
-      withoutAttendant > 0 &&
-        `attendant var. excl. ${withoutAttendant} ${withoutAttendant === 1 ? 'shift' : 'shifts'} without a separate attendant variance`,
-    ]),
     values: {
       ...(mixed ? { netVolume: null } : net != null && { netVolume: net }),
       ...(attendantVariance != null && { attendantVariance }),
@@ -309,12 +316,13 @@ export const ATTENDANT_COLUMNS: TableColumn<AttendantRow>[] = [
   },
 ];
 
-/** The attendants' total: the stored day total; blank for a snapshot without one, and the label says so. */
+/** The attendants' total: the stored day total; blank for a snapshot without one. */
 export function attendantTotalRow(day: DssrDay): TotalRow {
   const stored = day.drawerTotals.attendantVariance;
-  return {
-    label: totalLabel([stored == null && notStored('variance total')]),
-    values: stored == null ? {} : { variance: stored },
-    derive: false,
-  };
+  return { values: stored == null ? {} : { variance: stored }, derive: false };
+}
+
+/** Why the attendants' total is blank: the snapshot stores none. */
+export function attendantTotalNotes(day: DssrDay): string[] {
+  return reasons([day.drawerTotals.attendantVariance == null && notStored('variance total')]);
 }
