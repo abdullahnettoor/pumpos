@@ -145,7 +145,10 @@ describe('DecantationsTab', () => {
     expect(within(rowA).getByText(/Not linked · MS/)).toBeTruthy();
     // header + 2 visits + the total row
     expect(screen.getAllByRole('row').length).toBe(4);
-    expect(screen.getByText('Total excl. pending')).toBeTruthy();
+    // Only the measured visit adds up: invoice 6,000 vs received 5,900, not the pending 12,000.
+    const total = screen.getByText('Total excl. pending').closest('tr')!;
+    expect(within(total).getByText('6,000.00 L')).toBeTruthy();
+    expect(within(total).getByText('5,900.00 L')).toBeTruthy();
   });
 
   it('shows Short with the quantity, density status and the flag on a measured visit', () => {

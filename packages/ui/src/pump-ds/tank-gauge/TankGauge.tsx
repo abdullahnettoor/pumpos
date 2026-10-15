@@ -79,13 +79,16 @@ const TUBE = {
     name: 'text-[12.5px]',
     pct: 'text-[13px]',
     stock: 'text-[12px]',
+    side: 'shrink-0',
   },
   lg: {
     gap: 'gap-4',
     tube: 'h-[64px] w-5 rounded',
     name: 'text-[14px]',
     pct: 'text-[18px] leading-tight',
-    stock: 'text-[13px]',
+    stock: 'whitespace-nowrap text-[13px]',
+    // A long cover fallback wraps under the % instead of squeezing the stock.
+    side: 'max-w-[45%] shrink-0',
   },
 } as const satisfies Record<TankGaugeSize, Record<string, string>>;
 
@@ -169,7 +172,7 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
         {stock}
         {showStatus && <Status level={level} />}
       </div>
-      <div className="shrink-0 text-right">
+      <div className={cn('text-right', t.side)}>
         <div>
           {pct}
           {word && <span className="sr-only"> {word}</span>}

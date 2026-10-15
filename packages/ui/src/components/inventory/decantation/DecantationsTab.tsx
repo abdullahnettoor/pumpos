@@ -148,7 +148,16 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
     [inRange],
   );
   const rows = useMemo(() => inRange.filter(FILTERS[filter].test), [inRange, filter]);
-  const totalRow = useMemo<TotalRow>(() => ({ label: 'Total excl. pending' }), []);
+  // Invoice and received compare like with like: both sum measured visits only.
+  const totalRow = useMemo<TotalRow>(() => {
+    const measured = rows.filter((r) => r.receivedQty != null);
+    const sum = (pick: (r: DecantationRow) => number | null) =>
+      measured.reduce((acc, r) => acc + (pick(r) ?? 0), 0);
+    return {
+      label: 'Total excl. pending',
+      values: { invoiceQty: sum((r) => r.invoiceQty), received: sum((r) => r.receivedQty) },
+    };
+  }, [rows]);
 
   const columns = useMemo<TableColumn<DecantationRow>[]>(
     () => [
@@ -157,7 +166,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         header: 'Date',
         kind: 'date',
         value: dateOf,
-        width: '11%',
+        width: '12%',
         cell: (r) => (
           <div className="flex flex-col gap-0.5">
             <span>{formatDate(dateOf(r))}</span>
@@ -172,10 +181,12 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
         header: 'Tanker',
         kind: 'text',
         value: (r) => r.decantation.tankerNumber,
-        width: '11%',
+        width: '13%',
         cell: (r) => (
           <div className="flex flex-col gap-0.5">
-            <span className="font-semibold text-ink">{r.decantation.tankerNumber}</span>
+            <span className="whitespace-nowrap font-semibold text-ink">
+              {r.decantation.tankerNumber}
+            </span>
             {r.decantation.driverName && (
               <span className="text-[12px] text-ink-muted">{r.decantation.driverName}</span>
             )}

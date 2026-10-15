@@ -29,6 +29,12 @@ export interface ProductStockViewProps {
   highlightId: string | null;
 }
 
+const sentenceCase = (code: string) =>
+  code
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase());
+
 const productsCount = (n: number) => countOf(n, 'product', 'products');
 
 const FILTER: Record<ItemFilter, { label: string; status?: 'out-of-stock' | 'oversold' }> = {
@@ -40,7 +46,14 @@ const FILTER: Record<ItemFilter, { label: string; status?: 'out-of-stock' | 'ove
 const COLUMNS: TableColumn<ItemRow>[] = [
   { id: 'name', header: 'Product', kind: 'text', value: (i) => i.name, emphasis: true },
   { id: 'code', header: 'Code', kind: 'text', value: (i) => i.code, width: '14%' },
-  { id: 'type', header: 'Type', kind: 'text', value: (i) => i.productType, width: '14%' },
+  {
+    id: 'type',
+    header: 'Type',
+    kind: 'text',
+    // The API sends a code ("LUBRICANT"): read it in sentence case.
+    value: (i) => (i.productType ? sentenceCase(i.productType) : null),
+    width: '14%',
+  },
   {
     id: 'onHand',
     header: 'On hand',
