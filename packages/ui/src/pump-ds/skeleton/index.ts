@@ -1,2 +1,2 @@
-export { Skeleton } from './Skeleton.js';
-export type { SkeletonProps } from './Skeleton.js';
+export { Skeleton, SkeletonGrid } from './Skeleton.js';
+export type { SkeletonProps, SkeletonGridProps } from './Skeleton.js';

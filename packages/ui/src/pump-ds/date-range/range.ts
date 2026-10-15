@@ -2,7 +2,7 @@ import { resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
 
 /**
  * Date-range presets anchored on the station clock. The single source for
- * `DateRangeMenu` and the legacy `DateRangeField` (#539 removes the field).
+ * `DateRangeMenu` and every page that defaults a period.
  */
 
 export type RangePreset =

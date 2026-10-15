@@ -2,7 +2,8 @@ import React from 'react';
 
 /**
  * Canonical form primitives. These are the single source of truth for inputs
- * across the app — they wrap the `.input` / `.select` / `.textarea` CSS classes,
+ * across the app — they wrap the `.input` / `.textarea` CSS classes (and re-export
+ * the pump-ds `Select`),
  * forward refs so they drop straight into React Hook Form's `register`, and
  * surface a consistent invalid state. Prefer these over bespoke inline-styled
  * inputs so every form looks and behaves identically.
@@ -163,15 +164,9 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 Textarea.displayName = 'Textarea';
 
-export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  invalid?: boolean;
-}
-
-export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ invalid, className, children, ...props }, ref) => (
-    <select ref={ref} className={cx('select', invalid && 'input-invalid', className)} {...props}>
-      {children}
-    </select>
-  ),
-);
-Select.displayName = 'Select';
+/**
+ * The one `Select` is pump-ds's (`pump-ds/input/Select.tsx`). Re-exported here
+ * so a form can take its `Field` and its `Select` from one import.
+ */
+export { Select } from '../../pump-ds/input/Select.js';
+export type { SelectProps } from '../../pump-ds/input/Select.js';

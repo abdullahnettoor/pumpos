@@ -8,16 +8,7 @@
  *   Billing      → `organization plan|subscription|suspend|restore`
  */
 import React, { useState } from 'react';
-import {
-  Banner,
-  Drawer,
-  Field,
-  NumberInput,
-  Select,
-  Tabs,
-  TextInput,
-  LoadingSpinner,
-} from '@pump/ui';
+import { Banner, Drawer, Field, NumberInput, Select, Tabs, TextInput, Spinner } from '@pump/ui';
 import { commands, useInvalidatePlatform, useOrganizationAccess } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import { SUBSCRIPTION_STATUSES, type OrganizationAccess, type OwnerRow } from '../api/types.js';
@@ -73,7 +64,9 @@ export const OrganizationDrawer: React.FC<OrganizationDrawerProps> = ({ target, 
         {tab === 'owner' ? (
           <OwnerTab row={row} onRun={run} target={target} />
         ) : access.isLoading ? (
-          <LoadingSpinner />
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+            <Spinner className="size-6 text-brand" />
+          </div>
         ) : access.error ? (
           <Banner severity="danger">{access.error.message}</Banner>
         ) : access.data ? (

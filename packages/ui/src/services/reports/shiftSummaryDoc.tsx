@@ -11,7 +11,7 @@ import {
   Path,
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
-import { formatQuantity, formatSignedMoney } from '../../utils/format.js';
+import { formatDateTime, formatQuantity, formatSignedMoney } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
@@ -115,14 +115,8 @@ export const inr0 = (n: any) => formatSignedMoney(n, { decimals: 0 });
 // missing figure prints 0, as these PDFs always have, not the screen's `—`.
 const reading = (n: any) => Number(n) || 0;
 export const vol3 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 3 });
-export const fmtDateTime = (iso?: string) => {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('en-IN');
-  } catch {
-    return '—';
-  }
-};
+/** PDF date + time: the app's one format (`11 Jul 2026, 06:30 am`), `—` when missing. */
+export const fmtDateTime = (iso?: string) => formatDateTime(iso);
 
 export const s = StyleSheet.create({
   page: {
@@ -736,7 +730,7 @@ export const ShiftSummaryDoc: React.FC<{
         )}
         {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
         <View style={s.foot} fixed>
-          <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
+          <Text>Generated {formatDateTime(new Date())}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

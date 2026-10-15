@@ -334,7 +334,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
         [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
         [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
         [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
-        [new Date().toLocaleString('en-IN')]: '<printed at>',
+        [formatDateTime(new Date())]: '<printed at>',
       };
       const doc = (
         <DssrDoc
@@ -373,7 +373,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
           clock={{ timeZone: 'Asia/Kolkata' }}
         />
       );
-      const printed = new Date().toLocaleString('en-IN');
+      const printed = formatDateTime(new Date());
       const lines = readPdf(doc).lines.map((line) => line.split(printed).join('<printed at>'));
       expect(lines).toMatchSnapshot();
     } finally {

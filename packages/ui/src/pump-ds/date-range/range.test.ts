@@ -8,6 +8,27 @@ const IST_6AM = { timeZone: 'Asia/Kolkata', dayStartsAt: '06:00' };
 const IST = { timeZone: 'Asia/Kolkata', dayStartsAt: '00:00' };
 
 describe('computeRange', () => {
+  it('anchors presets to the station date across a month boundary, not UTC (#288)', () => {
+    // 2026-03-01 02:00 IST = 2026-02-28 20:30 UTC. A UTC-derived date would land on February.
+    const istEarlyMarch = new Date('2026-02-28T20:30:00.000Z');
+    expect(computeRange('today', IST, istEarlyMarch)).toEqual({
+      from: '2026-03-01',
+      to: '2026-03-01',
+    });
+    expect(computeRange('yesterday', IST, istEarlyMarch)).toEqual({
+      from: '2026-02-28',
+      to: '2026-02-28',
+    });
+    expect(computeRange('last-7', IST, istEarlyMarch)).toEqual({
+      from: '2026-02-23',
+      to: '2026-03-01',
+    });
+    expect(computeRange('this-month', IST, istEarlyMarch)).toEqual({
+      from: '2026-03-01',
+      to: '2026-03-01',
+    });
+  });
+
   it('anchors on the station business day, not the calendar day', () => {
     expect(computeRange('today', IST_6AM, EARLY_14_OCT)).toEqual({
       from: '2026-10-13',

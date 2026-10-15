@@ -50,7 +50,6 @@ export { AccountsPanel } from './components/finance/AccountsPanel.js';
 export { AccountStatement } from './components/finance/AccountStatement.js';
 export type { AccountStatementProps } from './components/finance/AccountStatement.js';
 export { AccountTypeChip } from './components/finance/AccountTypeChip.js';
-export { LoadingSpinner } from './components/LoadingSpinner.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export {
@@ -134,8 +133,6 @@ export * from './query/handoverMutation.js';
 export * from './query/stockCountMutation.js';
 export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
-export { PageLayout } from './components/primitives/PageLayout.js';
-export type { PageLayoutProps } from './components/primitives/PageLayout.js';
 export { PageFrame } from './components/page-frame/index.js';
 export type { PageFrameProps } from './components/page-frame/index.js';
 export { DataTable } from './components/primitives/DataTable.js';
@@ -150,7 +147,8 @@ export type {
   ToastVariant,
   ToastOptions,
 } from './components/primitives/ToastProvider.js';
-export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
+export { Skeleton, SkeletonGrid } from './pump-ds/skeleton/index.js';
+export type { SkeletonProps, SkeletonGridProps } from './pump-ds/skeleton/index.js';
 export {
   Field,
   TextInput,
@@ -167,21 +165,14 @@ export type {
   TextareaProps,
   SelectProps,
 } from './components/primitives/Field.js';
-export { DateRangeField, computeRange } from './components/primitives/DateRangeField.js';
-export type {
-  DateRangeFieldProps,
-  DateRange,
-  RangePreset,
-  RangeClock,
-} from './components/primitives/DateRangeField.js';
+export { computeRange } from './pump-ds/date-range/index.js';
+export type { DateRange, RangePreset, RangeClock } from './pump-ds/date-range/index.js';
 export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
 export { Tooltip } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
 export { InfoTip } from './components/primitives/InfoTip.js';
 export type { InfoTipProps } from './components/primitives/InfoTip.js';
-export { Menu, Popover } from './components/primitives/Menu.js';
-export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
 export { Combobox } from './components/primitives/Combobox.js';
 export type {
   ComboboxProps,
@@ -232,6 +223,7 @@ export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
 export * from './pump-ds/boot/index.js';
+export * from './pump-ds/spinner/index.js';
 // Used by the desktop update surface: a design-system meter instead of a
 // native <progress>, and the design-system button inside its drawer.
 export * from './pump-ds/meter/index.js';
