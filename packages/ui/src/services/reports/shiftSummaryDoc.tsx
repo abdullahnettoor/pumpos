@@ -50,7 +50,6 @@ import {
 } from '../../components/Shifts/shiftSummaryModel.js';
 import {
   CREDIT_COLUMNS,
-  DRAWER_COLUMNS,
   FUEL_COLUMNS,
   HANDOVER_COLUMNS,
   LEGACY_PURCHASE_COLUMNS,
@@ -71,8 +70,11 @@ import {
   terminalTotalRow,
 } from '../../components/Shifts/shiftSummaryColumns.js';
 import {
-  DRAWER_CURRENCY_NOTE,
-  type DrawerRow,
+  closeDrawerTotal,
+  drawerColumns,
+  drawerRows,
+  drawerTotalRow,
+  type CloseDrawerRow,
 } from '../../components/Shifts/DrawerReconciliationTable.js';
 import { PdfScreenTable, PdfTitle } from './pdfScreenTable.js';
 
@@ -617,23 +619,30 @@ const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
   ),
   // Office Records (collections, expenses) never appear on a Shift Summary
   // (ADR 0005); saved configs naming those old sections simply skip them.
-  drawers: ({ summary }) =>
-    summary.drawers.length > 0 ? (
-      <View key="drawers" wrap={breaks(summary.drawers)}>
-        <PdfTitle
-          title={TITLES.drawers}
-          subtitle={TITLES.drawersSubtitle}
-          caption={DRAWER_CURRENCY_NOTE}
-        />
+  // The screen's Drawers table (#534): its rows, columns and total row, with
+  // the variance total in words (`texts`).
+  drawers: ({ summary }) => {
+    if (summary.drawers.length === 0) return null;
+    const rows = drawerRows(summary.drawers);
+    const total = closeDrawerTotal(rows);
+    const totalRow = drawerTotalRow(rows, total);
+    const handedOver = rows.some((r) => !r.pending);
+    return (
+      <View key="drawers" wrap={breaks(rows)}>
+        <PdfTitle title={TITLES.drawers} subtitle={TITLES.drawersSubtitle} />
         <PdfScreenTable
-          columns={DRAWER_COLUMNS}
-          rows={summary.drawers}
-          flex={{ attendant: 1.6 }}
+          columns={drawerColumns()}
+          rows={rows}
+          totalRow={totalRow}
           empty=""
-          tone={varianceInk((r: DrawerRow) => r.variance)}
+          tone={varianceInk((r: CloseDrawerRow) => r.variance)}
+          totalTone={(col) =>
+            col.id === 'variance' && handedOver ? problemInk(total.variance) : undefined
+          }
         />
       </View>
-    ) : null,
+    );
+  },
   signatures: () => (
     <View key="signatures" style={s.signRow}>
       {SIGNATURE_LINES.map((who) => (

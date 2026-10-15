@@ -1,31 +1,55 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { InfoTip } from '../primitives/InfoTip.js';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
-import { Button, Form, Icon } from '../../pump-ds/index.js';
+import {
+  Button,
+  DataSection,
+  Form,
+  Icon,
+  Input,
+  InteractiveTable,
+  SectionHeader,
+  SegmentedControl,
+  Select,
+  STATUS_MAP,
+  VarianceChip,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
-import { useAllVehicles } from '../../query/hooks.js';
+import {
+  useAllVehicles,
+  useCustomers,
+  useMerchandiseHandovers,
+  useMerchandiseSales,
+} from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import {
   CloudTransactionService,
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../../services/cloud.js';
-import {
-  loadHandoverRequestIdentity,
-  resolveHandoverRequestIdentity,
-  saveHandoverRequestIdentity,
-  useRecordHandoverMutation,
-} from '../../query/handoverMutation.js';
-import { inr } from '../../utils/format.js';
-import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
-import { compareNatural } from '@pump/shared';
+import { useRecordHandoverMutation } from '../../query/handoverMutation.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import { formatMoney, formatQuantity, MINUS } from '../../utils/format.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { CloseNote } from './CloseShiftSteps.js';
+import { denominationCountError } from './closeShiftModel.js';
+import { HandoverProductSaleDrawer } from './HandoverProductSaleDrawer.js';
+import {
+  acceptedHandoverRecon,
+  handoverNozzles,
+  handoverRecon,
+  handoverReconInput,
+  sumAmounts,
+  type HandoverNozzleRow,
+} from './handoverFigures.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -60,6 +84,30 @@ const handoverFormSchema = z.object({
 
 type HandoverFormValues = z.infer<typeof handoverFormSchema>;
 
+/** A typed figure, '' while the box is blank (the schema coerces it on submit). */
+type Typed = number | '';
+
+/** The form as the operator types it: number boxes start blank, not at 0 (#302). */
+interface HandoverFormInput {
+  cashHandedOver: Typed;
+  cashDrops: Typed;
+  cardHandedOver: Typed;
+  upiHandedOver: Typed;
+  nozzleReadings: Record<string, Typed>;
+  nozzleTesting: Record<string, Typed>;
+  terminalCard?: Record<string, Typed>;
+  terminalUpi?: Record<string, Typed>;
+}
+
+/** The schema's resolver, typed for the blank-able input it coerces. */
+const handoverResolver = zodResolver(handoverFormSchema) as unknown as Resolver<
+  HandoverFormInput,
+  unknown,
+  HandoverFormValues
+>;
+
+const typed = (v: unknown): Typed => Number(v) || '';
+
 interface HandoverDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -72,15 +120,13 @@ interface HandoverDrawerProps {
   nozzles: any[];
   terminals?: any[];
   stationHasConfiguredTerminals?: boolean;
-  /** Credit-eligible (non-prepaid Credit/Fleet) customers, each with currentBalance + creditLimit. */
-  customers?: any[];
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
   creditSales?: any[];
   /** OMC fleet-card sale lines already recorded for this (attendant, DU). */
   omcSales?: any[];
-  /** Walk-in merchandise cash this attendant collected (folds into expected). */
+  /** Product sales paid in cash this attendant collected (folds into expected). */
   merchandiseCash?: number;
-  /** Walk-in merchandise paid by card/UPI on a terminal (informational; not in cash expected). */
+  /** Product sales paid by card/UPI on a terminal (informational; not in cash expected). */
   merchandiseNonCash?: number;
   /** This Drawer's Opening Float, issued at shift open (ADR 0005). */
   openingFloat?: number;
@@ -91,6 +137,11 @@ interface HandoverDrawerProps {
 }
 
 /**
+ * The Handover drawer (#534): one Drawer's nozzle readings, card / UPI
+ * batches, customer sales, cash and drops, and the reconciliation that reads
+ * expected = float + fuel cash + product cash − drops, with its variance in
+ * the shared vocabulary.
+ *
  * The body only exists while the drawer is open, so everything it prefills from
  * props is an initial value rather than something an effect has to push in and
  * then defend with a latch. The latch existed because recording a credit sale
@@ -100,6 +151,41 @@ interface HandoverDrawerProps {
  */
 export const HandoverDrawer: React.FC<HandoverDrawerProps> = (props) =>
   props.isOpen ? <HandoverDrawerBody {...props} /> : null;
+
+/** A field label above its control, 12px. */
+const FieldLabel: React.FC<{ htmlFor?: string; children: React.ReactNode }> = ({
+  htmlFor,
+  children,
+}) => (
+  <label htmlFor={htmlFor} className="text-[12px] font-medium text-ink-muted">
+    {children}
+  </label>
+);
+
+const FieldError: React.FC<{ message?: string }> = ({ message }) =>
+  message ? <span className="text-[12px] text-danger-fg">{message}</span> : null;
+
+/** A reconciliation line: label left, mono figure right. */
+const ReconLine: React.FC<{
+  label: React.ReactNode;
+  value: React.ReactNode;
+  total?: boolean;
+  muted?: boolean;
+}> = ({ label, value, total, muted }) => (
+  <div
+    className={cn(
+      'flex items-center justify-between gap-3 text-[13px]',
+      total && 'border-t border-border-soft pt-1.5 font-semibold text-ink-strong',
+      muted && 'text-ink-muted',
+    )}
+  >
+    <dt className="flex items-center gap-1.5">{label}</dt>
+    <dd className="font-mono tabular-nums">{value}</dd>
+  </div>
+);
+
+const minus = (v: number) => (v === 0 ? formatMoney(0) : `${MINUS}${formatMoney(v)}`);
+const plus = (v: number) => (v === 0 ? formatMoney(0) : `+${formatMoney(v)}`);
 
 const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   onClose,
@@ -112,7 +198,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   nozzles,
   terminals = [],
   stationHasConfiguredTerminals = false,
-  customers = [],
   creditSales = [],
   omcSales = [],
   merchandiseCash = 0,
@@ -122,6 +207,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   existingHandover,
   onSaveSuccess,
 }) => {
+  const formId = `handover-form-${duId}`;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Guard against a forgotten POS sheet: terminals configured but zero card/UPI
@@ -129,14 +215,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
   const toast = useToast();
-  // Lazily, once per open: a bare useRef argument is evaluated on every render,
-  // which would re-read localStorage on every keystroke in this drawer.
-  const [initialHandoverRequest] = useState(() =>
-    stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null,
-  );
-  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
-    initialHandoverRequest,
-  );
+  // One Idempotency-Key session per drawer open (#534): a retry after a lost
+  // answer reuses the key, even when edited (the server refuses an edited
+  // retry). A customer sale added or voided changes what the server would
+  // reconcile, so it starts a new session.
+  const keyScope = `shift:handover:${shiftId}:${userId}:${duId}`;
+  const [keySession, setKeySession] = useState(() => officeSubmitKeys.session(keyScope));
+  const renewKeySession = () => setKeySession(officeSubmitKeys.session(keyScope));
   const recordHandover = useRecordHandoverMutation();
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
@@ -150,31 +235,31 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     setValue,
     getValues,
     formState: { errors },
-  } = useForm<HandoverFormValues>({
-    resolver: zodResolver(handoverFormSchema),
+  } = useForm<HandoverFormInput, unknown, HandoverFormValues>({
+    resolver: handoverResolver,
     // Built once on open. Closing readings start from the opening reading as a
     // helpful anchor, and testing pre-fills from the previously-saved value so
     // re-saving a handover cannot silently zero a calibration volume.
     defaultValues: (() => {
       const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
-      const nozzleReadings: Record<string, number> = {};
-      const nozzleTesting: Record<string, any> = {};
+      const nozzleReadings: Record<string, Typed> = {};
+      const nozzleTesting: Record<string, Typed> = {};
       for (const nz of nozzles) {
         nozzleReadings[nz.nozzleId] = Number(nz.closingReading ?? nz.openingReading ?? 0);
-        nozzleTesting[nz.nozzleId] = (Number(nz.testingVolume) || '') as any;
+        nozzleTesting[nz.nozzleId] = typed(nz.testingVolume);
       }
-      const terminalCard: Record<string, any> = {};
-      const terminalUpi: Record<string, any> = {};
+      const terminalCard: Record<string, Typed> = {};
+      const terminalUpi: Record<string, Typed> = {};
       for (const t of terminals.filter((x: any) => x.duId === duId)) {
         const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
-        terminalCard[t.terminalId] = (Number(prior?.cardAmount) || '') as any;
-        terminalUpi[t.terminalId] = (Number(prior?.upiAmount) || '') as any;
+        terminalCard[t.terminalId] = typed(prior?.cardAmount);
+        terminalUpi[t.terminalId] = typed(prior?.upiAmount);
       }
       return {
-        cashHandedOver: (Number(existingHandover?.cashHandedOver) || '') as any,
-        cashDrops: (Number(existingHandover?.cashDrops) || '') as any,
-        cardHandedOver: (Number(existingHandover?.cardHandedOver) || '') as any,
-        upiHandedOver: (Number(existingHandover?.upiHandedOver) || '') as any,
+        cashHandedOver: typed(existingHandover?.cashHandedOver),
+        cashDrops: typed(existingHandover?.cashDrops),
+        cardHandedOver: typed(existingHandover?.cardHandedOver),
+        upiHandedOver: typed(existingHandover?.upiHandedOver),
         nozzleReadings,
         nozzleTesting,
         terminalCard,
@@ -184,14 +269,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   });
   const acceptedFormFingerprintRef = useRef<string | null>(null);
 
-  // Pre-fill form if existing handover is passed.
-  //
-  // This must run only ONCE per drawer open. Recording an in-drawer credit sale
-  // calls onCreditChanged(), which makes the parent refetch shift status and pass
-  // fresh `nozzles`/`terminals`/`existingHandover` identities. Without this guard
-  // the effect would re-run on that refetch and overwrite the operator's
-  // in-progress nozzle/POS/cash entries.
-
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
   useEffect(() => {
@@ -199,8 +276,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setAcceptedResult(null);
     }
   }, [acceptedResult, formValues]);
-  const formNozzleReadings = formValues.nozzleReadings || {};
-  const formNozzleTesting = formValues.nozzleTesting || {};
   const formCash = formValues.cashHandedOver || 0;
 
   // POS terminals assigned to THIS DU (shift-wide / other-DU machines are not
@@ -208,27 +283,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // the per-terminal batches (single source of truth).
   const duTerminals = terminals.filter((t: any) => t.duId === duId);
   const hasTerminals = duTerminals.length > 0;
-  const formTerminalCard = formValues.terminalCard || {};
-  const formTerminalUpi = formValues.terminalUpi || {};
-  const terminalCardTotal = duTerminals.reduce(
-    (sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0),
-    0,
-  );
-  const terminalUpiTotal = duTerminals.reduce(
-    (sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0),
-    0,
-  );
   const aggregateAllowed = !stationHasConfiguredTerminals;
-  const effectiveCard = hasTerminals
-    ? terminalCardTotal
-    : aggregateAllowed
-      ? Number(formValues.cardHandedOver || 0)
-      : 0;
-  const effectiveUpi = hasTerminals
-    ? terminalUpiTotal
-    : aggregateAllowed
-      ? Number(formValues.upiHandedOver || 0)
-      : 0;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   // Seeded on open; the drawer unmounts on close, so there is nothing to reset.
@@ -260,7 +315,21 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   const [extraCustomers, setExtraCustomers] = useState<any[]>([]);
   const [extraVehicles, setExtraVehicles] = useState<any[]>([]);
   // Cached vehicles (semi tier) for the client-side credit picker — no server search.
-  const { data: allVehiclesData } = useAllVehicles(true);
+  const vehiclesQ = useAllVehicles(true);
+  const allVehiclesData = vehiclesQ.data;
+  // Customers pickable for on-account billing: all except legacy
+  // station-prepaid non-fleet wallets. Prepaid Fleet customers are included
+  // (OMC fleet cards, settled to CMS).
+  const customersQ = useCustomers(true);
+  const customers = useMemo(
+    () => (customersQ.data ?? []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
+    [customersQ.data],
+  );
+  // The shift's Product Sales (cached operational reads, shared with Live
+  // shift), so "Edit" opens this employee's Handover Product Sale (#533).
+  const productHandoversQ = useMerchandiseHandovers(shiftId);
+  const productBilledQ = useMerchandiseSales(shiftId);
+  const [productSale, setProductSale] = useState({ open: false, token: 0 });
 
   const resetCcRow = () => {
     ccIdemKeyRef.current = null;
@@ -493,7 +562,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       if (isOmc) setOmcLines((prev) => [...prev, line]);
       else setCreditLines((prev) => [...prev, line]);
       setAcceptedResult(null);
-      handoverRequestRef.current = null;
+      renewKeySession();
       resetCcRow();
       refreshAfterCreditChange();
     } catch (e: any) {
@@ -508,10 +577,16 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     setError(null);
     try {
       setCcBusy(true);
-      await transactionService.voidCreditSale(id);
+      // One key per void, through the shared store: a retry of the same void
+      // after a lost answer reuses it, so it cannot void twice.
+      await sendKeyed(
+        officeSubmitKeys.session(`credit-sale:void:${id}`),
+        { stationId, shiftId, id },
+        (idempotencyKey) => transactionService.voidCreditSale(id, { idempotencyKey }),
+      );
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
-      handoverRequestRef.current = null;
+      renewKeySession();
       refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove credit sale');
@@ -525,10 +600,14 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     setError(null);
     try {
       setCcBusy(true);
-      await transactionService.voidOmcCardSale(id);
+      await sendKeyed(
+        officeSubmitKeys.session(`omc-card-sale:void:${id}`),
+        { stationId, shiftId, id },
+        (idempotencyKey) => transactionService.voidOmcCardSale(id, { idempotencyKey }),
+      );
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
-      handoverRequestRef.current = null;
+      renewKeySession();
       refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove OMC card sale');
@@ -537,62 +616,27 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
   };
 
-  // Derived Calculations. Sorted at the point of display so the drawer reads
-  // N1, N2 … N10 whatever order the caller happened to hand them in (#218).
-  const calculatedNozzles = [...nozzles]
-    .sort((a: any, b: any) => compareNatural(a.nozzleName, b.nozzleName))
-    .map((nz) => {
-      const opening = Number(nz.openingReading || 0);
-      const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
-      const volume = Math.max(0, closing - opening);
-      const price = Number(nz.unitPrice || 0);
-      const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
-
-      const rawValue = volume * price;
-      const testingDeduction = testing * price;
-
-      return {
-        ...nz,
-        opening,
-        closing,
-        volume,
-        price,
-        testing,
-        rawValue,
-        testingDeduction,
-      };
-    });
-
-  const totalVolumeSold = calculatedNozzles.reduce((sum, n) => sum + n.volume, 0);
-  const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);
-  const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
-  const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
-  // Fuel unit for this handover (a DU is normally single-product). Uses the
-  // product's own unit code (L / kg); falls back to a neutral label if mixed.
-  const handoverUnits = Array.from(new Set(calculatedNozzles.map((n: any) => n.unit || 'L')));
-  const handoverUnitLabel = handoverUnits.length === 1 ? handoverUnits[0] : 'units';
-
-  const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
+  // Derived figures: the nozzles, the customer sales and the reconciliation.
+  const fuel = handoverNozzles(
+    nozzles,
+    formValues.nozzleReadings || {},
+    formValues.nozzleTesting || {},
+  );
+  const anyInvalid = fuel.rows.some((r) => r.invalid);
 
   // Fuel-on-credit lines are declared in this section and saved immediately
   // (each is a real receivable). The credit chits total is DERIVED from them and
   // sits on the DECLARED side — the fuel is already metered in the nozzle reading,
   // so credit is NOT added to expected (that would double-count).
-  const creditTotal = creditLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  const creditTotal = sumAmounts(creditLines);
   // OMC fleet-card sales — settled to CMS (a non-drawer channel), never a
   // receivable. Like credit, the fuel is metered so it sits on the declared side.
-  const omcTotal = omcLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  const omcTotal = sumAmounts(omcLines);
   // Recorded customer-sale lines grouped by receivable type (Credit / Fleet /
   // Regular), each with its own subtotal. Station-prepaid customers never reach
   // this list (they draw down a balance instead of accruing a receivable).
   const creditGroups = useMemo(() => {
     const ORDER = ['Credit', 'Fleet', 'Regular'];
-    const LABELS: Record<string, string> = {
-      Credit: 'Credit',
-      Fleet: 'Fleet',
-      Regular: 'Regular',
-      Other: 'Other',
-    };
     const map = new Map<string, any[]>();
     for (const l of creditLines) {
       const t = ORDER.includes(l.customerType) ? l.customerType : 'Other';
@@ -600,44 +644,36 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
     return [...ORDER, 'Other']
       .filter((t) => map.has(t))
-      .map((t) => ({
-        type: t,
-        label: LABELS[t] ?? t,
-        lines: map.get(t)!,
-        subtotal: map.get(t)!.reduce((s, l) => s + Number(l.amount || 0), 0),
-      }));
+      .map((t) => ({ type: t, label: t, lines: map.get(t)!, subtotal: sumAmounts(map.get(t)!) }));
   }, [creditLines]);
-  const totalDeclared =
-    Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal + omcTotal;
-  // Walk-in merchandise cash this attendant collected (net of any card/UPI
-  // portion) is part of what they hand over, so it's added to the expected side.
-  const merchandiseCashNum = Number(merchandiseCash) || 0;
-  const merchandiseNonCashNum = Number(merchandiseNonCash) || 0;
-  const expectedTotal = expectedSales + merchandiseCashNum;
-  // Round to paise so floating-point dust (e.g. -1e-13) doesn't read as a shortage.
-  // The pouch also holds the Opening Float and is short what was dropped, so the
-  // Drawer variance is handed − (float + cash sales − drops). Preview only; the
-  // server's figure replaces it once accepted.
-  const openingFloatNum = Number(openingFloat) || 0;
-  const cashDropsNum = Number(formValues.cashDrops) || 0;
-  const variance =
-    Math.round((totalDeclared - expectedTotal - openingFloatNum + cashDropsNum) * 100) / 100 || 0;
-  const handoverVariance = formatVariance(acceptedResult?.varianceAmount ?? variance, 'cash');
+
+  // The reconciliation: the live preview, or the server's figures once accepted.
+  // The form mapped as the payload carries it, every amount raw (#534 review).
+  const reconInput = handoverReconInput({
+    terminals: duTerminals,
+    aggregateAllowed,
+    values: formValues,
+    creditLines,
+    omcLines,
+    fuelSales: fuel.fuelSales,
+    productCash: Number(merchandiseCash) || 0,
+    openingFloat: Number(openingFloat) || 0,
+  });
+  const terminalCardTotal = reconInput.terminalCard;
+  const terminalUpiTotal = reconInput.terminalUpi;
+  const recon = acceptedResult ? acceptedHandoverRecon(acceptedResult) : handoverRecon(reconInput);
+  const productNonCash = Number(merchandiseNonCash) || 0;
+  const shownVolume = acceptedResult
+    ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.grossVolume, 0)
+    : fuel.volume;
+  const shownTesting = acceptedResult
+    ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.testingVolume, 0)
+    : fuel.testing;
 
   // Volume sanity: credit litres billed for a fuel must not exceed the litres
   // metered (and not testing) for that fuel at this DU. Reactive to the readings.
-  const meteredByProduct = new Map<string, number>();
-  for (const n of calculatedNozzles) {
-    if (!n.productId) continue;
-    meteredByProduct.set(
-      n.productId,
-      (meteredByProduct.get(n.productId) ?? 0) + Math.max(0, n.volume - n.testing),
-    );
-  }
   const unitByProduct = new Map<string, string>();
-  for (const n of calculatedNozzles) {
-    if (n.productId) unitByProduct.set(n.productId, n.unit || 'L');
-  }
+  for (const r of fuel.rows) if (r.productId) unitByProduct.set(r.productId, r.unit);
   const creditLitresByProduct = new Map<string, number>();
   for (const l of [...creditLines, ...omcLines]) {
     if (l.productId && l.quantity)
@@ -651,7 +687,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel',
       unit: unitByProduct.get(pid) ?? 'L',
       lit,
-      metered: meteredByProduct.get(pid) ?? 0,
+      metered: fuel.meteredByProduct.get(pid) ?? 0,
     }))
     .filter((o) => o.lit > o.metered + 0.001);
 
@@ -679,10 +715,10 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
 
     // Validate reading constraints: closing cannot be less than opening
-    for (const nz of calculatedNozzles) {
-      if (nz.closing < nz.opening) {
+    for (const nz of fuel.rows) {
+      if (nz.invalid) {
         setError(
-          `Closing reading for nozzle ${nz.nozzleName} (${nz.closing}) cannot be less than opening reading (${nz.opening}).`,
+          `Closing reading for nozzle ${nz.nozzle} (${nz.closing}) cannot be less than opening reading (${nz.opening}).`,
         );
         return;
       }
@@ -720,17 +756,16 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
             }))
           : undefined,
       };
-      handoverRequestRef.current = resolveHandoverRequestIdentity(
-        handoverRequestRef.current,
+      // The readings and the handover are one write; the fingerprint names the
+      // station and the customer sales it reconciles against.
+      const fingerprint = {
+        stationId,
         payload,
+        customerSales: [...creditLines, ...omcLines].map((l) => l.id ?? null),
+      };
+      const result = await sendKeyed(keySession, fingerprint, (idempotencyKey) =>
+        recordHandover.mutateAsync({ stationId: stationId ?? '', payload, idempotencyKey }),
       );
-      if (stationId)
-        saveHandoverRequestIdentity(stationId, shiftId, userId, duId, handoverRequestRef.current);
-      const result = await recordHandover.mutateAsync({
-        stationId: stationId ?? '',
-        payload,
-        idempotencyKey: handoverRequestRef.current.idempotencyKey,
-      });
       for (const reading of result.nozzleReadings) {
         setValue(`nozzleReadings.${reading.nozzleId}`, reading.closingReading, {
           shouldDirty: false,
@@ -752,8 +787,6 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       }
       acceptedFormFingerprintRef.current = JSON.stringify(getValues());
       setAcceptedResult(result);
-      handoverRequestRef.current = null;
-      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, null);
       onSaveSuccess();
     } catch (err: any) {
       const message = err.message || 'Failed to save attendant handover';
@@ -764,656 +797,328 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
   };
 
+  // ── The nozzle table: closing and testing are inputs in the row ──────────
+  const nozzleColumns: TableColumn<HandoverNozzleRow>[] = [
+    {
+      id: 'nozzle',
+      header: 'Nozzle',
+      kind: 'text',
+      sortable: false,
+      value: (r) => r.nozzle,
+      width: '22%',
+      cell: (r) => (
+        <div className="flex flex-col">
+          <span className="font-semibold text-ink-strong">{r.nozzle}</span>
+          <span className="text-[12px] text-ink-muted">
+            {r.product} · {formatMoney(r.rate)}/{r.unit}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: 'opening',
+      header: 'Opening',
+      kind: 'qty',
+      decimals: 3,
+      sortable: false,
+      total: false,
+      value: (r) => r.opening,
+      cell: (r) => <span className="text-ink-muted">{r.opening.toFixed(3)}</span>,
+    },
+    {
+      id: 'closing',
+      header: 'Closing',
+      kind: 'qty',
+      sortable: false,
+      total: false,
+      width: '22%',
+      value: (r) => r.closing,
+      cell: (r) => {
+        const fieldError = errors.nozzleReadings?.[r.nozzleId]?.message;
+        return (
+          <div className="flex flex-col items-end gap-0.5">
+            <Input
+              inputSize="sm"
+              type="number"
+              step="0.001"
+              min={r.opening}
+              required
+              aria-label={`${r.nozzle} closing reading`}
+              invalid={r.invalid || !!fieldError}
+              className="w-32 text-right font-mono"
+              {...register(`nozzleReadings.${r.nozzleId}`)}
+            />
+            {r.invalid ? (
+              <span className="text-[12px] text-danger-fg">Must be ≥ {r.opening.toFixed(3)}</span>
+            ) : (
+              <FieldError message={fieldError} />
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'testing',
+      header: 'Testing',
+      kind: 'qty',
+      sortable: false,
+      width: '16%',
+      value: (r) => r.testing,
+      cell: (r) => (
+        <div className="flex flex-col items-end gap-0.5">
+          <Input
+            inputSize="sm"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="0"
+            aria-label={`${r.nozzle} testing, ${r.unit}`}
+            className="w-20 text-right font-mono"
+            {...register(`nozzleTesting.${r.nozzleId}`)}
+          />
+          <FieldError message={errors.nozzleTesting?.[r.nozzleId]?.message} />
+        </div>
+      ),
+    },
+    {
+      id: 'litres',
+      header: 'Litres',
+      kind: 'qty',
+      sortable: false,
+      value: (r) => r.volume,
+      unit: (r) => r.unit,
+      decimals: 3,
+    },
+  ];
+
+  const footer = (
+    <div className="flex w-full items-center gap-3">
+      <Button type="button" variant="secondary" size="md" onClick={onClose}>
+        {acceptedResult ? 'Done' : 'Cancel'}
+      </Button>
+      <div className="ml-auto flex items-center gap-2 text-[13px] text-ink-muted">
+        Variance
+        <VarianceChip amount={recon.variance} size="md" data-testid="handover-variance" />
+      </div>
+      <Button
+        type="submit"
+        form={formId}
+        variant="primary"
+        size="md"
+        disabled={anyInvalid}
+        loading={submitting}
+      >
+        {acceptedResult ? 'Save changes' : 'Save handover & readings'}
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <Drawer isOpen onClose={onClose} title={`Attendant Handover: ${userName} (${duCode})`}>
-        <Form
-          onSubmit={handleSubmit(onSubmit)}
-          style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
-        >
+      <Drawer
+        isOpen
+        onClose={onClose}
+        widthVariant="wide"
+        title={`Handover · ${duCode} · ${userName}`}
+        subtitle={`${
+          STATUS_MAP[existingHandover || acceptedResult ? 'handover-recorded' : 'handover-pending']
+            .label
+        } · attendant handover`}
+        footer={footer}
+      >
+        <Form id={formId} onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
           {error && (
-            <div
-              role="alert"
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                border: '1px solid var(--border-soft)',
-                color: 'var(--state-danger-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                fontWeight: 500,
-              }}
-            >
-              ⚠️ {error}
-            </div>
+            <CloseNote tone="danger" role="alert">
+              {error}
+            </CloseNote>
           )}
 
-          {/* 1. Nozzle Readings Section */}
-          <div>
-            <h3
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '10px',
-              }}
-            >
-              1. Nozzle Readings & Calibration Testing
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {calculatedNozzles.map((nz) => (
-                <div
-                  key={nz.nozzleId}
-                  style={{
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-input)',
-                    padding: '10px 12px',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 90px 110px 90px',
-                    alignItems: 'center',
-                    gap: '10px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-                      {nz.nozzleName}
+          {/* 1. Nozzle readings */}
+          <section className="flex flex-col gap-2" aria-label="Nozzle readings">
+            <SectionHeader title="Nozzle readings" subtitle="Closing ≥ opening" />
+            <div className="overflow-hidden rounded-card border border-border-soft bg-surface">
+              <InteractiveTable
+                bare
+                dense
+                columns={nozzleColumns}
+                rows={fuel.rows}
+                rowKey={(r) => r.nozzleId}
+                totalRow={{
+                  label: 'Total',
+                  derive: false,
+                  values: { testing: shownTesting, litres: shownVolume },
+                  units: { testing: fuel.unit, litres: fuel.unit },
+                }}
+              />
+            </div>
+            {anyInvalid && (
+              <CloseNote tone="danger">
+                One or more closing readings are below their opening reading. Fix the highlighted
+                fields before saving.
+              </CloseNote>
+            )}
+          </section>
+
+          {/* 2. Card / UPI — only the POS terminals assigned to THIS DU are
+             shown (an attendant isn't aware of machines that weren't handed to
+             them; shift-wide / other-DU machines are reconciled at shift close). */}
+          <section className="flex flex-col gap-2" aria-label="Card and UPI">
+            <SectionHeader
+              title="Card and UPI"
+              subtitle={hasTerminals ? 'Batch totals per machine' : undefined}
+            />
+            {hasTerminals ? (
+              <div className="flex flex-col gap-2">
+                {duTerminals.map((t: any) => (
+                  <div
+                    key={t.terminalId}
+                    className="flex flex-wrap items-end gap-3 rounded-input border border-border-soft bg-surface px-3 py-2.5"
+                  >
+                    <div className="min-w-[140px] flex-1 text-[13px] font-semibold text-ink-strong">
+                      {t.label}
+                      {t.provider && (
+                        <span className="font-normal text-ink-muted"> · {t.provider}</span>
+                      )}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {nz.productCode} •{' '}
-                      <strong>
-                        ₹{nz.price.toFixed(2)}/{nz.unit || 'L'}
-                      </strong>
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '10px',
-                        color: 'var(--text-muted)',
-                        display: 'block',
-                        marginBottom: '2px',
-                      }}
-                    >
-                      Opening
-                    </label>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        color: 'var(--text-faint)',
-                      }}
-                    >
-                      {nz.opening.toFixed(3)}
-                    </span>
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '10px',
-                        color: 'var(--text-muted)',
-                        display: 'block',
-                        marginBottom: '2px',
-                      }}
-                    >
-                      Closing Rd
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min={nz.opening}
-                      required
-                      {...register(`nozzleReadings.${nz.nozzleId}`)}
-                      style={{
-                        width: '100%',
-                        height: '28px',
-                        padding: '0 6px',
-                        border: `1px solid ${nz.closing < nz.opening ? 'var(--brand-danger)' : 'var(--border-strong)'}`,
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        textAlign: 'right',
-                      }}
-                    />
-                    {nz.closing < nz.opening ? (
-                      <span
-                        style={{
-                          color: 'var(--brand-danger)',
-                          fontSize: '10px',
-                          display: 'block',
-                          marginTop: '2px',
-                        }}
-                      >
-                        Must be ≥ {nz.opening.toFixed(3)}
-                      </span>
-                    ) : errors.nozzleReadings?.[nz.nozzleId] ? (
-                      <span
-                        style={{
-                          color: 'var(--brand-danger)',
-                          fontSize: '10px',
-                          display: 'block',
-                          marginTop: '2px',
-                        }}
-                      >
-                        {errors.nozzleReadings[nz.nozzleId]?.message || 'Invalid'}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div>
-                    <label
-                      style={{
-                        fontSize: '10px',
-                        color: 'var(--text-muted)',
-                        display: 'block',
-                        marginBottom: '2px',
-                      }}
-                    >
-                      Testing ({nz.unit || 'L'})
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="0"
-                      {...register(`nozzleTesting.${nz.nozzleId}`)}
-                      style={{
-                        width: '100%',
-                        height: '28px',
-                        padding: '0 6px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        textAlign: 'right',
-                      }}
-                    />
-                    {errors.nozzleTesting?.[nz.nozzleId] && (
-                      <span
-                        style={{
-                          color: 'var(--brand-danger)',
-                          fontSize: '10px',
-                          display: 'block',
-                          marginTop: '2px',
-                        }}
-                      >
-                        {errors.nozzleTesting[nz.nozzleId]?.message || 'Invalid'}
-                      </span>
+                    {t.supportsCard && (
+                      <div className="flex flex-col gap-0.5">
+                        <FieldLabel htmlFor={`tc-${t.terminalId}`}>Card (₹)</FieldLabel>
+                        <Input
+                          id={`tc-${t.terminalId}`}
+                          inputSize="sm"
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder="0"
+                          className="w-32 text-right font-mono"
+                          {...register(`terminalCard.${t.terminalId}`)}
+                        />
+                      </div>
+                    )}
+                    {t.supportsUpi && (
+                      <div className="flex flex-col gap-0.5">
+                        <FieldLabel htmlFor={`tu-${t.terminalId}`}>UPI (₹)</FieldLabel>
+                        <Input
+                          id={`tu-${t.terminalId}`}
+                          inputSize="sm"
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder="0"
+                          className="w-32 text-right font-mono"
+                          {...register(`terminalUpi.${t.terminalId}`)}
+                        />
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 2. Card / UPI collections — only the POS terminals assigned to THIS
-             DU are shown (an attendant isn't aware of machines that weren't
-             handed to them; shift-wide / other-DU machines are reconciled at
-             shift close). */}
-          {hasTerminals ? (
-            <div>
-              <h3
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '10px',
-                }}
-              >
-                2. Card / UPI Collections
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  POS Terminal Batches (Card / UPI per machine)
-                </label>
-                {duTerminals.map((t: any) => {
-                  const both = t.supportsCard && t.supportsUpi;
-                  return (
-                    <div
-                      key={t.terminalId}
-                      style={{
-                        backgroundColor: 'var(--bg-surface-alt)',
-                        border: '1px solid var(--border-soft)',
-                        borderRadius: 'var(--radius-input)',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      <div
-                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}
-                      >
-                        {t.label}
-                        {t.provider && (
-                          <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>
-                            {' '}
-                            · {t.provider}
-                          </span>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: both ? '1fr 1fr' : '1fr',
-                          gap: '8px',
-                        }}
-                      >
-                        {t.supportsCard && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                              Card (₹)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              placeholder="0"
-                              {...register(`terminalCard.${t.terminalId}`)}
-                              style={{
-                                height: '30px',
-                                padding: '0 8px',
-                                border: '1px solid var(--border-strong)',
-                                borderRadius: 'var(--radius-input)',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '12px',
-                                textAlign: 'right',
-                              }}
-                            />
-                          </div>
-                        )}
-                        {t.supportsUpi && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                              UPI (₹)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              placeholder="0"
-                              {...register(`terminalUpi.${t.terminalId}`)}
-                              style={{
-                                height: '30px',
-                                padding: '0 8px',
-                                border: '1px solid var(--border-strong)',
-                                borderRadius: 'var(--radius-input)',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '12px',
-                                textAlign: 'right',
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    paddingTop: '2px',
-                  }}
-                >
-                  <span>POS totals (derived)</span>
-                  <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-                    Card {inr(terminalCardTotal)} · UPI {inr(terminalUpiTotal)}
-                  </strong>
-                </div>
-              </div>
-            </div>
-          ) : aggregateAllowed ? (
-            <div>
-              <h3
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '10px',
-                }}
-              >
-                2. Card / UPI Collections
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    Card total (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="0"
-                    {...register('cardHandedOver')}
-                    style={{
-                      height: '30px',
-                      padding: '0 8px',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-input)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '12px',
-                      textAlign: 'right',
-                    }}
+                ))}
+                <dl className="flex flex-col gap-1 px-1">
+                  <ReconLine
+                    muted
+                    label="Batch totals"
+                    value={`Card ${formatMoney(terminalCardTotal)} · UPI ${formatMoney(terminalUpiTotal)}`}
                   />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    UPI total (₹)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    placeholder="0"
-                    {...register('upiHandedOver')}
-                    style={{
-                      height: '30px',
-                      padding: '0 8px',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-input)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '12px',
-                      textAlign: 'right',
-                    }}
-                  />
-                </div>
+                </dl>
               </div>
-              <span
-                style={{
-                  display: 'block',
-                  marginTop: '4px',
-                  fontSize: '10px',
-                  color: 'var(--text-faint)',
-                }}
-              >
-                Aggregate declaration used because no Payment Terminal is configured.
-              </span>
-            </div>
-          ) : (
-            <div
-              style={{
-                padding: '10px 12px',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-input)',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-muted)',
-                fontSize: '11px',
-              }}
-            >
-              No Payment Terminal is assigned to this Dispenser. Card and UPI declarations must be
-              recorded against an assigned terminal.
-            </div>
-          )}
+            ) : aggregateAllowed ? (
+              <div className="flex flex-col gap-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <FieldLabel htmlFor="handover-card">Card total (₹)</FieldLabel>
+                    <Input
+                      id="handover-card"
+                      inputSize="sm"
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="0"
+                      className="text-right font-mono"
+                      {...register('cardHandedOver')}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <FieldLabel htmlFor="handover-upi">UPI total (₹)</FieldLabel>
+                    <Input
+                      id="handover-upi"
+                      inputSize="sm"
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="0"
+                      className="text-right font-mono"
+                      {...register('upiHandedOver')}
+                    />
+                  </div>
+                </div>
+                <span className="text-[12px] text-ink-muted">
+                  One total each, as no payment terminal is configured.
+                </span>
+              </div>
+            ) : (
+              <CloseNote tone="neutral">
+                No payment terminal is assigned to this dispenser. Card and UPI are recorded against
+                an assigned terminal.
+              </CloseNote>
+            )}
+          </section>
 
           {/* 3. Customer sales (on-account fuel) for this DU */}
-          <div>
-            <h3
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-              }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                3. Customer Sales
-                <InfoTip label="About customer sales">
-                  Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid
-                  by an OMC fleet card (settled to the CMS account — not a receivable). Each line is
-                  recorded immediately; the fuel is already metered, so it sits on the declared
-                  side.
-                </InfoTip>
-              </span>
+          <section className="flex flex-col gap-2" aria-label="Customer sales">
+            <div className="flex items-center gap-1.5 px-0.5">
+              <h2 className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+                Customer sales
+              </h2>
+              <InfoTip label="About customer sales">
+                Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by
+                an OMC fleet card (settled to the CMS account — not a receivable). Each line is
+                recorded immediately; the fuel is already metered, so it sits on the declared side.
+              </InfoTip>
+              <span className="text-[12px] text-ink-muted">Receivables, not cash</span>
               {creditTotal + omcTotal > 0 && (
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                  {inr(creditTotal + omcTotal)}
+                <span className="ml-auto font-mono text-[13px] text-ink-strong">
+                  {formatMoney(creditTotal + omcTotal)}
                 </span>
               )}
-            </h3>
-            <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-              Credit and OMC fleet-card sales from this pump.
-            </p>
+            </div>
 
             {volumeOverages.length > 0 && (
-              <div
-                style={{
-                  backgroundColor: 'var(--state-warning-bg)',
-                  color: 'var(--state-warning-fg)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  padding: '8px 10px',
-                  fontSize: '11px',
-                  marginBottom: '10px',
-                }}
-              >
+              <CloseNote tone="warning">
                 Credit quantity exceeds metered volume for{' '}
                 {volumeOverages
                   .map(
                     (o) =>
-                      `${o.name} (${o.lit.toLocaleString('en-IN')} ${o.unit} billed vs ${o.metered.toLocaleString('en-IN')} ${o.unit} metered)`,
+                      `${o.name} (${formatQuantity(o.lit, o.unit)} billed vs ${formatQuantity(o.metered, o.unit)} metered)`,
                   )
                   .join(', ')}
                 . Check the readings or the credit quantities.
-              </div>
+              </CloseNote>
             )}
 
-            {creditGroups.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  marginBottom: '10px',
-                }}
-              >
-                {creditGroups.map((g) => (
-                  <div
-                    key={g.type}
-                    style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'baseline',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        color: 'var(--text-muted)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      <span>{g.label}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                        {inr(g.subtotal)}
-                      </span>
-                    </div>
-                    {g.lines.map((l, idx) => (
-                      <div
-                        key={l.id ?? idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px',
-                          backgroundColor: 'var(--bg-surface-alt)',
-                          border: '1px solid var(--border-soft)',
-                          borderRadius: 'var(--radius-input)',
-                          padding: '8px 10px',
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              color: 'var(--text-strong)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {l.customerName}
-                            {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                          </div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {l.productName ?? 'Fuel'}
-                            {l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}
-                            {l.notes ? ` · ${l.notes}` : ''}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                            {inr(l.amount)}
-                          </strong>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              runTask(removeCreditLine(l.id), 'Could not void the credit sale.')
-                            }
-                            disabled={ccBusy}
-                            title="Void this credit sale"
-                            aria-label="Void this credit sale"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: 'var(--brand-danger)',
-                              cursor: 'pointer',
-                              padding: '2px 4px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <Icon name="x" size="xs" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-
+            {creditGroups.map((g) => (
+              <SaleLines
+                key={g.type}
+                title={g.label}
+                total={g.subtotal}
+                lines={g.lines}
+                busy={ccBusy}
+                voidLabel="Void this credit sale"
+                emptyName="Customer"
+                onVoid={(id) => runTask(removeCreditLine(id), 'Could not void the credit sale.')}
+              />
+            ))}
             {omcLines.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  marginBottom: '10px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <span>OMC card · CMS</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                    {inr(omcTotal)}
-                  </span>
-                </div>
-                {omcLines.map((l, idx) => (
-                  <div
-                    key={l.id ?? idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '8px',
-                      backgroundColor: 'var(--bg-surface-alt)',
-                      border: '1px solid var(--border-soft)',
-                      borderRadius: 'var(--radius-input)',
-                      padding: '8px 10px',
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: 'var(--text-strong)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {l.customerName || 'OMC card (no customer)'}
-                        {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {l.productName ?? 'Fuel'}
-                        {l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}
-                        {l.notes ? ` · ${l.notes}` : ''}
-                      </div>
-                    </div>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}
-                    >
-                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                        {inr(l.amount)}
-                      </strong>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          runTask(removeOmcLine(l.id), 'Could not void the OMC card sale.')
-                        }
-                        disabled={ccBusy}
-                        title="Void this OMC card sale"
-                        aria-label="Void this OMC card sale"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--brand-danger)',
-                          cursor: 'pointer',
-                          padding: '2px 4px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Icon name="x" size="xs" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SaleLines
+                title="OMC card · CMS"
+                total={omcTotal}
+                lines={omcLines}
+                busy={ccBusy}
+                voidLabel="Void this OMC card sale"
+                emptyName="OMC card (no customer)"
+                onVoid={(id) => runTask(removeOmcLine(id), 'Could not void the OMC card sale.')}
+              />
+            )}
+            {creditGroups.length === 0 && omcLines.length === 0 && !ccOpen && (
+              <p className="text-[12px] text-ink-muted">None this shift.</p>
             )}
 
             {!ccOpen ? (
@@ -1421,637 +1126,365 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 type="button"
                 variant="secondary"
                 size="sm"
+                className="self-start"
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => setCcOpen(true)}
-                style={{ alignSelf: 'flex-start' }}
               >
                 Add customer sale
               </Button>
             ) : (
-              <div
-                style={{
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  padding: '10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                }}
+              // The picker needs the customers and vehicles: a failed load says
+              // so, with Retry, rather than offering an empty list.
+              <DataSection
+                title="customers and vehicles"
+                query={[customersQ, vehiclesQ]}
+                shape="bare"
+                placeholderHeight={160}
+                enabled
               >
-                {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    Payment channel
-                  </label>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {(['credit', 'omc'] as const).map((ch) => (
-                      <button
-                        key={ch}
-                        type="button"
-                        onClick={() => setCcChannel(ch)}
-                        disabled={ccBusy}
-                        style={{
-                          flex: 1,
-                          height: '30px',
-                          borderRadius: 'var(--radius-input)',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          border: `1px solid ${ccChannel === ch ? 'var(--brand-primary)' : 'var(--border-strong)'}`,
-                          background:
-                            ccChannel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
-                          color: ccChannel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
-                        }}
-                      >
-                        {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
-                      </button>
-                    ))}
-                  </div>
-                  {ccChannel === 'omc' && (
-                    <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-                      Settled to CMS by the Oil Company — not a receivable. Customer is optional.
-                    </span>
-                  )}
-                </div>
-
-                {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}
-                  </label>
-                  <Combobox
-                    options={creditOptions}
-                    value={ccSelectValue}
-                    onChange={handleCreditSelect}
-                    placeholder="Select customer or vehicle…"
-                    searchPlaceholder="Search name or vehicle no.…"
-                    emptyMessage="No credit customer or vehicle found."
-                    createActions={[
-                      {
-                        label: '＋ New customer',
-                        sublabel: 'Create and bill in one step',
-                        onSelect: () => setNewCustomerOpen(true),
-                      },
-                      {
-                        label: '＋ New vehicle',
-                        sublabel: 'Add a vehicle to a customer',
-                        onSelect: () => setNewVehicleOpen(true),
-                      },
-                    ]}
-                  />
-                  {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                      Available credit {inr(ccAvailable)}
-                    </span>
-                  )}
-                </div>
-
-                {(ccCustomerId || ccChannel === 'omc') && (
-                  <>
-                    <div
-                      style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '8px' }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          minWidth: 0,
-                        }}
-                      >
-                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Fuel</label>
-                        <select
-                          value={ccProductId}
-                          onChange={(e) => handleCcProductChange(e.target.value)}
-                          disabled={ccBusy}
-                          style={{
-                            height: '30px',
-                            padding: '0 6px',
-                            width: '100%',
-                            minWidth: 0,
-                            border: '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            fontSize: '12px',
-                          }}
-                        >
-                          <option value="">-- Fuel --</option>
-                          {duProducts.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                              {p.code ? ` (${p.code})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          minWidth: 0,
-                        }}
-                      >
-                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                          Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          placeholder="0"
-                          value={ccQty}
-                          onChange={(e) => handleCcQtyChange(e.target.value)}
-                          disabled={ccBusy}
-                          style={{
-                            height: '30px',
-                            padding: '0 6px',
-                            width: '100%',
-                            minWidth: 0,
-                            border: '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '12px',
-                            textAlign: 'right',
-                          }}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px',
-                          minWidth: 0,
-                        }}
-                      >
-                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                          Amount (₹)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0"
-                          name="ccAmount"
-                          aria-label="Customer sale amount"
-                          value={ccAmount}
-                          onChange={(e) => handleCcAmountChange(e.target.value)}
-                          disabled={ccBusy}
-                          style={{
-                            height: '30px',
-                            padding: '0 6px',
-                            width: '100%',
-                            minWidth: 0,
-                            border: '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '12px',
-                            textAlign: 'right',
-                            fontWeight: 600,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div
-                      style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}
-                    >
-                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                        Remarks (driver, slip no., notes)
-                      </label>
-                      <input
-                        type="text"
-                        value={ccNotes}
-                        onChange={(e) => setCcNotes(e.target.value)}
-                        disabled={ccBusy}
-                        placeholder="e.g. driver name / phone / slip ref"
-                        style={{
-                          height: '30px',
-                          padding: '0 8px',
-                          width: '100%',
-                          minWidth: 0,
-                          border: '1px solid var(--border-strong)',
-                          borderRadius: 'var(--radius-input)',
-                          fontSize: '12px',
-                        }}
-                      />
-                    </div>
-                    {ccChannel === 'credit' && ccExceeds && (
-                      <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
-                        Exceeds available credit
-                        {ccAvailable != null ? ` (${inr(ccAvailable)})` : ''} — you can still record
-                        it.
-                      </div>
+                <div className="flex flex-col gap-3 rounded-input border border-border-soft bg-surface p-3">
+                  {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-ink-muted">Payment channel</span>
+                    <SegmentedControl
+                      aria-label="Payment channel"
+                      value={ccChannel}
+                      onChange={setCcChannel}
+                      options={[
+                        { value: 'credit', label: 'Credit (receivable)' },
+                        { value: 'omc', label: 'OMC card → CMS' },
+                      ]}
+                    />
+                    {ccChannel === 'omc' && (
+                      <span className="text-[12px] text-ink-muted">
+                        Settled to CMS by the Oil Company — not a receivable. Customer is optional.
+                      </span>
                     )}
-                  </>
-                )}
+                  </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<Icon name="plus" size="xs" />}
-                    onClick={addCreditLine}
-                    disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)}
-                    loading={ccBusy}
-                  >
-                    {ccChannel === 'omc' ? 'Add OMC card sale' : 'Add credit sale'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      resetCcRow();
-                      setCcOpen(false);
-                    }}
-                    disabled={ccBusy}
-                  >
-                    Done
-                  </Button>
+                  {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-ink-muted">
+                      Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}
+                    </span>
+                    <Combobox
+                      options={creditOptions}
+                      value={ccSelectValue}
+                      onChange={handleCreditSelect}
+                      placeholder="Select customer or vehicle…"
+                      searchPlaceholder="Search name or vehicle no.…"
+                      emptyMessage="No credit customer or vehicle found."
+                      createActions={[
+                        {
+                          label: '＋ New customer',
+                          sublabel: 'Create and bill in one step',
+                          onSelect: () => setNewCustomerOpen(true),
+                        },
+                        {
+                          label: '＋ New vehicle',
+                          sublabel: 'Add a vehicle to a customer',
+                          onSelect: () => setNewVehicleOpen(true),
+                        },
+                      ]}
+                    />
+                    {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
+                      <span className="text-[12px] text-ink-muted">
+                        Available credit {formatMoney(ccAvailable)}
+                      </span>
+                    )}
+                  </div>
+
+                  {(ccCustomerId || ccChannel === 'omc') && (
+                    <>
+                      <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-2">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-fuel">Fuel</FieldLabel>
+                          <Select
+                            id="cc-fuel"
+                            inputSize="sm"
+                            value={ccProductId}
+                            onChange={(e) => handleCcProductChange(e.target.value)}
+                            disabled={ccBusy}
+                          >
+                            <option value="">Select fuel</option>
+                            {duProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                                {p.code ? ` (${p.code})` : ''}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-qty">
+                            Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}
+                          </FieldLabel>
+                          <Input
+                            id="cc-qty"
+                            inputSize="sm"
+                            type="number"
+                            step="0.001"
+                            min="0"
+                            placeholder="0"
+                            className="text-right font-mono"
+                            value={ccQty}
+                            onChange={(e) => handleCcQtyChange(e.target.value)}
+                            disabled={ccBusy}
+                          />
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <FieldLabel htmlFor="cc-amount">Amount (₹)</FieldLabel>
+                          <Input
+                            id="cc-amount"
+                            inputSize="sm"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0"
+                            name="ccAmount"
+                            aria-label="Customer sale amount"
+                            className="text-right font-mono font-semibold"
+                            value={ccAmount}
+                            onChange={(e) => handleCcAmountChange(e.target.value)}
+                            disabled={ccBusy}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <FieldLabel htmlFor="cc-notes">
+                          Remarks (driver, slip no., notes)
+                        </FieldLabel>
+                        <Input
+                          id="cc-notes"
+                          inputSize="sm"
+                          value={ccNotes}
+                          onChange={(e) => setCcNotes(e.target.value)}
+                          disabled={ccBusy}
+                          placeholder="e.g. driver name / phone / slip ref"
+                        />
+                      </div>
+                      {ccChannel === 'credit' && ccExceeds && (
+                        <CloseNote tone="warning">
+                          Exceeds available credit
+                          {ccAvailable != null ? ` (${formatMoney(ccAvailable)})` : ''}. You can
+                          still record it.
+                        </CloseNote>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Icon name="plus" size="xs" />}
+                      onClick={addCreditLine}
+                      disabled={
+                        (ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)
+                      }
+                      loading={ccBusy}
+                    >
+                      {ccChannel === 'omc' ? 'Add OMC card sale' : 'Add credit sale'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        resetCcRow();
+                        setCcOpen(false);
+                      }}
+                      disabled={ccBusy}
+                    >
+                      Done
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              </DataSection>
             )}
-          </div>
+          </section>
 
-          {/* 4. Cash & credit chits total */}
-          <div>
-            <h3
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '10px',
-              }}
-            >
-              4. Cash Deposit
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
-                  Cash Handed Over (₹)
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
+          {/* 4. Cash handed over, and drops */}
+          <section className="flex flex-col gap-2" aria-label="Cash">
+            <SectionHeader title="Cash" subtitle="Count includes the float" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <FieldLabel htmlFor="handover-cash">Cash handed over (₹)</FieldLabel>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="handover-cash"
                     type="number"
                     step="any"
                     min="0"
                     placeholder="0"
+                    className="flex-1 text-right font-mono"
                     {...register('cashHandedOver')}
-                    style={{
-                      height: '32px',
-                      padding: '0 8px',
-                      flex: 1,
-                      minWidth: 0,
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-input)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '13px',
-                      textAlign: 'right',
-                    }}
                   />
                   <CashCountPopover
                     breakdown={cashBreakdown}
                     onBreakdownChange={setCashBreakdown}
                     onApply={(t) =>
-                      setValue('cashHandedOver', t as any, {
+                      setValue('cashHandedOver', t, {
                         shouldValidate: true,
                         shouldDirty: true,
                       })
                     }
                     currentValue={Number(formCash) || 0}
                     title="Count handover cash by denomination"
+                    validateCount={denominationCountError}
                   />
                 </div>
-                {errors.cashHandedOver && (
-                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                    {errors.cashHandedOver.message}
-                  </span>
-                )}
+                <FieldError message={errors.cashHandedOver?.message} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
-                  Credit Chits Total (₹)
-                </label>
-                <div
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    border: '1px dashed var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    color: 'var(--text-default)',
-                  }}
-                  title="Auto-derived from the fuel-on-credit sales above"
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[12px] font-medium text-ink-muted">Credit chits total</span>
+                <span
+                  className="flex h-9 items-center justify-end rounded-input border border-dashed border-border-strong bg-surface-alt px-3 font-mono text-[13px] text-ink-default"
+                  title="From the credit sales above"
                 >
-                  {inr(creditTotal)}
-                </div>
-                <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
-                  Auto from credit sales above
+                  {formatMoney(creditTotal)}
                 </span>
+                <span className="text-[12px] text-ink-muted">From the credit sales above</span>
               </div>
             </div>
             {/* Most handovers have no mid-shift drop, so the field sits on its own
                 row behind "+ Add cash drop" (#304, #324). Removing it zeroes the
-                value so a hidden amount can never skew the variance. */}
-            <div style={{ marginTop: '12px' }}>
-              {!hasDrops ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={<Icon name="plus" size="xs" />}
-                  onClick={() => setHasDrops(true)}
-                >
-                  Add cash drop
-                </Button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label
-                    htmlFor="handover-cash-drops"
-                    style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}
-                  >
-                    Cash Drops (₹)
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      id="handover-cash-drops"
-                      type="number"
-                      step="any"
-                      min="0"
-                      placeholder="0"
-                      autoFocus={!existingHandover}
-                      {...register('cashDrops')}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        width: 'calc(50% - 6px)',
-                        minWidth: 0,
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '13px',
-                        textAlign: 'right',
-                      }}
-                    />
-                    <button
-                      type="button"
-                      aria-label="Remove cash drop"
-                      title="Remove cash drop"
-                      onClick={() => {
-                        setHasDrops(false);
-                        setValue('cashDrops', '' as any, {
-                          shouldValidate: true,
-                          shouldDirty: true,
-                        });
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--brand-danger)',
-                        cursor: 'pointer',
-                        padding: '2px 4px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Icon name="x" size="xs" />
-                    </button>
-                  </div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
-                    Cash taken from this pouch mid-shift (e.g. to the safe).
-                  </span>
-                  {errors.cashDrops && (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                      {errors.cashDrops.message}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 5. Live Reconciliation Summary Card */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-surface-alt)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-input)',
-              padding: '14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              marginTop: '8px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '11px',
-                fontWeight: 600,
-                color: acceptedResult ? 'var(--state-success-fg)' : 'var(--text-faint)',
-              }}
-            >
-              <span>{acceptedResult ? 'Accepted by server' : 'Live preview'}</span>
-              {acceptedResult && <span>Saved</span>}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span>Derived Fuel Volume:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                {(acceptedResult
-                  ? acceptedResult.nozzleReadings.reduce(
-                      (sum, reading) => sum + reading.grossVolume,
-                      0,
-                    )
-                  : totalVolumeSold
-                ).toFixed(3)}{' '}
-                {handoverUnitLabel}
-              </strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span>Testing/Calibration Volume:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                {(acceptedResult
-                  ? acceptedResult.nozzleReadings.reduce(
-                      (sum, reading) => sum + reading.testingVolume,
-                      0,
-                    )
-                  : totalTestingVolume
-                ).toFixed(1)}{' '}
-                {handoverUnitLabel}
-              </strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span>Expected Fuel Sales Value:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                {inr(acceptedResult?.expectedSales ?? expectedSales)}
-              </strong>
-            </div>
-            {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
-              <>
-                {merchandiseCashNum > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '13px',
-                      color: 'var(--text-muted)',
+                value so a hidden amount can never skew the variance. Drops become
+                their own records in #589. */}
+            {!hasDrops ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="self-start"
+                leftIcon={<Icon name="plus" size="xs" />}
+                onClick={() => setHasDrops(true)}
+              >
+                Add cash drop
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                <FieldLabel htmlFor="handover-cash-drops">Cash drops (₹)</FieldLabel>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="handover-cash-drops"
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0"
+                    autoFocus={!existingHandover}
+                    className="w-[calc(50%-6px)] text-right font-mono"
+                    {...register('cashDrops')}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    iconOnly
+                    aria-label="Remove cash drop"
+                    title="Remove cash drop"
+                    leftIcon={<Icon name="x" size="sm" />}
+                    onClick={() => {
+                      setHasDrops(false);
+                      setValue('cashDrops', '', {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
                     }}
-                  >
-                    <span>+ Merchandise sold (cash):</span>
-                    <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                      {inr(merchandiseCashNum)}
-                    </strong>
-                  </div>
-                )}
-                {merchandiseNonCashNum > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '12px',
-                      color: 'var(--text-faint)',
-                    }}
-                  >
-                    <span>Merchandise (card/UPI, on terminal):</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>
-                      {inr(merchandiseNonCashNum)}
-                    </span>
-                  </div>
-                )}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                  }}
-                >
-                  <span>Total Expected:</span>
-                  <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                    {inr(acceptedResult?.expectedTotal ?? expectedTotal)}
-                  </strong>
+                  />
                 </div>
-              </>
-            )}
-            {creditTotal > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <span>of which on credit (chits):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(creditTotal)}</strong>
-              </div>
-            )}
-            {omcTotal > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <span>of which OMC card (→ CMS):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(omcTotal)}</strong>
-              </div>
-            )}
-            {(openingFloatNum > 0 || cashDropsNum > 0) && (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '13px',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <span>
-                  Pouch: float {inr(openingFloatNum)} · dropped {inr(cashDropsNum)}
+                <span className="text-[12px] text-ink-muted">
+                  Cash taken from this pouch mid-shift (e.g. to the safe).
                 </span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                  {inr(openingFloatNum - cashDropsNum)}
-                </strong>
+                <FieldError message={errors.cashDrops?.message} />
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span>Declared Deposit Sum:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                {inr(acceptedResult?.declaredTotal ?? totalDeclared)}
-              </strong>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '13px',
-                fontWeight: 700,
-                borderTop: '1px solid var(--border-soft)',
-                paddingTop: '8px',
-                marginTop: '4px',
-                color: VARIANCE_TONE_TEXT[handoverVariance.tone],
-              }}
-            >
-              <span>Handover Variance:</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {handoverVariance.text}
-                {handoverVariance.state !== 'balanced' &&
-                  ` ${handoverVariance.label.toLowerCase()}`}
-              </span>
-            </div>
-          </div>
+          </section>
 
-          {/* Action Buttons */}
-          {calculatedNozzles.some((n) => n.closing < n.opening) && (
-            <div
-              style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-input)',
-                padding: '8px 10px',
-                fontSize: '11px',
-              }}
-            >
-              One or more closing readings are below their opening reading. Fix the highlighted
-              fields before saving.
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={calculatedNozzles.some((n) => n.closing < n.opening)}
-              loading={submitting}
-              style={{ flex: 1, height: '36px' }}
-            >
-              {acceptedResult ? 'Save Changes' : 'Save Handover & Readings'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onClose}
-              style={{ flex: 1, height: '36px' }}
-            >
-              {acceptedResult ? 'Done' : 'Cancel'}
-            </Button>
-          </div>
+          {/* 5. Reconciliation: expected = float + fuel cash + product cash − drops */}
+          <section className="flex flex-col gap-2" aria-label="Reconciliation">
+            <SectionHeader
+              title="Reconciliation"
+              subtitle={acceptedResult ? 'Saved · the server’s figures' : 'Live preview'}
+            />
+            <dl className="flex flex-col gap-1.5 rounded-card border border-border-soft bg-surface px-4 py-3">
+              <ReconLine label="Fuel sales" value={formatMoney(recon.fuelSales)} />
+              <ReconLine
+                label={
+                  <>
+                    Product sales (cash)
+                    {/* Edit opens the recorded sale: it waits for the shift's
+                        product sales, and says so if they fail to load. */}
+                    <DataSection
+                      title="product sales"
+                      query={[productHandoversQ, productBilledQ]}
+                      shape="bare"
+                      placeholderHeight={24}
+                      enabled
+                      className="inline-flex"
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="h-6 px-1.5 text-brand"
+                        onClick={() => setProductSale((p) => ({ open: true, token: p.token + 1 }))}
+                      >
+                        Edit
+                        <span className="sr-only"> {userName}'s product sales</span>
+                      </Button>
+                    </DataSection>
+                  </>
+                }
+                value={plus(recon.productCash)}
+              />
+              {productNonCash > 0 && (
+                <p className="text-[12px] text-ink-muted">
+                  Product sales on card / UPI ({formatMoney(productNonCash)}) are not drawer cash.
+                </p>
+              )}
+              <ReconLine label="Card · UPI" value={minus(recon.cardUpi)} />
+              <ReconLine label="Credit · OMC card" value={minus(recon.creditOmc)} />
+              <ReconLine total label="Cash sales" value={formatMoney(recon.cashSales)} />
+              <ReconLine label="Opening float" value={plus(recon.openingFloat)} />
+              <ReconLine label="Cash drops" value={minus(recon.drops)} />
+              <ReconLine total label="Expected in drawer" value={formatMoney(recon.expected)} />
+              <ReconLine label="Declared cash" value={formatMoney(recon.declaredCash)} />
+              <ReconLine
+                muted
+                label="Declared total (cash + card + UPI + credit + OMC)"
+                value={formatMoney(recon.declaredTotal)}
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-border-soft pt-1.5 text-[13px] font-semibold text-ink-strong">
+                <dt>Variance</dt>
+                <dd>
+                  <VarianceChip amount={recon.variance} size="md" />
+                </dd>
+              </div>
+            </dl>
+            <p className="text-[12px] text-ink-muted">
+              Fuel {formatQuantity(shownVolume, fuel.unit, { decimals: 3 })} metered
+              {shownTesting > 0
+                ? `, ${formatQuantity(shownTesting, fuel.unit)} returned as testing`
+                : ''}
+              .
+            </p>
+          </section>
         </Form>
       </Drawer>
+
+      {/* Edit opens the employee's Handover Product Sale (#533) on top. */}
+      <HandoverProductSaleDrawer
+        key={productSale.token}
+        isOpen={productSale.open}
+        onClose={() => setProductSale((p) => ({ ...p, open: false }))}
+        shiftId={shiftId}
+        stationId={stationId}
+        employeeId={userId}
+        handoverSales={productHandoversQ.data ?? []}
+        billed={productBilledQ.data ?? []}
+      />
 
       {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}
       <CustomerFormDrawer
@@ -2073,3 +1506,58 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     </>
   );
 };
+
+/** One group of recorded customer-sale lines, each voidable. */
+const SaleLines: React.FC<{
+  title: string;
+  total: number;
+  lines: any[];
+  busy: boolean;
+  voidLabel: string;
+  emptyName: string;
+  onVoid: (id: string) => void;
+}> = ({ title, total, lines, busy, voidLabel, emptyName, onVoid }) => (
+  <div className="flex flex-col gap-1.5">
+    <div className="flex items-baseline justify-between px-0.5 text-[12px] font-semibold text-ink-muted">
+      <span>{title}</span>
+      <span className="font-mono text-ink-strong">{formatMoney(total)}</span>
+    </div>
+    <ul className="flex flex-col overflow-hidden rounded-input border border-border-soft bg-surface">
+      {lines.map((l, idx) => (
+        <li
+          key={l.id ?? idx}
+          className="flex items-center justify-between gap-2 border-b border-border-soft px-3 py-2 last:border-b-0"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold text-ink-strong">
+              {l.customerName || emptyName}
+              {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+            </div>
+            <div className="text-[12px] text-ink-muted">
+              {l.productName ?? 'Fuel'}
+              {l.quantity ? ` · ${formatQuantity(Number(l.quantity), 'L')}` : ''}
+              {l.notes ? ` · ${l.notes}` : ''}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="font-mono text-[13px] font-semibold text-ink-strong">
+              {formatMoney(l.amount)}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              iconOnly
+              className="text-danger-fg"
+              disabled={busy}
+              title={voidLabel}
+              aria-label={voidLabel}
+              leftIcon={<Icon name="x" size="xs" />}
+              onClick={() => onVoid(l.id)}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  </div>
+);

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useNow } from './useNow.js';
 import { useMerchandiseHandovers, useMerchandiseSales } from '../../query/hooks.js';
 import { formatMoney } from '../../utils/format.js';
 import { BeforeCloseChecklist } from './BeforeCloseChecklist.js';
@@ -46,16 +47,6 @@ export interface LiveShiftViewProps {
 }
 
 const money = (v: number) => formatMoney(v, { decimals: 0 });
-
-/** The clock, read every 30 s: it decides Live vs Past scheduled end, Pending vs due. */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
-}
 
 /**
  * The Live shift tab (#533, layout B): the shift bar, four "This shift" tiles,

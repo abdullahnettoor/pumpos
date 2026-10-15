@@ -76,6 +76,13 @@ const screenTables = (): string[][][] =>
     );
 
 const NOTE = /^Total: /;
+
+/** The screen's Drawers table: the one headed `Drawer`. */
+const drawerTableOnScreen = (): HTMLElement => {
+  const table = screen.getAllByRole('table').find((t) => text(t.querySelector('th')) === 'Drawer');
+  if (!table) throw new Error('no Drawers table on screen');
+  return table;
+};
 /** The screen's business-day line (`businessDayContext`), never printed. */
 const BUSINESS_DAY_LINE = /^(Today's business day|A past business day)/;
 
@@ -282,6 +289,62 @@ describe('Shift Summary screen and PDF parity (#595): the words they once disagr
     expect(handovers?.totals[0].at(-1)).toBe('Balanced');
     const total = screen.getByRole('table', { name: 'Attendant handovers' }).querySelector('tfoot');
     expect(total?.textContent).toContain('Balanced');
+  });
+
+  it('Drawers: the shared columns and total row, the variance total in words on paper', async () => {
+    const pdf = await renderBoth(SHIFT_FULL_FIXTURE);
+    const drawers = pdf.tables.find((t) => t.headers[0] === 'DRAWER');
+    expect(drawers?.headers).toEqual([
+      'DRAWER',
+      'HANDOVER',
+      'FLOAT',
+      'CASH SALES',
+      'DROPS',
+      'EXPECTED',
+      'DECLARED',
+      'VARIANCE',
+    ]);
+    expect(drawers?.rows.map((r) => [r[0], r[1], r[7]])).toEqual([
+      ['DU1 · Ravi', 'Recorded', '−₹340.00'],
+      ['DU2 · Suresh', 'Recorded', 'Balanced'],
+    ]);
+    expect(drawers?.totals).toEqual([
+      [
+        'Total',
+        '',
+        '₹4,000.00',
+        '₹1,40,000.00',
+        '₹50,000.00',
+        '₹94,000.00',
+        '₹93,660.00',
+        '−₹340.00',
+      ],
+    ]);
+    // On screen the same total is a chip.
+    const foot = drawerTableOnScreen().querySelector('tfoot');
+    expect(foot?.querySelector('[data-variance="short"]')?.textContent).toBe('−₹340.00');
+  });
+
+  it('Drawers: a total that nets to zero reads Balanced, and a pending Drawer is left out', async () => {
+    const snap = SHIFT_FULL_FIXTURE.snapshotData ?? {};
+    const [ravi, suresh] = snap.drawers as Record<string, unknown>[];
+    const record: ShiftSummaryRecord = {
+      ...SHIFT_FULL_FIXTURE,
+      snapshotData: {
+        ...snap,
+        drawers: [
+          { ...ravi, variance: 0, cashHandedOver: 42000 },
+          { ...suresh, cashSales: null, expectedCash: null, cashHandedOver: null, variance: null },
+        ],
+      },
+    };
+    const pdf = await renderBoth(record);
+    const drawers = pdf.tables.find((t) => t.headers[0] === 'DRAWER');
+    expect(drawers?.rows[1].slice(1, 2)).toEqual(['Pending']);
+    expect(drawers?.totals[0][0]).toBe('Total excl. DU2, not handed over');
+    expect(drawers?.totals[0].at(-1)).toBe('Balanced');
+    const foot = drawerTableOnScreen().querySelector('tfoot');
+    expect(foot?.textContent).toContain('Balanced');
   });
 
   it('a legacy snapshot: one cash variance line and its stored purchases', async () => {

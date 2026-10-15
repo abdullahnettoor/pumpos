@@ -187,33 +187,41 @@ What happens during a typical shift, and where to record it:
   readings, count the whole pouch by denomination ("Count handover cash by
   denomination") — float included — enter any **Cash Drops** taken from the
   pouch mid-shift, record card/UPI slips per terminal, list credit sales →
-  **Save Handover & Readings**. The Drawer's expected cash is opening float +
-  DU cash sales − cash drops; the difference from the counted cash is that
-  attendant's **variance** — record the actual
-  count; variance is tracked, not hidden. Products sold without a bill go on
-  the employee's **Handover Product Sale** (Product sales → **Record**).
+  **Save handover & readings**. The drawer's **Reconciliation** reads expected
+  in drawer = opening float + fuel cash + **Product sales (cash)** − cash drops;
+  the difference from the counted cash is that attendant's **variance**
+  (Balanced, +₹… surplus, −₹… short) — record the actual count; variance is
+  tracked, not hidden. Products sold without a bill go on the employee's
+  **Handover Product Sale** (Product sales → **Record**, or **Edit** on the
+  Product sales (cash) line in the handover).
 
 Done when: every attendant has handed over — all readings, cash counts, and
 credit sales are in before you close.
 
 ## 8. Close the shift
 
-Live shift → **Close shift** (top right) — a 4-step wizard:
+Live shift → **Close shift** (top right; **Continue close** once started)
+opens the Close shift page (`/shifts/<id>/close`). Its step is in the
+address and what you enter is kept, so a reload or an accidental Back
+resumes it. A sticky footer shows expected vs counted office cash.
 
-1. **Cash Reconciliation** — "Count safe cash by denomination". Expected
-   drawer cash = Σ opening floats + cash sales − cash drops, the sum of the
-   attendants' Drawers, which the wizard lists one per row (collections,
-   expenses and supplier payments are office money, never drawer cash). Enter the real count;
-   the difference is recorded as variance with a reason.
-2. **Physical Dip Readings** — enter each tank's dip. Skipping is allowed
-   ("Close without recording Tank Dips?") but dips are what catch tank
-   variance.
-3. **Review Warnings** — read each warning, tick the confirmation.
-4. **Confirm Shift Summary** → **Close Shift**.
+1. **Readings** — every nozzle's closing reading, under its Drawer. A drawer
+   that has not handed over reads blank: **Record handover** opens the
+   Handover drawer on top of the page. Optional **Tank dips** sit here too
+   ("Close without recording tank dips?").
+2. **Handovers** — one row per Drawer: float, cash sales, drops, expected,
+   declared and variance. Every drawer must hand over before the shift
+   closes; **Record** opens the missing handover.
+3. **Cash count** — expected office cash = Σ opening floats + cash declared −
+   drops (collections, expenses and supplier payments are office money, never
+   drawer cash). Add any **Drops at close**, then enter the real count ("Count
+   safe cash by denomination"); the office count variance is shown at once.
+4. **Confirm** — the summary and any warnings to acknowledge → **Close shift**.
 
-Done when: the immutable **Shift Summary** appears (nozzle reconciliation,
-drawer reconciliation, totals). It never changes afterwards. **Open next
-Shift** starts the following window; past shifts live under **History**.
+Done when: the page shows **<Shift> closed** — the immutable **Shift
+Summary** is saved (nozzle reconciliation, drawer reconciliation, totals) and
+never changes afterwards. **Open next shift** starts the following window;
+**View shift summary** opens it under **History**.
 
 ## 9. Day-to-day finance (any time, not shift-bound)
 
@@ -377,8 +385,8 @@ Done when: the right tabs appear for the Role, the bell count matches the
 12:00  Customer clears dues    → Log Collection
 13:00  Tea & sundries paid     → Add Expense (Petty Cash)
 14:00  Attendants hand over    → Record Handover (readings + cash count)
-14:05  Close Morning shift     → 4-step wizard → Shift Summary
-14:10  Open Evening shift      → Open next Shift
+14:05  Close Morning shift     → Close shift page (4 steps) → Shift Summary
+14:10  Open Evening shift      → Open next shift
   ⋮      (repeat per shift)
 22:05  Close last shift
 22:10  Close business day      → DSR generated

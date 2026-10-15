@@ -319,7 +319,7 @@ const SummaryBody: React.FC<{
       {summary.drawers.length > 0 && (
         <section className="flex flex-col gap-2">
           <SectionHeader title={TITLES.drawers} subtitle={TITLES.drawersSubtitle} />
-          <DrawerReconciliationTable drawers={summary.drawers} />
+          <DrawerReconciliationTable drawers={summary.drawers} showTotals />
         </section>
       )}
 

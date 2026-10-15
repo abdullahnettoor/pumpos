@@ -81,10 +81,12 @@ a time — never in place.
   kg). Keep the label `Total` and say why in a note under the table (the DSR
   does). `units` names a qty figure's unit when it is not the rows' own (the
   DSR's shift total takes the day's fuel unit).
-- **A total in words.** `cells` renders a total cell yourself (a
-  `VarianceChip`), and `texts` gives the same cell as plain text for a PDF
-  (`+₹228.51`, `Balanced`), so a variance total reads as its rows do on screen
-  and on paper (#595).
+- **Custom total cells.** `totalRow.cells` renders a total cell yourself, as a
+  column's `cell` does for a row: the Drawers table's variance total is a
+  `VarianceChip` (#534). Pair it with `totalRow.texts`, that cell as plain text
+  (`Balanced`, `−₹220.00`), as a column pairs `cell` with `text`; without
+  `texts`, `totalTexts` prints the figure in `values`. Keep the figure in
+  `values` either way, so the totals stay readable to anything that reads them.
 - **Sorting** puts empty and broken values last in either direction.
 - **`selectedRowId`** (`InteractiveTable`) marks the row whose detail the
   screen shows (a picked Business Day): `aria-current` and the highlight tint,

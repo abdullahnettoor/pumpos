@@ -12,23 +12,13 @@ import { pdfTable } from './pdfTable.js';
 
 /**
  * A section title, uppercase as the screen's section header shows it, with
- * its subtitle and caption. It never ends a page: it moves to the next page
+ * its subtitle. It never ends a page: it moves to the next page
  * with the start of what it titles.
  */
-export const PdfTitle = ({
-  title,
-  subtitle,
-  caption,
-}: {
-  title: string;
-  subtitle?: string;
-  /** A line just above the table (`Amounts in ₹`). */
-  caption?: string;
-}) => (
+export const PdfTitle = ({ title, subtitle }: { title: string; subtitle?: string }) => (
   <View wrap={false} minPresenceAhead={50}>
     <Text style={s.h2}>{title.toUpperCase()}</Text>
     {subtitle && <Text style={[s.label, { marginTop: -3, marginBottom: 5 }]}>{subtitle}</Text>}
-    {caption && <Text style={[s.label, { marginBottom: 4 }]}>{caption}</Text>}
   </View>
 );
 

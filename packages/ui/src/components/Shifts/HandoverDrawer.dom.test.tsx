@@ -14,13 +14,15 @@ import { handoverResultFor } from '../../test/handoverResult.js';
  */
 const mutateAsync = vi.fn();
 const recordCollection = vi.fn();
+const voidCreditSale = vi.fn();
+const voidOmcCardSale = vi.fn();
 
 vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CloudTransactionService: class {
     recordCollection = (...a: unknown[]) => recordCollection(...a);
-    voidCreditSale = vi.fn();
-    voidOmcCardSale = vi.fn();
+    voidCreditSale = (...a: unknown[]) => voidCreditSale(...a);
+    voidOmcCardSale = (...a: unknown[]) => voidOmcCardSale(...a);
   },
 }));
 
@@ -31,9 +33,44 @@ vi.mock('../../query/handoverMutation.js', async (importOriginal) => ({
   saveHandoverRequestIdentity: vi.fn(),
 }));
 
+/** A query that has loaded `data`, as the Data Section reads it. */
+const loaded = (data: unknown[]) => ({
+  data,
+  isPending: false,
+  isError: false,
+  fetchStatus: 'idle' as const,
+  refetch: vi.fn(),
+});
+
+/** A query that failed, as the Data Section reads it. */
+const failed = () => ({
+  data: undefined,
+  isPending: false,
+  isError: true,
+  fetchStatus: 'idle' as const,
+  error: new Error('down'),
+  refetch: vi.fn(),
+});
+
+type FakeQuery = ReturnType<typeof loaded> | ReturnType<typeof failed>;
+const queries: { customers: () => FakeQuery; productSales: () => FakeQuery } = {
+  customers: () => loaded([]),
+  productSales: () => loaded([]),
+};
+
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useAllVehicles: () => ({ data: [] }),
+  useAllVehicles: () => loaded([]),
+  useCustomers: () => queries.customers(),
+  useMerchandiseHandovers: () => queries.productSales(),
+  useMerchandiseSales: () => loaded([]),
+}));
+
+// The Edit link opens the Handover Product Sale drawer; its own form is pinned
+// in its own tests, so here it only reports that it opened, for whom.
+vi.mock('./HandoverProductSaleDrawer.js', () => ({
+  HandoverProductSaleDrawer: (p: { isOpen: boolean; employeeId: string | null }) =>
+    p.isOpen ? <div role="dialog" aria-label={`Product sale for ${p.employeeId}`} /> : null,
 }));
 
 const { HandoverDrawer } = await import('./HandoverDrawer.js');
@@ -85,12 +122,15 @@ const setReading = (nozzleId: string, value: string) =>
 const setField = (name: string, value: string) =>
   fireEvent.change(input(name), { target: { value } });
 
+/** A reconciliation line's figure, by its label. */
 const rowValue = (label: string) => {
-  const span = screen.getByText(label);
-  return span.parentElement?.querySelector('strong')?.textContent ?? '';
+  const dt = [...document.querySelectorAll('dt')].find((d) => d.textContent?.startsWith(label));
+  return dt?.nextElementSibling?.textContent ?? '';
 };
+/** The drawer's variance chip (footer): its figure and its state. */
+const variance = () => screen.getByTestId('handover-variance');
 const saveButton = () =>
-  screen.getByRole('button', { name: /Save Handover & Readings/ }) as HTMLButtonElement;
+  screen.getByRole('button', { name: /Save handover & readings/ }) as HTMLButtonElement;
 
 describe('HandoverDrawer', () => {
   let restoreConsole: () => void;
@@ -104,6 +144,10 @@ describe('HandoverDrawer', () => {
         Promise.resolve(handoverResultFor(payload)),
       );
     recordCollection.mockReset();
+    voidCreditSale.mockReset().mockResolvedValue({});
+    voidOmcCardSale.mockReset().mockResolvedValue({});
+    queries.customers = () => loaded([]);
+    queries.productSales = () => loaded([]);
     // Only the noise these tests provoke on purpose; React's act() and
     // unmounted-update warnings must still reach the console.
     restoreConsole = muteExpectedConsoleErrors([
@@ -118,12 +162,13 @@ describe('HandoverDrawer', () => {
 
   it('renders nothing while closed', () => {
     renderWithProviders(<HandoverDrawer {...baseProps({ isOpen: false })} />);
-    expect(screen.queryByText(/Attendant Handover/)).toBeNull();
+    expect(screen.queryByText(/Handover ·/)).toBeNull();
   });
 
   it('identifies the attendant and their dispenser unit', () => {
     renderWithProviders(<HandoverDrawer {...baseProps()} />);
-    expect(screen.getByText('Attendant Handover: Ravi (DU-1)')).toBeDefined();
+    expect(screen.getByText('Handover · DU-1 · Ravi')).toBeDefined();
+    expect(screen.getByText('Pending · attendant handover')).toBeDefined();
   });
 
   it('lists nozzles in natural order whatever order they arrive in', () => {
@@ -151,14 +196,14 @@ describe('HandoverDrawer', () => {
     it('values the metered volume at the pump price', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050'); // 50 L × ₹100
-      expect(rowValue('Expected Fuel Sales Value:')).toBe('₹5,000.00');
+      expect(rowValue('Fuel sales')).toBe('₹5,000.00');
     });
 
     it('rounds fractional-paise expected sales to two decimals', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '2020.78132');
 
-      expect(rowValue('Expected Fuel Sales Value:')).toBe('₹1,02,078.13');
+      expect(rowValue('Fuel sales')).toBe('₹1,02,078.13');
     });
 
     it('deducts calibration testing volume from the expected sales', () => {
@@ -166,7 +211,7 @@ describe('HandoverDrawer', () => {
       setReading(NOZZLE_A, '1050');
       setField(`nozzleTesting.${NOZZLE_A}`, '5'); // 5 L returned to tank
       // 50 L sold − 5 L tested = 45 L × ₹100 = ₹4,500
-      expect(rowValue('Expected Fuel Sales Value:')).toContain('4,500');
+      expect(rowValue('Fuel sales')).toContain('4,500');
     });
 
     it('sums across every nozzle on the unit', () => {
@@ -175,20 +220,41 @@ describe('HandoverDrawer', () => {
       );
       setReading(NOZZLE_A, '1050');
       setReading(NOZZLE_B, '1020');
-      expect(rowValue('Expected Fuel Sales Value:')).toContain('7,000');
+      expect(rowValue('Fuel sales')).toContain('7,000');
     });
 
-    it('folds walk-in merchandise cash into what the attendant owes', () => {
+    it('folds product sales paid in cash into what the attendant owes', () => {
       renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseCash: 500 })} />);
       setReading(NOZZLE_A, '1050');
-      expect(rowValue('Total Expected:')).toContain('5,500');
+      expect(rowValue('Product sales (cash)')).toBe('+₹500.00');
+      expect(rowValue('Cash sales')).toBe('₹5,500.00');
     });
 
-    it('leaves merchandise taken on card out of the cash expectation', () => {
-      // Non-cash merchandise never reaches the attendant's hands.
+    it('leaves product sales taken on card out of the cash expectation', () => {
+      // Non-cash product sales never reach the attendant's hands.
       renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseNonCash: 900 })} />);
       setReading(NOZZLE_A, '1050');
-      expect(rowValue('Total Expected:')).toContain('5,000');
+      expect(rowValue('Product sales (cash)')).toBe('₹0.00');
+      expect(rowValue('Cash sales')).toBe('₹5,000.00');
+      expect(screen.getByText(/are not drawer cash/)).toBeDefined();
+    });
+
+    it('reads expected = float + fuel cash + product cash − drops (#534)', () => {
+      renderWithProviders(
+        <HandoverDrawer {...baseProps({ merchandiseCash: 500, openingFloat: 1000 })} />,
+      );
+      setReading(NOZZLE_A, '1050'); // ₹5,000 fuel
+      setField('cardHandedOver', '1500');
+      fireEvent.click(screen.getByRole('button', { name: /Add cash drop/ }));
+      setField('cashDrops', '2000');
+      setField('cashHandedOver', '3000');
+      expect(rowValue('Card · UPI')).toBe('−₹1,500.00');
+      expect(rowValue('Cash sales')).toBe('₹4,000.00');
+      expect(rowValue('Opening float')).toBe('+₹1,000.00');
+      expect(rowValue('Cash drops')).toBe('−₹2,000.00');
+      expect(rowValue('Expected in drawer')).toBe('₹3,000.00');
+      expect(rowValue('Declared cash')).toBe('₹3,000.00');
+      expect(variance().textContent).toBe('Balanced');
     });
   });
 
@@ -204,22 +270,25 @@ describe('HandoverDrawer', () => {
       setField('cardHandedOver', '1000');
       setField('upiHandedOver', '500');
       // 2,500 + 1,000 + 500 + 1,000 credit = 5,000
-      expect(rowValue('Declared Deposit Sum:')).toContain('5,000');
-      expect(screen.getByText(/Balanced/)).toBeDefined();
+      expect(rowValue('Credit · OMC card')).toBe('−₹1,000.00');
+      expect(variance().textContent).toBe('Balanced');
+      expect(variance().getAttribute('data-variance')).toBe('balanced');
     });
 
     it('reports a shortage when the attendant is under', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050');
       setField('cashHandedOver', '4800');
-      expect(screen.getByText(/−₹200.00 short/)).toBeDefined();
+      expect(variance().textContent).toBe('−₹200.00');
+      expect(variance().getAttribute('data-variance')).toBe('short');
     });
 
     it('reports a surplus when the attendant is over', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050');
       setField('cashHandedOver', '5200');
-      expect(screen.getByText(/\+₹200.00 surplus/)).toBeDefined();
+      expect(variance().textContent).toBe('+₹200.00');
+      expect(variance().getAttribute('data-variance')).toBe('surplus');
     });
 
     it('treats sub-paise float dust as balanced rather than a shortage', () => {
@@ -227,9 +296,9 @@ describe('HandoverDrawer', () => {
         <HandoverDrawer {...baseProps({ nozzles: [nozzle(NOZZLE_A, { unitPrice: 94.37 })] })} />,
       );
       setReading(NOZZLE_A, '1033.7');
-      const expected = rowValue('Expected Fuel Sales Value:').replace(/[₹,]/g, '');
+      const expected = rowValue('Fuel sales').replace(/[₹,]/g, '');
       setField('cashHandedOver', expected);
-      expect(screen.getByText(/Balanced/)).toBeDefined();
+      expect(variance().textContent).toBe('Balanced');
     });
   });
 
@@ -389,8 +458,9 @@ describe('HandoverDrawer', () => {
       );
       await waitFor(() => expect(screen.getAllByText(/Acme Transport/).length).toBeGreaterThan(0));
       setReading(NOZZLE_A, '1050');
-      // 2,000 of credit counts toward the 5,000 expected.
-      expect(rowValue('Declared Deposit Sum:')).toContain('2,000');
+      // 2,000 of credit comes off the cash the 5,000 of fuel should leave.
+      expect(rowValue('Credit · OMC card')).toBe('−₹2,000.00');
+      expect(rowValue('Cash sales')).toBe('₹3,000.00');
     });
   });
 
@@ -493,12 +563,130 @@ describe('HandoverDrawer', () => {
       setField('cashHandedOver', '4000');
       fireEvent.click(addButton()!);
       setField('cashDrops', '1000'); // 4,000 + 1,000 dropped = balanced
-      await waitFor(() => expect(screen.getByText(/Balanced/)).toBeDefined());
+      await waitFor(() => expect(variance().textContent).toBe('Balanced'));
       fireEvent.click(removeButton());
       expect(input('cashDrops')).toBeNull();
-      await waitFor(() => expect(screen.getByText(/−₹1,000.00 short/)).toBeDefined());
+      await waitFor(() => expect(variance().textContent).toBe('−₹1,000.00'));
       fireEvent.click(addButton()!);
       expect(input('cashDrops').value).toBe('');
+    });
+  });
+
+  describe('one Idempotency-Key per drawer open (#534)', () => {
+    it('reuses the key for an edited retry after a lost answer, so the server refuses it', async () => {
+      mutateAsync.mockRejectedValueOnce(
+        Object.assign(new Error('Network down'), { status: undefined }),
+      );
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '1050');
+      setField('cashHandedOver', '5000');
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+
+      setField('cashHandedOver', '4900');
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+      const [first, second] = mutateAsync.mock.calls.map((c) => c[0]);
+      expect(second.payload.cashHandedOver).toBe(4900);
+      expect(second.idempotencyKey).toBe(first.idempotencyKey);
+    });
+
+    it('takes a fresh key once a save is answered', async () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '1050');
+      setField('cashHandedOver', '5000');
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
+      const saveChanges = () => screen.getByRole('button', { name: /Save changes/ });
+      await waitFor(() => expect(saveChanges()).toBeDefined());
+      setField('cashHandedOver', '4900');
+      fireEvent.click(
+        screen.getByRole('button', { name: /Save changes|Save handover/ }) as HTMLButtonElement,
+      );
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+      const [first, second] = mutateAsync.mock.calls.map((c) => c[0]);
+      expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+    });
+  });
+
+  describe('failed reads show an error with Retry, never an empty list (#534 review)', () => {
+    it('says the customers could not load when adding a customer sale', () => {
+      queries.customers = failed;
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Add customer sale/ }));
+      expect(screen.getByText(/Couldn.t load customers and vehicles/)).toBeDefined();
+      expect(screen.getByRole('button', { name: /Retry/ })).toBeDefined();
+      expect(screen.queryByText('Payment channel')).toBeNull();
+    });
+
+    it('says the product sales could not load instead of offering Edit', () => {
+      queries.productSales = failed;
+      renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseCash: 450 })} />);
+      expect(screen.queryByRole('button', { name: /Edit Ravi's product sales/ })).toBeNull();
+      expect(screen.getByText(/Couldn.t load product sales/)).toBeDefined();
+    });
+  });
+
+  describe('voiding a customer sale is keyed (#534 review)', () => {
+    it('sends an Idempotency-Key, reused when the same void is retried after a lost answer', async () => {
+      voidCreditSale
+        .mockReset()
+        .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+        .mockResolvedValueOnce({});
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({ creditSales: [{ id: 'c1', amount: 1000, customerName: 'Acme' }] })}
+        />,
+      );
+      const voidButton = () => screen.getByRole('button', { name: 'Void this credit sale' });
+      fireEvent.click(voidButton());
+      await waitFor(() => expect(voidCreditSale).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect((voidButton() as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(voidButton());
+      await waitFor(() => expect(voidCreditSale).toHaveBeenCalledTimes(2));
+      const [first, second] = voidCreditSale.mock.calls;
+      expect(first[0]).toBe('c1');
+      expect(first[1].idempotencyKey).toEqual(expect.any(String));
+      expect(second[1].idempotencyKey).toBe(first[1].idempotencyKey);
+    });
+
+    it('keys an OMC card void too', async () => {
+      renderWithProviders(
+        <HandoverDrawer {...baseProps({ omcSales: [{ id: 'o1', amount: 500 }] })} />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Void this OMC card sale' }));
+      await waitFor(() => expect(voidOmcCardSale).toHaveBeenCalledTimes(1));
+      expect(voidOmcCardSale.mock.calls[0][1].idempotencyKey).toEqual(expect.any(String));
+    });
+  });
+
+  it('restores the declared total as one line (#534 review)', () => {
+    renderWithProviders(
+      <HandoverDrawer
+        {...baseProps({
+          creditSales: [{ id: 'c1', amount: 1000, customerName: 'Acme' }],
+          omcSales: [{ id: 'o1', amount: 250 }],
+        })}
+      />,
+    );
+    setField('cashHandedOver', '2500');
+    setField('cardHandedOver', '1000');
+    setField('upiHandedOver', '500');
+    expect(rowValue('Declared total (cash + card + UPI + credit + OMC)')).toBe('₹5,250.00');
+  });
+
+  describe('product sales in the reconciliation (#534)', () => {
+    it('opens this attendant’s handover product sale from Edit', async () => {
+      renderWithProviders(<HandoverDrawer {...baseProps({ merchandiseCash: 450 })} />);
+      fireEvent.click(screen.getByRole('button', { name: /Edit Ravi's product sales/ }));
+      expect(await screen.findByRole('dialog', { name: 'Product sale for user-1' })).toBeDefined();
+    });
+
+    it('never says merchandise on screen', () => {
+      renderWithProviders(
+        <HandoverDrawer {...baseProps({ merchandiseCash: 450, merchandiseNonCash: 100 })} />,
+      );
+      expect(document.body.textContent).not.toMatch(/merchandise/i);
     });
   });
 

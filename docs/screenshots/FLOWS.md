@@ -39,8 +39,8 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
   customer credit sale (chit) `[33]`, cash deposit; live variance preview `[34–36]`
   (DU-2 shows a small cash shortage `[36]`)
 - Workspace after 2/2 handovers: variances per attendant, nozzle reconciliation `[38]`
-- **Close shift** → 4-step wizard: Cash Reconciliation `[39]` → Physical Dip Readings `[40]` →
-  Review Warnings `[41]` → Confirm `[42]` → **Close Shift** → success + immutable summary `[43–44]`
+- **Close shift** → the Close shift page (#534; screenshots `[39–44]` predate it): Readings
+  (+ tank dips) → Handovers → Cash count → Confirm → **Close shift** → closed state + immutable summary
 
 ## Business day & reporting
 

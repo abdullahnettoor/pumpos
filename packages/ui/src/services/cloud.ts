@@ -788,18 +788,26 @@ export class CloudShiftService {
   async updateNozzleReadings(
     shiftId: string,
     readings: { nozzleId: string; closingReading: number }[],
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>('/shifts/readings', {
-      method: 'PUT',
-      body: JSON.stringify({ shiftId, readings }),
-    });
+    return request<any>(
+      '/shifts/readings',
+      { method: 'PUT', body: JSON.stringify({ shiftId, readings }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async closeShift(shiftId: string, payload: ShiftClosePayload): Promise<any> {
-    return request<any>('/shifts/close', {
-      method: 'POST',
-      body: JSON.stringify({ shiftId, payload }),
-    });
+  /** Close a shift. Pass an `idempotencyKey` so a retry after a lost answer cannot close twice. */
+  async closeShift(
+    shiftId: string,
+    payload: ShiftClosePayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/shifts/close',
+      { method: 'POST', body: JSON.stringify({ shiftId, payload }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async reopenShift(shiftId: string, opts?: { idempotencyKey?: string }): Promise<any> {
@@ -1508,12 +1516,22 @@ export class CloudTransactionService {
     );
   }
 
-  async voidCreditSale(id: string): Promise<any> {
-    return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  /** Void a credit sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidCreditSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/credit-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async voidOmcCardSale(id: string): Promise<any> {
-    return request<any>(`/transactions/omc-card-sales/${id}`, { method: 'DELETE' });
+  /** Void an OMC card sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidOmcCardSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/omc-card-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {

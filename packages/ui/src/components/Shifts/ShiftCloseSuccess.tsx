@@ -1,9 +1,18 @@
 import React from 'react';
-import { AlertTriangle, Check, Play, FileText } from 'lucide-react';
-import { Button } from '../../pump-ds/index.js';
-import { formatQuantity, inr } from '../../utils/format.js';
-import { formatVariance, VARIANCE_TONE_TEXT } from '../../utils/variance.js';
-import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
+import { formatStationDateTime, historicalShiftMessage } from '@pump/shared';
+import {
+  Button,
+  Icon,
+  InteractiveTable,
+  SectionHeader,
+  VarianceChip,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
+import { formatMoney, formatQuantity, formatShortDay } from '../../utils/format.js';
+import { formatVariance } from '../../utils/variance.js';
+import { CloseNote } from './CloseShiftSteps.js';
 
 export interface ShiftCloseResult {
   expectedCash: number;
@@ -20,32 +29,112 @@ export interface ShiftCloseResult {
   timeZone?: string;
 }
 
+type TankDip = {
+  tankId: string;
+  tankName: string;
+  actualQuantity: number;
+  status: 'pending' | 'saving' | 'saved' | 'failed';
+  error?: string;
+  expectedQuantity?: number;
+  varianceQuantity?: number;
+  warnings?: string[];
+};
+
 export interface ShiftCloseSuccessProps {
   result: ShiftCloseResult;
+  /** The closed shift's name ("Evening"), when known. */
+  shiftName?: string | null;
   onStartNext: () => void;
   onViewSummary: () => void;
+  /** Back to Live shift. */
   onBack: () => void;
-  tankDips?: Array<{
-    tankId: string;
-    tankName: string;
-    actualQuantity: number;
-    status: 'pending' | 'saving' | 'saved' | 'failed';
-    error?: string;
-    expectedQuantity?: number;
-    varianceQuantity?: number;
-    warnings?: string[];
-  }>;
+  tankDips?: TankDip[];
   onSaveTankDips?: () => void | Promise<unknown>;
   onDiscardTankDips?: () => void | Promise<unknown>;
 }
 
+const DIP_STATUS: Record<TankDip['status'], string> = {
+  saved: 'Saved',
+  saving: 'Saving…',
+  failed: 'Retry required',
+  pending: 'Ready',
+};
+
+const DIP_COLUMNS: TableColumn<TankDip>[] = [
+  { id: 'tank', header: 'Tank', kind: 'text', value: (d) => d.tankName, emphasis: true },
+  {
+    id: 'dip',
+    header: 'Dip',
+    kind: 'qty',
+    unit: 'L',
+    value: (d) => d.actualQuantity,
+    total: false,
+  },
+  {
+    id: 'expected',
+    header: 'Expected',
+    kind: 'qty',
+    unit: 'L',
+    total: false,
+    value: (d) => (d.status === 'saved' ? (d.expectedQuantity ?? null) : null),
+    cell: (d) =>
+      d.status === 'saved' && d.expectedQuantity !== undefined
+        ? formatQuantity(d.expectedQuantity, 'L')
+        : '—',
+  },
+  {
+    id: 'variance',
+    header: 'Variance',
+    kind: 'qty',
+    unit: 'L',
+    total: false,
+    value: (d) => (d.status === 'saved' ? (d.varianceQuantity ?? null) : null),
+    cell: (d) =>
+      d.status === 'saved' && d.varianceQuantity !== undefined ? (
+        <VarianceChip amount={d.varianceQuantity} kind="stock" size="md" />
+      ) : (
+        '—'
+      ),
+    text: (d) =>
+      d.status === 'saved' && d.varianceQuantity !== undefined
+        ? formatVariance(d.varianceQuantity, 'stock').text
+        : '—',
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    kind: 'text',
+    sortable: false,
+    value: (d) => DIP_STATUS[d.status],
+    cell: (d) => (
+      <div className="flex flex-col gap-0.5">
+        {d.status === 'failed' ? (
+          <span className="text-danger-fg">Retry required</span>
+        ) : (
+          <span className={d.status === 'saved' ? 'text-ink-strong' : 'text-ink-muted'}>
+            {DIP_STATUS[d.status]}
+          </span>
+        )}
+        {d.error && <span className="text-[12px] text-danger-fg">{d.error}</span>}
+        {d.warnings?.map((w) => (
+          <span key={w} className="text-[12px] text-warning-fg">
+            {w}
+          </span>
+        ))}
+      </div>
+    ),
+  },
+];
+
 /**
- * Post-close confirmation screen: shows the drawer reconciliation outcome
- * (expected vs actual cash + variance) and the next-step actions. Extracted from
- * ShiftsManagement as a presentational leaf.
+ * Close shift → closed (#534): the Close shift page's final state. The office
+ * cash outcome, any tank dips saved after close, and the next steps (open the
+ * next shift, view the Shift Summary). While a tank dip still needs saving the
+ * way on is held, as before, so a dip is never silently dropped.
  */
 export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
   result,
+  shiftName,
   onStartNext,
   onViewSummary,
   onBack,
@@ -53,285 +142,121 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
   onSaveTankDips,
   onDiscardTankDips,
 }) => {
-  const hasPendingDips = tankDips.some((dip) => dip.status === 'pending');
-  const hasFailedDips = tankDips.some((dip) => dip.status === 'failed');
-  const needsDipRetry = hasPendingDips || hasFailedDips;
-  const isSavingDips = tankDips.some((dip) => dip.status === 'saving');
-  const cashVariance = formatVariance(result.variance, 'cash');
+  const needsDipRetry = tankDips.some((d) => d.status === 'pending' || d.status === 'failed');
+  const isSavingDips = tankDips.some((d) => d.status === 'saving');
+  const held = needsDipRetry || isSavingDips;
+  const name = shiftName || 'Shift';
+  const historical = historicalShiftMessage(result.businessDate, result.currentBusinessDate);
+
   return (
-    <div
-      className="animate-fade-in card card-comfortable"
-      style={{
-        maxWidth: '600px',
-        margin: '40px auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px',
-        textAlign: 'center',
-        fontFamily: 'var(--font-sans)',
-      }}
+    <PageFrame
+      route={ROUTES.shifts}
+      title={`${name} closed`}
+      back={held ? undefined : { label: 'Live shift', href: `#${ROUTES.shifts}`, onClick: onBack }}
+      subtitle={`Business day ${formatShortDay(result.businessDate)} · closed ${formatStationDateTime(
+        result.closedAt,
+        result.timeZone,
+      )}`}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--state-success-bg)',
-            color: 'var(--state-success-fg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Check size={36} />
-        </div>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)' }}>
-          Shift Closed Successfully
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-          The Shift Summary is saved permanently.
-        </p>
-      </div>
-
-      <div style={{ textAlign: 'left' }}>
-        <ShiftBusinessDateContext
-          businessDate={result.businessDate}
-          currentBusinessDate={result.currentBusinessDate}
-          scheduledStartTime={result.scheduledStartTime}
-          scheduledEndTime={result.scheduledEndTime}
-          openedAt={result.openedAt}
-          closedAt={result.closedAt}
-          timeZone={result.timeZone}
-        />
-      </div>
-
-      <div
-        style={{
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-input)',
-          display: 'flex',
-          flexDirection: 'column',
-          fontSize: '13px',
-          overflow: 'hidden',
-          backgroundColor: 'var(--bg-surface-alt)',
-          textAlign: 'left',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignSelf: 'stretch',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-soft)',
-          }}
-        >
-          <span>Expected Safe Cash</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-            {inr(result.expectedCash)}
+      <div className="flex max-w-[760px] flex-col gap-5">
+        {historical && <CloseNote tone="warning">{historical}</CloseNote>}
+        <div className="flex items-center gap-3 rounded-card border border-border-soft bg-surface px-5 py-4">
+          <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-success-bg text-success-fg">
+            <Icon name="check" size="md" aria-hidden="true" />
           </span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignSelf: 'stretch',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-soft)',
-          }}
-        >
-          <span>Actual Closing Cash Entered</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-            {inr(result.closingCash)}
-          </span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignSelf: 'stretch',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            fontWeight: 700,
-            color: VARIANCE_TONE_TEXT[cashVariance.tone],
-          }}
-        >
-          <span>Cash Variance</span>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{cashVariance.text}</span>
-        </div>
-      </div>
-
-      {tankDips.length > 0 && (
-        <div
-          style={{
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            overflow: 'hidden',
-            textAlign: 'left',
-          }}
-        >
-          <div
-            style={{
-              padding: '10px 14px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              borderBottom: '1px solid var(--border-soft)',
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-strong)' }}>
-              Optional Tank Dip
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold text-ink-strong">
+              Shift closed. Its Shift Summary is saved and locked.
             </div>
-            <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-              Fuel sales were posted first, then these readings were recorded as separate Business
-              Day actions.
+            <div className="text-[13px] text-ink-muted">
+              The business day stays open; close it from Business days.
             </div>
           </div>
-          {tankDips.map((dip) => (
-            <div
-              key={dip.tankId}
-              style={{
-                padding: '9px 14px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 12,
-                borderBottom: '1px solid var(--border-soft)',
-                fontSize: 12,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{dip.tankName}</div>
-                {dip.error && (
-                  <div style={{ color: 'var(--state-danger-fg)', marginTop: 2 }}>{dip.error}</div>
-                )}
-                {dip.warnings?.map((w) => (
-                  <div key={w} style={{ color: 'var(--state-warning-fg)', marginTop: 2 }}>
-                    {w}
-                  </div>
-                ))}
-              </div>
-              <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                <div>{dip.actualQuantity.toFixed(1)} L</div>
-                <div
-                  style={{
-                    color:
-                      dip.status === 'saved'
-                        ? 'var(--state-success-fg)'
-                        : dip.status === 'failed'
-                          ? 'var(--state-danger-fg)'
-                          : 'var(--text-muted)',
-                    fontFamily: 'var(--font-sans)',
-                  }}
-                >
-                  {dip.status === 'saved'
-                    ? 'Saved'
-                    : dip.status === 'saving'
-                      ? 'Saving...'
-                      : dip.status === 'failed'
-                        ? 'Retry required'
-                        : 'Ready'}
-                </div>
-                {dip.status === 'saved' &&
-                  dip.expectedQuantity !== undefined &&
-                  dip.varianceQuantity !== undefined && (
-                    <DipVarianceLine
-                      expected={dip.expectedQuantity}
-                      variance={dip.varianceQuantity}
-                    />
-                  )}
-              </div>
-            </div>
-          ))}
-          {needsDipRetry && onSaveTankDips && (
-            <div
-              style={{
-                padding: '10px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                backgroundColor: 'var(--state-warning-bg)',
-              }}
-            >
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  fontSize: 11,
-                  color: 'var(--state-warning-fg)',
-                }}
-              >
-                <AlertTriangle size={13} /> Some Tank Dips could not be recorded automatically.
-              </span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {onDiscardTankDips && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDiscardTankDips}
-                    disabled={isSavingDips}
-                  >
-                    Discard Unsaved Dips
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onSaveTankDips}
-                  loading={isSavingDips}
-                >
-                  Retry Tank Dips
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
-      )}
 
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-        <Button
-          variant="primary"
-          size="md"
-          leftIcon={<Play size={13} style={{ fill: 'currentColor' }} />}
-          onClick={onStartNext}
-          disabled={needsDipRetry || isSavingDips}
-        >
-          Open next Shift
-        </Button>
-        <Button
-          variant="secondary"
-          size="md"
-          leftIcon={<FileText size={13} />}
-          onClick={onViewSummary}
-          disabled={needsDipRetry || isSavingDips}
-        >
-          View Compiled Shift Summary
-        </Button>
-        <Button
-          variant="secondary"
-          size="md"
-          onClick={onBack}
-          disabled={needsDipRetry || isSavingDips}
-        >
-          Back to Workspace
-        </Button>
+        <section className="flex flex-col gap-2" aria-label="Office cash">
+          <SectionHeader title="Office cash" />
+          <dl className="flex flex-col gap-1.5 rounded-card border border-border-soft bg-surface px-4 py-3 text-[13px]">
+            <div className="flex justify-between gap-3">
+              <dt>Expected office cash</dt>
+              <dd className="font-mono tabular-nums">{formatMoney(result.expectedCash)}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt>Counted</dt>
+              <dd className="font-mono tabular-nums">{formatMoney(result.closingCash)}</dd>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-3 border-t border-border-soft pt-2 font-semibold text-ink-strong">
+              <dt>Office count variance</dt>
+              <dd>
+                <VarianceChip amount={result.variance} size="md" />
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        {tankDips.length > 0 && (
+          <section className="flex flex-col gap-2" aria-label="Tank dips">
+            <SectionHeader title="Tank dips" subtitle="Recorded after the fuel sales were posted" />
+            <div className="overflow-hidden rounded-card border border-border-soft bg-surface">
+              <InteractiveTable
+                bare
+                dense
+                columns={DIP_COLUMNS}
+                rows={tankDips}
+                rowKey={(d) => d.tankId}
+              />
+            </div>
+            {needsDipRetry && onSaveTankDips && (
+              <CloseNote tone="warning">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Some tank dips could not be recorded automatically.</span>
+                  <span className="flex gap-2">
+                    {onDiscardTankDips && (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={onDiscardTankDips}
+                        disabled={isSavingDips}
+                      >
+                        Discard unsaved dips
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      onClick={onSaveTankDips}
+                      loading={isSavingDips}
+                    >
+                      Retry tank dips
+                    </Button>
+                  </span>
+                </div>
+              </CloseNote>
+            )}
+          </section>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="md"
+            leftIcon={<Icon name="play" size="sm" />}
+            onClick={onStartNext}
+            disabled={held}
+          >
+            Open next shift
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            leftIcon={<Icon name="file-text" size="sm" />}
+            onClick={onViewSummary}
+            disabled={held}
+          >
+            View shift summary
+          </Button>
+        </div>
       </div>
-    </div>
+    </PageFrame>
   );
 };
-
-/** A saved Tank Dip's expected stock and variance, read by the shared rule. */
-function DipVarianceLine({ expected, variance }: { expected: number; variance: number }) {
-  const v = formatVariance(variance, 'stock');
-  return (
-    <div
-      style={{
-        marginTop: 2,
-        color: VARIANCE_TONE_TEXT[v.tone],
-        fontFamily: 'var(--font-sans)',
-        fontSize: 11,
-      }}
-    >
-      Expected {formatQuantity(expected, 'L')} · Variance {v.text}
-    </div>
-  );
-}

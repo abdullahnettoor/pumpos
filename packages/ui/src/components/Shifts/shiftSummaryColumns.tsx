@@ -1,19 +1,12 @@
 import React from 'react';
 import { formatStationDateTime } from '@pump/shared';
 import { VarianceChip, type TableColumn, type TotalRow } from '../../pump-ds/index.js';
-import { STATUS_MAP } from '../../pump-ds/chip/status-map.js';
 import { formatBusinessDate, formatMoney, formatQuantity } from '../../utils/format.js';
 import { formatVariance } from '../../utils/variance.js';
 import {
   legacyPurchases,
   type LegacySnapshotPurchase,
 } from '../../services/reports/legacyPurchases.js';
-import {
-  DRAWER_HEADERS,
-  drawerDrops,
-  drawerMoney,
-  type DrawerRow,
-} from './DrawerReconciliationTable.js';
 import type {
   CashLine,
   ShiftSummary,
@@ -296,50 +289,6 @@ export const cashLineText = (line: CashLine): string =>
   line.role === 'variance'
     ? formatVariance(line.amount, 'cash').text
     : `${SIGN[line.role]}${formatMoney(line.amount)}`;
-
-/**
- * The Drawers table as plain columns, for the PDF: the same headers and words
- * as `DrawerReconciliationTable` on screen (no ₹; the caption states it).
- */
-export const DRAWER_COLUMNS: TableColumn<DrawerRow>[] = [
-  {
-    id: 'attendant',
-    header: DRAWER_HEADERS.attendant,
-    kind: 'text',
-    value: (r) => r.attendantName ?? 'Attendant',
-    text: (r) =>
-      [
-        r.attendantName ?? 'Attendant',
-        r.duName,
-        r.cashHandedOver === null && STATUS_MAP['handover-pending'].label,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-  },
-  ...(
-    [
-      ['float', (r: DrawerRow) => r.openingFloat],
-      ['sales', (r: DrawerRow) => r.cashSales],
-      ['drops', drawerDrops],
-      ['expected', (r: DrawerRow) => r.expectedCash],
-      ['handed', (r: DrawerRow) => r.cashHandedOver],
-    ] as const
-  ).map(([id, value]): TableColumn<DrawerRow> => ({
-    id,
-    header: DRAWER_HEADERS[id],
-    kind: 'money',
-    value,
-    text: (r) => drawerMoney(value(r)),
-  })),
-  {
-    id: 'variance',
-    header: DRAWER_HEADERS.variance,
-    kind: 'money',
-    value: (r) => r.variance,
-    text: (r) =>
-      r.variance == null ? '—' : formatVariance(r.variance, 'cash', { symbol: false }).text,
-  },
-];
 
 /** A purchase an older snapshot stored (#308), keyed for a table. */
 export type LegacyPurchaseRow = LegacySnapshotPurchase & { key: string };
