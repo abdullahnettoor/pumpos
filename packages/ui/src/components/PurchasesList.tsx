@@ -4,6 +4,7 @@ import { useNavIntent, clearNavIntent, type NavIntent } from '../nav-intent/stor
 import { ROUTES } from '../nav-intent/routes.js';
 import { usePayables, usePurchases, useStationSuppliers } from '../query/hooks.js';
 import { openQuickEntry } from '../quick-entry/store.js';
+import { useToast } from './primitives/ToastProvider.js';
 import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
 import { PageFrame } from './page-frame/index.js';
 import type { PurchaseLinkRow, PurchaseRow, SupplierRow } from './purchases/columns.js';
@@ -117,6 +118,21 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
   const statementSupplier = focusSupplierId
     ? (allSuppliers.find((x) => x.id === focusSupplierId) ?? null)
     : (allSuppliers.find((x) => x.id === statementSupplierId) ?? null);
+  // A deep link to a supplier this Station does not list (#575: another
+  // Station's own supplier) says so once and is dropped, never left doing nothing.
+  const toast = useToast();
+  const stationName = selectedStation?.name ?? 'this station';
+  const unresolvedFocus =
+    !!focusSupplierId &&
+    suppliersQ.isSuccess &&
+    !allSuppliers.some((x) => x.id === focusSupplierId);
+  useEffect(() => {
+    if (!unresolvedFocus) return;
+    toast.info(
+      `That supplier has no account at ${stationName}. Switch to its station to see its statement.`,
+    );
+    clearNavIntent();
+  }, [unresolvedFocus, stationName, toast]);
   /** See CustomersList: a setter competing with a derived intent must clear it. */
   const showStatementFor = (id: string | null) => {
     consumeIntent();

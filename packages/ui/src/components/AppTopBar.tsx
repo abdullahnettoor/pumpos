@@ -27,7 +27,7 @@ import {
   ConceptIcon,
   Icon,
 } from '../pump-ds/index.js';
-import { useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
+import { useCustomers, useStationSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -97,8 +97,13 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const canSeeFinancials = canViewReports(userRole);
   const stationId = selectedStation?.id;
 
-  const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);
-  const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
+  const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
+  // The selected Station's suppliers (#575): the "due" beside each is what this
+  // Station owes, and every result is one its Suppliers page lists, so the deep
+  // link always finds it.
+  const { data: suppliers } = useStationSuppliers(stationId, true, {
+    enabled: canSeeFinancials,
+  });
   const { data: products } = useProducts();
   const stationAlerts = useStationAlerts(stationId, stationReady && canSeeFinancials);
 

@@ -8,6 +8,11 @@ import { renderWithProviders } from '../test/renderWithProviders.js';
 import { computeRange } from '../pump-ds/index.js';
 import { shortMonth } from '../utils/format.js';
 import { PurchasesList } from './PurchasesList.js';
+import {
+  getNavIntentState,
+  publishNavIntent,
+  __resetNavIntentForTests,
+} from '../nav-intent/store.js';
 
 /**
  * The Suppliers page on the shared modules (#528): Page Frame, layout B for
@@ -143,6 +148,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  __resetNavIntentForTests();
 });
 
 describe('Suppliers page (#528)', () => {
@@ -418,6 +424,26 @@ describe('Suppliers page per Station (#575)', () => {
     renderWithProviders(<PurchasesList selectedStation={at} />);
     await waitFor(() => expect(within(tileOf('Payable')).getByText(owed)).toBeTruthy());
     expect((await payableTotal()).getByText(owed)).toBeTruthy();
+  });
+
+  it('a deep link to a supplier this Station does not list says so, then clears', async () => {
+    stubStations();
+    publishNavIntent({ focusSupplierId: 'iocl', open: 'supplier-statement' });
+    renderWithProviders(<PurchasesList selectedStation={HIGHWAY} />);
+    expect(
+      await screen.findByText(
+        'That supplier has no account at Highway Fuels. Switch to its station to see its statement.',
+      ),
+    ).toBeTruthy();
+    expect(getNavIntentState().intent).toBeNull();
+    expect(screen.queryByTestId('supplier-balance')).toBeNull();
+  });
+
+  it('a deep link to a supplier this Station lists opens its statement', async () => {
+    stubStations();
+    publishNavIntent({ focusSupplierId: 'lube', open: 'supplier-statement' });
+    renderWithProviders(<PurchasesList selectedStation={HIGHWAY} />);
+    expect((await screen.findByTestId('supplier-balance')).textContent).toBe('You owe₹4,000.00');
   });
 
   it('a shared supplier shows each Station its own share, row and statement alike', async () => {
