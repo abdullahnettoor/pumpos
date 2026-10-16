@@ -514,6 +514,7 @@ stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), asy
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
       products: new DrizzleProductRepository(tx),
+      dispensers: new DrizzleDispenserRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body.stationId })),
   );
@@ -1061,6 +1062,7 @@ stationSetupRouter.put('/nozzles/:id', writePolicyGuard('PUT /setup/nozzles/:id'
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
       products: new DrizzleProductRepository(tx),
+      dispensers: new DrizzleDispenserRepository(tx),
       events,
     }).execute({ ...body, id }, buildContext(user, { stationId })),
   );
@@ -1080,6 +1082,7 @@ stationSetupRouter.delete(
       repository: new DrizzleNozzleRepository(db),
       tanks: new DrizzleTankRepository(db),
       products: new DrizzleProductRepository(db),
+      dispensers: new DrizzleDispenserRepository(db),
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id }, buildContext(user));

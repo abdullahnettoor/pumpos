@@ -8,7 +8,12 @@ import {
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import type { Tank, TankRepository } from '../tanks/index.js';
-import { CreateNozzle, type Nozzle, type NozzleRepository } from '../nozzles/index.js';
+import {
+  CreateNozzle,
+  UpdateNozzle,
+  type Nozzle,
+  type NozzleRepository,
+} from '../nozzles/index.js';
 import type { Product } from '../products/index.js';
 import type { DispenserRepository, DispenserUnit } from './index.js';
 import { CreateDispenserWithNozzles, MAX_NOZZLES_PER_DISPENSER } from './create-with-nozzles.js';
@@ -68,6 +73,20 @@ function tank(id: string, productId: string, overrides: Partial<Tank> = {}): Tan
   };
 }
 
+function dispenser(id: string, overrides: Partial<DispenserUnit> = {}): DispenserUnit {
+  return {
+    id,
+    organizationId: 'org-1',
+    stationId: STATION,
+    name: id,
+    code: id,
+    status: 'ACTIVE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 function fuel(id: string, organizationId = 'org-1'): Product {
   return {
     id,
@@ -120,8 +139,18 @@ function setup() {
   const store = new InMemoryEventStore();
   const events = new InProcessEventDispatcher({ store });
   const useCase = new CreateDispenserWithNozzles({ dispensers, nozzles, tanks, products, events });
-  const createNozzle = new CreateNozzle({ repository: nozzles, tanks, products, events });
-  return { dispensers, nozzles, tanks, products, store, useCase, createNozzle };
+  // The single-nozzle use-cases hang nozzles on an existing dispenser.
+  const units = new InMemoryDispensers();
+  units.rows.push(
+    dispenser('du-1'),
+    dispenser('du-2'),
+    dispenser('du-elsewhere', { stationId: 'station-2' }),
+    dispenser('du-other-org', { organizationId: 'org-2' }),
+  );
+  const nozzleDeps = { repository: nozzles, tanks, products, dispensers: units, events };
+  const createNozzle = new CreateNozzle(nozzleDeps);
+  const updateNozzle = new UpdateNozzle(nozzleDeps);
+  return { dispensers, nozzles, tanks, products, store, useCase, createNozzle, updateNozzle };
 }
 
 const command = {
@@ -302,5 +331,72 @@ describe('CreateNozzle — product tenancy', () => {
     expect(result.success).toBe(true);
     expect(nozzles.rows).toHaveLength(1);
     expect(store.events.map((e) => e.eventType)).toEqual([BusinessEvents.NOZZLE_CREATED]);
+  });
+});
+
+describe('CreateNozzle / UpdateNozzle — dispenser tenancy (#629)', () => {
+  const create = (duId: string) => ({
+    stationId: STATION,
+    duId,
+    name: 'N1',
+    tankId: 'tank-ms',
+    productId: MS,
+  });
+
+  it.each([
+    ['another organization', 'du-other-org'],
+    ['another station of the same organization', 'du-elsewhere'],
+    ['no dispenser at all', 'du-missing'],
+  ])('refuses a dispenser of %s and writes nothing', async (_label, duId) => {
+    const { nozzles, store, createNozzle } = setup();
+
+    const result = await createNozzle.execute(create(duId), makeContext());
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatchObject({
+      code: 'NOT_FOUND',
+      details: { entity: 'Dispenser', id: duId },
+    });
+    expect(nozzles.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('hangs a nozzle on a dispenser of its own station', async () => {
+    const { nozzles, createNozzle } = setup();
+
+    const result = await createNozzle.execute(create('du-1'), makeContext());
+
+    expect(result.success).toBe(true);
+    expect(nozzles.rows.map((n) => n.duId)).toEqual(['du-1']);
+  });
+
+  it.each(['du-other-org', 'du-elsewhere', 'du-missing'])(
+    'refuses moving a nozzle onto dispenser %s and leaves it where it was',
+    async (duId) => {
+      const { nozzles, store, createNozzle, updateNozzle } = setup();
+      const created = await createNozzle.execute(create('du-1'), makeContext());
+      if (!created.success) throw new Error('setup nozzle not created');
+      const eventsBefore = store.events.length;
+
+      const result = await updateNozzle.execute({ id: created.data.id, duId }, makeContext());
+
+      expect(result.success).toBe(false);
+      if (!result.success)
+        expect(result.error).toMatchObject({ code: 'NOT_FOUND', details: { entity: 'Dispenser' } });
+      expect(nozzles.rows.map((n) => n.duId)).toEqual(['du-1']);
+      expect(store.events).toHaveLength(eventsBefore);
+    },
+  );
+
+  it('moves a nozzle to another dispenser of its own station', async () => {
+    const { nozzles, createNozzle, updateNozzle } = setup();
+    const created = await createNozzle.execute(create('du-1'), makeContext());
+    if (!created.success) throw new Error('setup nozzle not created');
+
+    const result = await updateNozzle.execute({ id: created.data.id, duId: 'du-2' }, makeContext());
+
+    expect(result.success).toBe(true);
+    expect(nozzles.rows.map((n) => n.duId)).toEqual(['du-2']);
   });
 });
