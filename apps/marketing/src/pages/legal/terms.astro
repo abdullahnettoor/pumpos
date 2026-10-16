@@ -3,7 +3,7 @@ import ProseLayout from '../../layouts/ProseLayout.astro';
 import Card from '../../components/ds/Card.astro';
 ---
 <ProseLayout
-  title="Terms of service"
+  title="Pilot terms"
   metaTitle="Pilot terms | PumpOS"
   description="Draft terms for the PumpOS guided pilot."
   path="/legal/terms"
@@ -11,33 +11,58 @@ import Card from '../../components/ds/Card.astro';
   noindex
 >
   <Card as="aside" class="prose-callout" role="note">
-    Draft, pending founder approval and legal review. This page is not a service agreement and has no effective date yet.
+    <p><strong>Draft.</strong> This page is waiting for founder approval and legal review. It is not a service agreement and has no effective date yet. Anything marked <span class="legal-tbd">To be decided</span> is still open, and we will confirm it with you in writing before your station joins.</p>
   </Card>
+
+  <h2>Who you agree with</h2>
+  <p>Legal operator, jurisdiction and governing law: <span class="legal-tbd">To be decided</span>.</p>
+
   <h2>Scope of the pilot</h2>
-  <p>The pilot is a guided rollout for selected fuel stations. We agree with you in advance which capabilities are included. Planned capabilities are not part of the pilot unless we confirm them in writing.</p>
-  <h2>Onboarding and support</h2>
-  <p>We help set up your station and users. Support channels and response times are to be decided and will be stated before you join.</p>
-  <h2>Pricing, payment and cancellation</h2>
-  <p>Plan prices are published on the <a href="/pricing">pricing page</a>: Core ₹999 and Pro ₹1,599 per station per month (Pro may vary with your station's configuration), Scale on request. Prices exclude GST; yearly billing is charged at ten months. Pilot stations get their first 3 months free on any plan. What happens when those 3 months end, payment methods, refunds and cancellation are not yet settled and will be confirmed in writing before you join.</p>
-  <h2>Account responsibilities</h2>
-  <p>Your organization is responsible for the users it adds, keeping credentials secure, and the accuracy of the records it enters.</p>
-  <h2>Service limitations</h2>
-  <p>PumpOS works online. It is not a point-of-sale system or an accounting package, and extended offline operation is not part of the pilot.</p>
-  <h2>Your data</h2>
-  <p>Your station's operational records remain yours. Export and deletion arrangements on termination are to be decided; see the <a href="/legal/privacy">privacy information</a>.</p>
-  <h2>Termination and liability</h2>
-  <p>Termination rights and limits on liability will be set out in the final terms after legal review.</p>
-  <h2>Demonstrations</h2>
-  <p>The website's walkthroughs use illustrative sample data.</p>
-  <h2>Questions</h2>
-  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to discuss the terms for your station.</p>
-  <h2>Open items before publication</h2>
+  <p>The pilot is a guided rollout for selected fuel stations. Before you start, we agree with you which capabilities your station gets. Features marked "Coming next" on the <a href="/pricing">pricing page</a>, such as Tally, GSTR and Excel export and WhatsApp reminders, are not part of the pilot unless we confirm them in writing.</p>
+
+  <h2>Onboarding</h2>
+  <p>We set up your station with you: tanks, nozzles, products, users and opening balances, including each credit customer's outstanding amount. After that, your team runs shifts and day closings in PumpOS.</p>
+
+  <h2>Support</h2>
+  <p>Support channels, hours and response times: <span class="legal-tbd">To be decided</span>.</p>
+
+  <h2>Pricing</h2>
+  <p>Plan prices are on the <a href="/pricing">pricing page</a>. Core is ₹999 and Pro is ₹1,599 per station per month. The Pro price can vary with your station's setup, and Scale is priced on request. Prices exclude GST. Yearly billing costs ten months of the monthly rate.</p>
+  <p>Pilot stations pay ₹0 for their first 3 months on any plan. Before those 3 months end, you choose whether to continue, on which plan, and whether to pay monthly or yearly. The standard rate starts only after you confirm.</p>
+
+  <h2>Payment, refunds and cancellation</h2>
   <ul>
-    <li>Legal operator name and jurisdiction.</li>
-    <li>End of the 3-month pilot period, payment methods, refunds and cancellation.</li>
-    <li>Support scope and response times.</li>
-    <li>Data export and deletion on termination.</li>
-    <li>Liability and termination wording, after legal review.</li>
-    <li>Effective and revision dates.</li>
+    <li>Payment methods and invoicing: <span class="legal-tbd">To be decided</span>.</li>
+    <li>What happens if a payment is late or fails: <span class="legal-tbd">To be decided</span>.</li>
+    <li>Refunds, including for unused months of a yearly plan: <span class="legal-tbd">To be decided</span>.</li>
+    <li>How to cancel and how much notice to give: <span class="legal-tbd">To be decided</span>.</li>
+  </ul>
+
+  <h2>Your responsibilities</h2>
+  <p>Your organisation decides who gets a login and which role each person has. It is responsible for those users, for keeping their passwords private, and for the accuracy of the records they enter.</p>
+
+  <h2>What PumpOS is not</h2>
+  <p>PumpOS needs an internet connection. Extended offline operation is not part of the pilot. PumpOS is not a point-of-sale system or an accounting package.</p>
+
+  <h2>Your data</h2>
+  <p>Your station's operational records belong to your organisation. How you can export them, and when we delete them after you leave: <span class="legal-tbd">To be decided</span>. See the <a href="/legal/privacy">privacy information</a> for how data is handled.</p>
+
+  <h2>Ending the pilot, and liability</h2>
+  <p>When either side can end the pilot, and the limits on liability: <span class="legal-tbd">To be decided after legal review</span>.</p>
+
+  <h2>Demonstrations</h2>
+  <p>Walkthroughs on this website and in demo stations use sample data.</p>
+
+  <h2>Questions</h2>
+  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to talk through the terms for your station.</p>
+
+  <h2>Still open before publication</h2>
+  <ul>
+    <li>Legal operator name, jurisdiction and governing law.</li>
+    <li>Support channels, hours and response times.</li>
+    <li>Payment methods, invoicing, late or failed payment, refunds and cancellation.</li>
+    <li>Data export and deletion when a station leaves.</li>
+    <li>Termination and liability wording, after legal review.</li>
+    <li>Effective date and revision date.</li>
   </ul>
 </ProseLayout>
