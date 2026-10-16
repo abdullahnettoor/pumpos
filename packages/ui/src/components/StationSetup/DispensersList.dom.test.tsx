@@ -219,10 +219,10 @@ describe('DispensersList — the Station page Add menu', () => {
 });
 
 describe('DispensersList — adding a dispenser with its nozzles (#591)', () => {
-  const fuel = (id: string, code: string) => ({
+  const fuel = (id: string, name: string, code: string) => ({
     id,
     code,
-    name: code,
+    name,
     productType: 'FUEL',
     isActive: true,
     unit: 'L',
@@ -237,18 +237,31 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     invalidateOperational.mockReset().mockResolvedValue(undefined);
   });
 
+  // Codes as a demo station or an owner types them, not `MS` / `HSD` (#638).
   const seedFuels = () => {
-    fixtures.products = [fuel('p-ms', 'MS'), fuel('p-hsd', 'HSD')];
+    fixtures.products = [
+      fuel('p-ms', 'Petrol', 'DEMO-MS-a753c7'),
+      fuel('p-hsd', 'Diesel', 'diesel-1'),
+    ];
     fixtures.tanks = [
       { id: 't-ms', stationId: 'st-1', name: 'Tank MS', productId: 'p-ms' },
       { id: 't-hsd', stationId: 'st-1', name: 'Tank HSD', productId: 'p-hsd' },
     ];
   };
-  /** Opens the add drawer (the Add ▾ menu) and auto-fills a dual layout in it (#635). */
+  const openDrawer = () =>
+    renderWithProviders(<DispensersList stationId="st-1" createRequest={1} />);
+  const readings = () => screen.getAllByPlaceholderText('Meter reading') as HTMLInputElement[];
+  /**
+   * Opens the add drawer (the Add ▾ menu), auto-fills a dual layout in it
+   * (#635) and types each nozzle's opening reading.
+   */
   const openDual = () => {
     seedFuels();
-    renderWithProviders(<DispensersList stationId="st-1" createRequest={1} />);
+    openDrawer();
     fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    readings().forEach((input, i) =>
+      fireEvent.change(input, { target: { value: String(1000 * (i + 1)) } }),
+    );
   };
   const save = () => fireEvent.click(screen.getByRole('button', { name: 'Create dispenser' }));
 
@@ -265,8 +278,8 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
         code: 'DU-04',
         status: 'ACTIVE',
         nozzles: [
-          { name: 'N1', tankId: 't-ms', productId: 'p-ms', currentReading: 1000 },
-          { name: 'N2', tankId: 't-hsd', productId: 'p-hsd', currentReading: 1000 },
+          { name: 'N1', tankId: 't-hsd', productId: 'p-hsd', currentReading: 1000 },
+          { name: 'N2', tankId: 't-ms', productId: 'p-ms', currentReading: 2000 },
         ],
       },
       { idempotencyKey: expect.any(String) },
@@ -310,6 +323,53 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
   it('auto-fill sits in the drawer, not on the page (#635)', () => {
     seedFuels();
     render();
+    expect(screen.queryByRole('button', { name: /dual \(2 nozzles\)/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /quad \(4 nozzles\)/i })).toBeNull();
+  });
+
+  it('auto-fill fills a row per fuel with a tank, whatever the product codes (#638)', () => {
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /quad \(4 nozzles\)/i }));
+
+    expect(screen.getAllByText(/^Nozzle #/)).toHaveLength(4);
+    // Opening readings are left for the operator, not invented.
+    expect(readings().map((r) => r.value)).toEqual(['', '', '', '']);
+  });
+
+  it('sends nothing until every nozzle has an opening reading (#638)', async () => {
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    save();
+
+    // The empty, required reading stops the submit (the save helper refuses
+    // it too, see dispenserWithNozzles.test.ts).
+    expect(readings().every((r) => r.validity.valueMissing)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(createDispenserWithNozzles).not.toHaveBeenCalled();
+  });
+
+  it('accepts an opening reading of zero', async () => {
+    createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    readings().forEach((input) => fireEvent.change(input, { target: { value: '0' } }));
+    expect(readings().map((r) => r.value)).toEqual(['0', '0']);
+    save();
+
+    await waitFor(() => expect(createDispenserWithNozzles).toHaveBeenCalledTimes(1));
+    const body = createDispenserWithNozzles.mock.calls[0][0] as {
+      nozzles: { currentReading: number }[];
+    };
+    expect(body.nozzles.map((n) => n.currentReading)).toEqual([0, 0]);
+  });
+
+  it('offers no auto-fill while no fuel has a tank (#638)', () => {
+    fixtures.products = [fuel('p-ms', 'Petrol', 'DEMO-MS-a753c7')];
+    fixtures.tanks = [{ id: 't-x', stationId: 'st-1', name: 'Tank X', productId: 'p-other' }];
+    openDrawer();
     expect(screen.queryByRole('button', { name: /dual \(2 nozzles\)/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /quad \(4 nozzles\)/i })).toBeNull();
   });

@@ -14,7 +14,9 @@ import {
 } from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 import {
+  AUTO_FILL_NEEDS_TANK,
   dispenserWithNozzlesBody,
+  fuelsWithTanks,
   standardNozzleLayout,
   type NozzleInput,
 } from './dispenserWithNozzles.js';
@@ -82,11 +84,14 @@ export const DispensersList: React.FC<DispensersListProps> = ({
   const name = nameRaw || `Dispenser Unit ${dispensers.length + 1}`;
   const code = codeRaw || `DU-${String(dispensers.length + 1).padStart(2, '0')}`;
   const [nozzlesList, setNozzlesList] = useState<NozzleInput[]>([]);
+  /** Set when an auto-fill click found no fuel with a tank to map. */
+  const [autoFillEmpty, setAutoFillEmpty] = useState(false);
 
   const resetForm = () => {
     setName(`Dispenser Unit ${dispensers.length + 1}`);
     setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
     setNozzlesList([]);
+    setAutoFillEmpty(false);
     setIsCodeEdited(false);
   };
 
@@ -114,7 +119,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
         name: `N${nextNozzleNum}`,
         productId: defaultProduct,
         tankId: defaultTank,
-        currentReading: 1000,
+        currentReading: null,
       },
     ]);
   };
@@ -151,7 +156,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     );
   };
 
-  const handleNozzleReadingChange = (idx: number, reading: number) => {
+  const handleNozzleReadingChange = (idx: number, reading: number | null) => {
     setNozzlesList((prev) =>
       prev.map((item, i) => {
         if (i !== idx) return item;
@@ -243,11 +248,18 @@ export const DispensersList: React.FC<DispensersListProps> = ({
    * The drawer's auto-fill: replaces the nozzle rows with a standard layout.
    * It fills the form only; nothing is sent until Create.
    */
-  const fillStandardLayout = (perFuel: 1 | 2) =>
-    setNozzlesList(
-      standardNozzleLayout({ perFuel, products, tanks, existingNozzles: nozzles.length }),
-    );
-  const canAutoFill = products.length > 0 && tanks.length > 0;
+  const fillStandardLayout = (perFuel: 1 | 2) => {
+    const rows = standardNozzleLayout({
+      perFuel,
+      products,
+      tanks,
+      existingNozzles: nozzles.length,
+    });
+    setAutoFillEmpty(rows.length === 0);
+    if (rows.length > 0) setNozzlesList(rows);
+  };
+  // Offered only when some fuel has a tank to feed its nozzles (#638).
+  const canAutoFill = fuelsWithTanks({ products, tanks }).length > 0;
 
   const closeForm = () => {
     resetForm();
@@ -429,6 +441,11 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                 </Button>
               </div>
             )}
+            {autoFillEmpty && (
+              <p role="status" className="text-[12px] text-warning-fg">
+                {AUTO_FILL_NEEDS_TANK}
+              </p>
+            )}
 
             {nozzlesList.length > 0 ? (
               nozzlesList.map((nozzle, idx) => {
@@ -460,12 +477,17 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                         />
                       </Field>
                       <Field
-                        label={`Reading (${products.find((p) => p.id === nozzle.productId)?.unit || 'L'})`}
+                        label={`Opening reading (${products.find((p) => p.id === nozzle.productId)?.unit || 'L'})`}
                       >
                         <NumberInput
-                          value={nozzle.currentReading || ''}
+                          value={nozzle.currentReading ?? ''}
+                          placeholder="Meter reading"
+                          min="0"
                           onChange={(e) =>
-                            handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)
+                            handleNozzleReadingChange(
+                              idx,
+                              e.target.value === '' ? null : Number(e.target.value),
+                            )
                           }
                           required
                         />
