@@ -27,7 +27,7 @@ later on the same model.
 - Only the Owner changes Permissions. Some are never delegable: subscription,
   organization settings, managing Owners, the activity log, deactivating the
   Organization. The Attendant Role stays mobile-only and handover-only.
-  Rules about *whose* data a user acts on stay fixed per Role (own handover;
+  Rules about _whose_ data a user acts on stay fixed per Role (own handover;
   Managers manage only Staff and Attendants).
 - Permissions apply at every Station the user is assigned to. Station
   assignment stays separate.
