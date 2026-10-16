@@ -1,7 +1,6 @@
 # Permissions are Role defaults plus per-user changes
 
-Status: accepted, not yet implemented (2026-10-13). Planned in the
-"Custom permissions" milestone.
+Status: accepted, implemented (#550; decided 2026-10-13).
 
 Owners want to give or take away individual abilities for one user without
 inventing new roles. We decided that a user's **Permissions** are their Role's

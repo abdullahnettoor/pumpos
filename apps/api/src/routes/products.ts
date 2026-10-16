@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { can } from '@pump/shared';
+import { can, redactProductCosts } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -24,7 +24,7 @@ export const productsRouter = new Hono<{ Variables: Variables }>();
 productsRouter.get('/products', async (c) => {
   const repo = new DrizzleProductRepository(c.var.db);
   const data = await repo.listByOrganization(c.var.user.organizationId);
-  return c.json({ success: true, data });
+  return c.json({ success: true, data: redactProductCosts(data, c.var.user) });
 });
 
 // POST /api/setup/products

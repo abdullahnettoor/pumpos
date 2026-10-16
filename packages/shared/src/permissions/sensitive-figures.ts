@@ -25,7 +25,34 @@ export function redactSensitiveDssr<T>(row: T, principal: Principal): T {
     const { total: _total, ...rest } = next.purchases as Loose;
     next.purchases = rest;
   }
+  if (!can(principal, 'purchases.viewCosts')) {
+    for (const key of ['fuelStockVariance', 'merchandiseStockVariance']) {
+      const rows: unknown = next[key];
+      if (Array.isArray(rows)) {
+        next[key] = (rows as unknown[]).map((r: unknown): unknown => {
+          if (!r || typeof r !== 'object') return r;
+          const { unitCost: _u, ...rest } = r as Loose;
+          return rest;
+        });
+      }
+    }
+  }
   return { ...row, snapshotData: next };
+}
+
+/** Drop `costBasis` from product rows when the principal lacks `purchases.viewCosts`. */
+export function redactProductCosts<T extends object>(rows: T[], principal: Principal): T[] {
+  if (can(principal, 'purchases.viewCosts')) return rows;
+  return rows.map((r) => {
+    const { costBasis: _c, ...rest } = r as Loose;
+    return rest as T;
+  });
+}
+
+/** Null the rupee-at-cost value of stock-loss rows without `purchases.viewCosts`. */
+export function redactStockLoss<T extends object>(rows: T[], principal: Principal): T[] {
+  if (can(principal, 'purchases.viewCosts')) return rows;
+  return rows.map((r) => ({ ...r, valueAtCost: null }));
 }
 
 const PURCHASE_COST_FIELDS = [

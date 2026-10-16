@@ -13,6 +13,7 @@ import {
   GetReceivables,
   GetSupplierPayable,
 } from '@pump/core';
+import { redactStockLoss } from '@pump/shared';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
@@ -239,7 +240,10 @@ reportsRouter.get('/insights/stock-loss', async (c) => {
     reader: new DrizzleInsightsStockLossReader(c.var.db),
   }).execute({ stationId, days }, buildContext(user, { stationId }));
 
-  return sendResult(c, result);
+  return sendResult(
+    c,
+    result.success ? { ...result, data: redactStockLoss(result.data, user) } : result,
+  );
 });
 
 /**

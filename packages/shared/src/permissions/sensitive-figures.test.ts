@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { principalOf } from './catalogue.js';
-import { redactPurchaseCosts, redactSensitiveDssr } from './sensitive-figures.js';
+import {
+  redactPurchaseCosts,
+  redactSensitiveDssr,
+  redactProductCosts,
+  redactStockLoss,
+} from './sensitive-figures.js';
 
 const row = () => ({
   businessDate: '2026-01-01',
@@ -47,5 +52,36 @@ describe('redactPurchaseCosts', () => {
   });
   it('returns the row untouched when allowed', () => {
     expect(redactPurchaseCosts(line, principalOf('Accountant'))).toBe(line);
+  });
+});
+
+describe('unit-cost figures', () => {
+  const noCosts = {
+    role: 'Manager' as const,
+    permissions: [...(principalOf('Owner').permissions ?? [])].filter(
+      (x) => x !== 'purchases.viewCosts',
+    ),
+  };
+  it('nulls the variance unitCost in a DSSR without View costs', () => {
+    const r = {
+      snapshotData: {
+        fuelStockVariance: [{ tankName: 'T1', varianceQuantity: -2, unitCost: 90 }],
+        merchandiseStockVariance: [{ varianceQuantity: 1, unitCost: 5 }],
+      },
+    };
+    const out = redactSensitiveDssr(r, noCosts) as any;
+    expect(out.snapshotData.fuelStockVariance[0]).toEqual({ tankName: 'T1', varianceQuantity: -2 });
+    expect(out.snapshotData.merchandiseStockVariance[0]).toEqual({ varianceQuantity: 1 });
+    expect(redactSensitiveDssr(r, principalOf('Owner'))).toEqual(r);
+  });
+  it('strips costBasis from products', () => {
+    expect(redactProductCosts([{ id: 'p', costBasis: '9' }], noCosts)).toEqual([{ id: 'p' }]);
+    const l = [{ id: 'p', costBasis: '9' }];
+    expect(redactProductCosts(l, principalOf('Owner'))).toBe(l);
+  });
+  it('nulls valueAtCost in stock loss', () => {
+    const l = [{ tankId: 't', valueAtCost: 10 }];
+    expect(redactStockLoss(l, noCosts)).toEqual([{ tankId: 't', valueAtCost: null }]);
+    expect(redactStockLoss(l, principalOf('Owner'))).toBe(l);
   });
 });
