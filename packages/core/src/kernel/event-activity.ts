@@ -105,6 +105,15 @@ export const EventActivityCatalog = {
     BusinessEvents.ORGANIZATION_CREATED,
     'Organization created',
   ),
+  [BusinessEvents.ORGANIZATION_UPDATED]: info(
+    BusinessEvents.ORGANIZATION_UPDATED,
+    'Organization profile updated',
+    [
+      template('organization-updated.v1', 'Updated the organization {fields}.', {
+        fields: 'text',
+      }),
+    ],
+  ),
   [BusinessEvents.ORGANIZATION_DEACTIVATED]: danger(
     BusinessEvents.ORGANIZATION_DEACTIVATED,
     'Organization deactivated',
