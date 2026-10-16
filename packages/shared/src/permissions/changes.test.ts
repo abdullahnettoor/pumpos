@@ -70,3 +70,30 @@ describe('withPrerequisites', () => {
     expect(withPrerequisites('nope')).toEqual([]);
   });
 });
+
+describe('View costs gates supplier and purchase work', () => {
+  const dependants: PermissionId[] = [
+    'pages.suppliers',
+    'suppliers.manage',
+    'suppliers.archive',
+    'purchases.record',
+    'purchases.adjust',
+    'accounts.manage',
+  ];
+  it('revoking viewCosts drops every dependant', () => {
+    const r = normalizePermissionChanges('Manager', { revoked: ['purchases.viewCosts'] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const id of dependants) expect(r.value.effective).not.toContain(id);
+  });
+  it('granting purchases.record on a Role lacking viewCosts adds it', () => {
+    expect(PERMISSIONS['purchases.record'].prerequisites).toContain('purchases.viewCosts');
+    expect(withPrerequisites('purchases.record')).toContain('purchases.viewCosts');
+  });
+  it('defaults are unchanged: holders of a dependant hold viewCosts', () => {
+    for (const role of ['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'] as const) {
+      const d = defaultPermissionsFor(role);
+      if (dependants.some((id) => d.has(id))) expect(d.has('purchases.viewCosts')).toBe(true);
+    }
+  });
+});

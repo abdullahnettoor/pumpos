@@ -285,6 +285,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           {activeTab === 'gst' && (
             <GstReport
               selectedStation={selectedStation}
+              canViewPurchases={can(principalFor(userRole), 'purchases.viewCosts')}
               initialView={intent?.openReportsTab === 'gst' ? intent.openGstView : undefined}
               onViewChange={() => {
                 // Commit the durable half (we are on GST) before clearing the

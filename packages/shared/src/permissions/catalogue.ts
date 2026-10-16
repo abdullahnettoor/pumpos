@@ -70,7 +70,7 @@ const CATALOGUE = {
   'pages.inventory': def('Pages', 'View Inventory', OMA),
   'pages.pricing': def('Pages', 'View Pricing', OM),
   'pages.customers': def('Pages', 'View Customers', ALL),
-  'pages.suppliers': def('Pages', 'View Suppliers', OMA),
+  'pages.suppliers': def('Pages', 'View Suppliers', OMA, { requires: ['purchases.viewCosts'] }),
   'pages.accounts': def('Pages', 'View Accounts', OMA),
   'pages.expenses': def('Pages', 'View Expenses', ALL),
   'pages.income': def('Pages', 'View Income', ALL),
@@ -123,14 +123,12 @@ const CATALOGUE = {
 
   // Purchases & inventory
   'purchases.record': def('Inventory', 'Record purchases and supplier payments', OMA, {
-    requires: ['pages.inventory'],
+    requires: ['pages.inventory', 'purchases.viewCosts'],
   }),
   'purchases.adjust': def('Inventory', 'Adjust a closed purchase', OMA, {
-    requires: ['pages.inventory'],
+    requires: ['pages.inventory', 'purchases.viewCosts'],
   }),
-  'purchases.viewCosts': def('Inventory', 'View purchase prices / costs', OMA, {
-    requires: ['pages.inventory'],
-  }),
+  'purchases.viewCosts': def('Inventory', 'View purchase prices / costs', OMA),
   'inventory.decantation': def('Inventory', 'Record decantations', OMA, {
     requires: ['pages.inventory'],
   }),
@@ -157,15 +155,15 @@ const CATALOGUE = {
     requires: ['pages.customers'],
   }),
   'suppliers.manage': def('Suppliers', 'Create and edit suppliers', OMA, {
-    requires: ['pages.suppliers'],
+    requires: ['pages.suppliers', 'purchases.viewCosts'],
   }),
   'suppliers.archive': def('Suppliers', 'Archive a supplier', OM, {
-    requires: ['pages.suppliers'],
+    requires: ['pages.suppliers', 'purchases.viewCosts'],
   }),
 
   // Accounts & reports
   'accounts.manage': def('Accounts', 'Manage money accounts and view ledgers', OMA, {
-    requires: ['pages.accounts'],
+    requires: ['pages.accounts', 'purchases.viewCosts'],
   }),
   'reports.view': def('Reports', 'View reports and money figures', OMA, {
     requires: ['pages.reports'],

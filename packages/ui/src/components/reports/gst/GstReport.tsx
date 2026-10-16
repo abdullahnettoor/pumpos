@@ -21,13 +21,18 @@ const VIEWS = [
  */
 export const GstReport: React.FC<{
   selectedStation: any | null;
+  /** Purchases (ITC) carries purchase prices: hidden without View costs. */
+  canViewPurchases?: boolean;
   /** View to open on (a deep link from Suppliers or Income). */
   initialView?: GstView;
   /** Called when the operator picks a view, so a deep link stops reasserting. */
   onViewChange?: (view: GstView) => void;
-}> = ({ selectedStation, initialView, onViewChange }) => {
-  const [picked, setPicked] = useState<GstView>(initialView ?? 'sales');
-  const view = initialView ?? picked;
+}> = ({ selectedStation, canViewPurchases = true, initialView, onViewChange }) => {
+  const views = canViewPurchases ? VIEWS : VIEWS.filter((v) => v.value !== 'purchases');
+  const requested = initialView ?? 'sales';
+  const [picked, setPicked] = useState<GstView>(requested);
+  const wanted = initialView ?? picked;
+  const view = !canViewPurchases && wanted === 'purchases' ? 'sales' : wanted;
   // One period for all three views, so switching view keeps the dates. Each
   // view's control bar shows it. Office records use the plain station
   // calendar date, so the default month is the entry-date month.
@@ -39,7 +44,7 @@ export const GstReport: React.FC<{
     <div className="flex flex-col gap-4">
       <SegmentedControl
         aria-label="GST view"
-        options={VIEWS}
+        options={views}
         value={view}
         onChange={(v) => {
           setPicked(v);
@@ -47,7 +52,7 @@ export const GstReport: React.FC<{
         }}
       />
       {view === 'sales' && <TaxRegisterPanel selectedStation={selectedStation} {...rangeProps} />}
-      {view === 'purchases' && (
+      {view === 'purchases' && canViewPurchases && (
         <PurchaseGstPanel selectedStation={selectedStation} {...rangeProps} />
       )}
       {view === 'income' && <IncomeGstPanel selectedStation={selectedStation} {...rangeProps} />}

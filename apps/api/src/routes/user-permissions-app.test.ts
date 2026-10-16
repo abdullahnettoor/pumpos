@@ -227,10 +227,10 @@ describe('Permission changes API (#553)', () => {
   });
 
   it('PUT stores a normalised change, emits one event and evicts the auth cache', async () => {
-    const r = await put({ revoked: ['purchases.viewCosts'] });
+    const r = await put({ revoked: ['shifts.reopen'] });
     expect(r.status).toBe(200);
-    expect(r.body.data.changes).toEqual({ granted: [], revoked: ['purchases.viewCosts'] });
-    expect(state.changes).toEqual({ granted: [], revoked: ['purchases.viewCosts'] });
+    expect(r.body.data.changes).toEqual({ granted: [], revoked: ['shifts.reopen'] });
+    expect(state.changes).toEqual({ granted: [], revoked: ['shifts.reopen'] });
     expect(state.events).toHaveLength(1);
     expect(state.events[0]).toMatchObject({
       eventType: 'USER_PERMISSIONS_CHANGED',
@@ -241,7 +241,7 @@ describe('Permission changes API (#553)', () => {
       payload: {
         reason: 'EDITED',
         before: { changes: { granted: [], revoked: [] } },
-        after: { changes: { revoked: ['purchases.viewCosts'] } },
+        after: { changes: { revoked: ['shifts.reopen'] } },
       },
     });
     expect(state.evicted).toEqual(['auth-target']);

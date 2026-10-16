@@ -13,7 +13,7 @@ import {
   GetReceivables,
   GetSupplierPayable,
 } from '@pump/core';
-import { redactStockLoss } from '@pump/shared';
+import { can, redactStockLoss } from '@pump/shared';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
@@ -291,6 +291,15 @@ reportsRouter.get('/payables', async (c) => {
     'Insufficient permissions to view payables',
   );
   if (scope instanceof Response) return scope;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view payables' },
+      },
+      403,
+    );
+  }
   const { stationId } = scope;
 
   const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
@@ -318,6 +327,15 @@ reportsRouter.get('/payables/:supplierId', async (c) => {
     'Insufficient permissions to view payables',
   );
   if (scope instanceof Response) return scope;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view payables' },
+      },
+      403,
+    );
+  }
   const { stationId } = scope;
 
   const supplierId = c.req.param('supplierId');

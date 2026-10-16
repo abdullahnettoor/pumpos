@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { DbClient } from '@pump/db';
 import { can, redactProductCosts } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
@@ -17,6 +17,17 @@ type Variables = {
   db: DbClient;
   user: AuthenticatedPrincipal;
 };
+
+/** sendResult with `costBasis` withheld from a returned product without View costs. */
+function sendProductResult<T extends object>(
+  c: Context<{ Variables: Variables }>,
+  result: Result<T>,
+): Response {
+  const shown: Result<T> = result.success
+    ? { ...result, data: redactProductCosts([result.data], c.var.user)[0] }
+    : result;
+  return sendResult(c, shown) as Response;
+}
 
 export const productsRouter = new Hono<{ Variables: Variables }>();
 
@@ -53,7 +64,7 @@ productsRouter.post('/products', writePolicyGuard('POST /setup/products'), async
       events,
     }).execute(body, buildContext(c.var.user, { stationId: body?.stationId, ...stationClock })),
   );
-  return sendResult(c, result);
+  return sendProductResult(c, result);
 });
 
 // POST /api/setup/products/import — bulk create products from a (frontend-validated)
@@ -134,7 +145,7 @@ productsRouter.put('/products/:id', writePolicyGuard('PUT /setup/products/:id'),
     events: createDispatcher(db),
   });
   const result = await useCase.execute({ ...body, id }, buildContext(c.var.user));
-  return sendResult(c, result);
+  return sendProductResult(c, result);
 });
 
 // DELETE /api/setup/products/:id  (archive -> isActive=false)
@@ -158,6 +169,6 @@ productsRouter.delete(
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id, isActive: false }, buildContext(c.var.user));
-    return sendResult(c, result);
+    return sendProductResult(c, result);
   },
 );

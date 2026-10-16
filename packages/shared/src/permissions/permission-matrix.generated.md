@@ -9,7 +9,7 @@ Generated from `catalogue.ts` (`npm run permissions:matrix -w @pump/shared`). Do
 | Pages | View Inventory | `pages.inventory` | yes | yes | yes | - | - | - | - |
 | Pages | View Pricing | `pages.pricing` | yes | yes | - | - | - | - | - |
 | Pages | View Customers | `pages.customers` | yes | yes | yes | yes | yes | - | - |
-| Pages | View Suppliers | `pages.suppliers` | yes | yes | yes | - | - | - | - |
+| Pages | View Suppliers | `pages.suppliers` | yes | yes | yes | - | - | - | `purchases.viewCosts` |
 | Pages | View Accounts | `pages.accounts` | yes | yes | yes | - | - | - | - |
 | Pages | View Expenses | `pages.expenses` | yes | yes | yes | yes | yes | - | - |
 | Pages | View Income | `pages.income` | yes | yes | yes | yes | yes | - | - |
@@ -32,9 +32,9 @@ Generated from `catalogue.ts` (`npm run permissions:matrix -w @pump/shared`). Do
 | Expenses | Void an expense | `expenses.void` | yes | yes | - | - | - | - | `pages.expenses` |
 | Expenses | Manage expense categories | `expenses.categories` | yes | yes | yes | - | - | - | `pages.expenses` |
 | Income | Record other income | `income.record` | yes | yes | yes | yes | - | - | `pages.income` |
-| Inventory | Record purchases and supplier payments | `purchases.record` | yes | yes | yes | - | - | - | `pages.inventory` |
-| Inventory | Adjust a closed purchase | `purchases.adjust` | yes | yes | yes | - | - | - | `pages.inventory` |
-| Inventory | View purchase prices / costs | `purchases.viewCosts` | yes | yes | yes | - | - | - | `pages.inventory` |
+| Inventory | Record purchases and supplier payments | `purchases.record` | yes | yes | yes | - | - | - | `pages.inventory`, `purchases.viewCosts` |
+| Inventory | Adjust a closed purchase | `purchases.adjust` | yes | yes | yes | - | - | - | `pages.inventory`, `purchases.viewCosts` |
+| Inventory | View purchase prices / costs | `purchases.viewCosts` | yes | yes | yes | - | - | - | - |
 | Inventory | Record decantations | `inventory.decantation` | yes | yes | yes | - | - | - | `pages.inventory` |
 | Inventory | Record product density | `inventory.density` | yes | yes | yes | yes | - | - | - |
 | Inventory | Record tank dips / stock counts | `inventory.stockCount` | yes | yes | yes | yes | - | - | - |
@@ -44,9 +44,9 @@ Generated from `catalogue.ts` (`npm run permissions:matrix -w @pump/shared`). Do
 | Customers | Archive a customer | `customers.archive` | yes | yes | - | - | - | - | `pages.customers` |
 | Customers | Record collections | `collections.record` | yes | yes | yes | yes | - | - | `pages.customers` |
 | Customers | Adjust a closed collection | `collections.adjust` | yes | yes | yes | - | - | - | `pages.customers` |
-| Suppliers | Create and edit suppliers | `suppliers.manage` | yes | yes | yes | - | - | - | `pages.suppliers` |
-| Suppliers | Archive a supplier | `suppliers.archive` | yes | yes | - | - | - | - | `pages.suppliers` |
-| Accounts | Manage money accounts and view ledgers | `accounts.manage` | yes | yes | yes | - | - | - | `pages.accounts` |
+| Suppliers | Create and edit suppliers | `suppliers.manage` | yes | yes | yes | - | - | - | `pages.suppliers`, `purchases.viewCosts` |
+| Suppliers | Archive a supplier | `suppliers.archive` | yes | yes | - | - | - | - | `pages.suppliers`, `purchases.viewCosts` |
+| Accounts | Manage money accounts and view ledgers | `accounts.manage` | yes | yes | yes | - | - | - | `pages.accounts`, `purchases.viewCosts` |
 | Reports | View reports and money figures | `reports.view` | yes | yes | yes | - | - | - | `pages.reports` |
 | Reports | Generate and export reports | `reports.export` | yes | yes | yes | - | - | - | `reports.view` |
 | Reports | View the attendant handover report | `reports.attendant` | yes | yes | yes | - | - | - | `reports.view` |

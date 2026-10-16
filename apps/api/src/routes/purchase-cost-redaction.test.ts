@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { reportsRouter } from './reports.js';
 import { productsRouter } from './products.js';
+import { transactionsRouter } from './transactions.js';
 
 /** `purchases.viewCosts` must withhold every unit-cost figure, not only purchase rows. */
 
@@ -64,7 +65,12 @@ function fakeDb(products: boolean) {
 
 function app(withCosts: boolean) {
   // A Manager's defaults, optionally minus View costs (an Owner-customised Permission set).
-  const all = ['reports.view', 'products.manage', 'purchases.viewCosts'] as const;
+  const all = [
+    'reports.view',
+    'products.manage',
+    'accounts.manage',
+    'purchases.viewCosts',
+  ] as const;
   const permissions = new Set(all.filter((p) => withCosts || p !== 'purchases.viewCosts'));
   const a = new Hono<{ Variables: { db: any; user: any } }>();
   a.use('*', async (c, next) => {
@@ -82,6 +88,7 @@ function app(withCosts: boolean) {
   });
   a.route('/reports', reportsRouter);
   a.route('/setup', productsRouter);
+  a.route('/transactions', transactionsRouter);
   return a;
 }
 
@@ -102,5 +109,35 @@ describe('unit-cost redaction', () => {
     expect(hidden.data[0].varianceLitres).toBe(-40);
     const shown = (await (await app(true).request(url)).json()) as any;
     expect(shown.data[0].valueAtCost).toBe(-4000);
+  });
+});
+
+describe('purchase amounts need View costs on every route', () => {
+  const denied = [
+    '/transactions/purchases/gst-register',
+    '/transactions/suppliers/s-1/ledger',
+    '/transactions/suppliers/s-1/ledger?from=2026-03-01&to=2026-03-31',
+    '/reports/payables?stationId=st-1',
+    '/reports/payables/00000000-0000-4000-8000-000000000001?stationId=st-1',
+  ];
+  it.each(denied)('%s is forbidden without View costs', async (url) => {
+    const res = await app(false).request(url);
+    expect(res.status).toBe(403);
+  });
+  it.each(denied)('%s is not forbidden with View costs', async (url) => {
+    const res = await app(true).request(url);
+    expect(res.status).not.toBe(403);
+  });
+  it('product update and archive responses drop costBasis without View costs', async () => {
+    const put = await app(false).request('/setup/products/p-1', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const putBody = (await put.json()) as any;
+    expect(putBody.data ? 'costBasis' in putBody.data : false).toBe(false);
+    const del = await app(false).request('/setup/products/p-1', { method: 'DELETE' });
+    const delBody = (await del.json()) as any;
+    expect(delBody.data ? 'costBasis' in delBody.data : false).toBe(false);
   });
 });

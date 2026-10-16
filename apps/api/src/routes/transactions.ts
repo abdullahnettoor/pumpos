@@ -467,6 +467,15 @@ transactionsRouter.delete(
 transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const supplierId = c.req.param('id');
   const stationId = c.req.query('stationId') || undefined;
   if (stationId) {
@@ -2167,6 +2176,15 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const from = c.req.query('from');
   const to = c.req.query('to');
   const stationId = c.req.query('stationId');
