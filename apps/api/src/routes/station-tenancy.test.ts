@@ -289,4 +289,34 @@ describe('station-anchored mutation tenancy (#235)', () => {
       expect(body.success).toBe(false);
     },
   );
+
+  it('POST /setup/dispensers/with-nozzles refuses a foreign-organization stationId (#591)', async () => {
+    // Its edge validation wants a UUID, so the foreign station is one.
+    const app = new Hono<{ Variables: { db: unknown; user: unknown } }>();
+    app.use('*', async (c, next) => {
+      c.set('db', accessThenEmptyDb());
+      c.set('user', {
+        id: 'user-1',
+        email: 'owner@example.com',
+        fullName: 'Owner',
+        organizationId: 'org-1',
+        role: 'Owner',
+        assignedStationIds: [],
+      });
+      await next();
+    });
+    for (const [prefix, router] of ROUTERS) app.route(prefix, router);
+    const res = await app.request('/setup/dispensers/with-nozzles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stationId: '00000000-0000-4000-8000-0000000000ff',
+        name: 'Foreign',
+        code: 'DU-X',
+        nozzles: [],
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { success: boolean }).success).toBe(false);
+  });
 });

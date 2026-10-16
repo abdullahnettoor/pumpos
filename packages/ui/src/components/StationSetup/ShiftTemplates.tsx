@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CloudShiftTemplateService } from '../../services/cloud.js';
+import { CloudShiftTemplateService, type ShiftTemplateBody } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
 import {
   Button,
@@ -16,7 +16,7 @@ import { Drawer } from '../Drawer.js';
 import { Field, TextInput } from '../primitives/Field.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { queryKeys, useShiftTemplates } from '../../query/hooks.js';
+import { queryKeys, useInvalidateOperational, useShiftTemplates } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   officeSubmitKeys,
@@ -54,7 +54,7 @@ const columns: TableColumn<ShiftTemplate>[] = [
   },
 ];
 
-const DEFAULT_SHIFTS = [
+const DEFAULT_SHIFTS: ShiftTemplateBody[] = [
   { name: 'Morning Shift', startTime: '06:00', endTime: '14:00', isActive: true },
   { name: 'Evening Shift', startTime: '14:00', endTime: '22:00', isActive: true },
   { name: 'Night Shift', startTime: '22:00', endTime: '06:00', isActive: true },
@@ -71,6 +71,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
   // One session per opened edit (#537): a new edit never inherits an unsettled key.
   const sessionRef = useRef<SubmitKeySession | null>(null);
   const qc = useQueryClient();
+  const invalidateOperational = useInvalidateOperational();
   const templatesQ = useShiftTemplates();
   const templates: ShiftTemplate[] = templatesQ.data ?? [];
   const [prefilling, setPrefilling] = useState(false);
@@ -108,15 +109,17 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
   const prefillDefaultShifts = async () => {
     try {
       setPrefilling(true);
-      // One request per shift, each under its own scope so the keys differ.
-      for (const [idx, body] of DEFAULT_SHIFTS.entries()) {
-        await sendKeyed(
-          officeSubmitKeys.session(`setup:shift-templates:new:prefill-${idx}`),
-          body,
-          (idempotencyKey) => templateService.createTemplate(body, { idempotencyKey }),
-        );
-      }
+      // All three in one request (#591): a retry under the same key answers
+      // with the first result, so a failure cannot leave one or two shifts
+      // behind for the next click to duplicate.
+      await sendKeyed(
+        officeSubmitKeys.session('setup:shift-templates:prefill'),
+        DEFAULT_SHIFTS,
+        (idempotencyKey) => templateService.createTemplates(DEFAULT_SHIFTS, { idempotencyKey }),
+      );
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
+      // Shift open offers templates through shift status (operational tier).
+      runTask(invalidateOperational(), 'Saved, but the shifts screen may be out of date.');
       toast.success('Default shifts created.');
     } catch (err: any) {
       toast.error(

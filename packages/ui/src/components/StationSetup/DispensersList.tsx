@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CloudDispenserService, CloudNozzleService } from '../../services/cloud.js';
+import { CloudDispenserService } from '../../services/cloud.js';
 import { queryKeys, useDispensers, useNozzles, useProducts, useTanks } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
@@ -13,6 +13,7 @@ import {
   type SubmitKeySession,
 } from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
+import { dispenserWithNozzlesBody, type NozzleInput } from './dispenserWithNozzles.js';
 import {
   Button,
   Chip,
@@ -29,17 +30,9 @@ import { countOf } from '../../utils/ledgerWindow.js';
 import { formatQuantity } from '../../utils/format.js';
 
 const dispenserService = new CloudDispenserService();
-const nozzleService = new CloudNozzleService();
 
 export interface DispensersListProps extends CreateRequestProps {
   stationId: string;
-}
-
-interface NozzleInput {
-  name: string;
-  productId: string;
-  tankId: string;
-  currentReading: number;
 }
 
 export const DispensersList: React.FC<DispensersListProps> = ({
@@ -211,38 +204,24 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     if (submitting) return;
     try {
       setSubmitting(true);
-      // Create Dispenser
-      const duBody = { stationId, name, code: code.toUpperCase(), status: 'ACTIVE' };
-      const createdDU = await sendKeyed(
+      const draft = dispenserWithNozzlesBody({ stationId, name, code, nozzles: nozzlesList });
+      if (!draft.ok) throw new Error(draft.message);
+      // One request for the dispenser and all its nozzles (#591): a retry
+      // under the drawer's key answers with the first result, so a failure
+      // can neither leave a dispenser without nozzles nor create a second one.
+      await sendKeyed(
         sessionRef.current ?? officeSubmitKeys.session(`setup:dispensers:${stationId}`),
-        duBody,
-        (idempotencyKey) => dispenserService.createDispenser(duBody, { idempotencyKey }),
+        draft.body,
+        (idempotencyKey) =>
+          dispenserService.createDispenserWithNozzles(draft.body, { idempotencyKey }),
       );
-
-      // Sequential nozzle creations for SQLite resilience. Each nozzle is its
-      // own request, so its own scope: a key is never shared between rows.
-      for (const [idx, nozzleInput] of nozzlesList.entries()) {
-        if (!nozzleInput.tankId || !nozzleInput.productId) {
-          throw new Error('Please make sure all nozzles have a valid tank and product selected.');
-        }
-        const nozzleBody = {
-          stationId,
-          duId: createdDU.id,
-          tankId: nozzleInput.tankId,
-          productId: nozzleInput.productId,
-          name: nozzleInput.name,
-          currentReading: nozzleInput.currentReading,
-        };
-        await sendKeyed(
-          officeSubmitKeys.session(`setup:nozzles:${createdDU.id}:${idx}`),
-          nozzleBody,
-          (idempotencyKey) => nozzleService.createNozzle(nozzleBody, { idempotencyKey }),
-        );
-      }
 
       setIsFormOpen(false);
       resetForm();
       runTask(refreshDispensers(), 'Saved, but the dispenser list could not be refreshed.');
+      // Shift open reads nozzles from shift status (operational tier), not the
+      // static nozzle list: refresh it so the new pump is offered straight away.
+      runTask(invalidateOperational(), 'Saved, but the shifts screen may be out of date.');
       toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(

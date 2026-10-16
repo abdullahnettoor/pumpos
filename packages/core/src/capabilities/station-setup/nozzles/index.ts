@@ -8,6 +8,7 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type {
+  DomainEvent,
   EventPublisher,
   ExecutionContext,
   Repository,
@@ -15,6 +16,7 @@ import type {
   UseCase,
 } from '../../../kernel/index.js';
 import type { TankRepository } from '../tanks/index.js';
+import type { ProductRepository } from '../products/ports.js';
 
 export interface Nozzle {
   id: string;
@@ -52,7 +54,7 @@ export interface UpdateNozzleCommand {
   currentReading?: number | string;
 }
 
-const createSchema = z.object({
+export const nozzleCreateSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   duId: z.string().min(1, 'duId is required'),
   tankId: z.string().min(1, 'tankId is required'),
@@ -69,57 +71,89 @@ const updateSchema = z.object({
   currentReading: z.coerce.number().min(0).optional(),
 });
 
+/** The one product read a nozzle needs: does this Product belong to the Organization. */
+export type NozzleProductLookup = Pick<ProductRepository, 'findById'>;
+
 export interface NozzleDeps {
   repository: NozzleRepository;
   tanks: TankRepository;
+  products: NozzleProductLookup;
   events: EventPublisher;
+}
+
+/**
+ * A Nozzle dispenses a Product of its own Organization, drawn from an active
+ * Tank of that Product at its own Station. Shared by single-nozzle create and
+ * update and by dispenser-with-nozzles create (#591), so all of them refuse the
+ * same nozzles with the same messages.
+ */
+export async function checkNozzleSource(
+  deps: { tanks: TankRepository; products: NozzleProductLookup },
+  nozzle: { stationId: string; tankId: string; productId: string },
+  ctx: ExecutionContext,
+): Promise<Result<void>> {
+  const tank = await deps.tanks.findByIdForUpdate(nozzle.tankId);
+  if (
+    !tank ||
+    tank.organizationId !== ctx.organizationId ||
+    tank.stationId !== nozzle.stationId ||
+    tank.status !== 'ACTIVE'
+  ) {
+    return err(notFoundError('Tank', nozzle.tankId));
+  }
+  if (tank.productId !== nozzle.productId)
+    return err(validationError('Nozzle Product must match its Tank Product'));
+  // Read after the Tank match, so the id is one the database already holds.
+  const product = await deps.products.findById(nozzle.productId);
+  if (!product || product.organizationId !== ctx.organizationId)
+    return err(notFoundError('Product', nozzle.productId));
+  return ok(undefined);
+}
+
+/** The Nozzle row and its NOZZLE_CREATED event for an already-checked command. */
+export function newNozzle(
+  data: z.infer<typeof nozzleCreateSchema>,
+  ctx: ExecutionContext,
+): { nozzle: Nozzle; event: DomainEvent } {
+  const now = ctx.clock.now().toISOString();
+  const nozzle: Nozzle = {
+    id: ctx.ids.newId(),
+    organizationId: ctx.organizationId,
+    stationId: data.stationId,
+    duId: data.duId,
+    tankId: data.tankId,
+    productId: data.productId,
+    name: data.name,
+    currentReading: String(data.currentReading ?? 0),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const event = eventFromContext(ctx, {
+    eventType: BusinessEvents.NOZZLE_CREATED,
+    aggregateType: 'Nozzle',
+    aggregateId: nozzle.id,
+    stationId: nozzle.stationId,
+    payload: {
+      nozzleId: nozzle.id,
+      duId: nozzle.duId,
+      tankId: nozzle.tankId,
+      productId: nozzle.productId,
+    },
+  });
+  return { nozzle, event };
 }
 
 export class CreateNozzle implements UseCase<CreateNozzleCommand, Nozzle> {
   constructor(private readonly deps: NozzleDeps) {}
   async execute(input: CreateNozzleCommand, ctx: ExecutionContext): Promise<Result<Nozzle>> {
-    const p = createSchema.safeParse(input);
+    const p = nozzleCreateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid CreateNozzle command', { issues: p.error.flatten() }));
-    const tank = await this.deps.tanks.findByIdForUpdate(p.data.tankId);
-    if (
-      !tank ||
-      tank.organizationId !== ctx.organizationId ||
-      tank.stationId !== p.data.stationId ||
-      tank.status !== 'ACTIVE'
-    ) {
-      return err(notFoundError('Tank', p.data.tankId));
-    }
-    if (tank.productId !== p.data.productId)
-      return err(validationError('Nozzle Product must match its Tank Product'));
-    const now = ctx.clock.now().toISOString();
-    const nozzle: Nozzle = {
-      id: ctx.ids.newId(),
-      organizationId: ctx.organizationId,
-      stationId: p.data.stationId,
-      duId: p.data.duId,
-      tankId: p.data.tankId,
-      productId: p.data.productId,
-      name: p.data.name,
-      currentReading: String(p.data.currentReading ?? 0),
-      createdAt: now,
-      updatedAt: now,
-    };
+    const sourceCheck = await checkNozzleSource(this.deps, p.data, ctx);
+    if (!sourceCheck.success) return err(sourceCheck.error);
+    const { nozzle, event } = newNozzle(p.data, ctx);
     await this.deps.repository.save(nozzle);
-    await this.deps.events.publish([
-      eventFromContext(ctx, {
-        eventType: BusinessEvents.NOZZLE_CREATED,
-        aggregateType: 'Nozzle',
-        aggregateId: nozzle.id,
-        stationId: nozzle.stationId,
-        payload: {
-          nozzleId: nozzle.id,
-          duId: nozzle.duId,
-          tankId: nozzle.tankId,
-          productId: nozzle.productId,
-        },
-      }),
-    ]);
+    await this.deps.events.publish([event]);
     return ok(nozzle);
   }
 }
@@ -135,17 +169,12 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
       return err(notFoundError('Nozzle', p.data.id));
     const tankId = p.data.tankId ?? existing.tankId;
     const productId = p.data.productId ?? existing.productId;
-    const tank = await this.deps.tanks.findByIdForUpdate(tankId);
-    if (
-      !tank ||
-      tank.organizationId !== ctx.organizationId ||
-      tank.stationId !== existing.stationId ||
-      tank.status !== 'ACTIVE'
-    ) {
-      return err(notFoundError('Tank', tankId));
-    }
-    if (tank.productId !== productId)
-      return err(validationError('Nozzle Product must match its Tank Product'));
+    const sourceCheck = await checkNozzleSource(
+      this.deps,
+      { stationId: existing.stationId, tankId, productId },
+      ctx,
+    );
+    if (!sourceCheck.success) return err(sourceCheck.error);
     const updated: Nozzle = {
       ...existing,
       duId: p.data.duId ?? existing.duId,
