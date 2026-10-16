@@ -14,6 +14,8 @@ import { queryKeys, useStations } from '../../query/hooks.js';
 import { Drawer } from '../Drawer.js';
 import { Field, Select, TextInput } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
+import { labelOf } from './permissionsModel.js';
 import { useToast, withNextStep, type ToastApi } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
@@ -176,6 +178,8 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
 }) => {
   const toast = useToast();
   const team = useTeamCache();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
   const save = useKeyedSave(editingUser ? `team:update:${editingUser.id}` : 'team:create');
   const stationsQ = useStations();
   const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
@@ -274,6 +278,29 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       payload.password = values.password;
     }
 
+    // A Role change resets the member's custom Permissions: say what is lost first.
+    if (editingUser && editingUser.hasLogin && payload.role !== editingUser.role) {
+      try {
+        const preview = await userService.previewUserRoleChange(editingUser.id, payload.role);
+        const d = preview.droppedChanges;
+        if (d) {
+          const lines = [
+            ...d.granted.map((id) => `${labelOf(id)} (extra)`),
+            ...d.revoked.map((id) => `${labelOf(id)} (removed)`),
+          ];
+          const ok = await confirm({
+            title: `Change role to ${payload.role}?`,
+            message: `Changing the role resets this member to the ${payload.role} defaults. These custom Permissions will be dropped: ${lines.join(', ')}.`,
+            confirmLabel: 'Change role',
+            danger: true,
+          });
+          if (!ok) return;
+        }
+      } catch {
+        // The server still reports anything it drops after saving.
+      }
+    }
+
     let saved: any;
     try {
       saved = await save(payload, (idempotencyKey) =>
@@ -291,9 +318,27 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       return;
     }
 
-    if (editingUser) team.merge({ ...editingUser, ...saved, ...payload, id: editingUser.id });
+    if (editingUser)
+      team.merge({
+        ...editingUser,
+        ...saved,
+        ...payload,
+        ...(saved?.droppedPermissionChanges ? { hasCustomPermissions: false } : {}),
+        id: editingUser.id,
+      });
     else team.refresh();
-    toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
+    const dropped = saved?.droppedPermissionChanges;
+    if (editingUser) {
+      void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(editingUser.id) });
+      void qc.invalidateQueries({ queryKey: queryKeys.access() });
+    }
+    if (dropped) {
+      toast.success(
+        `Team member updated. Custom Permissions dropped: ${[...dropped.granted, ...dropped.revoked].map(labelOf).join(', ')}.`,
+      );
+    } else {
+      toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
+    }
 
     // Show credentials to hand over when a fresh login was provisioned.
     if (!editingUser && wantsLogin) {

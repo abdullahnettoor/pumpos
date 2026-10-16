@@ -602,7 +602,26 @@ stationSetupRouter.get('/users', async (c) => {
   const repo = new DrizzleUserRepository(c.var.db);
   const data = await repo.listWithAssignments(user.organizationId);
   // Never expose auth linkage ids to clients; they only need "has a login".
-  const sanitized = data.map(({ authUserId, ...rest }) => ({ ...rest, hasLogin: !!authUserId }));
+  // `hasCustomPermissions` lets the Team list badge members whose Permissions differ from
+  // their Role's defaults (ADR 0013); the detail comes from GET /users/:id/permissions.
+  const changed = await c.var.db
+    .select({
+      userId: schema.userPermissionChanges.userId,
+      granted: schema.userPermissionChanges.granted,
+      revoked: schema.userPermissionChanges.revoked,
+    })
+    .from(schema.userPermissionChanges)
+    .where(eq(schema.userPermissionChanges.organizationId, user.organizationId));
+  const custom = new Set(
+    changed
+      .filter((r) => (r.granted?.length ?? 0) + (r.revoked?.length ?? 0) > 0)
+      .map((r) => r.userId),
+  );
+  const sanitized = data.map(({ authUserId, ...rest }) => ({
+    ...rest,
+    hasLogin: !!authUserId,
+    hasCustomPermissions: custom.has(rest.id),
+  }));
   return c.json({ success: true, data: sanitized });
 });
 

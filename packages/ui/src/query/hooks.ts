@@ -418,6 +418,20 @@ export function useUsers(options?: Options<any[]>) {
   });
 }
 
+/**
+ * One member's Permissions (Owner only). Operational tier and never persisted:
+ * an edit on another device must show, and a stale switch is a wrong grant.
+ */
+export function useUserPermissions(userId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.userPermissions(userId ?? ''),
+    queryFn: () => userSvc.getUserPermissions(userId!),
+    enabled: !!userId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useDispensers(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.dispensers(stationId ?? ''),
