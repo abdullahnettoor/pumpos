@@ -242,6 +242,8 @@ A fuel's price per unit at a Station, effective from an instant. The current
 price is the latest one in effect (effective at or before now, by the server's
 clock). A Shift's fuel sales are valued at the price current when the Shift
 opens, for the whole Shift: a later change reaches only Shifts opened after it.
+A Shift cannot open while a fuel on a pump in service has no price in effect
+(#630).
 _Avoid_: rate card, MRP (reserved for products)
 
 **Scheduled Price**:

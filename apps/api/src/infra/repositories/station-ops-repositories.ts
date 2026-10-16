@@ -27,6 +27,7 @@ import type {
   CloseShiftContext,
   CloseShiftContextReader,
   StaffDirectory,
+  FuelNameReader,
 } from '@pump/core';
 import { rowJson, tsIso } from '../sql-json.js';
 import {
@@ -856,5 +857,26 @@ export class DrizzleStaffDirectory implements StaffDirectory {
         )})
     `)) as unknown as { id: string }[];
     return new Set(rows.map((r) => r.id));
+  }
+}
+
+// ---------------- Fuel names (which fuels block a shift open, #630) ----------------
+
+/** The names of this organization's products, by id. */
+export class DrizzleFuelNameReader implements FuelNameReader {
+  constructor(private readonly db: DbClient) {}
+
+  async findNames(organizationId: string, productIds: string[]): Promise<Map<string, string>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: schema.products.id, name: schema.products.name })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.organizationId, organizationId),
+          inArray(schema.products.id, productIds),
+        ),
+      );
+    return new Map(rows.map((r) => [r.id, r.name]));
   }
 }
