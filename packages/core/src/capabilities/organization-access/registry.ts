@@ -1,4 +1,4 @@
-import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
+import { ATTENDANT_REPORT_CAPABILITY, CUSTOM_PERMISSIONS_CAPABILITY } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, ResolutionCode } from '@pump/shared';
 
 /**
@@ -62,6 +62,14 @@ export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
     },
   },
   capabilities: {
+    [CUSTOM_PERMISSIONS_CAPABILITY]: {
+      key: CUSTOM_PERMISSIONS_CAPABILITY,
+      title: 'Custom permissions',
+      unavailableMessage:
+        'Custom permissions are not part of your current plan. They let the Owner change what each team member can do.',
+      resolution: 'CONTACT_PUMPOS',
+      upgradable: true,
+    },
     [ATTENDANT_REPORT_CAPABILITY]: {
       key: ATTENDANT_REPORT_CAPABILITY,
       title: 'Attendant Handover Report',

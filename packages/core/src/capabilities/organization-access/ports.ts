@@ -1,4 +1,4 @@
-import type { LimitKey } from '@pump/shared';
+import type { LimitKey, PermissionChanges } from '@pump/shared';
 
 /**
  * Everything the access policy needs about one Organization, loaded in a
@@ -27,4 +27,10 @@ export interface OrganizationAccessInputs {
 /** Loads the access inputs for one Organization. */
 export interface OrganizationAccessReader {
   load(organizationId: string): Promise<OrganizationAccessInputs>;
+}
+
+/** Loads a user's stored Permission changes (differences from Role defaults). */
+export interface UserPermissionChangesReader {
+  /** Null when the user has no stored changes. */
+  load(organizationId: string, userId: string): Promise<PermissionChanges | null>;
 }

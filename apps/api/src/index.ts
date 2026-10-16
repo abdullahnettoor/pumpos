@@ -15,7 +15,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { can, type Role } from '@pump/shared';
+import { can, type PermissionId, type Role } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
@@ -27,9 +27,13 @@ import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
-import { RestoreOrganization, SuspendOrganization } from '@pump/core';
+import { RestoreOrganization, SuspendOrganization, resolveUserPermissions } from '@pump/core';
 import type { AccessChangeResult } from '@pump/core';
-import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleOrganizationSubscriptionRepository,
+} from './infra/repositories/organization-access.repo.js';
+import { DrizzleUserPermissionChangesReader } from './infra/repositories/user-permission-changes.repo.js';
 import { buildPlatformContext } from './infra/context.js';
 import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
@@ -64,6 +68,7 @@ type CachedAuthUser = {
   organizationId: string;
   role: Role;
   assignedStationIds: string[];
+  permissions: ReadonlySet<PermissionId>;
 };
 const AUTH_CACHE_TTL_MS = 60_000;
 const AUTH_CACHE_MAX = 500;
@@ -417,6 +422,16 @@ api.use('*', async (c, next) => {
           .where(eq(schema.userStationAssignments.userId, dbUser.id)),
       );
 
+      const permissions = await runWithFallback((client) =>
+        resolveUserPermissions(
+          {
+            access: new DrizzleOrganizationAccessReader(client),
+            changes: new DrizzleUserPermissionChangesReader(client),
+          },
+          { organizationId: dbUser.organizationId, userId: dbUser.id, role: dbUser.role },
+        ),
+      );
+
       cachedUser = {
         id: dbUser.id,
         email: dbUser.email,
@@ -424,6 +439,7 @@ api.use('*', async (c, next) => {
         organizationId: dbUser.organizationId,
         role: dbUser.role as Role,
         assignedStationIds: assigns.map((a) => a.stationId),
+        permissions,
       };
       setCachedAuthUser(authId, cachedUser);
     }

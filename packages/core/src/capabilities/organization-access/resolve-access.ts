@@ -372,6 +372,8 @@ export function buildAccessDocument(input: {
   registry?: AccessRegistry;
   /** Evaluation instant; defaults to now. Passed explicitly by use-cases. */
   now?: Date;
+  /** The requesting user's effective Permission ids, exposed to clients. */
+  permissions?: readonly string[];
 }): AccessDocument {
   const registry = input.registry ?? PRODUCT_ACCESS_REGISTRY;
   const { inputs, role } = input;
@@ -381,5 +383,6 @@ export function buildAccessDocument(input: {
     capabilities: resolveCapabilities(inputs, role, registry),
     limits: resolveLimits(inputs, registry),
     subscription: resolveSubscription(inputs, role, input.now ?? new Date()),
+    ...(input.permissions ? { permissions: [...input.permissions] } : {}),
   };
 }

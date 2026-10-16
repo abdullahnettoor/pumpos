@@ -58,8 +58,8 @@ Generated from `catalogue.ts` (`npm run permissions:matrix -w @pump/shared`). Do
 | Station | Run station onboarding | `station.onboard` | yes | yes | - | - | - | - | `pages.station` |
 | Station | Manage report templates | `station.reportTemplates` | yes | yes | - | - | - | - | `pages.station` |
 | Station | Set tank-level thresholds | `station.tankLevels` | yes | yes | - | - | - | - | `pages.station` |
-| Station | Create and provision stations | `station.create` | yes | - | - | - | - | - | - |
-| Team | Add and manage team members | `team.manage` | yes | yes | - | - | - | - | - |
+| Station | Create and provision stations | `station.create` | yes | - | - | - | - | yes | - |
+| Team | Add and manage team members | `team.manage` | yes | yes | - | - | - | yes | - |
 | Organization | Edit the organization profile | `organization.edit` | yes | - | - | - | - | yes | - |
 | Organization | View the activity log | `activity.view` | yes | - | - | - | - | yes | - |
 | Organization | See plan and upgrade options | `subscription.viewCommercial` | yes | yes | - | - | - | yes | - |

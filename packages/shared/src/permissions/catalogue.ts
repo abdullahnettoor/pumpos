@@ -199,10 +199,10 @@ const CATALOGUE = {
   'station.tankLevels': def('Station', 'Set tank-level thresholds', OM, {
     requires: ['pages.station'],
   }),
-  'station.create': def('Station', 'Create and provision stations', O),
+  'station.create': def('Station', 'Create and provision stations', O, { neverDelegable: true }),
 
   // Team & organization
-  'team.manage': def('Team', 'Add and manage team members', OM),
+  'team.manage': def('Team', 'Add and manage team members', OM, { neverDelegable: true }),
   'organization.edit': def('Organization', 'Edit the organization profile', O, {
     neverDelegable: true,
   }),

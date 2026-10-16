@@ -10,3 +10,4 @@ export * from './subscription-lifecycle.js';
 export * from './write-policy.js';
 export * from './organization-payload.js';
 export * from './update-organization.js';
+export * from './resolve-effective-permissions.js';
