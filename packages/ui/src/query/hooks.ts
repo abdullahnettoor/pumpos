@@ -82,6 +82,7 @@ import type {
   InsightsStockLoss,
   DecantationView,
   LinkablePurchase,
+  OrganizationPayload,
 } from '@pump/shared';
 
 /**
@@ -574,7 +575,7 @@ export function useDesktopDownloads(options?: Options<DesktopDownloads>) {
   });
 }
 
-export function useOrganization(options?: Options<any>) {
+export function useOrganization(options?: Options<OrganizationPayload>) {
   return useQuery({
     queryKey: queryKeys.organization(),
     queryFn: () => orgSvc.getOrganization(),

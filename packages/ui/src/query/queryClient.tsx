@@ -31,11 +31,13 @@ const PERSIST_PREFIXES = new Set([
   // reasons, or platform actor data, which clients are not sent at all.
   'access',
 ]);
-// Bump to invalidate all persisted client caches on next load. v4 adds the
+// Bump to invalidate all persisted client caches on next load. v7 drops
+// `organization` payloads persisted before #616 shaped it by Role, so a Staff
+// device no longer holds the plan and billing columns. v4 adds the
 // persisted Access Document (Phase E1); v3 dropped stale empty `stations`
 // lists cached while a user briefly resolved to a wrong/empty org (Phase A
 // duplicate-auth-user bug).
-const CACHE_BUSTER = 'v6';
+const CACHE_BUSTER = 'v7';
 
 /** localStorage key the persisted static/semi cache is written to. */
 export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';
