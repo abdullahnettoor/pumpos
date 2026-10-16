@@ -31,7 +31,7 @@ vi.mock('../../query/hooks.js', async (importOriginal) => ({
 const { ShiftTemplates } = await import('./ShiftTemplates.js');
 
 const prefill = () =>
-  fireEvent.click(screen.getByRole('button', { name: 'Pre-fill Default Shifts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Pre-fill default shifts' }));
 
 describe('ShiftTemplates — pre-filling the default shifts', () => {
   afterEach(() => {
@@ -68,7 +68,7 @@ describe('ShiftTemplates — pre-filling the default shifts', () => {
     await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: 'Pre-fill Default Shifts' }) as HTMLButtonElement)
+        (screen.getByRole('button', { name: 'Pre-fill default shifts' }) as HTMLButtonElement)
           .disabled,
       ).toBe(false),
     );

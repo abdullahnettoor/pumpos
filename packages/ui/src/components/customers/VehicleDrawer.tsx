@@ -33,7 +33,7 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, onClose, .
   <Drawer
     isOpen={isOpen}
     onClose={onClose}
-    title={rest.editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
+    title={rest.editingVehicle ? 'Edit vehicle' : 'Add vehicle'}
   >
     {/*
      * `Drawer` renders nothing while closed, so the form below unmounts on close
@@ -145,7 +145,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
         </Field>
       )}
 
-      <Field label="Registration Number" required>
+      <Field label="Registration number" required>
         <TextInput
           value={form.registrationNumber}
           onChange={(e) =>
@@ -156,7 +156,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
         />
       </Field>
 
-      <Field label="Vehicle Type" required>
+      <Field label="Vehicle type" required>
         <TextInput
           value={form.vehicleType}
           onChange={(e) => setForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
@@ -165,13 +165,13 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
         />
       </Field>
 
-      <Field label="Default Fuel Product">
+      <Field label="Default fuel product">
         <Select
           value={form.defaultProductId}
           onChange={(e) => setForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
           disabled={submitting}
         >
-          <option value="">-- Select Product --</option>
+          <option value="">-- Select product --</option>
           {fuelProducts.map((p: any) => (
             <option key={p.id} value={p.id}>
               {p.name} ({p.code})
@@ -182,7 +182,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
 
       <div className="flex items-center gap-2">
         <Checkbox
-          label="Vehicle Active"
+          label="Vehicle active"
           checked={form.isActive}
           onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))}
           disabled={submitting}
@@ -191,7 +191,7 @@ const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
 
       <div className="mt-2 flex gap-2.5">
         <Button type="submit" variant="primary" fullWidth loading={submitting}>
-          Save Vehicle
+          Save vehicle
         </Button>
         <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>
           Cancel

@@ -148,7 +148,7 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
-    fireEvent.click(screen.getByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close drawer' }));
     expect(document.querySelector('.drawer-container')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
   });

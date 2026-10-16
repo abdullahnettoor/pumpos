@@ -24,7 +24,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
 }) => {
   return (
     <OnboardingStep
-      title="Fuels & Rates"
+      title="Fuels & rates"
       subtitle="Configure the fuel products sold at this station and their current selling rates."
       actions={
         <>
@@ -51,7 +51,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
             </Button>
           )}
           <Button type="button" variant="secondary" size="sm" onClick={onAddProduct}>
-            Add Fuel
+            Add fuel
           </Button>
         </>
       }
@@ -61,7 +61,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
         {draft.products.length === 0 ? (
           <EmptyState
             title="No fuel products added yet"
-            description='Click "Petrol (MS)" or "Add Fuel" to begin.'
+            description='Click "Petrol (MS)" or "Add fuel" to begin.'
           />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">

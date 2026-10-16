@@ -32,7 +32,7 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 ## Shift lifecycle
 
 - Shifts → Live shift → open form: template, business date, opening cash float,
-  opening nozzle readings, attendant→DU + POS→DU assignment → **Start Shift Operations** `[27–29]`
+  opening nozzle readings, attendant→DU + POS→DU assignment → **Start shift operations** `[27–29]`
 - **Record ▾**: Product sale (M) `[30]` · Office record: Expense (E) `[31]` · Collection (C) `[37]` ·
   Purchase (P) — fuel drop with tank allocation `[32]` (screenshots predate #533)
 - **Record Handover** per DU: closing readings + testing, POS card/UPI batch,

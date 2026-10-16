@@ -80,7 +80,7 @@ export const Drawer: React.FC<DrawerProps> = ({
               {subtitle && <span className="drawer-subtitle">{subtitle}</span>}
             </div>
           </div>
-          <button onClick={onClose} className="drawer-close-btn" aria-label="Close Drawer">
+          <button onClick={onClose} className="drawer-close-btn" aria-label="Close drawer">
             <Icon name="x" size="md" />
           </button>
         </div>

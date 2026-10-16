@@ -73,7 +73,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
 
   return (
     <OnboardingStep
-      title="Business Rules"
+      title="Business rules"
       subtitle="Define when the station operates and where one business day begins."
     >
       <div className="grid grid-cols-[1.3fr_1fr] gap-5">
@@ -82,7 +82,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
             <Field label="Timezone" htmlFor="onb-timezone">
               <TextInput id="onb-timezone" value={draft.station.timezone} readOnly disabled />
             </Field>
-            <Field label="Business Day Starts At" htmlFor="onb-day-start" required>
+            <Field label="Business day starts at" htmlFor="onb-day-start" required>
               <TextInput
                 id="onb-day-start"
                 type="time"
@@ -104,7 +104,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           />
 
           <section className="flex flex-col gap-2">
-            <SectionHeader title="Weekly Operating Schedule" />
+            <SectionHeader title="Weekly operating schedule" />
             <div
               data-testid="schedule-grid"
               className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3"
@@ -137,18 +137,18 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
 
         <section className="flex flex-col gap-2">
           <SectionHeader
-            title="Policy Summary"
+            title="Policy summary"
             subtitle="Drives reporting boundaries and shift automation."
           />
           <div className={STEP_PANEL}>
             <div>
-              <span className="text-[12px] font-semibold text-ink-muted">Business Day</span>
+              <span className="text-[12px] font-semibold text-ink-muted">Business day</span>
               <div className="mt-1 text-[14px] font-semibold text-ink-strong">
                 Starts at {draft.businessRules.businessDayStartsAt}
               </div>
             </div>
             <div>
-              <span className="text-[12px] font-semibold text-ink-muted">Tank Levels</span>
+              <span className="text-[12px] font-semibold text-ink-muted">Tank levels</span>
               <div className="mt-1 text-[12px] text-ink-default" data-testid="tank-level-defaults">
                 Critical below {DEFAULT_TANK_LEVEL_SETTINGS.criticalBelowPct}% · low below{' '}
                 {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}% of capacity
@@ -158,7 +158,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
               </div>
             </div>
             <div>
-              <span className="text-[12px] font-semibold text-ink-muted">Operating Mode</span>
+              <span className="text-[12px] font-semibold text-ink-muted">Operating mode</span>
               <div className="mt-1">
                 <Chip tone={scheduleLocked ? 'success' : 'info'} size="md">
                   {scheduleLocked ? '24/7' : 'Scheduled'}

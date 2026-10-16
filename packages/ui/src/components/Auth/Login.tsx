@@ -76,7 +76,7 @@ export const Login: React.FC = () => {
           className="mt-2"
           rightIcon={loading ? undefined : <Icon name="arrow-right" size="xs" />}
         >
-          {loading ? 'Authenticating...' : 'Sign In'}
+          {loading ? 'Authenticating…' : 'Sign in'}
         </Button>
       </Form>
 

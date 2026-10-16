@@ -55,7 +55,7 @@ const baseProps = (over: Record<string, unknown> = {}): any =>
   }) as any;
 
 const openButton = () =>
-  screen.getByRole('button', { name: /Start Shift Operations/i }) as HTMLButtonElement;
+  screen.getByRole('button', { name: /Start shift operations/i }) as HTMLButtonElement;
 
 const renderForm = (
   props: Record<string, unknown> = {},
@@ -207,16 +207,16 @@ describe('OpenShiftForm', () => {
       );
       await waitFor(() => expect(openButton().disabled).toBe(false));
 
-      // Choose Custom Business Date, then a day from the calendar (#609).
+      // Choose Custom business date, then a day from the calendar (#609).
       fireEvent.change(screen.getByDisplayValue(/1 Mar 2026 · Open/), {
         target: { value: 'custom' },
       });
-      pickDate('Custom Business Date', '2026-02-27');
+      pickDate('Custom business date', '2026-02-27');
       // An unrelated prop moves; the chosen date must survive it.
       rerender(
         <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, isOpening: false })} />,
       );
-      await waitFor(() => expect(pickedDate('Custom Business Date')).toBe('2026-02-27'));
+      await waitFor(() => expect(pickedDate('Custom business date')).toBe('2026-02-27'));
       fireEvent.submit(openButton().closest('form')!);
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit.mock.calls[0][0].businessDate).toBe('2026-02-27');
@@ -224,7 +224,7 @@ describe('OpenShiftForm', () => {
 
     it('wires the custom date through the form: describedby, focusable ref, touched (#611)', async () => {
       renderForm({}, { requestedState: 'CLOSED', openBusinessDays: [] });
-      const picker = datePicker('Custom Business Date');
+      const picker = datePicker('Custom business date');
       const ids = picker.getAttribute('aria-describedby')!.split(' ');
       expect(document.getElementById(ids[0]!)?.textContent).toContain(
         'Unavailable: this Business Day is closed',
@@ -239,7 +239,7 @@ describe('OpenShiftForm', () => {
 
     it('offers no custom Business Date after the station clock (#609)', () => {
       renderForm({}, { requestedState: 'NOT_CREATED', openBusinessDays: [] });
-      fireEvent.click(datePicker('Custom Business Date'));
+      fireEvent.click(datePicker('Custom business date'));
       expect(calendarDay(TODAY)?.disabled).toBe(false);
       expect(calendarDay('2026-03-02')?.disabled).toBe(true);
     });

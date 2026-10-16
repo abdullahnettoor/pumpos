@@ -20,7 +20,7 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
 }) => {
   return (
     <OnboardingStep
-      title="Shift Templates"
+      title="Shift templates"
       subtitle="Optional now, but useful if you want the first shift to open against a known operational pattern."
       actions={
         <>
@@ -31,7 +31,7 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
             Autofill 3 Shifts
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={onAddShiftTemplate}>
-            Add Shift Template
+            Add shift template
           </Button>
         </>
       }

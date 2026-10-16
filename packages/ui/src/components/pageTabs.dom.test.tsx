@@ -204,7 +204,7 @@ describe('page tabs (#540)', () => {
     expect((await tabsOf('Customers')).selected).toContain('Customers');
     // An action that drops the intent commits its derived tab first.
     fireEvent.click(screen.getByRole('button', { name: /New customer/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Close drawer' }));
     expect((await tabsOf('Customers')).selected).toContain('Customers');
   });
 });

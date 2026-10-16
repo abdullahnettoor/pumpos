@@ -14,7 +14,7 @@ export interface BootScreenProps {
 }
 
 /**
- * The single screen between pressing Sign In and seeing the app.
+ * The single screen between pressing Sign in and seeing the app.
  *
  * It replaces four: a full-page "Initializing connection to Supabase Auth...",
  * a "Resolving operational permissions...", mobile's "Connecting…", and the

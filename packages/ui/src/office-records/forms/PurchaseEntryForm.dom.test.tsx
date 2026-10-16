@@ -82,7 +82,7 @@ describe('PurchaseEntryForm', () => {
       );
 
       // ₹4,72,500 for 5,000 L = ₹94.50/L
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
       const rate = await screen.findByText(/^₹94\.5000\//);
       // Words in sans, figures in mono.
       expect(rate.className).toContain('font-mono');
@@ -114,7 +114,7 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
       await screen.findByText(/^₹94\.5000\//);
 
       // A short delivery: same invoice total, fewer litres, so a higher ₹/L.
@@ -162,7 +162,7 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '9000' } });
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '9000' } });
       submitForm();
       await waitFor(() =>
         expect(screen.getByText('Record fuel and products as separate purchases')).toBeDefined(),
@@ -185,8 +185,8 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
-      fireEvent.change(inputUnder('Invoice Density (kg/m³ @15 °C)'), {
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Invoice density (kg/m³ @15 °C)'), {
         target: { value: '842.25' },
       });
       submitForm();
@@ -207,7 +207,7 @@ describe('PurchaseEntryForm', () => {
         />,
       );
       expect(screen.queryByText('Tank Drop Allocation')).toBeNull();
-      expect(inputUnder('Invoice Density (kg/m³ @15 °C)')).toBeTruthy();
+      expect(inputUnder('Invoice density (kg/m³ @15 °C)')).toBeTruthy();
     });
   });
 
@@ -252,7 +252,7 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '9450' } });
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '9450' } });
       await waitFor(() => expect(screen.getAllByText(/9,450/).length).toBeGreaterThan(0));
     });
   });
@@ -345,8 +345,8 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
-      fireEvent.change(inputUnder('Invoice Density (kg/m³ @15 °C)'), { target: { value: '842' } });
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Invoice density (kg/m³ @15 °C)'), { target: { value: '842' } });
 
       rerender(
         <PurchaseEntryForm
@@ -361,10 +361,10 @@ describe('PurchaseEntryForm', () => {
 
       // Carrying either figure over would book the wrong litres into the tank.
       await waitFor(() =>
-        expect((inputUnder('Total Amount (₹)') as HTMLInputElement).value).toBe(''),
+        expect((inputUnder('Total amount (₹)') as HTMLInputElement).value).toBe(''),
       );
       expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('3000');
-      expect((inputUnder('Invoice Density (kg/m³ @15 °C)') as HTMLInputElement).value).toBe('');
+      expect((inputUnder('Invoice density (kg/m³ @15 °C)') as HTMLInputElement).value).toBe('');
     });
 
     it('does not require tank allocation when opening a fuel line', async () => {
@@ -380,8 +380,8 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      expect(inputUnder('Invoice Density (kg/m³ @15 °C)')).toBeTruthy();
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
+      expect(inputUnder('Invoice density (kg/m³ @15 °C)')).toBeTruthy();
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
 
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());

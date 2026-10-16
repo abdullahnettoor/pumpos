@@ -209,10 +209,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </MenuTrigger>
             {/* Opens upward out of the bottom bar. */}
             <MenuContent side="top" align="start">
-              <MenuLabel>Business Day</MenuLabel>
+              <MenuLabel>Business day</MenuLabel>
               <MenuItem onSelect={onBusinessDay}>
                 <span className="flex flex-1 items-center justify-between gap-3">
-                  <span>Current Business Date · {businessDate}</span>
+                  <span>Current business date · {businessDate}</span>
                   <span
                     className={cn(
                       'text-[12px] font-medium',
@@ -226,22 +226,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               {businessDaysState === 'ready' && businessDays.length > 0 && (
                 <>
                   <MenuSeparator />
-                  <MenuLabel>Past Open Business Days</MenuLabel>
+                  <MenuLabel>Past open business days</MenuLabel>
                 </>
               )}
               {businessDaysState === 'loading' && (
                 <div className="px-2 py-1.5 text-[12px] text-ink-faint">
-                  Checking Past Open Business Days
+                  Checking past open business days…
                 </div>
               )}
               {businessDaysState === 'unavailable' && (
                 <div className="px-2 py-1.5 text-[12px] text-danger-fg">
-                  Past Open Business Days unavailable
+                  Past open business days unavailable
                 </div>
               )}
               {businessDays.length === 0 && businessDaysState === 'ready' && (
                 <div className="px-2 py-1.5 text-[12px] text-ink-faint">
-                  No Past Open Business Days
+                  No past open business days
                 </div>
               )}
               {businessDaysState === 'ready' &&

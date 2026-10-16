@@ -307,7 +307,7 @@ describe('owner decisions for the pilot (#566)', () => {
 
   it.each([
     ['expense', 'General'],
-    ['income', 'Other Income'],
+    ['income', 'Other income'],
   ] as const)('%s By category names an uncategorised entry %s', async (kind, fallback) => {
     stubApi({
       [PAGES[kind].path]: { data: [{ ...record('u1', 75), categoryName: null }] },
@@ -409,7 +409,7 @@ describe('Income › GST for Staff (#529)', () => {
     expect(headers(table)).toEqual([
       'Date',
       'Category',
-      'Payer / Description',
+      'Payer / description',
       'Rate',
       'Taxable',
       'CGST',

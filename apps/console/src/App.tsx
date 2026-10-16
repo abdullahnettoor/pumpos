@@ -318,7 +318,7 @@ export const App: React.FC = () => {
       ];
 
   const navItemsWithDev: NavItem[] = isLocalDev
-    ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
+    ? [...navItems, { label: 'Design system', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {
@@ -376,10 +376,10 @@ export const App: React.FC = () => {
           >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
               {isNetworkError
-                ? 'API Server Connection Failed'
+                ? 'API server connection failed'
                 : isProfileMissing
-                  ? 'User Profile Connection Error'
-                  : 'Sign-in Failed'}
+                  ? 'User profile connection error'
+                  : 'Sign-in failed'}
             </h2>
             <div
               style={{
@@ -441,7 +441,7 @@ export const App: React.FC = () => {
                 color: 'var(--text-default)',
               }}
             >
-              Sign Out & Try Again
+              Sign out and try again
             </button>
           </div>
         </div>

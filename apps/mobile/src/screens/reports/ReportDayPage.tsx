@@ -156,7 +156,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
         {model.shifts.length > 0 && (
           <>
-            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included Shifts</SectionLabel>
+            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included shifts</SectionLabel>
             <IncludedShifts shifts={model.shifts} onOpen={openShift} />
           </>
         )}

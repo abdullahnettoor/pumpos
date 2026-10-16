@@ -154,7 +154,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       )}
 
       {hasMultipleShiftOptions && (
-        <Field label="Target Shift">
+        <Field label="Target shift">
           <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((o) => (
               <option key={o.id} value={o.id}>
@@ -331,7 +331,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
         </div>
       )}
 
-      <Field label="Payment Method">
+      <Field label="Payment method">
         <SegmentedControl
           stretch
           size="md"
@@ -345,7 +345,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           value={paymentMethod}
           onChange={(v) => setValue('paymentMethod', v, { shouldValidate: true })}
           disabled={submitting}
-          aria-label="Payment Method"
+          aria-label="Payment method"
         />
       </Field>
 
@@ -403,7 +403,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
               <TextInput placeholder="GSTIN" disabled={submitting} {...register('buyerGstin')} />
             </Field>
           </div>
-          <Field label="State Code">
+          <Field label="State code">
             <TextInput
               placeholder="e.g. 32"
               disabled={submitting}
@@ -470,7 +470,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           }}
         >
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-            Sale Total
+            Sale total
           </span>
           <strong
             style={{

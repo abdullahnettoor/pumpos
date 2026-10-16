@@ -428,8 +428,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               </Select>
             </Field>
             <Field
-              label="Shift Business Date"
-              hint="Known open Business Days are listed first. Choose Custom Business Date for another eligible date."
+              label="Shift business date"
+              hint="Known open Business Days are listed first. Choose Custom business date for another eligible date."
             >
               <Select
                 value={dateChoice}
@@ -453,12 +453,12 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                     {day.businessDate > currentBusinessDate ? ' · Unavailable (future)' : ''}
                   </option>
                 ))}
-                <option value="custom">Custom Business Date</option>
+                <option value="custom">Custom business date</option>
               </Select>
             </Field>
             {dateChoice === 'custom' && (
               <Field
-                label="Custom Business Date"
+                label="Custom business date"
                 messageId={customDateHintId}
                 error={errors.businessDate?.message}
                 hint={
@@ -480,7 +480,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                     <DatePickerButton
                       ref={field.ref}
                       variant="field"
-                      aria-label="Custom Business Date"
+                      aria-label="Custom business date"
                       aria-describedby={
                         futureDate ? `${customDateHintId} ${futureDateId}` : customDateHintId
                       }
@@ -698,7 +698,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             }
             leftIcon={<Play style={{ fill: 'currentColor' }} />}
           >
-            Start Shift Operations
+            Start shift operations
           </Button>
         </div>
       </Form>

@@ -24,7 +24,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
 }) => {
   return (
     <OnboardingStep
-      title="Dispensers & Nozzles"
+      title="Dispensers & nozzles"
       subtitle="Map dispensers to your layout. Each nozzle connects to a specific storage tank and product."
       actions={
         <>
@@ -35,7 +35,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
             leftIcon={<Icon name="plus" size="xs" />}
             onClick={onAddDualDispenser}
           >
-            Add Dual (2 Nozzles)
+            Add dual (2 nozzles)
           </Button>
           <Button
             type="button"
@@ -44,10 +44,10 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
             leftIcon={<Icon name="plus" size="xs" />}
             onClick={onAddQuadDispenser}
           >
-            Add Quad (4 Nozzles)
+            Add quad (4 nozzles)
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={onAddCustomDispenser}>
-            Add Custom
+            Add custom
           </Button>
         </>
       }
@@ -57,7 +57,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
         {draft.dispensers.length === 0 ? (
           <EmptyState
             title="No dispensers configured yet"
-            description='Click "Add Dual", "Add Quad", or "Add Custom" to begin.'
+            description='Click "Add dual", "Add quad", or "Add custom" to begin.'
           />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
@@ -93,7 +93,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
                               <span className="font-medium">
                                 {n.name} →{' '}
                                 <span className="text-ink-muted">
-                                  {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
+                                  {tank?.name || 'No tank'} ({prod?.name || 'No fuel'})
                                 </span>
                               </span>
                             </div>
@@ -115,7 +115,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
                       size="xs"
                       onClick={() => onManageDispenser(du)}
                     >
-                      Manage Nozzles
+                      Manage nozzles
                     </Button>
                     <Button
                       type="button"

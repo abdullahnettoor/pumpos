@@ -178,7 +178,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
           id: `dec-flagged-${decantation.id}`,
           severity: 'warning',
           category: 'decantation',
-          title: 'Flagged Decantation',
+          title: 'Flagged decantation',
           meta: `${decantation.documentNumber} · ${decantation.flags.map((flag) => flag.message).join(', ')}`,
           action,
         });

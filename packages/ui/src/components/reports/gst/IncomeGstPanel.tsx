@@ -57,7 +57,7 @@ const COLUMNS: TableColumn<IncomeGstRow>[] = [
   },
   {
     id: 'payer',
-    header: 'Payer / Description',
+    header: 'Payer / description',
     kind: 'text',
     value: (r) => r.payer || r.description,
   },
