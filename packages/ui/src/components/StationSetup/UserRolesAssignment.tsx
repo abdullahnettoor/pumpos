@@ -35,6 +35,7 @@ import {
   useTeamCache,
   userService,
   type Credentials,
+  type TeamMember,
 } from './TeamMemberDrawers.js';
 
 export { defaultNewMemberStationIds } from './TeamMemberDrawers.js';
@@ -49,11 +50,11 @@ const RoleChip: React.FC<{ role?: string | null }> = ({ role }) =>
 
 const buildUserColumns = (
   stations: Station[],
-  startEdit: (u: any) => void,
-  onReset: (u: any) => void,
-  onToggleActive: (u: any) => void,
-  onPermissions: (u: any) => void,
-): TableColumn<any>[] => [
+  startEdit: (u: TeamMember) => void,
+  onReset: (u: TeamMember) => void,
+  onToggleActive: (u: TeamMember) => void,
+  onPermissions: (u: TeamMember) => void,
+): TableColumn<TeamMember>[] => [
   {
     id: 'name',
     header: 'Member',
@@ -191,9 +192,9 @@ const members = (n: number) => countOf(n, 'member', 'members');
 
 /** The open drawer: edit a member (or hand over a reset login), or reset a password. */
 type TeamDrawer =
-  | { kind: 'member'; user: any; credentials?: Credentials }
-  | { kind: 'reset'; user: any }
-  | { kind: 'permissions'; user: any };
+  | { kind: 'member'; user: TeamMember | null; credentials?: Credentials }
+  | { kind: 'reset'; user: TeamMember }
+  | { kind: 'permissions'; user: TeamMember };
 
 /**
  * Organization › Team (#538): the org-wide team list (Table module, status
@@ -237,9 +238,9 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
 
   // One click is one logical submit; a retry of the same switch after an
   // unknown outcome recovers its key from the shared store.
-  const toggleActive = async (u: any) => {
+  const toggleActive = async (u: TeamMember) => {
     const reactivate = u.status === 'INACTIVE';
-    let updated: any;
+    let updated: Partial<TeamMember>;
     try {
       updated = await sendKeyed(
         officeSubmitKeys.session(`team:${reactivate ? 'reactivate' : 'deactivate'}:${u.id}`),
@@ -249,9 +250,12 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
             ? userService.reactivateUser(u.id, { idempotencyKey })
             : userService.deactivateUser(u.id, { idempotencyKey }),
       );
-    } catch (err: any) {
+    } catch (err) {
       toast.error(
-        withNextStep(err.message || "Couldn't update the member", 'Try again from their row.'),
+        withNextStep(
+          (err instanceof Error && err.message) || "Couldn't update the member",
+          'Try again from their row.',
+        ),
       );
       return;
     }

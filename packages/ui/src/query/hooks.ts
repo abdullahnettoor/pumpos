@@ -31,6 +31,7 @@ import {
   resolveTankLevelSettings,
   type RoleChangePreview,
   type TankLevelSettings,
+  type UserPermissionsView,
 } from '@pump/shared';
 import { patchQueryData } from './patches/applyPatch.js';
 import { flashRows } from '../utils/rowFlash.js';
@@ -428,7 +429,10 @@ export function useUsers(options?: Options<any[]>) {
  * One member's Permissions (Owner only). Operational tier and never persisted:
  * an edit on another device must show, and a stale switch is a wrong grant.
  */
-export function useUserPermissions(userId: string | null | undefined, options?: Options<any>) {
+export function useUserPermissions(
+  userId: string | null | undefined,
+  options?: Options<UserPermissionsView>,
+) {
   return useQuery({
     queryKey: queryKeys.userPermissions(userId ?? ''),
     queryFn: () => userSvc.getUserPermissions(userId!),

@@ -32,7 +32,7 @@ const names = (ids: string[]) => ids.map(labelOf).join(', ');
 /** Owner › Team › member › Permissions: areas expand to switches (ADR 0013). */
 export const PermissionsDrawer: React.FC<{
   isOpen: boolean;
-  user: { id: string; fullName: string; role: string } | null;
+  user: { id: string; fullName: string; role?: string } | null;
   onClose: () => void;
 }> = ({ isOpen, user, onClose }) => {
   const q = useUserPermissions(isOpen ? user?.id : null);
