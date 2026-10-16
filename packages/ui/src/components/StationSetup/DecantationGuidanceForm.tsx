@@ -16,13 +16,17 @@ import {
   useUnsavedSection,
   type SectionQuery,
 } from '../../pump-ds/index.js';
-import { Field, Select, TextInput } from '../primitives/Field.js';
+import { Field, NumberInput, Select, TextInput } from '../primitives/Field.js';
 import {
   decantationGuidanceBody,
   decantationGuidanceSchema,
   decantationGuidanceValues,
   withDensityBand,
 } from './stationForms.js';
+import { RULES_FORM, RULES_FORM_GRID } from './rulesForm.js';
+
+/** A density band row: the product, then its minimum and maximum. */
+const BAND_ROW = 'grid grid-cols-[minmax(180px,1fr)_1fr_1fr] items-center gap-3';
 
 export interface DecantationGuidanceFormProps {
   station: Station;
@@ -97,9 +101,9 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
             return section.save();
           }}
           aria-label="Decantation guidance"
-          className="flex max-w-[760px] flex-col gap-3"
+          className={RULES_FORM}
         >
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className={RULES_FORM_GRID}>
             <Field
               label="Density method"
               htmlFor={fid('method')}
@@ -121,7 +125,12 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
               </Select>
             </Field>
             <Field label="Reference temperature">
-              <TextInput value={`${DECANTATION_REFERENCE_TEMPERATURE_C} °C`} disabled readOnly />
+              <TextInput
+                className="input-numeric"
+                value={`${DECANTATION_REFERENCE_TEMPERATURE_C} °C`}
+                disabled
+                readOnly
+              />
             </Field>
             <Field
               label="Density tolerance (kg/m³)"
@@ -129,13 +138,11 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
               hint="Warn when RO density differs from invoice density by more than this value."
               error={errors.densityToleranceKgM3?.message}
             >
-              <TextInput
+              <NumberInput
                 id={fid('density-tolerance')}
-                type="number"
                 min="0.1"
                 max="100"
                 step="0.1"
-                className="font-mono"
                 invalid={!!errors.densityToleranceKgM3}
                 {...register('densityToleranceKgM3', number)}
               />
@@ -146,13 +153,11 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
               hint="Percent of invoice quantity; 0.2 means 0.2%."
               error={errors.quantityTolerance?.message}
             >
-              <TextInput
+              <NumberInput
                 id={fid('quantity-tolerance')}
-                type="number"
                 min="0"
                 max="100"
                 step="0.01"
-                className="font-mono"
                 invalid={!!errors.quantityTolerance}
                 {...register('quantityTolerance', number)}
               />
@@ -163,13 +168,11 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
               hint="Early post-unloading dips are flagged for review."
               error={errors.settlingTimeMinutes?.message}
             >
-              <TextInput
+              <NumberInput
                 id={fid('settling')}
-                type="number"
                 min="0"
                 max="1440"
                 step="1"
-                className="font-mono"
                 invalid={!!errors.settlingTimeMinutes}
                 {...register('settlingTimeMinutes', number)}
               />
@@ -200,44 +203,42 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
                 </p>
               }
             >
-              {fuelProducts.map((product) => {
-                const band = bands[product.id] ?? {};
-                const setBand = (edge: 'minKgM3' | 'maxKgM3', raw: string) =>
-                  setValue('densitySpecBands', withDensityBand(bands, product.id, edge, raw), {
-                    shouldDirty: true,
-                    shouldValidate: !!errors.densitySpecBands,
-                  });
-                return (
-                  <div
-                    key={product.id}
-                    className="grid grid-cols-[minmax(180px,1fr)_1fr_1fr] items-end gap-3"
-                  >
-                    <span className="pb-6 text-[13px] text-ink">{product.name}</span>
-                    <Field label="Minimum (kg/m³)">
-                      <TextInput
-                        type="number"
-                        min="0"
+              {/* One header row, one row per product (#635): Minimum and Maximum
+                  are named once, as column headers. */}
+              <div role="group" aria-label="Product density bands" className="flex flex-col gap-2">
+                <div className={BAND_ROW} aria-hidden="true">
+                  <span className="field-label">Product</span>
+                  <span className="field-label">Minimum (kg/m³)</span>
+                  <span className="field-label">Maximum (kg/m³)</span>
+                </div>
+                {fuelProducts.map((product) => {
+                  const band = bands[product.id] ?? {};
+                  const setBand = (edge: 'minKgM3' | 'maxKgM3', raw: string) =>
+                    setValue('densitySpecBands', withDensityBand(bands, product.id, edge, raw), {
+                      shouldDirty: true,
+                      shouldValidate: !!errors.densitySpecBands,
+                    });
+                  return (
+                    <div key={product.id} className={BAND_ROW}>
+                      <span className="text-[13px] text-ink">{product.name}</span>
+                      <NumberInput
                         step="0.1"
-                        className="font-mono"
+                        placeholder=""
                         aria-label={`${product.name} minimum density`}
                         value={band.minKgM3 ?? ''}
                         onChange={(e) => setBand('minKgM3', e.target.value)}
                       />
-                    </Field>
-                    <Field label="Maximum (kg/m³)">
-                      <TextInput
-                        type="number"
-                        min="0"
+                      <NumberInput
                         step="0.1"
-                        className="font-mono"
+                        placeholder=""
                         aria-label={`${product.name} maximum density`}
                         value={band.maxKgM3 ?? ''}
                         onChange={(e) => setBand('maxKgM3', e.target.value)}
                       />
-                    </Field>
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </DataSection>
           </div>
         </Form>

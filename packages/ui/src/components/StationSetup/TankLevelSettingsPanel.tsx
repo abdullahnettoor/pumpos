@@ -7,6 +7,7 @@ import {
 import { Field, NumberInput } from '../primitives/Field.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { submitSection } from '../../forms/submitSection.js';
+import { RULES_FORM, RULES_FORM_GRID } from './rulesForm.js';
 import {
   Form,
   Panel,
@@ -70,7 +71,7 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
             return section.save();
           }}
           aria-label="Tank levels"
-          className="flex max-w-[520px] flex-col gap-3"
+          className={RULES_FORM}
         >
           <p className="text-[12px] text-ink-muted">
             When a tank reads critical or low, as a percent of its capacity. Defaults: critical
@@ -78,7 +79,7 @@ export const TankLevelSettingsPanel: React.FC<TankLevelSettingsPanelProps> = ({
             {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}%.
           </p>
           <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0">
-            <div className="grid grid-cols-2 gap-x-4">
+            <div className={RULES_FORM_GRID}>
               <Field
                 label="Critical below (%)"
                 htmlFor="tank-critical-below"

@@ -13,7 +13,11 @@ import {
   type SubmitKeySession,
 } from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
-import { dispenserWithNozzlesBody, type NozzleInput } from './dispenserWithNozzles.js';
+import {
+  dispenserWithNozzlesBody,
+  standardNozzleLayout,
+  type NozzleInput,
+} from './dispenserWithNozzles.js';
 import {
   Button,
   Chip,
@@ -235,86 +239,15 @@ export const DispensersList: React.FC<DispensersListProps> = ({
     }
   };
 
-  const prefillDualNozzles = () => {
-    const petrol = products.find((p) => p.code === 'MS');
-    const diesel = products.find((p) => p.code === 'HSD');
-    const petrolTank = tanks.find((t) => t.productId === petrol?.id);
-    const dieselTank = tanks.find((t) => t.productId === diesel?.id);
-
-    setName(`Dispenser Unit ${dispensers.length + 1}`);
-    setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
-
-    const baseNozzleNum = nozzles.length + 1;
-    const recommendedNozzles: NozzleInput[] = [];
-
-    if (petrol && petrolTank) {
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum}`,
-        productId: petrol.id,
-        tankId: petrolTank.id,
-        currentReading: 1000,
-      });
-    }
-    if (diesel && dieselTank) {
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum + recommendedNozzles.length}`,
-        productId: diesel.id,
-        tankId: dieselTank.id,
-        currentReading: 1000,
-      });
-    }
-
-    setNozzlesList(recommendedNozzles);
-    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
-    setIsFormOpen(true);
-  };
-
-  const prefillQuadNozzles = () => {
-    const petrol = products.find((p) => p.code === 'MS');
-    const diesel = products.find((p) => p.code === 'HSD');
-    const petrolTank = tanks.find((t) => t.productId === petrol?.id);
-    const dieselTank = tanks.find((t) => t.productId === diesel?.id);
-
-    setName(`Dispenser Unit ${dispensers.length + 1}`);
-    setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
-
-    const baseNozzleNum = nozzles.length + 1;
-    const recommendedNozzles: NozzleInput[] = [];
-
-    if (petrol && petrolTank) {
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum}`,
-        productId: petrol.id,
-        tankId: petrolTank.id,
-        currentReading: 1000,
-      });
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum + 1}`,
-        productId: petrol.id,
-        tankId: petrolTank.id,
-        currentReading: 1000,
-      });
-    }
-    if (diesel && dieselTank) {
-      const currentLen = recommendedNozzles.length;
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum + currentLen}`,
-        productId: diesel.id,
-        tankId: dieselTank.id,
-        currentReading: 1000,
-      });
-      recommendedNozzles.push({
-        name: `N${baseNozzleNum + currentLen + 1}`,
-        productId: diesel.id,
-        tankId: dieselTank.id,
-        currentReading: 1000,
-      });
-    }
-
-    setNozzlesList(recommendedNozzles);
-    sessionRef.current = officeSubmitKeys.session(`setup:dispensers:${stationId}`);
-    setIsFormOpen(true);
-  };
+  /**
+   * The drawer's auto-fill: replaces the nozzle rows with a standard layout.
+   * It fills the form only; nothing is sent until Create.
+   */
+  const fillStandardLayout = (perFuel: 1 | 2) =>
+    setNozzlesList(
+      standardNozzleLayout({ perFuel, products, tanks, existingNozzles: nozzles.length }),
+    );
+  const canAutoFill = products.length > 0 && tanks.length > 0;
 
   const closeForm = () => {
     resetForm();
@@ -337,22 +270,6 @@ export const DispensersList: React.FC<DispensersListProps> = ({
           dispensersQ.data ? countOf(dispensers.length, 'dispenser', 'dispensers') : undefined
         }
       />
-
-      {products.length > 0 && tanks.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border-soft bg-surface-alt px-4 py-3">
-          <span className="text-[12px] text-ink-muted">
-            Pre-fill the form with a standard dispenser layout:
-          </span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={prefillDualNozzles}>
-              Auto-fill Dual Dispenser (2 Nozzles)
-            </Button>
-            <Button size="sm" variant="secondary" onClick={prefillQuadNozzles}>
-              Auto-fill Quad Dispenser (4 Nozzles)
-            </Button>
-          </div>
-        </div>
-      )}
 
       <DataSection
         title="dispenser units"
@@ -406,7 +323,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                           <span className="font-medium">
                             {n.name} →{' '}
                             <span className="text-ink-muted">
-                              {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
+                              {tank?.name || 'No tank'} ({prod?.name || 'No fuel'})
                             </span>
                           </span>
                           <span className="font-mono font-semibold text-ink-strong">
@@ -455,9 +372,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({
         </div>
       </DataSection>
 
-      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add Dispenser Island">
+      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add dispenser">
         <Form onSubmit={handleCreate} className="flex flex-col">
-          <Field label="Dispenser Name" required>
+          <Field label="Dispenser name" required>
             <TextInput
               placeholder="e.g. Dispenser 01"
               value={name}
@@ -465,7 +382,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               required
             />
           </Field>
-          <Field label="Code / Reference ID" required>
+          <Field label="Code / reference ID" required>
             <TextInput
               placeholder="e.g. DU-01"
               value={code}
@@ -479,7 +396,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
 
           <div className="flex flex-col gap-3 border-t border-border-soft pt-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-strong">Map Nozzles</span>
+              <span className="text-[13px] font-semibold text-ink-strong">Map nozzles</span>
               <Button
                 type="button"
                 variant="secondary"
@@ -487,9 +404,31 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={addNozzleRow}
               >
-                Add Nozzle
+                Add nozzle
               </Button>
             </div>
+            {/* Auto-fill fills the rows below; nothing is saved until Create. */}
+            {canAutoFill && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[12px] text-ink-muted">Auto-fill a standard layout:</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => fillStandardLayout(1)}
+                >
+                  Dual (2 nozzles)
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => fillStandardLayout(2)}
+                >
+                  Quad (4 nozzles)
+                </Button>
+              </div>
+            )}
 
             {nozzlesList.length > 0 ? (
               nozzlesList.map((nozzle, idx) => {
@@ -548,7 +487,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                           value={nozzle.tankId}
                           onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
                         >
-                          <option value="">-- Select Tank --</option>
+                          <option value="">Select a tank</option>
                           {filteredTanks.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -562,7 +501,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               })
             ) : (
               <p className="p-3 text-center text-[12px] text-ink-muted">
-                No nozzles mapped yet. Click "Add Nozzle" to connect fuel lines to this dispenser.
+                No nozzles mapped yet. Click "Add nozzle" to connect fuel lines to this dispenser.
               </p>
             )}
           </div>
@@ -575,7 +514,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               loading={submitting}
               disabled={submitting}
             >
-              {submitting ? 'Creating...' : 'Create Dispenser'}
+              {submitting ? 'Creating…' : 'Create dispenser'}
             </Button>
             <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
               Cancel

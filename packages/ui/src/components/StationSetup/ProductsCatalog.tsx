@@ -10,7 +10,6 @@ import {
   DataSection,
   EmptyState,
   Form,
-  Icon,
   InteractiveTable,
   SearchInput,
   SectionHeader,
@@ -172,30 +171,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const [hsnCode, setHsnCode] = useState('');
   const [vatRate, setVatRate] = useState(0);
   const [priceInclusive, setPriceInclusive] = useState(true);
-
-  const handleQuickAdd = async (type: 'MS' | 'HSD') => {
-    try {
-      const body = {
-        name: type === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)',
-        code: type,
-        productType: 'FUEL',
-        stockTracked: true,
-        taxCategory: 'FUEL_VAT',
-        unit: 'L',
-        taxConfig: { vat_rate: 0, hsn_code: '2710' },
-        isActive: true,
-      };
-      await sendKeyed(officeSubmitKeys.session('setup:products:new'), body, (idempotencyKey) =>
-        productService.createProduct(body, { idempotencyKey }),
-      );
-      runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
-      toast.success('Standard product added.');
-    } catch (err: any) {
-      toast.error(
-        withNextStep(err.message || "Couldn't add the standard product", 'Try adding it again.'),
-      );
-    }
-  };
 
   const handleNameChange = (val: string) => {
     setName(val);
@@ -364,8 +339,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   useCreateRequest(createRequest, openCreate, onCreateHandled);
   useCreateRequest(importRequest, () => setIsImportOpen(true), onImportHandled);
 
-  const hasMS = products.some((p) => p.code === 'MS');
-  const hasHSD = products.some((p) => p.code === 'HSD');
   const visible = products.filter((p) => {
     if (filterType && p.productType !== filterType) return false;
     if (filterText) {
@@ -379,44 +352,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
   return (
     <section className="flex flex-col gap-2">
-      {productsQ.data && (!hasMS || !hasHSD) && (
-        <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border-soft bg-surface-alt px-4 py-3">
-          <div>
-            <span className="text-[13px] font-semibold text-ink-strong">
-              Quick Add Standard Indian Fuels
-            </span>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
-              Add pre-configured products for standard Indian petroleum fuels with correct units and
-              tax-exempt defaults.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {!hasMS && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                leftIcon={<Icon name="plus" size="xs" />}
-                onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
-              >
-                Add Petrol (MS)
-              </Button>
-            )}
-            {!hasHSD && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                leftIcon={<Icon name="plus" size="xs" />}
-                onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
-              >
-                Add Diesel (HSD)
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
       <SectionHeader
         title="Products catalogue"
         subtitle={
@@ -443,7 +378,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
             >
-              <option value="">All Types</option>
+              <option value="">All types</option>
               <option value="FUEL">FUEL</option>
               <option value="LUBRICANT">LUBRICANT</option>
               <option value="ADDITIVE">ADDITIVE</option>
@@ -497,10 +432,10 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
           resetForm();
           setIsFormOpen(false);
         }}
-        title={editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
+        title={editingProduct ? 'Edit catalogue item' : 'New catalogue item'}
       >
         <Form onSubmit={handleCreateOrUpdate} className="flex flex-col">
-          <Field label="Product Name" required>
+          <Field label="Product name" required>
             <TextInput
               type="text"
               value={name}
@@ -510,7 +445,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          <Field label="Product Code" required>
+          <Field label="Product code" required>
             <TextInput
               type="text"
               value={code}
@@ -520,7 +455,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          <Field label="Product Type" required>
+          <Field label="Product type" required>
             <Select
               value={productType}
               onChange={(e) => {
@@ -540,7 +475,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Inventory Engine" required>
+          <Field label="Inventory engine" required>
             <Select
               value={inventoryType}
               onChange={(e) => setInventoryType(e.target.value as 'BULK' | 'ITEM' | 'NONE')}
@@ -551,7 +486,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Sales Unit" required>
+          <Field label="Sales unit" required>
             <Select value={unit} onChange={(e) => setUnit(e.target.value)} required>
               {!PRODUCT_UNITS.some((u) => u.value === unit) && unit && (
                 <option value={unit}>{unit}</option>
@@ -564,7 +499,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Brand / Company">
+          <Field label="Brand / company">
             <TextInput
               type="text"
               value={brand}
@@ -574,7 +509,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
           </Field>
 
           <Field
-            label={`Selling Price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}
+            label={`Selling price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}
           >
             <MoneyInput
               value={sellingPrice}
@@ -586,7 +521,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           {productType !== 'FUEL' && (
             <Field
-              label={`Cost Price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
+              label={`Cost price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
               hint={
                 editingProduct
                   ? 'Cost basis updates automatically as a weighted-average from purchases.'
@@ -604,7 +539,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           {productType !== 'FUEL' && !editingProduct && inventoryType === 'ITEM' && (
             <Field
-              label={`Opening Stock (${unit || 'units'})`}
+              label={`Opening stock (${unit || 'units'})`}
               hint={
                 selectedStation
                   ? 'Posts an opening balance to inventory for this station. Leave blank if none.'
@@ -622,14 +557,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           <div className="mb-4">
             <Checkbox
-              label="Track Inventory (Maintain stock levels automatically)"
+              label="Track inventory (maintain stock levels automatically)"
               checked={stockTracked}
               onChange={(e) => setStockTracked(e.target.checked)}
             />
           </div>
 
           <Field
-            label="Tax Category"
+            label="Tax category"
             hint="Petrol/diesel attract state VAT (no input credit); lubes & other products attract GST."
           >
             <Select
@@ -638,14 +573,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             >
               <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
               <option value="GST">GST (lubricants / products)</option>
-              <option value="EXEMPT">GST Exempt</option>
-              <option value="NON_TAXABLE">Non-Taxable</option>
+              <option value="EXEMPT">GST exempt</option>
+              <option value="NON_TAXABLE">Non-taxable</option>
             </Select>
           </Field>
 
           {(taxCategory === 'GST' || taxCategory === 'FUEL_VAT') && (
             <div className="flex flex-col border-t border-border-soft pt-3">
-              <Field label={taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}>
+              <Field label={taxCategory === 'GST' ? 'GST rate (%)' : 'VAT rate (%)'}>
                 <NumberInput
                   step="1"
                   value={taxCategory === 'GST' ? gstRate : vatRate}
@@ -657,7 +592,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
                 />
               </Field>
 
-              <Field label={taxCategory === 'GST' ? 'HSN / SAC Code' : 'HSN Code'}>
+              <Field label={taxCategory === 'GST' ? 'HSN / SAC code' : 'HSN code'}>
                 <TextInput
                   type="text"
                   value={hsnCode}
@@ -691,7 +626,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               Cancel
             </Button>
             <Button type="submit" variant="primary">
-              {editingProduct ? 'Save Changes' : 'Create Item'}
+              {editingProduct ? 'Save changes' : 'Create item'}
             </Button>
           </div>
         </Form>
