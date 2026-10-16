@@ -67,6 +67,9 @@ interface Created {
   nozzles: Array<{ id: string; duId: string; tankId: string }>;
 }
 
+/** A row name the test trigger refuses on insert. */
+const FAIL_MARK = 'IT-591-FAIL';
+
 const dispenserBody = (code: string, nozzles: unknown[]) => ({
   stationId: STATION,
   name: `Dispenser ${code}`,
@@ -108,6 +111,7 @@ describe.skipIf(!CONNECTION)('dispenser with nozzles in one request (#591)', () 
     });
     db = drizzle(sql, { schema }) as unknown as DbClient;
     await seed();
+    await installWriteFailures();
 
     const a = new Hono<{ Variables: { db: DbClient; user: unknown } }>();
     a.use('*', async (c, next) => {
@@ -135,6 +139,32 @@ describe.skipIf(!CONNECTION)('dispenser with nozzles in one request (#591)', () 
       await sql.end();
     }
   });
+
+  /**
+   * A real failure in the middle of the write: Postgres refuses one row only
+   * after the rows before it in the same request are already inserted. The
+   * marker names never come from the product, so nothing else trips them.
+   */
+  async function installWriteFailures() {
+    await sql.unsafe(`
+      create function ${TEST_SCHEMA}.it_591_refuse_marked() returns trigger
+      language plpgsql as $$
+      begin
+        if new.name = '${FAIL_MARK}' then
+          raise exception 'it-591: refused mid-write';
+        end if;
+        return new;
+      end $$;
+      create trigger it_591_refuse_nozzle before insert on ${TEST_SCHEMA}.nozzles
+        for each row execute function ${TEST_SCHEMA}.it_591_refuse_marked();
+      create trigger it_591_refuse_template before insert on ${TEST_SCHEMA}.shift_templates
+        for each row execute function ${TEST_SCHEMA}.it_591_refuse_marked();
+    `);
+  }
+
+  async function eventCount() {
+    return (await db.select({ id: schema.events.id }).from(schema.events)).length;
+  }
 
   async function seed() {
     await db.insert(schema.organizations).values({ id: ORG, name: 'Tenant A' });
@@ -310,5 +340,80 @@ describe.skipIf(!CONNECTION)('dispenser with nozzles in one request (#591)', () 
       'Morning Shift',
       'Night Shift',
     ]);
+  });
+
+  it('rolls back a dispenser and its first nozzle when the second fails mid-write', async () => {
+    const key = 'it-591-mid-write';
+    const eventsBefore = await eventCount();
+    const failing = dispenserBody('DU-05', [
+      twoNozzles[0],
+      { name: FAIL_MARK, tankId: HSD_TANK, productId: HSD, currentReading: 0 },
+    ]);
+
+    const failed = await app.request('/setup/dispensers/with-nozzles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify(failing),
+    });
+
+    // The dispenser and N1 were inserted before Postgres refused the second
+    // nozzle; the transaction takes all of it back, events included.
+    expect(failed.status).toBe(500);
+    expect(await dispensersWithCode('DU-05')).toEqual([]);
+    expect(
+      await db.select().from(schema.nozzles).where(eq(schema.nozzles.name, FAIL_MARK)),
+    ).toEqual([]);
+    expect(await eventCount()).toBe(eventsBefore);
+
+    // A 5xx releases the key, so the corrected save goes through under it.
+    const retry = await post<Created>(
+      '/setup/dispensers/with-nozzles',
+      dispenserBody('DU-05', twoNozzles),
+      key,
+    );
+    expect(retry.json.success).toBe(true);
+    const rows = await dispensersWithCode('DU-05');
+    expect(rows.map((r) => r.id)).toEqual([retry.json.data.dispenser.id]);
+    const nozzles = await db
+      .select()
+      .from(schema.nozzles)
+      .where(eq(schema.nozzles.duId, retry.json.data.dispenser.id));
+    expect(nozzles.map((n) => n.name).sort()).toEqual(['N1', 'N2']);
+    expect(await eventCount()).toBe(eventsBefore + 3);
+  });
+
+  it('rolls back a template batch when a later template fails mid-write', async () => {
+    const key = 'it-591-shifts-mid-write';
+    const eventsBefore = await eventCount();
+    const shift = (name: string) => ({ name, startTime: '08:00', endTime: '16:00' });
+
+    const failed = await app.request('/setup/shift-templates/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify({ templates: [shift('Relief A'), shift(FAIL_MARK)] }),
+    });
+
+    expect(failed.status).toBe(500);
+    const reliefs = async () =>
+      (
+        await db
+          .select()
+          .from(schema.shiftTemplates)
+          .where(eq(schema.shiftTemplates.organizationId, ORG))
+      )
+        .map((r) => r.name)
+        .filter((n) => n.startsWith('Relief') || n === FAIL_MARK)
+        .sort();
+    expect(await reliefs()).toEqual([]);
+    expect(await eventCount()).toBe(eventsBefore);
+
+    const retry = await post<unknown[]>(
+      '/setup/shift-templates/batch',
+      { templates: [shift('Relief A'), shift('Relief B')] },
+      key,
+    );
+    expect(retry.json.success).toBe(true);
+    expect(await reliefs()).toEqual(['Relief A', 'Relief B']);
+    expect(await eventCount()).toBe(eventsBefore + 2);
   });
 });

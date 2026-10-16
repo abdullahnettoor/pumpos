@@ -8,7 +8,8 @@ import {
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import type { Tank, TankRepository } from '../tanks/index.js';
-import type { Nozzle, NozzleRepository } from '../nozzles/index.js';
+import { CreateNozzle, type Nozzle, type NozzleRepository } from '../nozzles/index.js';
+import type { Product } from '../products/index.js';
 import type { DispenserRepository, DispenserUnit } from './index.js';
 import { CreateDispenserWithNozzles, MAX_NOZZLES_PER_DISPENSER } from './create-with-nozzles.js';
 
@@ -67,6 +68,36 @@ function tank(id: string, productId: string, overrides: Partial<Tank> = {}): Tan
   };
 }
 
+function fuel(id: string, organizationId = 'org-1'): Product {
+  return {
+    id,
+    organizationId,
+    name: id,
+    code: id,
+    productType: 'FUEL',
+    inventoryType: 'BULK',
+    stockTracked: true,
+    isTaxable: true,
+    taxCategory: 'FUEL_VAT',
+    unit: 'L',
+    brand: null,
+    category: null,
+    sellingPrice: null,
+    costBasis: null,
+    taxConfig: {},
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+class InMemoryProducts {
+  readonly rows: Product[] = [fuel(MS), fuel(HSD)];
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+}
+
 function makeContext(): ExecutionContext {
   return {
     organizationId: 'org-1',
@@ -84,15 +115,13 @@ function setup() {
   const dispensers = new InMemoryDispensers();
   const nozzles = new InMemoryNozzles();
   const tanks = new InMemoryTanks();
+  const products = new InMemoryProducts();
   tanks.rows.push(tank('tank-ms', MS), tank('tank-hsd', HSD));
   const store = new InMemoryEventStore();
-  const useCase = new CreateDispenserWithNozzles({
-    dispensers,
-    nozzles,
-    tanks,
-    events: new InProcessEventDispatcher({ store }),
-  });
-  return { dispensers, nozzles, tanks, store, useCase };
+  const events = new InProcessEventDispatcher({ store });
+  const useCase = new CreateDispenserWithNozzles({ dispensers, nozzles, tanks, products, events });
+  const createNozzle = new CreateNozzle({ repository: nozzles, tanks, products, events });
+  return { dispensers, nozzles, tanks, products, store, useCase, createNozzle };
 }
 
 const command = {
@@ -210,5 +239,68 @@ describe('CreateDispenserWithNozzles', () => {
     }
     expect(dispensers.rows).toHaveLength(0);
     expect(store.events).toHaveLength(0);
+  });
+
+  it("writes nothing when a nozzle's product belongs to another organization", async () => {
+    // A tank row naming a foreign product must not let a nozzle dispense it.
+    const { dispensers, nozzles, tanks, products, store, useCase } = setup();
+    products.rows.push(fuel('product-foreign', 'org-2'));
+    tanks.rows.push(tank('tank-foreign-product', 'product-foreign'));
+
+    const result = await useCase.execute(
+      {
+        ...command,
+        nozzles: [
+          command.nozzles[0],
+          { name: 'N2', tankId: 'tank-foreign-product', productId: 'product-foreign' },
+        ],
+      },
+      makeContext(),
+    );
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.code).toBe('NOT_FOUND');
+    expect(result.error.details).toMatchObject({ entity: 'Product', nozzleIndex: 1 });
+    expect(dispensers.rows).toHaveLength(0);
+    expect(nozzles.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+});
+
+describe('CreateNozzle — product tenancy', () => {
+  it('refuses a product of another organization and writes nothing', async () => {
+    const { nozzles, tanks, products, store, createNozzle } = setup();
+    products.rows.push(fuel('product-foreign', 'org-2'));
+    tanks.rows.push(tank('tank-foreign-product', 'product-foreign'));
+
+    const result = await createNozzle.execute(
+      {
+        stationId: STATION,
+        duId: 'du-1',
+        name: 'N1',
+        tankId: 'tank-foreign-product',
+        productId: 'product-foreign',
+      },
+      makeContext(),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatchObject({ code: 'NOT_FOUND' });
+    expect(nozzles.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('creates a nozzle for a product of its own organization', async () => {
+    const { nozzles, store, createNozzle } = setup();
+
+    const result = await createNozzle.execute(
+      { stationId: STATION, duId: 'du-1', name: 'N1', tankId: 'tank-ms', productId: MS },
+      makeContext(),
+    );
+
+    expect(result.success).toBe(true);
+    expect(nozzles.rows).toHaveLength(1);
+    expect(store.events.map((e) => e.eventType)).toEqual([BusinessEvents.NOZZLE_CREATED]);
   });
 });

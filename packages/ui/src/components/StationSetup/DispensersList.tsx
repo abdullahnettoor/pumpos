@@ -219,6 +219,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({
       setIsFormOpen(false);
       resetForm();
       runTask(refreshDispensers(), 'Saved, but the dispenser list could not be refreshed.');
+      // Shift open reads nozzles from shift status (operational tier), not the
+      // static nozzle list: refresh it so the new pump is offered straight away.
+      runTask(invalidateOperational(), 'Saved, but the shifts screen may be out of date.');
       toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(

@@ -16,7 +16,7 @@ import { Drawer } from '../Drawer.js';
 import { Field, TextInput } from '../primitives/Field.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { queryKeys, useShiftTemplates } from '../../query/hooks.js';
+import { queryKeys, useInvalidateOperational, useShiftTemplates } from '../../query/hooks.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
   officeSubmitKeys,
@@ -71,6 +71,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
   // One session per opened edit (#537): a new edit never inherits an unsettled key.
   const sessionRef = useRef<SubmitKeySession | null>(null);
   const qc = useQueryClient();
+  const invalidateOperational = useInvalidateOperational();
   const templatesQ = useShiftTemplates();
   const templates: ShiftTemplate[] = templatesQ.data ?? [];
   const [prefilling, setPrefilling] = useState(false);
@@ -117,6 +118,8 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
         (idempotencyKey) => templateService.createTemplates(DEFAULT_SHIFTS, { idempotencyKey }),
       );
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
+      // Shift open offers templates through shift status (operational tier).
+      runTask(invalidateOperational(), 'Saved, but the shifts screen may be out of date.');
       toast.success('Default shifts created.');
     } catch (err: any) {
       toast.error(

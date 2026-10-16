@@ -10,10 +10,11 @@ import type {
 } from '../../../kernel/index.js';
 import type { TankRepository } from '../tanks/index.js';
 import {
-  checkNozzleTank,
+  checkNozzleSource,
   newNozzle,
   nozzleCreateSchema,
   type Nozzle,
+  type NozzleProductLookup,
   type NozzleRepository,
 } from '../nozzles/index.js';
 import {
@@ -54,6 +55,7 @@ export interface DispenserWithNozzlesDeps {
   dispensers: DispenserRepository;
   nozzles: NozzleRepository;
   tanks: TankRepository;
+  products: NozzleProductLookup;
   events: EventPublisher;
 }
 
@@ -65,7 +67,7 @@ function forNozzle(error: CoreError, nozzleIndex: number): CoreError {
 /**
  * Create a Dispenser and its Nozzles as one command (#591).
  *
- * All or nothing: every nozzle is checked against its Tank before anything is
+ * All or nothing: every nozzle is checked against its Product and Tank before anything is
  * written, so a refused nozzle leaves no dispenser behind. Run inside one
  * transaction, a retry under the same Idempotency-Key can neither leave a
  * dispenser without nozzles nor create a second one. Emits DISPENSER_CREATED
@@ -91,8 +93,8 @@ export class CreateDispenserWithNozzles implements UseCase<
     const { nozzles: nozzleInputs, ...dispenserInput } = p.data;
 
     for (const [idx, n] of nozzleInputs.entries()) {
-      const check = await checkNozzleTank(
-        this.deps.tanks,
+      const check = await checkNozzleSource(
+        this.deps,
         { stationId: dispenserInput.stationId, tankId: n.tankId, productId: n.productId },
         ctx,
       );

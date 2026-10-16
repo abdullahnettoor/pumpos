@@ -234,6 +234,7 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     fixtures.products = [];
     createDispenserWithNozzles.mockReset();
     createNozzle.mockReset();
+    invalidateOperational.mockReset().mockResolvedValue(undefined);
   });
 
   const openDual = () => {
@@ -268,6 +269,23 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     );
     expect(createNozzle).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('Dispenser unit created.')).toBeDefined());
+  });
+
+  it('refreshes the shifts screen, which reads nozzles from shift status', async () => {
+    createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });
+    openDual();
+    save();
+
+    await waitFor(() => expect(invalidateOperational).toHaveBeenCalledTimes(1));
+  });
+
+  it('refreshes nothing when the save failed', async () => {
+    createDispenserWithNozzles.mockRejectedValueOnce(new Error('Network down'));
+    openDual();
+    save();
+
+    await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+    expect(invalidateOperational).not.toHaveBeenCalled();
   });
 
   it('retries a dropped save under the same key, so it cannot add a second dispenser', async () => {

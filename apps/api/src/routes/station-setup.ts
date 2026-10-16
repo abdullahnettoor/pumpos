@@ -65,6 +65,7 @@ import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
+import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
 import {
@@ -460,6 +461,7 @@ stationSetupRouter.post(
         dispensers: new DrizzleDispenserRepository(tx),
         nozzles: new DrizzleNozzleRepository(tx),
         tanks: new DrizzleTankRepository(tx),
+        products: new DrizzleProductRepository(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body.stationId })),
     );
@@ -511,6 +513,7 @@ stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), asy
     new CreateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body.stationId })),
   );
@@ -1057,6 +1060,7 @@ stationSetupRouter.put('/nozzles/:id', writePolicyGuard('PUT /setup/nozzles/:id'
     new UpdateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
       events,
     }).execute({ ...body, id }, buildContext(user, { stationId })),
   );
@@ -1075,6 +1079,7 @@ stationSetupRouter.delete(
     const useCase = new DeleteNozzle({
       repository: new DrizzleNozzleRepository(db),
       tanks: new DrizzleTankRepository(db),
+      products: new DrizzleProductRepository(db),
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id }, buildContext(user));

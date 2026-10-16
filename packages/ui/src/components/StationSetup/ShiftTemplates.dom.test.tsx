@@ -12,6 +12,7 @@ import { renderWithProviders } from '../../test/renderWithProviders.js';
  */
 const createTemplates = vi.fn();
 const createTemplate = vi.fn();
+const invalidateOperational = vi.fn(() => Promise.resolve());
 
 vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -24,6 +25,7 @@ vi.mock('../../services/cloud.js', async (importOriginal) => ({
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useShiftTemplates: () => ({ data: [], isPending: false }),
+  useInvalidateOperational: () => invalidateOperational,
 }));
 
 const { ShiftTemplates } = await import('./ShiftTemplates.js');
@@ -36,6 +38,7 @@ describe('ShiftTemplates — pre-filling the default shifts', () => {
     cleanup();
     createTemplates.mockReset();
     createTemplate.mockReset();
+    invalidateOperational.mockReset().mockResolvedValue(undefined);
   });
 
   it('creates all three shifts in one keyed request', async () => {
@@ -54,6 +57,8 @@ describe('ShiftTemplates — pre-filling the default shifts', () => {
     );
     expect(createTemplate).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('Default shifts created.')).toBeDefined());
+    // Shift open reads templates through shift status, an operational query.
+    expect(invalidateOperational).toHaveBeenCalledTimes(1);
   });
 
   it('retries a dropped pre-fill under the same key', async () => {
