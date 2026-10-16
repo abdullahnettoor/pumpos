@@ -8,6 +8,8 @@ import { renderWithProviders } from '../test/renderWithProviders.js';
 import { computeRange } from '../pump-ds/index.js';
 import { shortMonth } from '../utils/format.js';
 import { PurchasesList } from './PurchasesList.js';
+import { defaultPermissionsFor } from '@pump/shared';
+import { publishEffective, resetEffectivePrincipal } from '../access/effectivePrincipal.js';
 import {
   getNavIntentState,
   publishNavIntent,
@@ -142,10 +144,12 @@ const RED_OR_GREEN = /\b(text|fill|bg)-(danger|success)-(fg|bg)\b/;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/;
 
 beforeEach(() => {
+  publishEffective('Manager', [...defaultPermissionsFor('Manager')]);
   stubApi(DATA);
 });
 
 afterEach(() => {
+  resetEffectivePrincipal();
   cleanup();
   vi.unstubAllGlobals();
   __resetNavIntentForTests();
