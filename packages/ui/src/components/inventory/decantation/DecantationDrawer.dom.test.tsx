@@ -207,7 +207,7 @@ describe('DecantationDrawer save', () => {
     type('Tanker no.', 'KL-07-CB-4412');
     click('Continue to tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
-    click('Continue to Tanker chambers');
+    click('Continue to tanker chambers');
     await save('Save decantation');
     expect(saveDecantation).not.toHaveBeenCalled();
     expect(screen.getByText(/Enter the before dip/)).toBeTruthy();

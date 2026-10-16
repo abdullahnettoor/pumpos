@@ -55,9 +55,9 @@ const STEP_TITLES = [
 ] as const;
 const NEXT_LABEL = [
   'Continue to tanks',
-  'Continue to Tanker chambers',
+  'Continue to tanker chambers',
   'Continue to unloading',
-  'Continue to After unloading',
+  'Continue to after unloading',
   'Continue to review',
 ];
 

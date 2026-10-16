@@ -179,8 +179,8 @@ export const ChangePriceDrawer: React.FC<{
 
 /**
  * Set a product's MRP. Mounted per open, so each edit gets its own key session.
- * The answer's price is patched into the product list before the background
- * refresh, so a form waiting on it (a Handover Product Sale line, #638) reads it
+ * The answer's price (only the server's, never the typed one) is patched into
+ * the product list before the background refresh, so a form waiting on it (a Handover Product Sale line, #638) reads it
  * at once.
  */
 export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = ({
@@ -211,12 +211,14 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
       setSaving(false);
       return;
     }
-    patchQueryData<MerchRow[]>(qc, queryKeys.products(), (list) =>
-      withProductPrice(list, {
-        id: product.id,
-        sellingPrice: answer?.sellingPrice ?? body.sellingPrice,
-      }),
-    );
+    // Only what the server answered (#606): a returned null is kept, and an
+    // answer without the price patches nothing; never the typed value.
+    if (answer && 'sellingPrice' in answer) {
+      const answered = { id: product.id, sellingPrice: answer.sellingPrice };
+      patchQueryData<MerchRow[]>(qc, queryKeys.products(), (list) =>
+        withProductPrice(list, answered),
+      );
+    }
     toast.success('Price updated.');
     onClose();
     runTask(

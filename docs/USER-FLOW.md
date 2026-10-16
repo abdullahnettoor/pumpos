@@ -55,17 +55,17 @@ Onboarding runs on the **web console** only — the desktop app shows a notice
 to finish setup on the web. Sidebar → **Onboarding setup** opens a full-screen
 9-step wizard. Progress is saved as a draft; you can leave and resume.
 
-| Step                        | What you enter                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1. Station basics           | Station name, address, contact details                                                            |
-| 2. Business rules           | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime                       |
-| 3. Fuels & rates            | **Add fuel** for each fuel sold (MS, HSD, XP…) with current rate                                  |
-| 4. Tanks                    | One entry per underground tank: fuel, capacity, current stock                                     |
-| 5. Dispensers & nozzles     | **Add dual (2 nozzles)** / **Add quad (4 nozzles)** per dispenser unit; map each nozzle to a tank |
-| 6. Opening / current values | Current totalizer reading per nozzle, current tank stock                                          |
-| 7. Shift templates          | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night)                                     |
-| 8. Payment terminals        | **Add terminal**: Provider/acquirer, Terminal ID (TID), label — one per POS machine               |
-| 9. Review & provision       | Summary counts; fix any "Add at least one…" validation, then provision                            |
+| Step                        | What you enter                                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1. Station basics           | Station name, address, contact details                                                                                 |
+| 2. Business rules           | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime                                            |
+| 3. Fuels & rates            | **Add fuel** for each fuel sold (MS, HSD, XP…) with current rate                                                       |
+| 4. Tanks                    | One entry per underground tank: fuel, capacity, current stock                                                          |
+| 5. Dispensers & nozzles     | **Add dual (2 nozzles)** / **Add quad (4 nozzles)** per dispenser unit; map each nozzle to a tank                      |
+| 6. Opening / current values | Current selling rate per fuel; opening stock and purchase rate per tank (nozzle readings come at the first shift open) |
+| 7. Shift templates          | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night)                                                          |
+| 8. Payment terminals        | **Add terminal**: Provider/acquirer, Terminal ID (TID), label — one per POS machine                                    |
+| 9. Review & provision       | Summary counts; fix any "Add at least one…" validation, then provision                                                 |
 
 Done when: the review step provisions the station and the full app unlocks.
 
