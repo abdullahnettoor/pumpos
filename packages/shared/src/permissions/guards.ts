@@ -41,6 +41,15 @@ export function canReopenShift(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/**
+ * Who may change a fuel price (POST /setup/pricing): Owners, and Managers at
+ * their own stations (the API checks the station). Mirrors the API's setup
+ * write check; the Open shift form offers "Change price" only to them (#619).
+ */
+export function canChangeFuelPrice(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
 /** True for the mobile-only, self-scoped Attendant role. */
 export function isAttendant(role: Role): boolean {
   return role === 'Attendant';

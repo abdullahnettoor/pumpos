@@ -266,3 +266,110 @@ describe('changing a price (#606)', () => {
     }
   });
 });
+
+describe('scheduled prices (#619)', () => {
+  // The clock: 16 Oct 2026, 01:30 am at the station; Petrol changes at 6:00 am.
+  const NOW = new Date('2026-10-15T20:00:00Z');
+  const scheduled = {
+    id: 'h3',
+    productId: 'ms',
+    productName: 'Petrol',
+    price: '103',
+    effectiveFrom: '2026-10-16T00:30:00Z',
+    createdAt: '2026-10-15T19:00:00Z',
+  };
+  const setupScheduled = () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
+    const queryClient = setup();
+    queryClient.setQueryData(queryKeys.pricingHistory('st-1'), (h: unknown[] = []) => [
+      scheduled,
+      ...h,
+    ]);
+    return queryClient;
+  };
+
+  it('the card shows the price now and the change still ahead', async () => {
+    setupScheduled();
+    await waitFor(() => expect(within(card('Petrol')).getByText('now')).toBeTruthy());
+    const petrol = card('Petrol');
+    expect(petrol.textContent).toMatch('₹102.50/L');
+    const next = within(petrol).getByTestId('fuel-price-scheduled');
+    expect(next.textContent).toMatch('Scheduled');
+    expect(next.textContent).toMatch('₹103.00/L');
+    expect(next.textContent).toMatch('from Fri 16 Oct, 6:00\u00a0am');
+    // The last change is the one into the current price, not the scheduled one.
+    expect(petrol.textContent).toMatch('₹101.80 → ₹102.50 (+₹0.70)');
+    // A fuel with nothing scheduled reads as before.
+    expect(within(card('CNG')).queryByText('now')).toBeNull();
+  });
+
+  it('marks the scheduled row in the price history', async () => {
+    setupScheduled();
+    const table = screen.getByRole('table');
+    await waitFor(() => expect(within(table).getAllByText('Scheduled')).toHaveLength(1));
+    expect(within(table).getByText('Status')).toBeTruthy();
+  });
+
+  it('refreshes the current prices when the scheduled time comes', async () => {
+    setupScheduled();
+    getPricing.mockClear();
+    await waitFor(() => expect(within(card('Petrol')).getByText('now')).toBeTruthy());
+    await vi.advanceTimersByTimeAsync(4.5 * 60 * 60 * 1000 + 2_000);
+    await waitFor(() => expect(getPricing).toHaveBeenCalled());
+    // Past its time, the change is no longer "scheduled".
+    await waitFor(() =>
+      expect(within(card('Petrol')).queryByTestId('fuel-price-scheduled')).toBeNull(),
+    );
+  });
+
+  it('a remount after the scheduled time refreshes prices fetched before it (#628 review)', async () => {
+    // Fetched at 05:59 (station), unmounted; 103 takes effect at 06:00; back at 06:01.
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-10-16T00:29:00Z') });
+    const queryClient = setup();
+    queryClient.setQueryData(queryKeys.pricingHistory('st-1'), (h: unknown[] = []) => [
+      scheduled,
+      ...h,
+    ]);
+    await waitFor(() => expect(within(card('Petrol')).getByText('now')).toBeTruthy());
+    cleanup();
+
+    vi.setSystemTime(new Date('2026-10-16T00:31:00Z'));
+    getPricing.mockClear();
+    getPricing.mockResolvedValueOnce([
+      {
+        productId: 'ms',
+        productName: 'Petrol',
+        productCode: 'MS',
+        price: '103',
+        effectiveFrom: '2026-10-16T00:30:00Z',
+      },
+      { productId: 'cng', productName: 'CNG', price: 0, effectiveFrom: null },
+    ] as never);
+    renderWithProviders(<FuelPricingPanel selectedStation={station} />, { queryClient });
+
+    await waitFor(() => expect(card('Petrol').textContent).toMatch('₹103.00/L'));
+    expect(getPricing).toHaveBeenCalledTimes(1);
+    expect(within(card('Petrol')).queryByTestId('fuel-price-scheduled')).toBeNull();
+    expect(card('Petrol').textContent).toMatch('₹102.50 → ₹103.00 (+₹0.50)');
+  });
+
+  it('a change applied for later reads "Fuel rate scheduled." and stays off the current price', async () => {
+    setupScheduled();
+    recordPricing.mockResolvedValue({
+      id: 'h4',
+      stationId: 'st-1',
+      productId: 'ms',
+      price: '104',
+      effectiveFrom: '2026-10-17T00:30:00.000Z',
+      createdAt: NOW.toISOString(),
+    });
+    fireEvent.click(within(card('Petrol')).getByRole('button', { name: 'Change price of Petrol' }));
+    fireEvent.change(screen.getByPlaceholderText('e.g. 96.43'), { target: { value: '104' } });
+    fireEvent.change(document.querySelector('input[type="datetime-local"]') as HTMLInputElement, {
+      target: { value: '2026-10-17T06:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply new rate' }));
+    expect(await screen.findByText('Fuel rate scheduled.')).toBeTruthy();
+    expect(card('Petrol').textContent).toMatch('₹102.50/L');
+  });
+});

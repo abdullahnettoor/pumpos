@@ -15,6 +15,7 @@ import {
   type FuelPriceRow,
 } from './fuelPriceRows.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
+import { isScheduledFuelPrice } from '@pump/shared';
 
 const productService = new CloudProductService();
 
@@ -84,8 +85,12 @@ export const ChangePriceDrawer: React.FC<{
     save(payload, (idempotencyKey) => record.mutateAsync({ payload, idempotencyKey })).then(
       () => {
         // The card updating, highlighted, is the confirmation; there is no
-        // record of its own to open, so the toast has no action.
-        toast.success('Fuel rate updated.');
+        // record of its own to open, so the toast has no action. A change
+        // for later is stored but not current until its time (#619).
+        const done = isScheduledFuelPrice(payload, Date.now())
+          ? 'Fuel rate scheduled.'
+          : 'Fuel rate updated.';
+        toast.success(done);
         refresh(
           () =>
             Promise.all([
@@ -98,7 +103,7 @@ export const ChangePriceDrawer: React.FC<{
                 { throwOnError: true },
               ),
             ]),
-          'Fuel rate updated.',
+          done,
         );
       },
       // Refused or unanswered: the fuel's card says so, with the next step.
@@ -153,7 +158,11 @@ export const ChangePriceDrawer: React.FC<{
             autoFocus
           />
         </Field>
-        <Field label="Effective from" required hint={`Station time (${timeZone})`}>
+        <Field
+          label="Effective from"
+          required
+          hint={`Station time (${timeZone}). A later time schedules the change; shifts opened before then keep the current rate.`}
+        >
           <TextInput
             type="datetime-local"
             value={effectiveFrom}

@@ -1,5 +1,11 @@
-import { compareFuelPricesNewestFirst, localToInstant } from '@pump/shared';
+import {
+  compareFuelPricesNewestFirst,
+  isFuelPriceInEffect,
+  isScheduledFuelPrice,
+  localToInstant,
+} from '@pump/shared';
 import { toPaise } from '../../utils/ledgerWindow.js';
+import { formatClockInZone, formatShortDay } from '../../utils/format.js';
 import { unknownOutcome } from '../../office-records/submitKeys.js';
 
 /**
@@ -38,6 +44,11 @@ export interface FuelPriceRow {
    * `difference` is `to − from`, worked in whole paise.
    */
   lastChange: { from: number; to: number; difference: number } | null;
+  /**
+   * The next price change still ahead (#619): recorded, but not current until
+   * its effective time. `null` when none is scheduled.
+   */
+  scheduled: { price: number; effectiveFrom: string } | null;
 }
 
 /** One price change, old → new, with the difference in whole paise. */
@@ -62,18 +73,49 @@ export function sortNewestFirst<T extends FuelPriceHistoryEntry>(entries: T[]): 
   return [...entries].sort(newestFirst);
 }
 
+/** Epoch ms of an ISO instant. */
+const at = (iso: string): number => new Date(iso).getTime();
+
+/**
+ * A product's next scheduled change (#619): the earliest effective time still
+ * ahead of `now`; of the prices sharing that moment, the one the server will
+ * read as current then (the one order).
+ */
+function nextScheduled<T extends FuelPriceHistoryEntry>(entries: T[], now: number): T | null {
+  const ahead = sortNewestFirst(entries.filter((e) => isScheduledFuelPrice(e, now)));
+  if (ahead.length === 0) return null;
+  const first = Math.min(...ahead.map((e) => at(e.effectiveFrom)));
+  return ahead.find((e) => at(e.effectiveFrom) === first) ?? null;
+}
+
 /**
  * The fuel rows, in the order the API lists the fuels. The current price is
- * the API's: the price shift close sells at. The last change reads the history
- * in the API's order (the same tie-breakers), so it ends on that price.
+ * the API's: the latest price in effect, the price a shift opened now sells
+ * at. The last change reads the history in effect at `now`, in the API's
+ * order (the same tie-breakers), and ends on that price. A change scheduled
+ * for later is listed separately (#619).
  */
 export function buildFuelPriceRows(
   current: CurrentFuelPrice[],
   history: FuelPriceHistoryEntry[],
   unitOf: (productId: string) => string | null | undefined,
+  now: Date | number,
 ): FuelPriceRow[] {
+  const nowMs = typeof now === 'number' ? now : now.getTime();
   return current.map((cp) => {
-    const [latest, previous] = sortNewestFirst(history.filter((h) => h.productId === cp.productId));
+    const mine = history.filter((h) => h.productId === cp.productId);
+    const inEffect = sortNewestFirst(mine.filter((h) => isFuelPriceInEffect(h, nowMs)));
+    // The change into the current price: from the entry that is the current
+    // price (if the history holds it), else from the latest in effect.
+    const currentAt = cp.effectiveFrom
+      ? inEffect.findIndex(
+          (h) =>
+            at(h.effectiveFrom) === at(cp.effectiveFrom!) && Number(h.price) === Number(cp.price),
+        )
+      : -1;
+    const from = Math.max(currentAt, 0);
+    const [latest, previous] = [inEffect[from], inEffect[from + 1]];
+    const next = nextScheduled(mine, nowMs);
     return {
       productId: cp.productId,
       productName: cp.productName,
@@ -82,8 +124,26 @@ export function buildFuelPriceRows(
       price: cp.effectiveFrom != null ? Number(cp.price) : null,
       effectiveFrom: cp.effectiveFrom,
       lastChange: latest && previous ? priceChange(previous.price, latest.price) : null,
+      scheduled: next ? { price: Number(next.price), effectiveFrom: next.effectiveFrom } : null,
     };
   });
+}
+
+/**
+ * When the next scheduled price of any fuel takes effect (epoch ms), or null
+ * when none is ahead of `now` (#619). The screens refresh the current prices
+ * then, so a scheduled price takes over on time.
+ */
+export function nextScheduledPriceAt(
+  history: readonly FuelPriceHistoryEntry[],
+  now: number,
+): number | null {
+  let next: number | null = null;
+  for (const h of history) {
+    const t = at(h.effectiveFrom);
+    if (t > now && (next == null || t < next)) next = t;
+  }
+  return next;
 }
 
 /** `now` on the station's wall clock, as a `datetime-local` value (`YYYY-MM-DDTHH:MM`). */
@@ -102,6 +162,31 @@ export function stationDateTimeInput(now: Date, timeZone: string): string {
       .map((p) => [p.type, p.value]),
   ) as Record<string, string>;
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * Whether cached current prices were fetched before a scheduled price that has
+ * since taken effect (#628 review): the cache still holds the old price, and
+ * no timer is left to refresh it (a page that unmounted before the time and
+ * remounted after it). `fetchedAt` is the current prices' fetch time (epoch
+ * ms); 0 means nothing is cached.
+ */
+export function missedScheduledPrice(
+  history: readonly FuelPriceHistoryEntry[],
+  fetchedAt: number,
+  now: number,
+): boolean {
+  if (fetchedAt <= 0) return false;
+  return history.some((h) => {
+    const t = at(h.effectiveFrom);
+    return t > fetchedAt && t <= now;
+  });
+}
+
+/** A price's effective time on the station clock, short: `Fri 16 Oct, 10:00 am` (#619). */
+export function formatPriceTime(iso: string, timeZone: string): string {
+  const date = stationDateTimeInput(new Date(iso), timeZone).slice(0, 10);
+  return `${formatShortDay(date)}, ${formatClockInZone(iso, timeZone)}`;
 }
 
 /** A `datetime-local` value read on the station's wall clock, as a UTC ISO instant. */

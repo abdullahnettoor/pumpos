@@ -510,8 +510,9 @@ export function useRecordFuelPrice() {
         ?.find((c) => c.productId === answer.productId);
       // The current price is judged against the history as it was before the answer.
       const history = qc.getQueryData<FuelPriceHistoryRow[]>(queryKeys.pricingHistory(stationId));
+      const now = Date.now();
       patchQueryData<FuelPrice[]>(qc, queryKeys.pricing(stationId), (c) =>
-        withRecordedCurrentPrice(c, answer, history),
+        withRecordedCurrentPrice(c, answer, history, now),
       );
       patchQueryData<FuelPriceHistoryRow[]>(qc, queryKeys.pricingHistory(stationId), (h) =>
         withRecordedPriceInHistory(h, answer, {

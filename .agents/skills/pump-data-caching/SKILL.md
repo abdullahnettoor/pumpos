@@ -68,7 +68,7 @@ Auth/session and anything live are operational (or uncached); never persist them
      also cancels a refetch already in flight, so an older answer cannot overwrite the patch.
    - Patched today: handover, credit / OMC card sale (+ voids), Handover and Billed Product
      Sales, Expense / Income / Collection / Supplier payment (+ Expense / Income voids),
-     Business Day close, and a fuel price change (current price and history). Left to revalidation: Purchase, shift open and close (their answers
+     Business Day close, and a fuel price change (current price and history; a Scheduled Price joins the history only, #619). Left to revalidation: Purchase, shift open and close (their answers
      lack the list or board fields).
 
 ## Review checklist (before merge)

@@ -1,15 +1,32 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, DatePickerButton, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput } from '../primitives/Field.js';
 import { formatBusinessDate, inr } from '../../utils/format.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
-import { compareByDispenserThenNozzle, dispenserLabel } from '@pump/shared';
+import { businessDateSettings, compareByDispenserThenNozzle, dispenserLabel } from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useZodForm } from '../../forms/useZodForm.js';
-import { useBusinessDayStatus } from '../../query/hooks.js';
+import { mutationKeys, useBusinessDayStatus } from '../../query/hooks.js';
+import { useWriteStates } from '../../query/pendingWrites.js';
+import { Banner } from '../primitives/Banner.js';
+import { ChangePriceDrawer } from '../StationSetup/PricingDrawers.js';
+import { useFuelPriceRows } from '../StationSetup/useFuelPriceRows.js';
+import {
+  fuelPriceWriteKey,
+  unconfirmedAttempt,
+  type FuelPriceAttempt,
+  type FuelPriceRow,
+} from '../StationSetup/fuelPriceRows.js';
+import { ShiftRatesPanel } from './ShiftRatesPanel.js';
+import {
+  plannedShiftWindow,
+  rateChangeWarning,
+  scheduledChangesDuringShift,
+  type ShiftTemplateTimes,
+} from './shiftRates.js';
 
 interface OpenShiftFormProps {
   lastShift: any;
@@ -32,7 +49,14 @@ interface OpenShiftFormProps {
   onInitialReadingChange: (nozzleId: string, value: number) => void;
   isOpening: boolean;
   onSubmit: (values: OpenShiftFormValues) => void | Promise<unknown>;
+  /** The station clock: the shift's planned window and its rates' times (#619). */
+  clock?: { timeZone: string; dayStartsAt: string };
+  /** Whether "Change price" is offered beside each rate (Owner, Manager). */
+  canChangePrice?: boolean;
 }
+
+/** Without a station clock: the default zone and Day Start. */
+const DEFAULT_CLOCK = businessDateSettings(undefined);
 
 const sectionHeading: React.CSSProperties = {
   fontSize: '12px',
@@ -240,6 +264,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onInitialReadingChange,
   isOpening,
   onSubmit,
+  clock = DEFAULT_CLOCK,
+  canChangePrice = false,
 }) => {
   /**
    * Terminals on no dispenser. They keep their own panel rather than vanishing:
@@ -321,6 +347,32 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   const customDateHintId = useId();
   const futureDateId = useId();
   const futureDate = formBusinessDate > currentBusinessDate;
+
+  // Rates for this shift (#619): each fuel's current price, which the shift
+  // keeps for its whole life. A change scheduled inside the planned window
+  // does not reach it; say so above Open shift.
+  const fuels = useFuelPriceRows(stationId);
+  const writes = useWriteStates(mutationKeys.fuelPrice(), fuelPriceWriteKey, stationId);
+  const [changing, setChanging] = useState<{
+    row: FuelPriceRow;
+    attempt: FuelPriceAttempt | null;
+  } | null>(null);
+  const shiftTemplate = (templates as ShiftTemplateTimes[]).find((t) => t.id === formTemplateId);
+  const changesDuringShift = useMemo(
+    () =>
+      scheduledChangesDuringShift(
+        fuels.rows,
+        shiftTemplate && formBusinessDate
+          ? plannedShiftWindow(shiftTemplate, formBusinessDate, clock)
+          : null,
+        fuels.now,
+      ),
+    [fuels.rows, fuels.now, shiftTemplate, formBusinessDate, clock],
+  );
+  const changingDuringShift = useMemo(
+    () => new Set(changesDuringShift.map((c) => c.productId)),
+    [changesDuringShift],
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Main open-shift form */}
@@ -426,7 +478,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 {futureDate && (
                   <div
                     id={futureDateId}
-                    style={{ marginTop: '5px', color: 'var(--state-danger-fg)', fontSize: '11px' }}
+                    style={{ marginTop: '5px', color: 'var(--state-danger-fg)', fontSize: '12px' }}
                   >
                     Unavailable: future Business Dates cannot be used to open a Shift.
                   </div>
@@ -444,6 +496,20 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             </Field>
           </div>
         </Panel>
+
+        <ShiftRatesPanel
+          rows={fuels.rows}
+          query={[fuels.pricingQ, fuels.historyQ, fuels.productsQ]}
+          timeZone={clock.timeZone}
+          writes={writes}
+          changingDuringShift={changingDuringShift}
+          onChangePrice={
+            canChangePrice
+              ? (row) =>
+                  setChanging({ row, attempt: unconfirmedAttempt(writes.get(row.productId)) })
+              : undefined
+          }
+        />
 
         {!lastShift && nozzles && nozzles.length > 0 && (
           <Panel title="Opening nozzle readings">
@@ -548,6 +614,16 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           </Panel>
         )}
 
+        {changesDuringShift.length > 0 && (
+          <Banner severity="warning">
+            <span className="flex flex-col gap-1" data-testid="shift-rate-warning">
+              {changesDuringShift.map((c) => (
+                <span key={c.productId}>{rateChangeWarning(c, clock.timeZone)}</span>
+              ))}
+            </span>
+          </Banner>
+        )}
+
         <div
           style={{
             display: 'flex',
@@ -591,6 +667,17 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           </Button>
         </div>
       </Form>
+      {changing && (
+        // Outside the form: the drawer's own submit must never open the shift.
+        <ChangePriceDrawer
+          stationId={stationId}
+          timeZone={clock.timeZone}
+          fuels={fuels.rows}
+          initial={changing.row}
+          attempt={changing.attempt}
+          onClose={() => setChanging(null)}
+        />
+      )}
     </div>
   );
 };

@@ -262,7 +262,7 @@ describe('Pricing page', () => {
     fireEvent.change(await screen.findByPlaceholderText('e.g. 96.43'), {
       target: { value: '105' },
     });
-    expect(screen.getByText('Station time (Asia/Dubai)')).toBeTruthy();
+    expect(screen.getByText(/^Station time \(Asia\/Dubai\)\./)).toBeTruthy();
     fireEvent.change(document.querySelector('input[type="datetime-local"]')!, {
       target: { value: '2026-10-16T06:00' },
     });

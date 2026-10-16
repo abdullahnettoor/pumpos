@@ -133,9 +133,11 @@ class ReadingRepo implements NozzleReadingRepository {
 }
 
 class PriceRepo implements FuelPriceRepository {
+  asOf: string | null = null;
   constructor(readonly rows: FuelPrice[]) {}
   async save() {}
-  async listByStation() {
+  async listByStation(_org: string, _station: string, asOf: string) {
+    this.asOf = asOf;
     return this.rows;
   }
 }
@@ -166,14 +168,19 @@ function nozzle(id: string, productId: string, currentReading: string): Nozzle {
     updatedAt: '',
   };
 }
-function price(productId: string, p: string): FuelPrice {
+function price(
+  productId: string,
+  p: string,
+  effectiveFrom = '2026-03-01',
+  id = 'p-' + productId,
+): FuelPrice {
   return {
-    id: 'p-' + productId,
+    id,
     organizationId: 'org-1',
     stationId: 'st-1',
     productId,
     price: p,
-    effectiveFrom: '2026-03-01',
+    effectiveFrom,
     createdAt: '2026-03-01',
   };
 }
@@ -226,6 +233,47 @@ describe('OpenShift', () => {
     const types = store.events.map((e) => e.eventType);
     expect(types).toContain(BusinessEvents.BUSINESS_DAY_OPENED);
     expect(types).toContain(BusinessEvents.SHIFT_OPENED);
+  });
+
+  it('prices nozzles at the rate in effect now, never a scheduled one (#619)', async () => {
+    const nozzleReadings = new ReadingRepo({});
+    // The clock reads 2026-03-15T03:00Z. Petrol has a change scheduled for
+    // 05:00Z: stored, but not current until then. Even a repository that
+    // lists it must not price this shift at it.
+    const fuelPrices = new PriceRepo([
+      price('pet', '103', '2026-03-15T05:00:00.000Z', 'p-next'),
+      price('pet', '102.5', '2026-03-10T00:30:00.000Z', 'p-now'),
+      price('pet', '101', '2026-03-01T00:30:00.000Z', 'p-old'),
+    ]);
+    const open = (at: string) =>
+      new OpenShift({
+        shifts: new ShiftRepo(),
+        businessDays: new BdRepo(),
+        nozzles: new NozzleRepo([nozzle('n1', 'pet', '1000')]),
+        nozzleReadings,
+        fuelPrices,
+        dispensers: new InServiceDispenserRepo(['du-1']),
+        staff: new StaffDirectoryFake(),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }).execute(
+        {
+          stationId: 'st-1',
+          shiftTemplateId: 'tpl-1',
+          staffAssignments: [{ userId: 'u-1', duId: 'du-1', openingFloat: 0 }],
+        },
+        { ...makeContext(), clock: new FixedClock(new Date(at)) },
+      );
+
+    const before = await open('2026-03-15T03:00:00.000Z');
+    expect(before.success).toBe(true);
+    // The repository is asked for the prices in effect at the open.
+    expect(fuelPrices.asOf).toBe('2026-03-15T03:00:00.000Z');
+    expect(nozzleReadings.saved.at(-1)?.unitPrice).toBe('102.5');
+
+    // From its effective time on, the scheduled price is the current one.
+    const after = await open('2026-03-15T05:00:00.000Z');
+    expect(after.success).toBe(true);
+    expect(nozzleReadings.saved.at(-1)?.unitPrice).toBe('103');
   });
 
   it("issues each Drawer's Opening Float; opening cash is their sum (ADR 0005)", async () => {
