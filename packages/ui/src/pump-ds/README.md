@@ -191,8 +191,11 @@ strings and object maps it names. `${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-b
 and `cn(base, 'text-on-brand')` are both checked.
 
 **Small text (#602).** Nothing on screen is below 12px. `text-[11px]`,
-`text-[0.6rem]`, `text-2xs` (any variant) and a style `fontSize` under 12 all
-count. PDF documents are skipped: their typography is a print scale. Use
+`text-[0.6rem]`, `text-2xs` (any variant), a style `fontSize` under 12, and in
+CSS files a `font-size` or Tailwind `--text-*` token under 12px all count. Only
+react-pdf typography is skipped (a `StyleSheet.create` argument, or the `style`
+prop of an element imported from `@react-pdf/renderer`): it is a print scale in
+points. An HTML element in a PDF-importing file still counts. Use
 `text-[12px]` for captions, chips, counts and kbd hints.
 
 Plain CSS classes defined in `index.css` are allowed.

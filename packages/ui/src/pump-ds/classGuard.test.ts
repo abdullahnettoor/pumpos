@@ -16,8 +16,11 @@
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
  * - `small-text`     text below the 12px floor (#515, #602): `text-[11px]`,
- *                    `text-[0.6rem]`, `text-2xs`, or a style `fontSize` under
- *                    12. PDF documents are skipped (print scale, not screen).
+ *                    `text-[0.6rem]`, `text-2xs`, a style `fontSize` under 12,
+ *                    and in CSS a `font-size` or Tailwind `--text-*` token
+ *                    under 12px. Only react-pdf typography is skipped (a
+ *                    `StyleSheet.create` argument or the `style` prop of a
+ *                    react-pdf element: print points, not screen px).
  *
  * Class strings are `className` / `cn()` values, plus any other string whose
  * tokens are all class-shaped with at least one utility prefix (class maps).
@@ -60,6 +63,7 @@ import {
   cssDefinitions,
   findFillTextMismatches,
   scanCss,
+  scanCssSmallText,
   scanSource,
   sourceDefinitions,
   type Findings,
@@ -140,7 +144,9 @@ async function scanTree(): Promise<Map<string, Findings>> {
   for (const file of SOURCE_FILES) out.set(file, scanSource(read(file), file, ctx));
   for (const file of CSS_FILES) {
     const undef = scanCss(read(file), ctx.definedVars);
-    if (undef.length) out.set(file, { ...emptyFindings(), 'undefined-var': undef });
+    const small = scanCssSmallText(read(file));
+    if (undef.length || small.length)
+      out.set(file, { ...emptyFindings(), 'undefined-var': undef, 'small-text': small });
   }
   return out;
 }
@@ -357,11 +363,41 @@ describe('style check: small-text (#602)', () => {
     ).toEqual([]);
   });
 
-  it('flags fontSize under 12 in style objects; PDF documents are exempt', () => {
+  it('flags fontSize under 12 in style objects', () => {
     const style =
       "<i style={{ fontSize: 11 }} />; const s = { fontSize: '10px' }; const t = { fontSize: '12px', a: 9 };";
     expect(small(style)).toEqual(['fontSize: 11', 'fontSize: 10px']);
-    expect(small(`import { Text } from '@react-pdf/renderer';\n${style}`)).toEqual([]);
+  });
+
+  it('skips react-pdf typography only, not the whole PDF-importing file', () => {
+    const pdf = [
+      "import { Text, StyleSheet } from '@react-pdf/renderer';",
+      "import * as Pdf from '@react-pdf/renderer';",
+      'const s = StyleSheet.create({ label: { fontSize: 7 } });',
+      '<Text style={{ fontSize: 8.5 }}>a</Text>;',
+      '<Pdf.Text style={{ fontSize: 9 }}>b</Pdf.Text>;',
+      // Screen text in the same file still counts.
+      '<span style={{ fontSize: 11 }}>c</span>;',
+      "const loose = { fontSize: '10px' };",
+      "<i className='text-[11px]' />;",
+    ].join('\n');
+    expect(small(pdf).sort()).toEqual(['fontSize: 10px', 'fontSize: 11', 'text-[11px]']);
+  });
+
+  it('CSS: font-size declarations and Tailwind --text-* tokens under 12px', () => {
+    const css = [
+      '.a { font-size: 11px; }',
+      '.b { font-size: 0.65rem !important; }',
+      '.c { font-size: 12px; font-size: clamp(10px, 2vw, 14px); }',
+      '@theme { --text-2xs: 0.625rem; --text-2xs--line-height: 0.5rem; --text-xs: 12px; }',
+      ':root { --text-muted: #5e6a61; }',
+      '/* font-size: 9px */',
+    ].join('\n');
+    expect(scanCssSmallText(css)).toEqual([
+      'font-size: 11px',
+      'font-size: 0.65rem',
+      '--text-2xs: 0.625rem',
+    ]);
   });
 });
 
