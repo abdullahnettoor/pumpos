@@ -767,14 +767,9 @@
 .docs-index-card span { font-size: 14px; line-height: 1.5; color: var(--ds-muted); flex: 1; }
 .docs-index-card i { font-style: normal; font-weight: 700; font-size: 14px; color: var(--ds-primary); margin-top: 6px; }
 
-/* Open fact in a draft legal page. The words carry the meaning; colour only marks it. */
-.legal-tbd {
-  padding: 1px 7px;
-  border: 1px solid var(--ds-amber);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-amber-soft);
-  color: var(--ds-amber-ink);
-  font-size: .88em;
-  font-weight: 700;
-  white-space: nowrap;
+.legal-updated {
+  margin: 12px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--ds-text-small);
+  font-weight: 600;
 }
