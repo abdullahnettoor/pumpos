@@ -27,17 +27,16 @@ const PERSIST_PREFIXES = new Set([
   'funding-accounts',
   'pricing',
   'organization',
-  // Only the role-filtered Access Document is persisted — never grant rows,
-  // reasons, or platform actor data, which clients are not sent at all.
-  'access',
 ]);
-// Bump to invalidate all persisted client caches on next load. v7 drops
+// Bump to invalidate all persisted client caches on next load. v8 drops the
+// Access Document, which now carries effective Permissions and is never persisted
+// (ADR 0013). v7 drops
 // `organization` payloads persisted before #616 shaped it by Role, so a Staff
 // device no longer holds the plan and billing columns. v4 adds the
 // persisted Access Document (Phase E1); v3 dropped stale empty `stations`
 // lists cached while a user briefly resolved to a wrong/empty org (Phase A
 // duplicate-auth-user bug).
-const CACHE_BUSTER = 'v7';
+const CACHE_BUSTER = 'v8';
 
 /** localStorage key the persisted static/semi cache is written to. */
 export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';

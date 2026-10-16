@@ -41,7 +41,10 @@ export function principalFor(role: string | null | undefined): Principal {
   return principalOf(role);
 }
 
-export function publishEffective(role: string | null | undefined, permissions: string[] | undefined) {
+export function publishEffective(
+  role: string | null | undefined,
+  permissions: string[] | undefined,
+) {
   effective =
     role && permissions ? { role, permissions: new Set(permissions as PermissionId[]) } : null;
 }

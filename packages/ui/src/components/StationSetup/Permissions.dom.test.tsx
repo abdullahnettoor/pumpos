@@ -89,6 +89,21 @@ describe('Permissions drawer (#555)', () => {
     expect(put.mock.calls[0][2]?.idempotencyKey).toBeTruthy();
   });
 
+  it('patches the cache with the server view it saved, before revalidating', async () => {
+    const saved = view({ changes: { granted: [extraId], revoked: [] } });
+    vi.spyOn(CloudUserAssignmentService.prototype, 'setUserPermissions').mockResolvedValue(saved);
+    vi.spyOn(CloudUserAssignmentService.prototype, 'getUserPermissions').mockResolvedValue(saved);
+    const { queryClient } = renderDrawer(view()) as unknown as {
+      queryClient: ReturnType<typeof createTestQueryClient>;
+    };
+    expand(extraId);
+    fireEvent.click(sw(extraId));
+    fireEvent.click(screen.getByRole('button', { name: 'Save permissions' }));
+    await waitFor(() =>
+      expect(queryClient.getQueryData(queryKeys.userPermissions('u1'))).toEqual(saved),
+    );
+  });
+
   it('shows "Also turns off" on a prerequisite and drops dependants when switched', () => {
     renderDrawer(view());
     expand(prereqId);
@@ -206,6 +221,44 @@ describe('Role change confirmation (#555)', () => {
     expect(update).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Change role' }));
     await waitFor(() => expect(update).toHaveBeenCalled());
+  });
+
+  it('does not save a role change when the preview cannot be read', async () => {
+    vi.spyOn(CloudUserAssignmentService.prototype, 'previewUserRoleChange').mockRejectedValue(
+      new Error('offline'),
+    );
+    const update = vi.spyOn(CloudUserAssignmentService.prototype, 'updateUser').mockResolvedValue({
+      id: 'u1',
+    } as any);
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.users(), []);
+    queryClient.setQueryData(queryKeys.stations(), []);
+    renderWithProviders(
+      <MemberDrawer
+        isOpen
+        editingUser={{
+          id: 'u1',
+          fullName: 'Asha',
+          role: 'Staff',
+          hasLogin: true,
+          status: 'ACTIVE',
+          phone: '',
+          email: 'a@b.co',
+          stationIds: [],
+        }}
+        onClose={() => {}}
+      />,
+      { queryClient },
+    );
+    fireEvent.change(
+      screen
+        .getAllByRole('combobox')
+        .find((e) => (e as HTMLSelectElement).querySelector('option[value="Manager"]'))!,
+      { target: { value: 'Manager' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText(/offline/);
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

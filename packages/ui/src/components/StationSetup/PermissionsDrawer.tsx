@@ -87,18 +87,27 @@ const PermissionsEditor: React.FC<{ view: UserPermissionsView; onDone: () => voi
 
   const submit = async () => {
     setBusy(true);
+    let saved: UserPermissionsView;
     try {
-      await save(draft, (idempotencyKey) =>
+      saved = await save(draft, (idempotencyKey) =>
         userService.setUserPermissions(view.userId, draft, { idempotencyKey }),
       );
-    } catch (err: any) {
-      toast.error(withNextStep(err.message || "Couldn't save permissions", 'Save again.'));
+    } catch (err) {
+      toast.error(
+        withNextStep(
+          err instanceof Error && err.message ? err.message : "Couldn't save permissions",
+          'Save again.',
+        ),
+      );
       setBusy(false);
       return;
     }
     setBusy(false);
     // The edited member may be the signed-in Owner: always refresh access.
+    // The server's answer is the member's new view: patch the cache with it, then revalidate.
+    qc.setQueryData(queryKeys.userPermissions(view.userId), saved);
     void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(view.userId) });
+    void qc.invalidateQueries({ queryKey: ['user-role-change-preview', view.userId] });
     void qc.invalidateQueries({ queryKey: queryKeys.users() });
     void qc.invalidateQueries({ queryKey: queryKeys.access() });
     toast.success('Permissions saved.');

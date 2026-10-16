@@ -705,8 +705,16 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     );
   }
 
-  async updateUser(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<User> {
-    return request<User>(
+  async updateUser(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<
+    User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+  > {
+    return request<
+      User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+    >(
       `/setup/users/${id}`,
       { method: 'PUT', body: JSON.stringify(data) },
       { idempotencyKey: opts?.idempotencyKey },
