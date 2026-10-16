@@ -94,6 +94,7 @@ export const EditMemberSheet: React.FC<{
         stations={stations}
         initial={initial}
         hasLogin={member.hasLogin}
+        member={{ id: member.id, role: member.role }}
         roleLocked={roleLocked}
         save={save}
         isSaving={isSaving}

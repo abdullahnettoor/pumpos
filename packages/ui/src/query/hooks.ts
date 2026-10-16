@@ -453,6 +453,8 @@ export function fetchRoleChangePreview(
     queryFn: () => userSvc.previewUserRoleChange(userId, role),
     staleTime: TIER.operational.staleTime,
     gcTime: TIER.operational.gcTime,
+    // The caller blocks the save on a failure and offers a retry itself.
+    retry: false,
   });
 }
 
