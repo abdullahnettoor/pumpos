@@ -29,7 +29,7 @@ import { DEMO_BOOKING_URL } from '../../config';
   {DEMO_BOOKING_URL ? (
     <p>The demo form sends your name, phone number, station name and town, and any tank, nozzle and attendant counts you enter, to our booking calendar so you can choose a time. The calendar provider is <span class="legal-tbd">To be confirmed</span>.</p>
   ) : (
-    <p>The demo form does not send anything to our servers. It opens your own email app with a message to hello@pumpos.app containing your name, phone number, station name and town, and any tank, nozzle and attendant counts you entered. Nothing reaches us until you press send.</p>
+    <p>The demo form does not send anything to our servers. It opens WhatsApp with a message to us containing your name, phone number, station name and town, and any tank, nozzle and attendant counts you entered. Nothing reaches us until you press send. You can also write to us at hello@pumpos.app instead.</p>
   )}
   <p>If you message us on WhatsApp, WhatsApp (Meta) carries the conversation and your number. The WhatsApp links on this site go through our own <code>/whatsapp</code> page, which only forwards you to WhatsApp.</p>
   <p>We use what you send to reply, arrange the demo and talk about the pilot. Please don't send customer lists, bank statements or other records. The demo uses sample data.</p>
@@ -52,6 +52,7 @@ import { DEMO_BOOKING_URL } from '../../config';
   </ul>
   <p>The database is in Supabase's Mumbai region, in India. We have not confirmed where the other providers process data. We make no claim about certifications or compliance standards.</p>
 
+  {/* Hidden until retention periods are decided.
   <h2>How long we keep data</h2>
   <ul>
     <li>Demo stations: deleted seven days after the demo expires, as described above.</li>
@@ -59,16 +60,17 @@ import { DEMO_BOOKING_URL } from '../../config';
     <li>Pilot station records: kept while the organisation uses PumpOS. Export and deletion when a station leaves: <span class="legal-tbd">To be confirmed</span>.</li>
   </ul>
   <p>Ask us before your station joins and we will confirm these points in writing.</p>
+  */}
 
   <h2>Your requests</h2>
-  <p>To see, correct or delete information you have sent us, email <a href="mailto:hello@pumpos.app?subject=Privacy%20request">hello@pumpos.app</a>. If you work at a pilot station, ask your station's owner first: they control the records your station keeps in PumpOS. Response time for requests: <span class="legal-tbd">To be confirmed</span>.</p>
+  <p>To see, correct or delete information you have sent us, email <a href="mailto:hello@pumpos.app?subject=Privacy%20request">hello@pumpos.app</a>. If you work at a pilot station, ask your station's owner first: they control the records your station keeps in PumpOS. We reply within 14 days.</p>
+  <p>Grievance contact: Abdullah Nettoor, <a href="mailto:hello@pumpos.app?subject=Privacy%20grievance">hello@pumpos.app</a>.</p>
 
   <h2>Still open before publication</h2>
   <ul>
     <li>Legal operator details, after registration.</li>
-    <li>Retention for demo requests and pilot station records, and the export and deletion process when a station leaves.</li>
-    <li>Response time for privacy requests.</li>
-    <li>Grievance contact, and review against applicable Indian privacy law.</li>
+    <li>Retention periods, and the export and deletion process when a station leaves.</li>
+    <li>Review against applicable Indian privacy law.</li>
     <li>Effective date and revision date.</li>
   </ul>
 </ProseLayout>
