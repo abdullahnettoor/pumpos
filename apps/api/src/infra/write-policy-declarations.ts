@@ -215,6 +215,17 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
   },
 
   // ---------------------------------------------------------------------
+  // Organization profile (#626)
+  // ---------------------------------------------------------------------
+  {
+    operation: 'PUT /organization',
+    restricted: 'BLOCKED',
+    rationale:
+      'Editing the Organization profile is a setup change, like PUT /setup/stations/:id; ' +
+      'ADR 0004 blocks setup under Restricted Access (owner decision on #626).',
+  },
+
+  // ---------------------------------------------------------------------
   // Setup and administration (#168)
   // ---------------------------------------------------------------------
   {

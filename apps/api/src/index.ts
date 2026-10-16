@@ -15,17 +15,15 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, isOwner, organizationUpdateSchema } from '@pump/shared';
+import { Role, isOwner } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
   UuidGenerator,
   createEvent,
   type DomainEvent,
-  shapeOrganizationPayload,
 } from '@pump/core';
 import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
-import { getOrganizationHandler } from './routes/organization.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
@@ -462,44 +460,6 @@ api.get('/session', (c) => {
       user,
     },
   });
-});
-
-// GET /api/organization - current organization profile, shaped by Role (#616)
-api.get('/organization', getOrganizationHandler);
-
-// PUT /api/organization - update org name + profile metadata (Owner only)
-api.put('/organization', async (c) => {
-  const user = c.var.user;
-  if (!isOwner(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = organizationUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: parsed.error.issues[0]?.message || 'Invalid input',
-        },
-      },
-      400,
-    );
-  }
-  const db = c.var.db;
-  const [updated] = await db
-    .update(schema.organizations)
-    .set({ name: parsed.data.name, metadata: parsed.data.metadata ?? {}, updatedAt: new Date() })
-    .where(eq(schema.organizations.id, user.organizationId))
-    .returning();
-  return c.json({ success: true, data: shapeOrganizationPayload(updated, user.role) });
 });
 
 // GET /api/activity - human-readable business-event activity groups (Owner only).
@@ -1379,6 +1339,19 @@ platform.route('/organizations', platformAccessRouter);
 platform.route('/demos', platformDemosRouter);
 
 app.route('/platform', platform);
+
+/**
+ * The fully mounted route table, read by `write-policy-coverage.test.ts` so a
+ * mutation registered anywhere on the app — inline or in a router — has to
+ * declare its Restricted Access answer (#626).
+ */
+export function registeredRoutes(): ReadonlyArray<{
+  method: string;
+  path: string;
+  handler: unknown;
+}> {
+  return app.routes;
+}
 
 // Daily demo expiry maintenance; the handler also runs for scheduled test events.
 export async function runDemoExpiry(db: DbClient, env: Bindings, now = new Date()) {
