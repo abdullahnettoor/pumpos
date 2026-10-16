@@ -369,6 +369,10 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
       ),
     [fuels.rows, fuels.now, shiftTemplate, formBusinessDate, clock],
   );
+  const changingDuringShift = useMemo(
+    () => new Set(changesDuringShift.map((c) => c.productId)),
+    [changesDuringShift],
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Main open-shift form */}
@@ -498,6 +502,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           query={[fuels.pricingQ, fuels.historyQ, fuels.productsQ]}
           timeZone={clock.timeZone}
           writes={writes}
+          changingDuringShift={changingDuringShift}
           onChangePrice={
             canChangePrice
               ? (row) =>

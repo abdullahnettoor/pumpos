@@ -69,6 +69,15 @@ describe('scheduledChangesDuringShift (#619)', () => {
     expect(scheduledChangesDuringShift([row()], null, now)).toEqual([]);
   });
 
+  it('warns on an early open for a change before the planned start (#628 review)', () => {
+    // Opened at 5:30 am for the 6:00 am Morning shift; Petrol changes at 5:45 am.
+    // Opening now locks today's rate, so the shift runs through the change.
+    const early = row({ scheduled: { price: 103, effectiveFrom: iso('2026-10-16', '05:45') } });
+    expect(scheduledChangesDuringShift([early], window, ist('2026-10-16', '05:30'))).toEqual([
+      expect.objectContaining({ productId: 'ms', at: iso('2026-10-16', '05:45') }),
+    ]);
+  });
+
   it('does not warn once the planned end has passed', () => {
     expect(scheduledChangesDuringShift([row()], window, ist('2026-10-16', '14:30'))).toEqual([]);
   });

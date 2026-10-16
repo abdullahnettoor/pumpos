@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
 import {
   buildFuelPriceRows,
+  missedScheduledPrice,
   nextScheduledPriceAt,
   type CurrentFuelPrice,
   type FuelPriceHistoryEntry,
@@ -20,7 +21,9 @@ const GRACE_MS = 1_000;
  * `now` is the clock the rows are read at: when the page mounted, moved on
  * when the data changes (a patch or a refetch) and when a scheduled price
  * takes effect. At that moment the current prices are refreshed in the
- * background, so a scheduled price takes over on time without a reload.
+ * background, so a scheduled price takes over on time without a reload. On
+ * mount, current prices fetched before a scheduled price that has since taken
+ * effect are refreshed too (#628 review).
  */
 export function useFuelPriceRows(stationId: string) {
   const qc = useQueryClient();
@@ -44,6 +47,13 @@ export function useFuelPriceRows(stationId: string) {
     }, delay);
     return () => window.clearTimeout(timer);
   }, [next, now, qc, stationId]);
+
+  // Fetched before a scheduled price that has since taken effect (a remount
+  // after its time, with a still-fresh cache): refresh now, in the background.
+  const missed = missedScheduledPrice(history, pricingQ.dataUpdatedAt, now);
+  useEffect(() => {
+    if (missed) void qc.invalidateQueries({ queryKey: queryKeys.pricing(stationId) });
+  }, [missed, qc, stationId]);
 
   const rows = useMemo(() => {
     const products = (productsQ.data as { id: string; unit?: string | null }[] | undefined) ?? [];

@@ -160,9 +160,48 @@ describe('Rates for this shift (#619)', () => {
     expect(screen.getAllByRole('button', { name: /Start Shift Operations/ })).toHaveLength(1);
   });
 
-  it('does not warn for a change after the planned end', () => {
+  it('does not warn for a change after the planned end; the rate names it quietly', () => {
     setup({}, ist(TODAY, '15:00'));
     expect(screen.queryByTestId('shift-rate-warning')).toBeNull();
+    const next = within(rate('Petrol')).getByTestId('shift-rate-next');
+    expect(next.textContent).toBe(' · Next: ₹103.00/L from Fri 16 Oct, 3:00\u00a0pm');
+    expect(next.className).not.toMatch(/warning|danger/);
+  });
+
+  it('a change during the shift is the warning only, not repeated on its rate', async () => {
+    setup();
+    await screen.findByTestId('shift-rate-warning');
+    expect(within(rate('Petrol')).queryByTestId('shift-rate-next')).toBeNull();
+  });
+
+  it('warns on an early open for a change before the planned start (#628 review)', async () => {
+    // 5:30 am, opening the 6:00 am Morning shift early; Petrol changes at 5:45 am.
+    vi.setSystemTime(new Date(ist(TODAY, '05:30')));
+    setup({}, ist(TODAY, '05:45'));
+    expect((await screen.findByTestId('shift-rate-warning')).textContent).toMatch(
+      'Petrol changes to ₹103.00 at 5:45\u00a0am, during this shift.',
+    );
+  });
+
+  it('says the server fixes the rates, and offers Retry when they fail to load', async () => {
+    const restore = muteExpectedConsoleErrors([/pricing down/]);
+    try {
+      const queryClient = createTestQueryClient();
+      queryClient.setQueryData(queryKeys.businessDayStatus(STATION, TODAY), {
+        requestedState: 'OPEN',
+        openBusinessDays: [{ id: 'bd', businessDate: TODAY }],
+      });
+      queryClient.setQueryData(queryKeys.products(), []);
+      queryClient.setQueryData(queryKeys.pricingHistory(STATION), []);
+      getPricing.mockRejectedValueOnce(new Error('pricing down') as never);
+      renderWithProviders(<OpenShiftForm {...props()} />, { queryClient });
+      expect(
+        screen.getByText("Rates are fixed by the server's time when you open the shift."),
+      ).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Retry' })).toBeTruthy();
+    } finally {
+      restore();
+    }
   });
 
   it('follows the template: the night window runs past a change at 5:00 am', async () => {

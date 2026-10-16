@@ -164,6 +164,25 @@ export function stationDateTimeInput(now: Date, timeZone: string): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+/**
+ * Whether cached current prices were fetched before a scheduled price that has
+ * since taken effect (#628 review): the cache still holds the old price, and
+ * no timer is left to refresh it (a page that unmounted before the time and
+ * remounted after it). `fetchedAt` is the current prices' fetch time (epoch
+ * ms); 0 means nothing is cached.
+ */
+export function missedScheduledPrice(
+  history: readonly FuelPriceHistoryEntry[],
+  fetchedAt: number,
+  now: number,
+): boolean {
+  if (fetchedAt <= 0) return false;
+  return history.some((h) => {
+    const t = at(h.effectiveFrom);
+    return t > fetchedAt && t <= now;
+  });
+}
+
 /** A price's effective time on the station clock, short: `Fri 16 Oct, 10:00 am` (#619). */
 export function formatPriceTime(iso: string, timeZone: string): string {
   const date = stationDateTimeInput(new Date(iso), timeZone).slice(0, 10);

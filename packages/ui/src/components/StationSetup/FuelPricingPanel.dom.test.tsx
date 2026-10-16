@@ -322,6 +322,37 @@ describe('scheduled prices (#619)', () => {
     );
   });
 
+  it('a remount after the scheduled time refreshes prices fetched before it (#628 review)', async () => {
+    // Fetched at 05:59 (station), unmounted; 103 takes effect at 06:00; back at 06:01.
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2026-10-16T00:29:00Z') });
+    const queryClient = setup();
+    queryClient.setQueryData(queryKeys.pricingHistory('st-1'), (h: unknown[] = []) => [
+      scheduled,
+      ...h,
+    ]);
+    await waitFor(() => expect(within(card('Petrol')).getByText('now')).toBeTruthy());
+    cleanup();
+
+    vi.setSystemTime(new Date('2026-10-16T00:31:00Z'));
+    getPricing.mockClear();
+    getPricing.mockResolvedValueOnce([
+      {
+        productId: 'ms',
+        productName: 'Petrol',
+        productCode: 'MS',
+        price: '103',
+        effectiveFrom: '2026-10-16T00:30:00Z',
+      },
+      { productId: 'cng', productName: 'CNG', price: 0, effectiveFrom: null },
+    ] as never);
+    renderWithProviders(<FuelPricingPanel selectedStation={station} />, { queryClient });
+
+    await waitFor(() => expect(card('Petrol').textContent).toMatch('₹103.00/L'));
+    expect(getPricing).toHaveBeenCalledTimes(1);
+    expect(within(card('Petrol')).queryByTestId('fuel-price-scheduled')).toBeNull();
+    expect(card('Petrol').textContent).toMatch('₹102.50 → ₹103.00 (+₹0.50)');
+  });
+
   it('a change applied for later reads "Fuel rate scheduled." and stays off the current price', async () => {
     setupScheduled();
     recordPricing.mockResolvedValue({

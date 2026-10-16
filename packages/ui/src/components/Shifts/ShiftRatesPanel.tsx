@@ -22,7 +22,8 @@ import {
  * shift, which is its current price when the shift opens, and since when.
  * "Change price ›" opens the Pricing drawer over the form; the rates update
  * in place when the server answers. A change in flight or refused reads here
- * as it does on the Pricing card (#606).
+ * as it does on the Pricing card (#606). A change scheduled after the shift
+ * reads as quiet secondary text; one during it is the form's warning.
  */
 export const ShiftRatesPanel: React.FC<{
   rows: readonly FuelPriceRow[];
@@ -31,7 +32,12 @@ export const ShiftRatesPanel: React.FC<{
   writes: ReadonlyMap<string, WriteEntry<FuelPriceWriteVars>>;
   /** Absent when the user may not change a price: the rates are read-only. */
   onChangePrice?: (row: FuelPriceRow) => void;
-}> = ({ rows, query, timeZone, writes, onChangePrice }) => (
+  /**
+   * Fuels whose scheduled change falls during this shift: the warning above
+   * Open shift names those. Any other scheduled change reads here, quietly.
+   */
+  changingDuringShift?: ReadonlySet<string>;
+}> = ({ rows, query, timeZone, writes, onChangePrice, changingDuringShift }) => (
   <Panel title="Rates for this shift">
     <DataSection
       title="fuel rates"
@@ -74,10 +80,19 @@ export const ShiftRatesPanel: React.FC<{
                           'Use Change price to try again.',
                         )}
                   </span>
-                ) : row.effectiveFrom ? (
-                  `since ${formatPriceTime(row.effectiveFrom, timeZone)}`
                 ) : (
-                  'No price recorded yet'
+                  <>
+                    {row.effectiveFrom
+                      ? `since ${formatPriceTime(row.effectiveFrom, timeZone)}`
+                      : 'No price recorded yet'}
+                    {row.scheduled && !changingDuringShift?.has(row.productId) && (
+                      // A change after this shift: information, not a warning.
+                      <span data-testid="shift-rate-next" className="text-ink-faint">
+                        {' · '}Next: {formatMoney(row.scheduled.price)}/{row.unit} from{' '}
+                        {formatPriceTime(row.scheduled.effectiveFrom, timeZone)}
+                      </span>
+                    )}
+                  </>
                 )}
               </span>
               {onChangePrice && (
@@ -97,5 +112,9 @@ export const ShiftRatesPanel: React.FC<{
         })}
       </ul>
     </DataSection>
+    {/* Said even while the rates fail to load: the server decides, not this screen. */}
+    <p className="mt-3 text-[12px] text-ink-muted">
+      Rates are fixed by the server&apos;s time when you open the shift.
+    </p>
   </Panel>
 );

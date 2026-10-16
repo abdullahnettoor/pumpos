@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFuelPriceRows,
   formatPriceTime,
+  missedScheduledPrice,
   nextScheduledPriceAt,
   priceChange,
   sortNewestFirst,
@@ -104,6 +105,23 @@ describe('scheduled prices (#619)', () => {
     // 103 took effect a moment ago; the cached current price is still 102.50.
     const [row] = buildFuelPriceRows(current, history, () => 'L', new Date('2026-10-16T00:31:00Z'));
     expect(row!.lastChange).toEqual({ from: 101, to: 102.5, difference: 1.5 });
+  });
+
+  it('knows cached prices missed a scheduled change that has since taken effect (#628 review)', () => {
+    const t = (iso: string) => new Date(iso).getTime();
+    // Fetched 15 Oct 23:59, 103 took effect 16 Oct 00:30, read at 00:31: missed.
+    expect(
+      missedScheduledPrice(history, t('2026-10-15T23:59:00Z'), t('2026-10-16T00:31:00Z')),
+    ).toBe(true);
+    // Fetched after it took effect, or read before it does: nothing missed.
+    expect(
+      missedScheduledPrice(history, t('2026-10-16T00:30:01Z'), t('2026-10-16T00:31:00Z')),
+    ).toBe(false);
+    expect(
+      missedScheduledPrice(history, t('2026-10-15T23:59:00Z'), t('2026-10-16T00:29:00Z')),
+    ).toBe(false);
+    // Nothing cached yet.
+    expect(missedScheduledPrice(history, 0, t('2026-10-16T00:31:00Z'))).toBe(false);
   });
 
   it('knows when the next scheduled price of any fuel takes effect', () => {
