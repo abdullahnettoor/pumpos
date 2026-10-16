@@ -10,7 +10,6 @@ import {
   DataSection,
   EmptyState,
   Form,
-  Icon,
   InteractiveTable,
   SearchInput,
   SectionHeader,
@@ -172,30 +171,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const [hsnCode, setHsnCode] = useState('');
   const [vatRate, setVatRate] = useState(0);
   const [priceInclusive, setPriceInclusive] = useState(true);
-
-  const handleQuickAdd = async (type: 'MS' | 'HSD') => {
-    try {
-      const body = {
-        name: type === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)',
-        code: type,
-        productType: 'FUEL',
-        stockTracked: true,
-        taxCategory: 'FUEL_VAT',
-        unit: 'L',
-        taxConfig: { vat_rate: 0, hsn_code: '2710' },
-        isActive: true,
-      };
-      await sendKeyed(officeSubmitKeys.session('setup:products:new'), body, (idempotencyKey) =>
-        productService.createProduct(body, { idempotencyKey }),
-      );
-      runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
-      toast.success('Standard product added.');
-    } catch (err: any) {
-      toast.error(
-        withNextStep(err.message || "Couldn't add the standard product", 'Try adding it again.'),
-      );
-    }
-  };
 
   const handleNameChange = (val: string) => {
     setName(val);
@@ -364,8 +339,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   useCreateRequest(createRequest, openCreate, onCreateHandled);
   useCreateRequest(importRequest, () => setIsImportOpen(true), onImportHandled);
 
-  const hasMS = products.some((p) => p.code === 'MS');
-  const hasHSD = products.some((p) => p.code === 'HSD');
   const visible = products.filter((p) => {
     if (filterType && p.productType !== filterType) return false;
     if (filterText) {
@@ -379,44 +352,6 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
   return (
     <section className="flex flex-col gap-2">
-      {productsQ.data && (!hasMS || !hasHSD) && (
-        <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border-soft bg-surface-alt px-4 py-3">
-          <div>
-            <span className="text-[13px] font-semibold text-ink-strong">
-              Quick Add Standard Indian Fuels
-            </span>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
-              Add pre-configured products for standard Indian petroleum fuels with correct units and
-              tax-exempt defaults.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {!hasMS && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                leftIcon={<Icon name="plus" size="xs" />}
-                onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
-              >
-                Add Petrol (MS)
-              </Button>
-            )}
-            {!hasHSD && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                leftIcon={<Icon name="plus" size="xs" />}
-                onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
-              >
-                Add Diesel (HSD)
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
       <SectionHeader
         title="Products catalogue"
         subtitle={

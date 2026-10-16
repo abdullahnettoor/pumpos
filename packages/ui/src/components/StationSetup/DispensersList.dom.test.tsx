@@ -237,14 +237,18 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     invalidateOperational.mockReset().mockResolvedValue(undefined);
   });
 
-  const openDual = () => {
+  const seedFuels = () => {
     fixtures.products = [fuel('p-ms', 'MS'), fuel('p-hsd', 'HSD')];
     fixtures.tanks = [
       { id: 't-ms', stationId: 'st-1', name: 'Tank MS', productId: 'p-ms' },
       { id: 't-hsd', stationId: 'st-1', name: 'Tank HSD', productId: 'p-hsd' },
     ];
-    render();
-    fireEvent.click(screen.getByRole('button', { name: /dual dispenser/i }));
+  };
+  /** Opens the add drawer (the Add ▾ menu) and auto-fills a dual layout in it (#635). */
+  const openDual = () => {
+    seedFuels();
+    renderWithProviders(<DispensersList stationId="st-1" createRequest={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
   };
   const save = () => fireEvent.click(screen.getByRole('button', { name: 'Create Dispenser' }));
 
@@ -301,6 +305,21 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     const keyOf = (n: number) =>
       (createDispenserWithNozzles.mock.calls[n][1] as { idempotencyKey: string }).idempotencyKey;
     expect(keyOf(1)).toBe(keyOf(0));
+  });
+
+  it('auto-fill sits in the drawer, not on the page (#635)', () => {
+    seedFuels();
+    render();
+    expect(screen.queryByRole('button', { name: /dual \(2 nozzles\)/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /quad \(4 nozzles\)/i })).toBeNull();
+  });
+
+  it('auto-fill only fills the form: nothing is sent until Create', () => {
+    openDual();
+    fireEvent.click(screen.getByRole('button', { name: /quad \(4 nozzles\)/i }));
+
+    expect(screen.getAllByText(/^Nozzle #/)).toHaveLength(4);
+    expect(createDispenserWithNozzles).not.toHaveBeenCalled();
   });
 
   it('sends nothing while a nozzle has no tank', async () => {

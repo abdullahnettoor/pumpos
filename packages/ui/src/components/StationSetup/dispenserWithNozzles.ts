@@ -43,3 +43,32 @@ export function dispenserWithNozzlesBody(input: {
     },
   };
 }
+
+/**
+ * A standard dispenser layout for the add drawer's auto-fill: `perFuel`
+ * nozzles on Petrol (MS), then on Diesel (HSD), each fed from the first tank
+ * of that fuel. A fuel with no product or no tank is skipped. Names continue
+ * from the station's existing nozzles (`N{existing + 1}`, …).
+ */
+export function standardNozzleLayout(input: {
+  perFuel: 1 | 2;
+  products: readonly { id: string; code: string }[];
+  tanks: readonly { id: string; productId: string }[];
+  existingNozzles: number;
+}): NozzleInput[] {
+  const rows: NozzleInput[] = [];
+  for (const code of ['MS', 'HSD'] as const) {
+    const product = input.products.find((p) => p.code === code);
+    const tank = product && input.tanks.find((t) => t.productId === product.id);
+    if (!product || !tank) continue;
+    for (let i = 0; i < input.perFuel; i++) {
+      rows.push({
+        name: `N${input.existingNozzles + rows.length + 1}`,
+        productId: product.id,
+        tankId: tank.id,
+        currentReading: 1000,
+      });
+    }
+  }
+  return rows;
+}

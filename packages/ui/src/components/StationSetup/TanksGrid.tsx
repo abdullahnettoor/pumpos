@@ -65,11 +65,6 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
   const name = nameRaw || `Tank ${tanks.length + 1}`;
   const [capacity, setCapacity] = useState(20000);
 
-  // Quick add states
-  const [quickPetrolCapacity, setQuickPetrolCapacity] = useState('15000');
-  const [quickDieselCapacity, setQuickDieselCapacity] = useState('20000');
-  const [quickSubmitting, setQuickSubmitting] = useState(false);
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productId) {
@@ -100,73 +95,6 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
         ),
       );
     }
-  };
-
-  const handleQuickAdd = async (fuelCode: 'MS' | 'HSD', capStr: string) => {
-    const fuel = fuelProducts.find((p) => p.code === fuelCode);
-    if (!fuel) {
-      toast.error(
-        withNextStep(
-          `There is no active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'}`,
-          'Add it in the product catalog, then add the tank.',
-        ),
-      );
-      return;
-    }
-    const cap = parseInt(capStr);
-    if (!cap || cap <= 0) {
-      toast.error(withNextStep('The capacity is not valid', 'Enter the tank capacity in litres.'));
-      return;
-    }
-
-    try {
-      setQuickSubmitting(true);
-      const sameProductTanksCount = tanks.filter((t) => t.productId === fuel.id).length;
-      const tankName =
-        fuelCode === 'MS'
-          ? `Petrol Tank ${sameProductTanksCount + 1}`
-          : `Diesel Tank ${sameProductTanksCount + 1}`;
-
-      const body = { stationId, name: tankName, productId: fuel.id, capacity: cap };
-      // A session per action: the shared store hands an unsettled key back
-      // only for the same body, so Petrol never lends its key to Diesel.
-      await sendKeyed(
-        officeSubmitKeys.session(`setup:tanks:${stationId}`),
-        body,
-        (idempotencyKey) => tankService.createTank(body, { idempotencyKey }),
-      );
-
-      runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
-      toast.success('Tank created.');
-    } catch (err: any) {
-      toast.error(
-        withNextStep(
-          err.message || "Couldn't create the tank",
-          'Check the details and save again.',
-        ),
-      );
-    } finally {
-      setQuickSubmitting(false);
-    }
-  };
-
-  const prefillSuggestion = (fuelCode: 'MS' | 'HSD') => {
-    const fuel = fuelProducts.find((p) => p.code === fuelCode);
-    if (!fuel) {
-      toast.error(
-        withNextStep(
-          `There is no active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'}`,
-          'Add it in step 2, then add the tank.',
-        ),
-      );
-      return;
-    }
-
-    setName(fuelCode === 'MS' ? 'Petrol Tank 1' : 'Diesel Tank 1');
-    setCapacity(fuelCode === 'MS' ? 15000 : 20000);
-    setProductId(fuel.id);
-    sessionRef.current = officeSubmitKeys.session(`setup:tanks:${stationId}`);
-    setIsFormOpen(true);
   };
 
   const resetForm = () => {
@@ -213,43 +141,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
   // The Station page's Add ▾ menu opens this drawer.
   useCreateRequest(createRequest, openCreate, onCreateHandled);
 
-  const quickAdd = (code: 'MS' | 'HSD', label: string, value: string, set: (v: string) => void) =>
-    fuelProducts.some((p) => p.code === code) && (
-      <div className="flex items-center gap-2">
-        <span className="text-[12px] font-semibold text-ink-strong">{label}</span>
-        <NumberInput
-          className="w-[110px]"
-          placeholder="Capacity"
-          aria-label={`${label} capacity`}
-          value={value}
-          onChange={(e) => set(e.target.value)}
-          disabled={quickSubmitting}
-        />
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={quickSubmitting}
-          onClick={() => runTask(handleQuickAdd(code, value), 'Could not add the tank.')}
-        >
-          Quick Add
-        </Button>
-      </div>
-    );
-
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader
         title="Storage tanks"
         subtitle={tanksQ.data ? countOf(tanks.length, 'tank', 'tanks') : undefined}
       />
-
-      {fuelProducts.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-card border border-border-soft bg-surface-alt px-4 py-3">
-          <span className="text-[12px] text-ink-muted">Quick add a tank by capacity:</span>
-          {quickAdd('MS', 'Petrol Tank (MS)', quickPetrolCapacity, setQuickPetrolCapacity)}
-          {quickAdd('HSD', 'Diesel Tank (HSD)', quickDieselCapacity, setQuickDieselCapacity)}
-        </div>
-      )}
 
       <DataSection
         title="storage tanks"
