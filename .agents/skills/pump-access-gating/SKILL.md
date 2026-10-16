@@ -58,9 +58,10 @@ Organization is behind on payment.
 
 `apps/api/src/infra/write-policy-coverage.test.ts` reads the whole mounted
 app's route table, inline routes in `index.ts` included. It fails on a mutation
-with no declaration, on a declaration whose route lost its guard (or carries
-another route's), and on a mutation outside `/api` other than platform
-administration. The per-family tests in `apps/api/src/routes/*-write-policy.test.ts`
+with no declaration, on a declared route whose first handler is not its own
+guard, on a mutation outside `/api` other than platform administration, and on
+any `ALL` registration (`.all()`, `.mount()`, extra `.use()`) missing from its
+reviewed list. The per-family tests in `apps/api/src/routes/*-write-policy.test.ts`
 prove each family's answers. There is deliberately no default: "allow" lets an
 unpaid Organization keep growing, "block" strands a station mid-shift.
 

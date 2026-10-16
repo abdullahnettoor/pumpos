@@ -108,11 +108,14 @@ describe('GET /organization (#616)', () => {
 });
 
 /**
- * `PUT /organization` (#626): Owner only, and declared FINISH_OPEN_WORK — the
- * profile is the Organization's legal and billing identity, so Restricted
- * Access lets the Owner correct it; Suspension stops it like every write.
- * Driven through the mounted router, so the guard is proven attached.
+ * `PUT /organization` (#626): Owner only, and declared BLOCKED — editing the
+ * profile is a setup change, which Restricted Access stops (ADR 0004), like
+ * `PUT /setup/stations/:id`. Suspension stops it like every write. Driven
+ * through the mounted router, so the guard is proven attached.
  */
+const DAY_MS = 86_400_000;
+const inOneDay = () => new Date(Date.now() + DAY_MS).toISOString();
+const oneDayAgo = () => new Date(Date.now() - DAY_MS).toISOString();
 const UPDATE = {
   name: 'Sri Lakshmi Fuels',
   metadata: { legalName: 'Sri Lakshmi Fuels Pvt Ltd', gstin: '32AAACS1234A1Z5' },
@@ -161,16 +164,31 @@ async function put(
 }
 
 describe('PUT /organization (#626)', () => {
-  it.each([
+  it.each<[string, Subscription]>([
     ['active', ACTIVE],
     ['in a Payment Grace Period', IN_GRACE],
-    ['under Restricted Access', RESTRICTED],
-    ['past a lapsed grace period', LAPSED_GRACE],
+    ['trialing, inside the trial', { status: 'TRIALING', accessUntil: inOneDay() }],
+    ['trialing, with no trial end recorded', { status: 'TRIALING' }],
+    ['canceled, inside access_until', { status: 'CANCELED', accessUntil: inOneDay() }],
   ])('lets the Owner edit the profile while %s', async (_label, subscription) => {
     const result = await put(subscription);
     expect(result.status).toBe(200);
     expect(result.success).toBe(true);
     expect(result.updates).toBe(1);
+  });
+
+  it.each<[string, Subscription]>([
+    ['under Restricted Access', RESTRICTED],
+    ['past a lapsed Payment Grace Period', LAPSED_GRACE],
+    ['after the trial ended', { status: 'TRIALING', accessUntil: oneDayAgo() }],
+    ['canceled, past access_until', { status: 'CANCELED', accessUntil: oneDayAgo() }],
+    ['canceled, with no access_until', { status: 'CANCELED' }],
+  ])('refuses the Owner %s, before writing anything', async (_label, subscription) => {
+    const result = await put(subscription);
+    expect(result.status).toBe(403);
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('SUBSCRIPTION_RESTRICTED');
+    expect(result.updates).toBe(0);
   });
 
   it('refuses a suspended Organization before writing anything', async () => {
@@ -190,10 +208,12 @@ describe('PUT /organization (#626)', () => {
     },
   );
 
-  it('keeps the Role check under Restricted Access', async () => {
+  it('refuses a non-Owner under Restricted Access too', async () => {
+    // The guard answers first, so the refusal names the access mode.
     const result = await put(RESTRICTED, { role: 'Manager' });
     expect(result.status).toBe(403);
-    expect(result.code).toBe('FORBIDDEN');
+    expect(result.code).toBe('SUBSCRIPTION_RESTRICTED');
+    expect(result.updates).toBe(0);
   });
 
   it('answers VALIDATION_ERROR for an invalid profile', async () => {

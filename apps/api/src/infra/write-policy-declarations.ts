@@ -219,11 +219,10 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
   // ---------------------------------------------------------------------
   {
     operation: 'PUT /organization',
-    restricted: 'FINISH_OPEN_WORK',
+    restricted: 'BLOCKED',
     rationale:
-      "The profile is the Organization's legal and billing identity (name, legal name, GSTIN, PAN, " +
-      'address, contact). Correcting it adds no Station, user or capability, and it is the identity ' +
-      'the Owner needs right to settle the invoice that lifts Restricted Access. Suspension still blocks it.',
+      'Editing the Organization profile is a setup change, like PUT /setup/stations/:id; ' +
+      'ADR 0004 blocks setup under Restricted Access (owner decision on #626).',
   },
 
   // ---------------------------------------------------------------------
