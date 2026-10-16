@@ -46,6 +46,7 @@ import {
   DensityReadingWithContext,
   DensityTodaySummary,
   RecordDensityReadingPayload,
+  OrganizationPayload,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -1846,8 +1847,9 @@ export class CloudDesktopDownloadsService {
 }
 
 export class CloudOrganizationService {
-  async getOrganization(): Promise<any> {
-    return request<any>('/organization');
+  /** Role-shaped: plan and billing fields reach Owners and Managers only (#616). */
+  async getOrganization(): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>('/organization');
   }
 
   async updateOrganization(
@@ -1856,8 +1858,8 @@ export class CloudOrganizationService {
       metadata?: Record<string, unknown> | null;
     },
     opts?: { idempotencyKey?: string },
-  ): Promise<any> {
-    return request<any>(
+  ): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>(
       '/organization',
       { method: 'PUT', body: JSON.stringify(payload) },
       { idempotencyKey: opts?.idempotencyKey },

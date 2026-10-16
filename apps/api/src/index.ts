@@ -22,8 +22,10 @@ import {
   UuidGenerator,
   createEvent,
   type DomainEvent,
+  shapeOrganizationPayload,
 } from '@pump/core';
 import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
+import { getOrganizationHandler } from './routes/organization.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
@@ -462,21 +464,8 @@ api.get('/session', (c) => {
   });
 });
 
-// GET /api/organization - current organization profile
-api.get('/organization', async (c) => {
-  const user = c.var.user;
-  const db = c.var.db;
-  const org = await db.query.organizations.findFirst({
-    where: eq(schema.organizations.id, user.organizationId),
-  });
-  if (!org) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } },
-      404,
-    );
-  }
-  return c.json({ success: true, data: org });
-});
+// GET /api/organization - current organization profile, shaped by Role (#616)
+api.get('/organization', getOrganizationHandler);
 
 // PUT /api/organization - update org name + profile metadata (Owner only)
 api.put('/organization', async (c) => {
@@ -510,7 +499,7 @@ api.put('/organization', async (c) => {
     .set({ name: parsed.data.name, metadata: parsed.data.metadata ?? {}, updatedAt: new Date() })
     .where(eq(schema.organizations.id, user.organizationId))
     .returning();
-  return c.json({ success: true, data: updated });
+  return c.json({ success: true, data: shapeOrganizationPayload(updated, user.role) });
 });
 
 // GET /api/activity - human-readable business-event activity groups (Owner only).
