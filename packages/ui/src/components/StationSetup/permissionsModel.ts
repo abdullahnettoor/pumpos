@@ -4,6 +4,7 @@ import {
   PERMISSIONS,
   type PermissionId,
   type Role,
+  withPrerequisites,
 } from '@pump/shared';
 
 /** The Permission changes as the editor holds them: differences from Role defaults. */
@@ -56,7 +57,8 @@ export function togglePermission(
   on: boolean,
 ): Set<string> {
   const next = new Set(desired);
-  if (on) next.add(id);
+  // Turning a switch on restores what it needs, even a prerequisite revoked earlier.
+  if (on) for (const p of withPrerequisites(id)) next.add(p);
   else next.delete(id);
   const normalised = normalizePermissionChanges(
     role as Role,

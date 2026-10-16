@@ -17,7 +17,11 @@ export function redactSensitiveDssr<T>(row: T, principal: Principal): T {
     const pnl = next.pnl as Loose;
     next.pnl = { ...(pnl.revenue !== undefined ? { revenue: pnl.revenue } : {}) };
   }
-  if (!can(principal, 'purchases.viewCosts') && next.purchases && typeof next.purchases === 'object') {
+  if (
+    !can(principal, 'purchases.viewCosts') &&
+    next.purchases &&
+    typeof next.purchases === 'object'
+  ) {
     const { total: _total, ...rest } = next.purchases as Loose;
     next.purchases = rest;
   }

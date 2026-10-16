@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePermissionChanges, samePermissionChanges } from './changes.js';
+import { normalizePermissionChanges, samePermissionChanges, withPrerequisites } from './changes.js';
 import { PERMISSIONS, defaultPermissionsFor, type PermissionId } from './catalogue.js';
 
 const ids = Object.keys(PERMISSIONS) as PermissionId[];
@@ -59,5 +59,14 @@ describe('normalizePermissionChanges', () => {
       samePermissionChanges({ granted: ['a', 'b'] }, { granted: ['b', 'a'], revoked: [] }),
     ).toBe(true);
     expect(samePermissionChanges(null, { granted: ['a'] })).toBe(false);
+  });
+});
+
+describe('withPrerequisites', () => {
+  it('lists the id and its prerequisites, and nothing for an unknown id', () => {
+    expect(withPrerequisites('expenses.void')).toEqual(
+      expect.arrayContaining(['expenses.void', 'pages.expenses']),
+    );
+    expect(withPrerequisites('nope')).toEqual([]);
   });
 });

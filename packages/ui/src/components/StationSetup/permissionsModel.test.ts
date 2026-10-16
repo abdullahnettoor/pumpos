@@ -50,4 +50,17 @@ describe('permissionsModel', () => {
     const first = defaults[defaults.length - 1];
     expect(resolveDraft(role, { granted: [], revoked: [first] }).has(first)).toBe(false);
   });
+
+  it('re-enabling a dependant restores the prerequisite that was switched off', () => {
+    const mgr: string[] = [...defaultPermissionsFor('Manager')];
+    const dependant = 'expenses.void';
+    const prereq = 'pages.expenses';
+    expect(mgr).toContain(dependant);
+    const off = togglePermission('Manager', new Set(mgr), mgr, prereq, false);
+    expect(off.has(dependant)).toBe(false);
+    const on = togglePermission('Manager', off, mgr, dependant, true);
+    expect(on.has(dependant)).toBe(true);
+    expect(on.has(prereq)).toBe(true);
+    expect(diffFromDefaults('Manager', on, mgr)).toEqual({ granted: [], revoked: [] });
+  });
 });

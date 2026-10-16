@@ -36,6 +36,18 @@ function isPermissionId(id: string): id is PermissionId {
 
 const sorted = (ids: Iterable<PermissionId>): PermissionId[] => [...ids].sort();
 
+/** An id and, transitively, every prerequisite it needs. Unknown ids give an empty list. */
+export function withPrerequisites(id: string): PermissionId[] {
+  const out = new Set<PermissionId>();
+  const visit = (p: string) => {
+    if (!isPermissionId(p) || out.has(p)) return;
+    out.add(p);
+    for (const pre of PERMISSIONS[p].prerequisites) visit(pre);
+  };
+  visit(id);
+  return [...out];
+}
+
 /** True when both lists name the same ids. */
 export function samePermissionChanges(
   a: PermissionChanges | null | undefined,
