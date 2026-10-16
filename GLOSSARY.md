@@ -147,8 +147,22 @@ _Avoid_: operator, pumper
 
 **Role**:
 Authorization level for app users: Owner, Manager, Accountant, Staff (console),
-Attendant (mobile-only, DU-scoped). `guards.ts` is the source of truth.
+Attendant (mobile-only, DU-scoped). Each Role carries a set of Default
+Permissions. `guards.ts` is the source of truth.
 _Avoid_: user type, permission group
+
+**Permission**:
+One thing a user may do or see, such as void an expense, change a credit limit
+or view profit and loss. A user's Permissions are their Role's Default
+Permissions plus any changes the Owner made for that user. A Permission is
+about the user; whether the Organization may use a capability at all is its
+Entitlement.
+_Avoid_: entitlement, capability, access right
+
+**Default Permissions**:
+The Permissions a Role grants to every user who holds it, before any
+per-user change.
+_Avoid_: role template, base permissions
 
 **Product Capability**:
 A coarse, customer-visible area of PumpOS that can be granted independently,
