@@ -261,3 +261,162 @@ describe('Rates for this shift (#619)', () => {
     }
   });
 });
+
+describe('a fuel with no rate in effect (#630)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: NOW });
+  });
+  afterEach(() => {
+    cleanup();
+    recordPricing.mockReset();
+    vi.useRealTimers();
+  });
+
+  // Shift status lists the nozzles of pumps in service: Petrol and Diesel.
+  const nozzles = [
+    { id: 'n1', name: 'N1', productId: 'ms', productName: 'Petrol', productCode: 'MS' },
+    { id: 'n2', name: 'N2', productId: 'hsd', productName: 'Diesel', productCode: 'HSD' },
+  ];
+
+  /** Diesel has no price in effect: never priced, or (`scheduledAt`) only for later. */
+  function setupNoRate(over: Record<string, unknown> = {}, scheduledAt?: string) {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.businessDayStatus(STATION, TODAY), {
+      requestedState: 'OPEN',
+      openBusinessDays: [{ id: 'bd', businessDate: TODAY }],
+    });
+    queryClient.setQueryData(queryKeys.products(), [
+      { id: 'ms', name: 'Petrol', productType: 'FUEL', unit: 'L' },
+      { id: 'hsd', name: 'Diesel', productType: 'FUEL', unit: 'L' },
+      { id: 'cng', name: 'CNG', productType: 'FUEL', unit: 'kg' },
+    ]);
+    queryClient.setQueryData(queryKeys.pricing(STATION), [
+      {
+        productId: 'ms',
+        productName: 'Petrol',
+        productCode: 'MS',
+        price: 102.5,
+        effectiveFrom: ist('2026-10-12', '06:00'),
+      },
+      // The API's convention for a fuel with no price in effect.
+      {
+        productId: 'hsd',
+        productName: 'Diesel',
+        productCode: 'HSD',
+        price: 0,
+        effectiveFrom: null,
+      },
+      // No pump in service sells CNG: unpriced, but it does not block.
+      { productId: 'cng', productName: 'CNG', productCode: 'CNG', price: 0, effectiveFrom: null },
+    ]);
+    queryClient.setQueryData(
+      queryKeys.pricingHistory(STATION),
+      scheduledAt
+        ? [
+            {
+              id: 'h9',
+              productId: 'hsd',
+              productName: 'Diesel',
+              price: '90.5',
+              effectiveFrom: scheduledAt,
+              createdAt: ist('2026-10-15', '20:00'),
+            },
+          ]
+        : [],
+    );
+    const p = props({ nozzles, ...over });
+    renderWithProviders(<OpenShiftForm {...p} />, { queryClient });
+    return { queryClient, props: p };
+  }
+
+  const start = () =>
+    screen.getByRole('button', { name: /Start Shift Operations/ }) as HTMLButtonElement;
+
+  it('marks the fuel, offers Change price, and disables Open shift with the reason', () => {
+    setupNoRate();
+    expect(within(rate('Diesel')).getByText('No rate in effect')).toBeTruthy();
+    expect(within(rate('Diesel')).getByTestId('shift-rate-missing').textContent).toBe(
+      'Set a rate before opening',
+    );
+    expect(
+      within(rate('Diesel')).getByRole('button', { name: 'Change price of Diesel' }),
+    ).toBeTruthy();
+    expect(start().disabled).toBe(true);
+    expect(screen.getByTestId('open-shift-rate-block').textContent).toBe(
+      'Diesel has no rate in effect. Set a rate before opening.',
+    );
+    // A fuel no running pump sells stays as it was.
+    expect(within(rate('CNG')).queryByText('No rate in effect')).toBeNull();
+    expect(rate('CNG').textContent).toMatch('Not set');
+    expect(within(rate('Petrol')).queryByText('No rate in effect')).toBeNull();
+  });
+
+  it('tells a user who may not change prices whom to ask', () => {
+    setupNoRate({ canChangePrice: false });
+    expect(within(rate('Diesel')).getByText('No rate in effect')).toBeTruthy();
+    expect(within(rate('Diesel')).getByTestId('shift-rate-missing').textContent).toBe(
+      'Ask your Owner or Manager to set a rate',
+    );
+    expect(within(rates()).queryByRole('button')).toBeNull();
+    expect(start().disabled).toBe(true);
+  });
+
+  it('counts a fuel priced only for later', () => {
+    setupNoRate({}, ist(TODAY, '15:00'));
+    expect(within(rate('Diesel')).getByText('No rate in effect')).toBeTruthy();
+    expect(within(rate('Diesel')).getByTestId('shift-rate-next').textContent).toBe(
+      ' · Next: ₹90.50/L from Fri 16 Oct, 3:00\u00a0pm',
+    );
+    expect(start().disabled).toBe(true);
+  });
+
+  it('enables Open shift once the rate is set', async () => {
+    let answer!: (v: unknown) => void;
+    recordPricing.mockReturnValue(new Promise((r) => (answer = r)));
+    setupNoRate();
+    fireEvent.click(within(rate('Diesel')).getByRole('button', { name: 'Change price of Diesel' }));
+    fireEvent.change(screen.getByPlaceholderText('e.g. 96.43'), { target: { value: '90.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply new rate' }));
+    answer({
+      id: 'h9',
+      stationId: STATION,
+      productId: 'hsd',
+      price: '90.5',
+      effectiveFrom: ist(TODAY, '06:30'),
+      createdAt: NOW.toISOString(),
+    });
+    await waitFor(() => expect(rate('Diesel').textContent).toMatch('₹90.50/L'));
+    expect(within(rate('Diesel')).queryByText('No rate in effect')).toBeNull();
+    expect(screen.queryByTestId('open-shift-rate-block')).toBeNull();
+    expect(start().disabled).toBe(false);
+  });
+
+  it("shows the server's refusal beside Open shift, until the rates are read again", () => {
+    // Every rate this screen read is in effect; the server, at the open, said otherwise.
+    const refusal = 'Diesel has no rate in effect. Set a rate before opening.';
+    setup({ nozzles, openRefusal: { message: refusal, at: NOW.getTime() + 60_000 } });
+    const alert = screen.getByTestId('open-shift-rate-block');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.textContent).toBe(refusal);
+  });
+
+  it('drops the refusal once fresher rates are read', () => {
+    setup({
+      nozzles,
+      openRefusal: { message: 'Diesel has no rate in effect.', at: NOW.getTime() - 60_000 },
+    });
+    expect(screen.queryByTestId('open-shift-rate-block')).toBeNull();
+    expect(start().disabled).toBe(false);
+  });
+
+  it('blocks nothing while the rates have not loaded', () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.businessDayStatus(STATION, TODAY), {
+      requestedState: 'OPEN',
+      openBusinessDays: [{ id: 'bd', businessDate: TODAY }],
+    });
+    renderWithProviders(<OpenShiftForm {...props({ nozzles })} />, { queryClient });
+    expect(screen.queryByTestId('open-shift-rate-block')).toBeNull();
+    expect(start().disabled).toBe(false);
+  });
+});

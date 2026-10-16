@@ -41,6 +41,7 @@ export * from './utils/decantation-flags.js';
 export * from './utils/density-form.js';
 export * from './utils/handover-status.js';
 export * from './utils/fuel-price-order.js';
+export * from './utils/shift-open-rates.js';
 export * from './utils/status-vocabulary.js';
 export * from './utils/shift-timeline.js';
 export * from './utils/reachable-stations.js';

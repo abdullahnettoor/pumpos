@@ -64,8 +64,11 @@ export type DecantationStatusState =
  */
 export type WriteStatusState = 'saving';
 
-/** A fuel price recorded with an effective time still ahead: not yet current (#619). */
-export type PriceStatusState = 'price-scheduled';
+/**
+ * A fuel price recorded with an effective time still ahead: not yet current
+ * (#619). A fuel with no price in effect at all blocks a shift open (#630).
+ */
+export type PriceStatusState = 'price-scheduled' | 'price-no-rate';
 
 export type PumpState =
   | VarianceStatusState
@@ -114,6 +117,8 @@ const VOCABULARY: Record<PumpState, StatusPresentation> = {
 
   // Informational: a price waiting for its time is not a problem.
   'price-scheduled': { label: 'Scheduled', tone: 'info' },
+  // Danger: a shift cannot open until it is set (#630).
+  'price-no-rate': { label: 'No rate in effect', tone: 'danger' },
 
   'handover-pending': { label: 'Pending', tone: 'neutral' },
   'handover-due': { label: 'Handover due', tone: 'warning' },

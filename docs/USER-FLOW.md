@@ -138,9 +138,12 @@ form:
    float (₹)** handed to that attendant's pouch (0 is fine); **Attach POS** if
    a terminal travels with that DU. The shift's opening cash is the sum of the
    floats.
-3. Verify **Opening nozzle readings** — they default from the previous close;
+3. Check **Rates for this shift**: each fuel sells at its current price for
+   the whole shift. A fuel marked **No rate in effect** blocks the open until
+   an Owner or Manager sets one with **Change price**.
+4. Verify **Opening nozzle readings** — they default from the previous close;
    correct only if the pump display disagrees.
-4. **Start Shift Operations**.
+5. **Start Shift Operations**.
 
 Done when: the active-shift workspace appears and the status bar shows the
 open shift.

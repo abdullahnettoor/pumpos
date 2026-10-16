@@ -23,7 +23,9 @@ import {
  * "Change price ›" opens the Pricing drawer over the form; the rates update
  * in place when the server answers. A change in flight or refused reads here
  * as it does on the Pricing card (#606). A change scheduled after the shift
- * reads as quiet secondary text; one during it is the form's warning.
+ * reads as quiet secondary text; one during it is the form's warning. A fuel
+ * on a pump in service with no rate in effect reads "No rate in effect": the
+ * shift cannot open until it has one (#630).
  */
 export const ShiftRatesPanel: React.FC<{
   rows: readonly FuelPriceRow[];
@@ -37,7 +39,12 @@ export const ShiftRatesPanel: React.FC<{
    * Open shift names those. Any other scheduled change reads here, quietly.
    */
   changingDuringShift?: ReadonlySet<string>;
-}> = ({ rows, query, timeZone, writes, onChangePrice, changingDuringShift }) => (
+  /**
+   * Fuels sold on a pump in service with no rate in effect (#630): the shift
+   * cannot open until each has one. Read as a problem, with who can fix it.
+   */
+  withoutRate?: ReadonlySet<string>;
+}> = ({ rows, query, timeZone, writes, onChangePrice, changingDuringShift, withoutRate }) => (
   <Panel title="Rates for this shift">
     <DataSection
       title="fuel rates"
@@ -50,6 +57,7 @@ export const ShiftRatesPanel: React.FC<{
       <ul aria-label="Rates for this shift" className="flex flex-col divide-y divide-border-soft">
         {rows.map((row) => {
           const write = writes.get(row.productId);
+          const noRate = withoutRate?.has(row.productId) ?? false;
           return (
             <li
               key={row.productId}
@@ -62,6 +70,8 @@ export const ShiftRatesPanel: React.FC<{
               <span className="w-[120px] shrink-0">
                 {write?.state === 'saving' ? (
                   <StatusChip status="saving" />
+                ) : noRate ? (
+                  <StatusChip status="price-no-rate" size="sm" />
                 ) : row.price == null ? (
                   <span className="text-[13px] text-ink-faint">Not set</span>
                 ) : (
@@ -82,9 +92,19 @@ export const ShiftRatesPanel: React.FC<{
                   </span>
                 ) : (
                   <>
-                    {row.effectiveFrom
-                      ? `since ${formatPriceTime(row.effectiveFrom, timeZone)}`
-                      : 'No price recorded yet'}
+                    {noRate ? (
+                      // Who can fix it: a rate is set on Change price, which
+                      // only an Owner or Manager is offered.
+                      <span data-testid="shift-rate-missing" className="text-danger-fg">
+                        {onChangePrice
+                          ? 'Set a rate before opening'
+                          : 'Ask your Owner or Manager to set a rate'}
+                      </span>
+                    ) : row.effectiveFrom ? (
+                      `since ${formatPriceTime(row.effectiveFrom, timeZone)}`
+                    ) : (
+                      'No price recorded yet'
+                    )}
                     {row.scheduled && !changingDuringShift?.has(row.productId) && (
                       // A change after this shift: information, not a warning.
                       <span data-testid="shift-rate-next" className="text-ink-faint">
