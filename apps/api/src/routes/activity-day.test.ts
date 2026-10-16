@@ -123,6 +123,19 @@ describe('role filtering', () => {
     expect(staff).toContain('SHIFT_OPENED');
     expect(staff).toContain('DECANTATION_RECORDED');
   });
+
+  it('drops purchase and supplier-payment events without View costs (ADR 0013)', async () => {
+    const { dashboardEventTypesForRole } = await import('../infra/activity-day.js');
+    const { defaultPermissionsFor } = await import('@pump/shared');
+    const noCosts = new Set(defaultPermissionsFor('Manager'));
+    noCosts.delete('purchases.viewCosts');
+    const types = dashboardEventTypesForRole({ role: 'Manager', permissions: noCosts })!;
+    for (const t of ['PURCHASE_CREATED', 'SUPPLIER_PAID', 'PAYMENT_MADE']) {
+      expect(types).not.toContain(t);
+      expect(dashboardEventTypesForRole('Manager')).toContain(t);
+    }
+    expect(types).toContain('EXPENSE_RECORDED');
+  });
 });
 
 describe('entryDate placement (#512)', () => {
