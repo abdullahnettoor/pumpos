@@ -15,8 +15,12 @@ import { DEMO_BOOKING_URL } from '../../config';
     <p><strong>Draft.</strong> This page is waiting for founder approval and legal review. It is not a final privacy policy and has no effective date yet. Anything marked <span class="legal-tbd">To be confirmed</span> is still open.</p>
   </Card>
 
+  {/* Hidden until PumpOS is registered. Restore with the legal name, registered address and jurisdiction.
   <h2>Who runs PumpOS</h2>
-  <p>Legal operator, jurisdiction and registered address: <span class="legal-tbd">To be confirmed</span>. Until they are published here, write to <a href="mailto:hello@pumpos.app?subject=Privacy%20question">hello@pumpos.app</a> with any privacy question.</p>
+  <p>PumpOS is run by [legal name], [registered address]. [Jurisdiction].</p>
+  */}
+  <h2>Contact</h2>
+  <p>Write to <a href="mailto:hello@pumpos.app?subject=Privacy%20question">hello@pumpos.app</a> with any privacy question.</p>
 
   <h2>Visiting this website</h2>
   <p>This website is a set of static pages served by Cloudflare. Our pages set no cookies and load no analytics, advertising or tracking scripts. Fonts and images come from this site, and the site search runs in your browser. Cloudflare receives the technical details of each request, such as your IP address and browser, in order to deliver the page.</p>
@@ -36,24 +40,23 @@ import { DEMO_BOOKING_URL } from '../../config';
   <h2>Pilot stations</h2>
   <p>Once a station joins the pilot, its team enters operational records into PumpOS: shifts, nozzle readings, sales, stock, collections, expenses and credit customers. These records include personal details that the station chooses to add, such as staff names, phone numbers and email addresses, and the names and contact details of its credit customers.</p>
   <p>Each organisation's records are kept apart from every other organisation's. Inside an organisation, the role the owner gives each user decides what that user can see and do. PumpOS staff access a station's records only when needed to set up or support it.</p>
-  <p>Who decides what happens to the station's customer and staff details, and what that makes the station and PumpOS under Indian privacy law: <span class="legal-tbd">To be confirmed after legal review</span>.</p>
+  <p>The station decides how the staff and customer details it enters are used. PumpOS stores and processes them on the station's behalf, to run the service for that station.</p>
 
   <h2>Providers that handle data</h2>
   <ul>
-    <li><strong>Cloudflare.</strong> Hosts this website, the web console, the mobile web app and the PumpOS API, and connects the API to the database. The API keeps a sample of request logs with Cloudflare for troubleshooting.</li>
+    <li><strong>Cloudflare.</strong> Hosts this website, the web console, the mobile web app and the PumpOS API, and connects the API to the database.</li>
     <li><strong>Supabase.</strong> Hosts the database that holds station records, and runs sign-in, including the sign-in invitation emails.</li>
     <li><strong>GitHub.</strong> Serves the desktop app download and its update checks. Each check sends GitHub a normal web request from your computer.</li>
     <li><strong>WhatsApp (Meta).</strong> Only if you choose to message us there.</li>
-    <li>Email provider for hello@pumpos.app: <span class="legal-tbd">To be confirmed</span>.</li>
+    <li><strong>Google (Gmail).</strong> Receives email sent to hello@pumpos.app.</li>
   </ul>
-  <p>Country or region where the database and logs are stored: <span class="legal-tbd">To be confirmed</span>. We make no claim about data residency, certifications or compliance standards.</p>
+  <p>The database is in Supabase's Mumbai region, in India. We have not confirmed where the other providers process data. We make no claim about certifications or compliance standards.</p>
 
   <h2>How long we keep data</h2>
   <ul>
     <li>Demo stations: deleted seven days after the demo expires, as described above.</li>
     <li>Demo requests by email and WhatsApp messages: <span class="legal-tbd">To be confirmed</span>.</li>
     <li>Pilot station records: kept while the organisation uses PumpOS. Export and deletion when a station leaves: <span class="legal-tbd">To be confirmed</span>.</li>
-    <li>Request logs: <span class="legal-tbd">To be confirmed</span>.</li>
   </ul>
   <p>Ask us before your station joins and we will confirm these points in writing.</p>
 
@@ -62,11 +65,10 @@ import { DEMO_BOOKING_URL } from '../../config';
 
   <h2>Still open before publication</h2>
   <ul>
-    <li>Legal operator name, jurisdiction and registered address.</li>
-    <li>Confirmation that hello@pumpos.app is monitored, and its email provider.</li>
-    <li>Where the database and logs are stored.</li>
-    <li>Retention for demo requests, request logs and pilot station records, and the export and deletion process when a station leaves.</li>
-    <li>Review against applicable Indian privacy law, including the roles of the station and PumpOS, and whether a grievance contact is required.</li>
+    <li>Legal operator details, after registration.</li>
+    <li>Retention for demo requests and pilot station records, and the export and deletion process when a station leaves.</li>
+    <li>Response time for privacy requests.</li>
+    <li>Grievance contact, and review against applicable Indian privacy law.</li>
     <li>Effective date and revision date.</li>
   </ul>
 </ProseLayout>
