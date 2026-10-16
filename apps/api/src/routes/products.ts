@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canManageProduct } from '@pump/shared';
+import { can } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -29,7 +29,7 @@ productsRouter.get('/products', async (c) => {
 
 // POST /api/setup/products
 productsRouter.post('/products', writePolicyGuard('POST /setup/products'), async (c) => {
-  if (!canManageProduct(c.var.user.role)) {
+  if (!can(c.var.user, 'products.manage')) {
     return c.json(
       {
         success: false,
@@ -64,7 +64,7 @@ productsRouter.post(
   '/products/import',
   writePolicyGuard('POST /setup/products/import'),
   async (c) => {
-    if (!canManageProduct(c.var.user.role)) {
+    if (!can(c.var.user, 'products.manage')) {
       return c.json(
         {
           success: false,
@@ -117,7 +117,7 @@ productsRouter.post(
 
 // PUT /api/setup/products/:id
 productsRouter.put('/products/:id', writePolicyGuard('PUT /setup/products/:id'), async (c) => {
-  if (!canManageProduct(c.var.user.role)) {
+  if (!can(c.var.user, 'products.manage')) {
     return c.json(
       {
         success: false,
@@ -142,7 +142,7 @@ productsRouter.delete(
   '/products/:id',
   writePolicyGuard('DELETE /setup/products/:id'),
   async (c) => {
-    if (!canManageProduct(c.var.user.role)) {
+    if (!can(c.var.user, 'products.manage')) {
       return c.json(
         {
           success: false,

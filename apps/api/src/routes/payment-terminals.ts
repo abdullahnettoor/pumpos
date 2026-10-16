@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { normalizeProvider } from '@pump/shared';
+import { canWriteStationSetup, normalizeProvider } from '@pump/shared';
 import { RegisterPaymentTerminal, UpdatePaymentTerminal, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -19,10 +19,7 @@ type Variables = {
 export const paymentTerminalsRouter = new Hono<{ Variables: Variables }>();
 
 function canWrite(c: any, stationId?: string | null): boolean {
-  const user = c.var.user;
-  if (user.role === 'Owner') return true;
-  if (user.role === 'Manager') return !!stationId && user.assignedStationIds.includes(stationId);
-  return false;
+  return canWriteStationSetup(c.var.user, stationId);
 }
 
 // GET /api/setup/payment-terminals?stationId=...

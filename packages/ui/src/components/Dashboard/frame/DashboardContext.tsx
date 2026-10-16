@@ -3,6 +3,7 @@ import {
   canSeeDashboardCard,
   type DashboardCard,
   type OperatorRole,
+  principalOf,
   type Station,
 } from '@pump/shared';
 import type { NavIntent } from '../../AppShell.js';
@@ -42,5 +43,5 @@ export function useDashboard(): DashboardContextValue {
  */
 export function useCardEnabled(card: DashboardCard): boolean {
   const { role, station } = useDashboard();
-  return canSeeDashboardCard(card, role) && !!station.id;
+  return canSeeDashboardCard(card, principalOf(role)) && !!station.id;
 }

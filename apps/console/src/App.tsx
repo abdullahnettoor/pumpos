@@ -45,7 +45,7 @@ import {
   pageRoute,
 } from '@pump/ui';
 import type { NavIntent, NavItem } from '@pump/ui';
-import { canOnboardStation, Station } from '@pump/shared';
+import { can, principalOf, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
@@ -313,7 +313,7 @@ export const App: React.FC = () => {
           label: 'Organization',
           path: '/organization',
           icon: 'organization',
-          roles: ['Owner', 'Manager'],
+          permission: 'station.onboard',
         },
       ];
 
@@ -464,7 +464,12 @@ export const App: React.FC = () => {
     //    The screen carries its own sign-out because it does not always render
     //    inside the shell: /onboarding renders bare, and a Staff user who got
     //    there had no way out but a page reload (#132).
-    if (!stationsLoading && !isStationReady && userRole && !canOnboardStation(userRole)) {
+    if (
+      !stationsLoading &&
+      !isStationReady &&
+      userRole &&
+      !can(principalOf(userRole), 'station.onboard')
+    ) {
       return (
         <StationOnboardingLockout
           // Layout only — the sign-out is unconditional, so getting this

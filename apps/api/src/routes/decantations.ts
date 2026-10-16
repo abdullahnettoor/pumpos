@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { DbClient, DbExecutor } from '@pump/db';
-import { canRecordDecantation, isAuthorizedForStation } from '@pump/shared';
+import { can, isAuthorizedForStation } from '@pump/shared';
 import {
   DiscardDecantation,
   GetDecantation,
@@ -62,7 +62,7 @@ const forbidden = (c: Ctx, message: string) =>
 
 function guardStation(c: Ctx, stationId: string | null | undefined) {
   const user = c.var.user;
-  if (!canRecordDecantation(user.role))
+  if (!can(user, 'inventory.decantation'))
     return forbidden(c, 'Insufficient permissions for decantations');
   if (!stationId)
     return c.json(
@@ -129,7 +129,7 @@ decantationsRouter.post(
   async (c) => {
     const { id } = c.req.valid('param');
     const user = c.var.user;
-    if (!canRecordDecantation(user.role))
+    if (!can(user, 'inventory.decantation'))
       return forbidden(c, 'Insufficient permissions for decantations');
     const stationId = await stationOfDecantation(c, id);
     if (!stationId) return sendResult(c, err(notFoundError('Decantation', id)));
@@ -215,7 +215,7 @@ async function linkChange(
   ) => Promise<Result<unknown>>,
 ) {
   const user = c.var.user;
-  if (!canRecordDecantation(user.role))
+  if (!can(user, 'inventory.decantation'))
     return forbidden(c, 'Insufficient permissions for decantations');
   const stationId = await stationOfDecantation(c, decantationId);
   if (!stationId) return sendResult(c, err(notFoundError('Decantation', decantationId)));
@@ -292,7 +292,7 @@ decantationsRouter.get('/decantations/day-close-warnings', async (c) => {
 
 decantationsRouter.get('/decantations/:id', async (c) => {
   const user = c.var.user;
-  if (!canRecordDecantation(user.role))
+  if (!can(user, 'inventory.decantation'))
     return forbidden(c, 'Insufficient permissions for decantations');
   const result = await new GetDecantation({
     decantations: new DrizzleDecantationRepository(c.var.db),

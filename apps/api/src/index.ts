@@ -15,7 +15,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, isOwner } from '@pump/shared';
+import { can, type Role } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
@@ -556,7 +556,7 @@ async function auditActivityFeed(c: Context<{ Variables: Pick<Variables, 'db' | 
 // GET /api/activity/:groupId - one grouped command, including lazy siblings.
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
-  if (!isOwner(user.role)) {
+  if (!can(user, 'activity.view')) {
     return c.json(
       {
         success: false,

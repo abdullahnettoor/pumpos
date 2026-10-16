@@ -1,5 +1,5 @@
 import React from 'react';
-import { canViewReports } from '@pump/shared';
+import { can, principalOf } from '@pump/shared';
 import { ROUTES } from '../nav-intent/routes.js';
 import type { NavIntent } from '../nav-intent/store.js';
 import { Button } from '../pump-ds/index.js';
@@ -26,7 +26,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   userRole,
   onNavigate,
 }) => {
-  const reportsGst = canViewReports((userRole as any) ?? 'Staff');
+  const reportsGst = can(principalOf(userRole), 'reports.view');
   return (
     <CategoryRecordPage
       kind="income"

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { canChangeCreditLimit, creditLimitSchema } from '@pump/shared';
+import { can, creditLimitSchema } from '@pump/shared';
 import type { CustomerType, Role } from '@pump/shared';
 import {
   BusinessEvents,
@@ -125,14 +125,14 @@ const limitValue = (v: number | string | null | undefined): number =>
 
 /**
  * Changing a Customer's credit limit is a narrower right than editing the
- * Customer (Accountants may edit, not re-limit): `canChangeCreditLimit`. Enforced
+ * Customer (Accountants may edit, not re-limit): `customers.changeCreditLimit`. Enforced
  * here so every caller of the use-case is covered, not one route. A command with
  * no tenant-user actor (a system job) is not a user acting.
  */
 function mayChangeLimit(ctx: ExecutionContext): boolean {
   const actor = ctx.actorSnapshot;
   if (!actor || actor.kind !== 'tenant_user') return true;
-  return actor.role !== null && canChangeCreditLimit(actor.role as Role);
+  return actor.role !== null && can({ role: actor.role as Role }, 'customers.changeCreditLimit');
 }
 
 export interface CustomerDeps {

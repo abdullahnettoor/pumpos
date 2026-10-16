@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { can, principalOf } from '@pump/shared';
 import {
   DataSection,
   EmptyState,
@@ -195,7 +196,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
 
   if (activeSummary || viewShiftId) {
     const canReopen =
-      (userRole === 'Owner' || userRole === 'Manager') &&
+      can(principalOf(userRole), 'shifts.reopen') &&
       (activeSummary?.shiftStatus ?? activeSummary?.status) === 'CLOSED';
 
     return (

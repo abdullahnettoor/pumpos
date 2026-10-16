@@ -330,7 +330,7 @@ const App: React.FC = () => {
           label: 'Onboarding setup',
           path: '/onboarding',
           icon: 'onboarding',
-          roles: ['Owner', 'Manager'],
+          permission: 'station.onboard',
         },
       ];
 

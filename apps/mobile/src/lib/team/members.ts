@@ -2,7 +2,12 @@
  * Team members as the Team page shows them: who they are, where they work,
  * whether they are on the open shift. Pure; no React and no fetching.
  */
-import { statusPresentation, type PartyStatusState, type Role } from '@pump/shared';
+import {
+  hasOrganizationWideStationAccess,
+  statusPresentation,
+  type PartyStatusState,
+  type Role,
+} from '@pump/shared';
 import { badgeTone, type BadgeTone } from '../../ui/tones.js';
 
 /** One row of `GET /setup/users` (the server drops the auth id and sends `hasLogin`). */
@@ -76,7 +81,7 @@ export function stationSummary(
   m: Pick<TeamMember, 'role' | 'stationIds'>,
   stations: ReadonlyArray<{ id: string; name: string }>,
 ): string {
-  if (m.role === 'Owner') return 'All stations';
+  if (hasOrganizationWideStationAccess(m)) return 'All stations';
   const names = (m.stationIds ?? [])
     .map((id) => stations.find((s) => s.id === id)?.name)
     .filter((n): n is string => !!n);

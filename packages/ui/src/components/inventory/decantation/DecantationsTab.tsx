@@ -1,5 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { resolveDecantationSettings, statusPresentation, type DecantationView } from '@pump/shared';
+import {
+  can,
+  principalOf,
+  resolveDecantationSettings,
+  statusPresentation,
+  type DecantationView,
+} from '@pump/shared';
 import {
   Button,
   Chip,
@@ -348,7 +354,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
   return (
     <>
       <div className="flex flex-col gap-3">
-        {userRole === 'Owner' && flagged > 0 && (
+        {can(principalOf(userRole), 'inventory.reviewFlagged') && flagged > 0 && (
           <Banner severity="danger" title="Needs your review">
             {flagged} flagged Decantation{flagged === 1 ? '' : 's'}: density off, tanker short or
             chamber not emptied.

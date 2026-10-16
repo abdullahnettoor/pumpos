@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
   canRecordDensityFromDashboard,
   canSeeDashboardCard,
+  principalOf,
   resolveDecantationSettings,
 } from '@pump/shared';
 import { DashboardCard } from '../frame/DashboardCard.js';
@@ -36,7 +37,7 @@ export const FuelsCard: React.FC = () => {
   const densityQ = useDensityTodaySummary(station.id, businessDate, { enabled });
   const inventoryQ = useInventoryStatus(station.id, { enabled });
 
-  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', role);
+  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', principalOf(role));
   const decantsQ = useDecantations(station.id, 'PENDING_MEASUREMENT', {
     enabled: enabled && canPlanDecant,
   });
@@ -44,7 +45,7 @@ export const FuelsCard: React.FC = () => {
     () => resolveDecantationSettings(station.settings).densityToleranceKgM3,
     [station.settings],
   );
-  const canRecord = canRecordDensityFromDashboard(role);
+  const canRecord = canRecordDensityFromDashboard(principalOf(role));
   const tankLevels = useTankLevelSettings(station.id);
 
   const fuels = pricingQ.data ?? [];

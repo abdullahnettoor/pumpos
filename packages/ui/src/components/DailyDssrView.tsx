@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { DSR_FULL_NAME, DSR_LABEL, canExportReports, resolveBusinessDate } from '@pump/shared';
+import { can, DSR_FULL_NAME, DSR_LABEL, principalOf, resolveBusinessDate } from '@pump/shared';
 import type { Role } from '@pump/shared';
 import {
   Button,
@@ -65,7 +65,7 @@ interface DailyDssrViewProps {
   dailyDssr: any;
   onBack?: () => void;
   station?: any;
-  /** Generate DSR shows only to Roles the generate route allows (`canExportReports`). */
+  /** Generate DSR shows only to Roles the generate route allows (`reports.export`). */
   userRole?: Role;
 }
 
@@ -115,7 +115,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
   const day = useMemo(() => (row ? readDssrDay(row) : null), [row]);
   const status = row ? dssrDayStatus(row, date, currentBusinessDate) : null;
 
-  const canGenerate = !!stationId && !!userRole && canExportReports(userRole);
+  const canGenerate = !!stationId && !!userRole && can(principalOf(userRole), 'reports.export');
   const generate = useMutation({
     // The day is the mutation's own variable, never the screen's current date:
     // the operator may step to another day while Generate is still in flight.

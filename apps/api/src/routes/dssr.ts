@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports, canViewReports } from '@pump/shared';
+import { can, isAuthorizedForStation } from '@pump/shared';
 import {
   GenerateDssr,
   ListBusinessDays,
@@ -93,7 +93,7 @@ async function loadPersistedDssr(
 dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canExportReports(user.role)) {
+  if (!can(user, 'reports.export')) {
     return c.json(
       {
         success: false,
@@ -293,7 +293,7 @@ dssrRouter.get('/days', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canViewReports,
+    'reports.view',
     'Insufficient permissions to view Daily Station Sales Reports',
   );
   if (scope instanceof Response) return scope;

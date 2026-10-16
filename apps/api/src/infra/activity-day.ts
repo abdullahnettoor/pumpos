@@ -1,8 +1,10 @@
 import { BusinessEvents } from '@pump/core';
 import {
-  isOwner,
-  canSeeDashboardCard,
   businessDayWindow as sharedBusinessDayWindow,
+  can,
+  canSeeDashboardCard,
+  principalOf,
+  type Principal,
   type Role,
 } from '@pump/shared';
 
@@ -71,10 +73,11 @@ export const OFFICE_ACTIVITY_EVENTS: readonly string[] = [
 ];
 
 /** Event types a role may read through the dated feed; Owner gets everything. */
-export function dashboardEventTypesForRole(role: Role): readonly string[] | null {
-  if (!canSeeDashboardCard('timeline', role)) return [];
-  if (isOwner(role)) return null; // Owner
-  if (canSeeDashboardCard('timelineOfficeEvents', role)) {
+export function dashboardEventTypesForRole(who: Role | Principal): readonly string[] | null {
+  const principal = typeof who === 'string' ? principalOf(who) : who;
+  if (!canSeeDashboardCard('timeline', principal)) return [];
+  if (can(principal, 'activity.view')) return null; // sees every event
+  if (canSeeDashboardCard('timelineOfficeEvents', principal)) {
     return [...FORECOURT_ACTIVITY_EVENTS, ...STAFF_HIDDEN_ACTIVITY_EVENTS];
   }
   return FORECOURT_ACTIVITY_EVENTS;

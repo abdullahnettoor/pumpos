@@ -1,5 +1,5 @@
 import React from 'react';
-import { canViewInventoryNav, resolveDecantationSettings } from '@pump/shared';
+import { can, principalOf, resolveDecantationSettings } from '@pump/shared';
 import { useDensityTodaySummary } from '../../../query/hooks.js';
 import { FuelsCard } from '../cards/FuelsCard.js';
 import { SectionHeader } from '../../../pump-ds/section-header/index.js';
@@ -23,7 +23,7 @@ export const FuelsColumn: React.FC = () => {
         title="Fuels"
         subtitle="price · density · stock"
         action={
-          canViewInventoryNav(role)
+          can(principalOf(role), 'pages.inventory')
             ? { label: 'Inventory', onClick: () => onNavigate('/inventory') }
             : undefined
         }

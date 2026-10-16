@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canManageFinancialAccounts, canViewAttendantReport, canViewReports } from '@pump/shared';
 import {
   ATTENDANT_REPORT_CAPABILITY,
   GetAttendantHandoverReport,
@@ -53,7 +52,7 @@ reportsRouter.get(
     const user = c.var.user;
     const scope = requireStationRead(
       c,
-      canViewAttendantReport,
+      'reports.attendant',
       'Insufficient permissions to view the Attendant Handover Report',
     );
     if (scope instanceof Response) return scope;
@@ -77,13 +76,13 @@ reportsRouter.get(
  * Decantation Report (ticket #473, ADR 0007): tanker unloads, tank line dips,
  * per-invoice variance and chamber results (Short/Excess/not emptied/seals broken).
  * Exposes transit loss vs station loss across a Business Date range.
- * Roles: Owner, Manager, Accountant (canViewReports). Read-only.
+ * Roles: Owner, Manager, Accountant (reports.view). Read-only.
  */
 reportsRouter.get('/decantations', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canViewReports,
+    'reports.view',
     'Insufficient permissions to view Decantation Report',
   );
   if (scope instanceof Response) return scope;
@@ -110,7 +109,7 @@ reportsRouter.get('/decantations', async (c) => {
  */
 reportsRouter.get('/insights/sales', async (c) => {
   const user = c.var.user;
-  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  const scope = requireStationRead(c, 'reports.view', 'Insufficient permissions to view Insights');
   if (scope instanceof Response) return scope;
   const { stationId } = scope;
 
@@ -143,7 +142,7 @@ reportsRouter.get('/receivables', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canManageFinancialAccounts,
+    'accounts.manage',
     'Insufficient permissions to view receivables',
   );
   if (scope instanceof Response) return scope;
@@ -170,7 +169,7 @@ reportsRouter.get('/receivables/:customerId', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canManageFinancialAccounts,
+    'accounts.manage',
     'Insufficient permissions to view receivables',
   );
   if (scope instanceof Response) return scope;
@@ -208,7 +207,7 @@ reportsRouter.get(
     const user = c.var.user;
     const scope = requireStationRead(
       c,
-      canViewAttendantReport,
+      'reports.attendant',
       'Insufficient permissions to view the Attendant Handover Report',
     );
     if (scope instanceof Response) return scope;
@@ -231,7 +230,7 @@ reportsRouter.get(
  */
 reportsRouter.get('/insights/stock-loss', async (c) => {
   const user = c.var.user;
-  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  const scope = requireStationRead(c, 'reports.view', 'Insufficient permissions to view Insights');
   if (scope instanceof Response) return scope;
   const { stationId } = scope;
 
@@ -251,7 +250,7 @@ reportsRouter.get('/insights/stock-loss', async (c) => {
  */
 reportsRouter.get('/insights/credit-health', async (c) => {
   const user = c.var.user;
-  const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+  const scope = requireStationRead(c, 'reports.view', 'Insufficient permissions to view Insights');
   if (scope instanceof Response) return scope;
   const { stationId } = scope;
 
@@ -284,7 +283,7 @@ reportsRouter.get('/payables', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canManageFinancialAccounts,
+    'accounts.manage',
     'Insufficient permissions to view payables',
   );
   if (scope instanceof Response) return scope;
@@ -311,7 +310,7 @@ reportsRouter.get('/payables/:supplierId', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canManageFinancialAccounts,
+    'accounts.manage',
     'Insufficient permissions to view payables',
   );
   if (scope instanceof Response) return scope;

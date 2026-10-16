@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import {
-  canManageTankLevels,
-  TANK_LEVEL_SETTINGS_KEY,
-  tankLevelSettingsSchema,
-  tankLevelsChanged,
+  can,
   type Role,
+  TANK_LEVEL_SETTINGS_KEY,
+  tankLevelsChanged,
+  tankLevelSettingsSchema,
 } from '@pump/shared';
 import {
   BusinessEvents,
@@ -95,14 +95,14 @@ const updateSchema = z.object({
 
 /**
  * Tank-level thresholds (#520) colour every tank on every screen, so changing
- * them is narrower than editing the Station: `canManageTankLevels`. Enforced
+ * them is narrower than editing the Station: `station.tankLevels`. Enforced
  * here so every caller is covered. A command with no tenant-user actor (a
  * system job) is not a user acting.
  */
 function mayChangeTankLevels(ctx: ExecutionContext): boolean {
   const actor = ctx.actorSnapshot;
   if (!actor || actor.kind !== 'tenant_user') return true;
-  return actor.role !== null && canManageTankLevels(actor.role as Role);
+  return actor.role !== null && can({ role: actor.role as Role }, 'station.tankLevels');
 }
 
 /** Refusal for a settings write that changes the tank-level thresholds; null when allowed. */

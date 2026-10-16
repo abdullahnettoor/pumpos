@@ -11,12 +11,7 @@
  * Idempotency-Key, preview, access, refusals) is in `officePayment.ts`.
  */
 import { z } from 'zod';
-import {
-  canRecordPurchase,
-  supplierPaymentEntryFormSchema,
-  type AccessMode,
-  type Role,
-} from '@pump/shared';
+import { type AccessMode, can, type Role, supplierPaymentEntryFormSchema } from '@pump/shared';
 import { supplierPaymentPayload } from '@pump/ui';
 import {
   amountForValidation,
@@ -95,7 +90,7 @@ export function supplierPaymentRequest(
 /**
  * May this user record a Supplier Payment from here?
  *
- *  - Role: `canRecordPurchase` (Owner, Manager, Accountant), the guard
+ *  - Role: `purchases.record` (Owner, Manager, Accountant), the guard
  *    `POST /transactions/supplier-payments` applies.
  *  - Access mode: the route is declared FINISH_OPEN_WORK ("cash paid to a
  *    supplier has already gone"), so Restricted Access still permits it; only
@@ -106,7 +101,7 @@ export function supplierPaymentAccess(input: {
   accessMode?: AccessMode;
 }): OfficePaymentAccess {
   return officePaymentAccess({
-    allowed: canRecordPurchase(input.role),
+    allowed: can(input, 'purchases.record'),
     accessMode: input.accessMode,
   });
 }

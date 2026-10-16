@@ -1,17 +1,17 @@
 import type { Context } from 'hono';
-import { isAuthorizedForStation, type Role } from '@pump/shared';
+import { can, isAuthorizedForStation, type PermissionId } from '@pump/shared';
 import type { AuthenticatedPrincipal } from './authenticated-principal.js';
 
 type Env = { Variables: { user: AuthenticatedPrincipal } };
 
 /**
  * The checks every station-scoped read route runs before touching data:
- * the caller's Role may view the report, the request names a `stationId`, and
+ * the caller holds the Permission to view the report, the request names a `stationId`, and
  * that station is one the caller may access.
  *
  * Returns the station id, or the error response to send back. Use it as
  *
- *   const scope = requireStationRead(c, canViewReports, 'Insufficient permissions to view Insights');
+ *   const scope = requireStationRead(c, 'reports.view', 'Insufficient permissions to view Insights');
  *   if (scope instanceof Response) return scope;
  *
  * Nothing else is validated here: a route's own query parameters (a date
@@ -19,11 +19,11 @@ type Env = { Variables: { user: AuthenticatedPrincipal } };
  */
 export function requireStationRead<E extends Env>(
   c: Context<E>,
-  roleAllowed: (role: Role) => boolean,
+  permission: PermissionId,
   forbiddenMessage: string,
 ): { stationId: string } | Response {
   const user = c.var.user;
-  if (!roleAllowed(user.role)) {
+  if (!can(user, permission)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: forbiddenMessage } }, 403);
   }
   const stationId = c.req.query('stationId');

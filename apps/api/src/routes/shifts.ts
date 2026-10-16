@@ -5,18 +5,14 @@ import {
   attendantHandoverSchema,
   businessDateSettings,
   byNaturalField,
-  canOpenShift,
-  canCloseShift,
-  canReopenShift,
-  canRecordHandover,
+  can,
   compareByDispenserThenNozzle,
   dispenserLabel,
-  isAuthorizedForStation,
   isAttendant,
+  isAuthorizedForStation,
   isHandoverSelfScoped,
   productCashDrawer,
   resolveBusinessDate,
-  type Role,
 } from '@pump/shared';
 import {
   OpenShift,
@@ -114,10 +110,6 @@ const shiftIdBody = z
 const stationIdBody = z
   .object({ stationId: z.string().trim().min(1, 'stationId is required') })
   .passthrough();
-
-function canManageDay(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
 
 // GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
 // A lightweight lifecycle read for desktop/console. Missing is explicit rather
@@ -317,7 +309,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
     if (
       lastRaw.status === 'CLOSED' &&
       lastRaw.dayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !openRaw
     )
       canReopenLastShift = true;
@@ -967,7 +959,7 @@ shiftsRouter.get('/status', async (c) => {
     if (
       currentStatus === 'CLOSED' &&
       lastShiftRow.parentDayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !dbActiveShift
     )
       canReopenLastShift = true;
@@ -1365,7 +1357,7 @@ shiftsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canRecordHandover(user.role)) {
+    if (!can(user, 'handover.record')) {
       return c.json(
         {
           success: false,
@@ -1477,7 +1469,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canOpenShift(user.role)) {
+    if (!can(user, 'shifts.open')) {
       return c.json(
         {
           success: false,
@@ -1587,7 +1579,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canCloseShift(user.role)) {
+    if (!can(user, 'shifts.close')) {
       return c.json(
         {
           success: false,
@@ -1674,7 +1666,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canReopenShift(user.role)) {
+    if (!can(user, 'shifts.reopen')) {
       return c.json(
         {
           success: false,
@@ -1739,7 +1731,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1795,7 +1787,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1837,7 +1829,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,

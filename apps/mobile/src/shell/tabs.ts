@@ -3,15 +3,7 @@
  * are declared. Adding or retiring a tab edits this file, `tabIcons.tsx` (the
  * dock glyph) and `TabRoot.tsx` (what the tab shows).
  */
-import {
-  canManageFinancialAccounts,
-  canViewMobileHome,
-  canViewMobileInsights,
-  canViewMobileShifts,
-  canViewReports,
-  isAttendant,
-  type Role,
-} from '@pump/shared';
+import { can, isAttendant, principalOf, type PermissionId, type Role } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
 
 export interface TabDef {
@@ -31,17 +23,17 @@ export const TAB_DEFS: readonly TabDef[] = [
 export const tabDef = (key: TabKey): TabDef => TAB_DEFS.find((t) => t.key === key)!;
 
 /**
- * Whether a Role may open each tab, answered by the shared permission guards
+ * Whether a Role may open each tab, answered by the shared Permission catalogue
  * (`@pump/shared`), never re-derived here. Reports and Money follow their
  * existing guards; Home, Shifts and Insights have mobile guards of their own.
  * Staff and Attendant get no tabs (Attendant has its own shell).
  */
-const CAN_OPEN: Record<TabKey, (role: Role) => boolean> = {
-  home: canViewMobileHome,
-  shifts: canViewMobileShifts,
-  reports: canViewReports,
-  money: canManageFinancialAccounts,
-  insights: canViewMobileInsights,
+const TAB_PERMISSION: Record<TabKey, PermissionId> = {
+  home: 'mobile.home',
+  shifts: 'mobile.shifts',
+  reports: 'reports.view',
+  money: 'accounts.manage',
+  insights: 'mobile.insights',
 };
 
 /**
@@ -55,6 +47,8 @@ const CAN_OPEN: Record<TabKey, (role: Role) => boolean> = {
 export function tabsForRole(role: Role | null, hasHandover: boolean): TabKey[] {
   if (!role) return [];
   return TAB_DEFS.map((t) => t.key).filter((key) =>
-    key === 'home' && hasHandover && !isAttendant(role) ? true : CAN_OPEN[key](role),
+    key === 'home' && hasHandover && !isAttendant(role)
+      ? true
+      : can(principalOf(role), TAB_PERMISSION[key]),
   );
 }

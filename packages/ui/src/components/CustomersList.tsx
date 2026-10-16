@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { canManageFinancialAccounts, type Role } from '@pump/shared';
+import { can, principalOf } from '@pump/shared';
 import { useNavIntent, clearNavIntent, getNavIntentState } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -61,7 +61,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, u
 
   const stationId = selectedStation?.id ?? null;
   // Receivables are read by the Roles that see money (the API refuses Staff).
-  const canReadReceivables = canManageFinancialAccounts((userRole ?? 'Staff') as Role);
+  const canReadReceivables = can(principalOf(userRole), 'accounts.manage');
   const customersAllQ = useCustomers(false);
   const productsQ = useProducts();
   const collectionsQ = useCollections();

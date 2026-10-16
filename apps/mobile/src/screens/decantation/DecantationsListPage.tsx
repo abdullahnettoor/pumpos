@@ -1,8 +1,9 @@
 import React, { useContext } from 'react';
 import {
-  canRecordDecantation,
-  resolveDecantationSettings,
+  can,
   type DecantationView,
+  principalOf,
+  resolveDecantationSettings,
   type Station,
 } from '@pump/shared';
 import { isoToLocalTime, toDecantationRow, useDecantations, formatQuantity } from '@pump/ui';
@@ -53,7 +54,7 @@ export const DecantationsListPage: React.FC<{ station: Station }> = ({ station }
       title="Decantations"
       subtitle={station.name}
       right={
-        role && canRecordDecantation(role) ? (
+        role && can(principalOf(role), 'inventory.decantation') ? (
           <button
             type="button"
             onClick={() => nav.push(<TankerArrivedPage station={station} />, 'tanker-arrived')}

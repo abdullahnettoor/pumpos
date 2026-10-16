@@ -1,5 +1,5 @@
 import React from 'react';
-import { canSeeDashboardCard } from '@pump/shared';
+import { canSeeDashboardCard, principalOf } from '@pump/shared';
 import { useShiftStatus } from '../../../query/hooks.js';
 import { MoneyCard } from '../cards/MoneyCard.js';
 import { ReceivablesPayablesCard } from '../cards/ReceivablesPayablesCard.js';
@@ -25,8 +25,8 @@ const YourShiftHeader: React.FC = () => {
 /** Third column: Money (Owner/Manager/Accountant) or Your shift (Staff, in Money's place) (#506). */
 export const MoneyColumn: React.FC = () => {
   const { role, onNavigate } = useDashboard();
-  const showMoney = canSeeDashboardCard('money', role);
-  const showYourShift = canSeeDashboardCard('yourShift', role);
+  const showMoney = canSeeDashboardCard('money', principalOf(role));
+  const showYourShift = canSeeDashboardCard('yourShift', principalOf(role));
   return (
     <>
       {showMoney && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { canRecordDecantation, type Role } from '@pump/shared';
+import { can, principalOf, type Role } from '@pump/shared';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { Button, Icon, Tabs, tabPanelProps, type TabItem } from '../pump-ds/index.js';
@@ -76,7 +76,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, u
   // the intent rather than copied into state by an effect, so the deep link
   // wins until the operator picks a different tab, which clears it.
   const intent = useNavIntent();
-  const showDecantations = !!userRole && canRecordDecantation(userRole);
+  const showDecantations = !!userRole && can(principalOf(userRole), 'inventory.decantation');
   // A deep link to a tab this role cannot see falls back to the chosen tab.
   const requestedTab = intent?.focusInventoryTab ?? null;
   const focusTab = requestedTab === 'decantations' && !showDecantations ? null : requestedTab;

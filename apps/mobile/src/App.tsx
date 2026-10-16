@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { BootScreen, Login, useStations, runTask } from '@pump/ui';
-import type { Station } from '@pump/shared';
+import { isAttendant, type Station } from '@pump/shared';
 import { useOwnHandover } from './lib/handover/useOwnHandover.js';
 import { useSession, signOut } from './lib/session.js';
 import { MobileShell } from './shell/MobileShell.js';
@@ -39,7 +39,7 @@ export const App: React.FC = () => {
 
   // Non-attendant roles who happen to be assigned to a DU on an open shift get a
   // pinned handover card on Home (the same self-service form as the Attendant shell).
-  const hasHandover = useOwnHandover(status === 'ready' && role !== 'Attendant') !== null;
+  const hasHandover = useOwnHandover(status === 'ready' && !isAttendant(role)) !== null;
   const allowedTabs = useMemo(() => tabsForRole(role, hasHandover), [role, hasHandover]);
 
   // The operator's pick, falling back to the first station until stations load.
@@ -79,7 +79,7 @@ export const App: React.FC = () => {
     runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error));
 
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
-  if (role === 'Attendant') {
+  if (isAttendant(role)) {
     return <AttendantScreen userName={userName} onSignOut={onSignOut} stations={stations} />;
   }
 

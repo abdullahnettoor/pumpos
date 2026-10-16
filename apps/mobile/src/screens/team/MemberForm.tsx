@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { hasOrganizationWideStationAccess } from '@pump/shared';
 import { useToast } from '@pump/ui';
 import {
   generatePassword,
@@ -78,15 +79,16 @@ export const MemberForm: React.FC<Props> = ({
     () => (roleLocked ? [initial.role] : assignableRoles(actor.role)),
     [roleLocked, initial.role, actor.role],
   );
+  const requireStation = !hasOrganizationWideStationAccess(actor);
   const schema = useMemo(
     () =>
       memberFormSchema({
         mode,
         allowedRoles: roles,
         allowedStationIds: stations.map((s) => s.id),
-        requireStation: actor.role === 'Manager',
+        requireStation,
       }),
-    [mode, roles, stations, actor.role],
+    [mode, roles, stations, requireStation],
   );
 
   const {
@@ -175,13 +177,13 @@ export const MemberForm: React.FC<Props> = ({
         hint={
           roleLocked
             ? 'You cannot change your own role.'
-            : actor.role === 'Manager'
+            : !hasOrganizationWideStationAccess(actor)
               ? 'Managers can add Staff and Attendants.'
               : undefined
         }
       />
 
-      {values.role === 'Owner' ? (
+      {hasOrganizationWideStationAccess(values) ? (
         <p className="m-0 text-[12px] text-text-muted">Owners can use every station.</p>
       ) : (
         <StationChecks

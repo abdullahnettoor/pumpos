@@ -1,5 +1,5 @@
 import React from 'react';
-import { isDayShiftsDone, shiftWorkspaceAction } from '@pump/shared';
+import { isDayShiftsDone, principalOf, shiftWorkspaceAction } from '@pump/shared';
 import { Eye, Play, Plus } from 'lucide-react';
 import { Button, PageHeader } from '../../../pump-ds/index.js';
 import { useDashboardSummary, useShiftTemplates } from '../../../query/hooks.js';
@@ -14,7 +14,7 @@ import { formatClockInZone, formatHHMM, formatShortDay } from '../../../utils/fo
  */
 export const DashboardHeader: React.FC = () => {
   const { station, role, now, businessDate, dayStartsAt, timeZone, onNavigate } = useDashboard();
-  const action = shiftWorkspaceAction(role);
+  const action = shiftWorkspaceAction(principalOf(role));
   const summary = useDashboardSummary(station.id, { enabled: action !== null });
 
   const templates = useShiftTemplates({ enabled: action === 'act' });

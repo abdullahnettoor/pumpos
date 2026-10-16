@@ -2,28 +2,25 @@ import { Hono } from 'hono';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
-  canManageProduct,
-  canManageInfrastructure,
-  canManageReportTemplates,
-  canManageTankLevels,
+  can,
   DECANTATION_SETTINGS_KEY_SET,
-  TANK_LEVEL_SETTINGS_KEY,
-  tankLevelsChanged,
-  decantationSettingsSchema,
   DECANTATION_SETTINGS_KEYS,
-  canManageStaff,
-  isManageableByManager,
+  decantationSettingsSchema,
+  finalizeOnboardingSchema,
+  fuelPriceSchema,
+  canActOnTeamMember,
+  canWriteStationSetup,
   isAuthorizedForStation,
   normalizeIndianMobile,
+  OnboardingDraft,
   phoneToAuthEmail,
-  stationSchema,
   resolveDecantationSettings,
+  Role,
+  stationSchema,
+  TANK_LEVEL_SETTINGS_KEY,
+  tankLevelsChanged,
   userSchema,
   userUpdateSchema,
-  fuelPriceSchema,
-  finalizeOnboardingSchema,
-  OnboardingDraft,
-  Role,
 } from '@pump/shared';
 import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
@@ -100,13 +97,7 @@ export const stationSetupRouter = new Hono<{ Bindings: Bindings; Variables: Vari
 // Helper Checkers
 // ----------------------------------------------------
 function checkWriteAccess(c: any, stationId?: string | null): boolean {
-  const user = c.var.user;
-  if (user.role === 'Owner') return true;
-  if (user.role === 'Manager') {
-    if (!stationId) return false;
-    return user.assignedStationIds.includes(stationId);
-  }
-  return false; // Accountant & Staff are read-only
+  return canWriteStationSetup(c.var.user, stationId);
 }
 
 /**
@@ -178,7 +169,7 @@ stationSetupRouter.post(
   validateJson(stationSchema),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,
@@ -225,7 +216,7 @@ stationSetupRouter.put(
       !!submittedSettings &&
       Object.keys(submittedSettings).some((key) => DECANTATION_SETTINGS_KEY_SET.has(key));
     if (updatesDecantationSettings) {
-      if (!['Owner', 'Manager'].includes(user.role)) {
+      if (!can(user, 'station.manage')) {
         return c.json(
           {
             success: false,
@@ -260,7 +251,7 @@ stationSetupRouter.put(
     if (
       body.settings &&
       'report_config' in (body.settings as Record<string, unknown>) &&
-      !canManageReportTemplates(user.role)
+      !can(user, 'station.reportTemplates')
     ) {
       return c.json(
         {
@@ -280,7 +271,7 @@ stationSetupRouter.put(
     if (
       submittedSettings &&
       TANK_LEVEL_SETTINGS_KEY in submittedSettings &&
-      !canManageTankLevels(user.role)
+      !can(user, 'station.tankLevels')
     ) {
       const existing = await new DrizzleStationRepository(c.var.db).findById(stationId);
       const stored =
@@ -357,7 +348,7 @@ stationSetupRouter.get('/tanks', async (c) => {
 stationSetupRouter.post('/tanks', writePolicyGuard('POST /setup/tanks'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -405,7 +396,7 @@ stationSetupRouter.get('/dispensers', async (c) => {
 stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -448,7 +439,7 @@ stationSetupRouter.post(
   async (c) => {
     const user = c.var.user;
     const body = c.req.valid('json');
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
         403,
@@ -501,7 +492,7 @@ stationSetupRouter.get('/nozzles', async (c) => {
 stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -542,7 +533,7 @@ stationSetupRouter.post(
   writePolicyGuard('POST /setup/shift-templates'),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -571,7 +562,7 @@ stationSetupRouter.post(
   writePolicyGuard('POST /setup/shift-templates/batch'),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -612,20 +603,17 @@ function getSupabaseAdmin(c: any): SupabaseAdmin | null {
   return new SupabaseAdmin({ url, secretKey: key });
 }
 
-// Owner = full; Manager = Staff/Attendant on own stations only.
+// Owner = full; Manager = Staff/Attendant on own stations only (whose-data rule).
 function canActOnTarget(
   actor: { role: Role; assignedStationIds: string[] },
   targetRole: Role,
   targetStationIds: string[] = [],
 ): boolean {
-  if (actor.role === 'Owner') return true;
-  if (actor.role !== 'Manager') return false;
-  if (!isManageableByManager(targetRole)) return false;
-  // A Manager must be assigned to EVERY station the target touches (current
-  // and requested). A target with no station scope is NOT implicitly
-  // manageable — that previously let Managers control any org account.
-  if (targetStationIds.length === 0) return false;
-  return targetStationIds.every((s) => actor.assignedStationIds.includes(s));
+  return canActOnTeamMember(
+    { role: actor.role, stationIds: actor.assignedStationIds },
+    targetRole,
+    targetStationIds,
+  );
 }
 
 /** Current station assignments of a target user (for authorization). */
@@ -644,7 +632,7 @@ stationSetupRouter.post(
   validateJson(userSchema, 'BAD_REQUEST'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageStaff(user.role)) {
+    if (!can(user, 'team.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } },
         403,
@@ -952,7 +940,7 @@ async function authorizeInfrastructure(
   id: string,
 ): Promise<{ error: Response | null; stationId: string | null }> {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!can(user, 'station.infrastructure')) {
     return {
       error: c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
@@ -1096,7 +1084,7 @@ stationSetupRouter.put(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1122,7 +1110,7 @@ stationSetupRouter.delete(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1321,7 +1309,7 @@ stationSetupRouter.post(
     const db = c.var.db;
     const user = c.var.user;
 
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,

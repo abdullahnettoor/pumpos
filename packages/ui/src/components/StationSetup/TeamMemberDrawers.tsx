@@ -3,7 +3,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { INDIAN_MOBILE_MESSAGE, normalizeIndianMobile, type Station } from '@pump/shared';
+import {
+  hasOrganizationWideStationAccess,
+  INDIAN_MOBILE_MESSAGE,
+  normalizeIndianMobile,
+  type Station,
+} from '@pump/shared';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { queryKeys, useStations } from '../../query/hooks.js';
 import { Drawer } from '../Drawer.js';
@@ -417,7 +422,7 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
             </Field>
           )}
 
-          {watchRole !== 'Owner' && (
+          {!hasOrganizationWideStationAccess({ role: watchRole }) && (
             <div
               role="group"
               aria-labelledby="team-assign-stations"

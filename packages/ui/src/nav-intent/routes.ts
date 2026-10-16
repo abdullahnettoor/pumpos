@@ -1,4 +1,4 @@
-import { REPORTS_ROLES, type Role } from '@pump/shared';
+import type { PermissionId } from '@pump/shared';
 import type { IconName } from '../pump-ds/icon/registry.js';
 import { CONCEPT_ICON } from '../pump-ds/icon/concepts.js';
 import type { NavIntent } from './store.js';
@@ -158,8 +158,8 @@ export interface NavPage {
   label: string;
   path: RoutePath;
   icon: IconName;
-  /** Roles that see the page. Omitted = every role. */
-  roles?: Role[];
+  /** The "View <page>" Permission that shows the page. */
+  permission: PermissionId;
 }
 
 /**
@@ -167,57 +167,72 @@ export interface NavPage {
  * case). Insights is planned (Insights milestone) and stays out until built.
  */
 export const NAV_PAGES: readonly NavPage[] = [
-  { label: 'Dashboard', path: ROUTES.dashboard, icon: CONCEPT_ICON.dashboard },
+  {
+    label: 'Dashboard',
+    path: ROUTES.dashboard,
+    permission: 'pages.dashboard',
+    icon: CONCEPT_ICON.dashboard,
+  },
   {
     label: 'Shifts',
     path: ROUTES.shifts,
+    permission: 'pages.shifts',
     icon: CONCEPT_ICON.shifts,
-    roles: ['Owner', 'Manager', 'Accountant', 'Staff'],
   },
   {
     label: 'Inventory',
     path: ROUTES.inventory,
+    permission: 'pages.inventory',
     icon: CONCEPT_ICON.inventory,
-    roles: ['Owner', 'Manager', 'Accountant'],
   },
   {
     label: 'Pricing',
     path: ROUTES.pricing,
+    permission: 'pages.pricing',
     icon: CONCEPT_ICON.pricing,
-    roles: ['Owner', 'Manager'],
   },
-  { label: 'Customers', path: ROUTES.customers, icon: CONCEPT_ICON.customers },
+  {
+    label: 'Customers',
+    path: ROUTES.customers,
+    permission: 'pages.customers',
+    icon: CONCEPT_ICON.customers,
+  },
   {
     label: 'Suppliers',
     path: ROUTES.suppliers,
+    permission: 'pages.suppliers',
     icon: CONCEPT_ICON.suppliers,
-    roles: ['Owner', 'Manager', 'Accountant'],
   },
   {
     label: 'Accounts',
     path: ROUTES.accounts,
+    permission: 'pages.accounts',
     icon: CONCEPT_ICON.accounts,
-    roles: ['Owner', 'Manager', 'Accountant'],
   },
-  { label: 'Expenses', path: ROUTES.expenses, icon: CONCEPT_ICON.expenses },
-  { label: 'Income', path: ROUTES.income, icon: CONCEPT_ICON.income },
+  {
+    label: 'Expenses',
+    path: ROUTES.expenses,
+    permission: 'pages.expenses',
+    icon: CONCEPT_ICON.expenses,
+  },
+  { label: 'Income', path: ROUTES.income, permission: 'pages.income', icon: CONCEPT_ICON.income },
   {
     label: 'Reports',
     path: ROUTES.reports,
+    permission: 'pages.reports',
     icon: CONCEPT_ICON.reports,
-    roles: [...REPORTS_ROLES],
   },
   {
     label: 'Station',
     path: ROUTES.station,
+    permission: 'pages.station',
     icon: CONCEPT_ICON.station,
-    roles: ['Owner', 'Manager'],
   },
   {
     label: 'Organization',
     path: ROUTES.organization,
+    permission: 'pages.organization',
     icon: CONCEPT_ICON.organization,
-    roles: ['Owner'],
   },
 ];
 

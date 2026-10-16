@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  canManageExpenseCategory,
-  canManageFinancialAccounts,
-  resolveBusinessDate,
-  resolveEntryDate,
-  type Role,
-} from '@pump/shared';
+import { can, principalOf, resolveBusinessDate, resolveEntryDate, type Role } from '@pump/shared';
 import { Drawer } from '../components/Drawer.js';
 import { Banner } from '../components/primitives/Banner.js';
 import { Checkbox } from '../components/primitives/Toggle.js';
@@ -163,7 +157,7 @@ const OfficeRecordSession: React.FC<
   const productsQ = useProducts({ enabled: kind === 'purchase' });
   const fundingQ = useFundingAccounts(stationId);
   const terminalsQ = usePaymentTerminals(stationId, { enabled: kind === 'collection' });
-  const seesBalances = canManageFinancialAccounts(userRole);
+  const seesBalances = can(principalOf(userRole), 'accounts.manage');
   const balancesQ = useFinancialAccounts(stationId, { enabled: seesBalances });
   const prior = usePriorRecords(kind, stationId);
 
@@ -334,7 +328,7 @@ const OfficeRecordSession: React.FC<
             {...formProps}
             kind={kind}
             categories={categories}
-            canAddCategory={canManageExpenseCategory(userRole)}
+            canAddCategory={can(principalOf(userRole), 'expenses.categories')}
             onSubmit={(values) => save({ kind, values })}
           />
         );

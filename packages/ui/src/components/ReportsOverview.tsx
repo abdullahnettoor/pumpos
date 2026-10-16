@@ -22,13 +22,7 @@ import {
   lockedFeatureState,
   lockedFeatureVisible,
 } from '../access/lockedFeatureState.js';
-import {
-  ATTENDANT_REPORT_CAPABILITY,
-  canViewAttendantReport,
-  canExportReports,
-  canViewReports,
-  resolveBusinessDate,
-} from '@pump/shared';
+import { ATTENDANT_REPORT_CAPABILITY, can, principalOf, resolveBusinessDate } from '@pump/shared';
 import { useRunTask } from '../utils/runTask.js';
 import { officeSubmitKeys } from '../office-records/submitKeys.js';
 import { dailyDssrPreviewQuery, invalidateAfterDssrGenerate } from '../query/hooks.js';
@@ -80,7 +74,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
    * shows nothing at all.
    */
   const showAttendantReport =
-    canViewAttendantReport(userRole) && lockedFeatureVisible(attendantReport);
+    can(principalOf(userRole), 'reports.attendant') && lockedFeatureVisible(attendantReport);
   const { intent, token: intentToken } = useNavIntentEntry();
   const activeTab: ReportsTab = intent?.openDssrDate
     ? 'daily-dssr'
@@ -194,7 +188,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
               } satisfies ReportsNavItem<ReportsTab>,
             ]
           : []),
-        ...(canViewReports(userRole)
+        ...(can(principalOf(userRole), 'reports.view')
           ? [
               {
                 id: 'decantations',
@@ -208,7 +202,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     {
       heading: 'Finance',
       items: [
-        ...(userRole === 'Owner'
+        ...(can(principalOf(userRole), 'finance.viewProfitLoss')
           ? [
               {
                 id: 'pnl',
@@ -267,7 +261,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
               generating={generatingDailyDssr}
               generateError={generateError}
               onGenerate={
-                canExportReports(userRole) ? () => void handleGenerateDailyDssr() : undefined
+                can(principalOf(userRole), 'reports.export')
+                  ? () => void handleGenerateDailyDssr()
+                  : undefined
               }
               onOpen={setActiveDailyDssr}
             />
@@ -277,7 +273,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
             <LedgersReport selectedStation={selectedStation} onNavigate={onNavigate} />
           )}
 
-          {activeTab === 'pnl' && userRole === 'Owner' && (
+          {activeTab === 'pnl' && can(principalOf(userRole), 'finance.viewProfitLoss') && (
             <ProfitLossView selectedStation={selectedStation} />
           )}
 
@@ -306,7 +302,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
             <AttendantHandoverReportPanel selectedStation={selectedStation} />
           )}
 
-          {activeTab === 'decantations' && canViewReports(userRole) && (
+          {activeTab === 'decantations' && can(principalOf(userRole), 'reports.view') && (
             <DecantationReportPanel selectedStation={selectedStation} />
           )}
         </div>
