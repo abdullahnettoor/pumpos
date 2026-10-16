@@ -8,6 +8,7 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type {
+  DomainEvent,
   EventPublisher,
   ExecutionContext,
   Repository,
@@ -64,6 +65,28 @@ export interface ShiftTemplateDeps {
   events: EventPublisher;
 }
 
+/** The template row and its SHIFT_TEMPLATE_CREATED event for a parsed command. */
+function newShiftTemplate(
+  data: z.infer<typeof createSchema>,
+  ctx: ExecutionContext,
+): { template: ShiftTemplate; event: DomainEvent } {
+  const template: ShiftTemplate = {
+    id: ctx.ids.newId(),
+    organizationId: ctx.organizationId,
+    name: data.name,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    isActive: data.isActive ?? true,
+  };
+  const event = eventFromContext(ctx, {
+    eventType: BusinessEvents.SHIFT_TEMPLATE_CREATED,
+    aggregateType: 'ShiftTemplate',
+    aggregateId: template.id,
+    payload: { shiftTemplateId: template.id, name: template.name },
+  });
+  return { template, event };
+}
+
 export class CreateShiftTemplate implements UseCase<CreateShiftTemplateCommand, ShiftTemplate> {
   constructor(private readonly deps: ShiftTemplateDeps) {}
   async execute(
@@ -75,24 +98,45 @@ export class CreateShiftTemplate implements UseCase<CreateShiftTemplateCommand, 
       return err(
         validationError('Invalid CreateShiftTemplate command', { issues: p.error.flatten() }),
       );
-    const tpl: ShiftTemplate = {
-      id: ctx.ids.newId(),
-      organizationId: ctx.organizationId,
-      name: p.data.name,
-      startTime: p.data.startTime,
-      endTime: p.data.endTime,
-      isActive: p.data.isActive ?? true,
-    };
-    await this.deps.repository.save(tpl);
-    await this.deps.events.publish([
-      eventFromContext(ctx, {
-        eventType: BusinessEvents.SHIFT_TEMPLATE_CREATED,
-        aggregateType: 'ShiftTemplate',
-        aggregateId: tpl.id,
-        payload: { shiftTemplateId: tpl.id, name: tpl.name },
-      }),
-    ]);
-    return ok(tpl);
+    const { template, event } = newShiftTemplate(p.data, ctx);
+    await this.deps.repository.save(template);
+    await this.deps.events.publish([event]);
+    return ok(template);
+  }
+}
+
+export interface CreateShiftTemplatesCommand {
+  templates: CreateShiftTemplateCommand[];
+}
+
+/** Bounds one request; a station runs a handful of shifts a day. */
+export const MAX_SHIFT_TEMPLATES_PER_REQUEST = 12;
+
+const createManySchema = z.object({
+  templates: z.array(createSchema).min(1).max(MAX_SHIFT_TEMPLATES_PER_REQUEST),
+});
+
+/**
+ * Create several shift templates as one command (#591), e.g. the three-shift
+ * pre-fill. All or nothing: every template is validated before any is saved,
+ * and run in one transaction a retry under the same Idempotency-Key cannot
+ * leave a partial set or add a second one.
+ */
+export class CreateShiftTemplates implements UseCase<CreateShiftTemplatesCommand, ShiftTemplate[]> {
+  constructor(private readonly deps: ShiftTemplateDeps) {}
+  async execute(
+    input: CreateShiftTemplatesCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<ShiftTemplate[]>> {
+    const p = createManySchema.safeParse(input);
+    if (!p.success)
+      return err(
+        validationError('Invalid CreateShiftTemplates command', { issues: p.error.flatten() }),
+      );
+    const created = p.data.templates.map((t) => newShiftTemplate(t, ctx));
+    for (const c of created) await this.deps.repository.save(c.template);
+    await this.deps.events.publish(created.map((c) => c.event));
+    return ok(created.map((c) => c.template));
   }
 }
 

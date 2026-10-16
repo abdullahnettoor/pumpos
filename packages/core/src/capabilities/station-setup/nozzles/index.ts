@@ -8,6 +8,7 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type {
+  DomainEvent,
   EventPublisher,
   ExecutionContext,
   Repository,
@@ -52,7 +53,7 @@ export interface UpdateNozzleCommand {
   currentReading?: number | string;
 }
 
-const createSchema = z.object({
+export const nozzleCreateSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   duId: z.string().min(1, 'duId is required'),
   tankId: z.string().min(1, 'tankId is required'),
@@ -75,51 +76,74 @@ export interface NozzleDeps {
   events: EventPublisher;
 }
 
+/**
+ * A Nozzle draws from an active Tank of the same Product at its own Station.
+ * Shared by single-nozzle create and dispenser-with-nozzles create (#591), so
+ * both refuse the same nozzles with the same messages.
+ */
+export async function checkNozzleTank(
+  tanks: TankRepository,
+  nozzle: { stationId: string; tankId: string; productId: string },
+  ctx: ExecutionContext,
+): Promise<Result<void>> {
+  const tank = await tanks.findByIdForUpdate(nozzle.tankId);
+  if (
+    !tank ||
+    tank.organizationId !== ctx.organizationId ||
+    tank.stationId !== nozzle.stationId ||
+    tank.status !== 'ACTIVE'
+  ) {
+    return err(notFoundError('Tank', nozzle.tankId));
+  }
+  if (tank.productId !== nozzle.productId)
+    return err(validationError('Nozzle Product must match its Tank Product'));
+  return ok(undefined);
+}
+
+/** The Nozzle row and its NOZZLE_CREATED event for an already-checked command. */
+export function newNozzle(
+  data: z.infer<typeof nozzleCreateSchema>,
+  ctx: ExecutionContext,
+): { nozzle: Nozzle; event: DomainEvent } {
+  const now = ctx.clock.now().toISOString();
+  const nozzle: Nozzle = {
+    id: ctx.ids.newId(),
+    organizationId: ctx.organizationId,
+    stationId: data.stationId,
+    duId: data.duId,
+    tankId: data.tankId,
+    productId: data.productId,
+    name: data.name,
+    currentReading: String(data.currentReading ?? 0),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const event = eventFromContext(ctx, {
+    eventType: BusinessEvents.NOZZLE_CREATED,
+    aggregateType: 'Nozzle',
+    aggregateId: nozzle.id,
+    stationId: nozzle.stationId,
+    payload: {
+      nozzleId: nozzle.id,
+      duId: nozzle.duId,
+      tankId: nozzle.tankId,
+      productId: nozzle.productId,
+    },
+  });
+  return { nozzle, event };
+}
+
 export class CreateNozzle implements UseCase<CreateNozzleCommand, Nozzle> {
   constructor(private readonly deps: NozzleDeps) {}
   async execute(input: CreateNozzleCommand, ctx: ExecutionContext): Promise<Result<Nozzle>> {
-    const p = createSchema.safeParse(input);
+    const p = nozzleCreateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid CreateNozzle command', { issues: p.error.flatten() }));
-    const tank = await this.deps.tanks.findByIdForUpdate(p.data.tankId);
-    if (
-      !tank ||
-      tank.organizationId !== ctx.organizationId ||
-      tank.stationId !== p.data.stationId ||
-      tank.status !== 'ACTIVE'
-    ) {
-      return err(notFoundError('Tank', p.data.tankId));
-    }
-    if (tank.productId !== p.data.productId)
-      return err(validationError('Nozzle Product must match its Tank Product'));
-    const now = ctx.clock.now().toISOString();
-    const nozzle: Nozzle = {
-      id: ctx.ids.newId(),
-      organizationId: ctx.organizationId,
-      stationId: p.data.stationId,
-      duId: p.data.duId,
-      tankId: p.data.tankId,
-      productId: p.data.productId,
-      name: p.data.name,
-      currentReading: String(p.data.currentReading ?? 0),
-      createdAt: now,
-      updatedAt: now,
-    };
+    const tankCheck = await checkNozzleTank(this.deps.tanks, p.data, ctx);
+    if (!tankCheck.success) return err(tankCheck.error);
+    const { nozzle, event } = newNozzle(p.data, ctx);
     await this.deps.repository.save(nozzle);
-    await this.deps.events.publish([
-      eventFromContext(ctx, {
-        eventType: BusinessEvents.NOZZLE_CREATED,
-        aggregateType: 'Nozzle',
-        aggregateId: nozzle.id,
-        stationId: nozzle.stationId,
-        payload: {
-          nozzleId: nozzle.id,
-          duId: nozzle.duId,
-          tankId: nozzle.tankId,
-          productId: nozzle.productId,
-        },
-      }),
-    ]);
+    await this.deps.events.publish([event]);
     return ok(nozzle);
   }
 }
