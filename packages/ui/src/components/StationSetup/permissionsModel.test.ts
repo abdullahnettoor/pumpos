@@ -61,6 +61,9 @@ describe('permissionsModel', () => {
     const on = togglePermission('Manager', off, mgr, dependant, true);
     expect(on.has(dependant)).toBe(true);
     expect(on.has(prereq)).toBe(true);
-    expect(diffFromDefaults('Manager', on, mgr)).toEqual({ granted: [], revoked: [] });
+    // Only the other dependants stay revoked; the dependant and prerequisite are not stored as changes.
+    const diff = diffFromDefaults('Manager', on, mgr);
+    expect(diff.revoked).not.toContain(dependant);
+    expect(diff.revoked).not.toContain(prereq);
   });
 });
