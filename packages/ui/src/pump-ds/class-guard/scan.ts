@@ -84,10 +84,10 @@ function isSmallFontSize(node: ts.Expression): string | null {
   if (ts.isNumericLiteral(node)) return Number(node.text) < MIN_TEXT_PX ? node.text : null;
   const lit = literalOf(node);
   if (!lit || lit.chunks.length !== 1) return null;
-  const m = /^(\d*\.?\d+)(px|rem)$/.exec(lit.chunks[0]!.trim());
+  const m = /^(\d*\.?\d+)(px|rem)$/.exec(lit.chunks[0].trim());
   if (!m) return null;
   const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
-  return px < MIN_TEXT_PX ? lit.chunks[0]! : null;
+  return px < MIN_TEXT_PX ? lit.chunks[0] : null;
 }
 
 const COLOR_UTILITY = /^(bg|text|border|divide|ring|from|to|via|fill|stroke|shadow|outline)-/;
