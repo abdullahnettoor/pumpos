@@ -8,16 +8,14 @@ import { DEMO_BOOKING_URL } from '../../config';
   description="What PumpOS collects, who handles it, and how to ask us about your data."
   path="/legal/privacy"
   eyebrow="PumpOS pilot"
+  legal
 >
-  <p slot="meta" class="legal-updated">Last updated 20 October 2026</p>
+  <p slot="meta" class="legal-updated">Last updated 20 October 2026. We update this page when PumpOS or the way we handle data changes.</p>
 
   <h2>Who runs PumpOS</h2>
   <p>PumpOS is run by Abdullah Nettoor from Kochi, Kerala, India. Write to <a href="mailto:hello@pumpos.app?subject=Privacy%20question">hello@pumpos.app</a> with any privacy question.</p>
 
-  <h2>Visiting this website</h2>
-  <p>This website is a set of static pages served by Cloudflare. Our pages set no cookies and load no analytics, advertising or tracking scripts. Fonts and images come from this site, and the site search runs in your browser. Cloudflare receives the technical details of each request, such as your IP address and browser, in order to deliver the page.</p>
-
-  <h2>Asking for a demo</h2>
+  <h2>Demos</h2>
   {DEMO_BOOKING_URL ? (
     <p>The demo form sends your name, phone number, station name and town, and any tank, nozzle and attendant counts you enter, to our booking calendar so you can choose a time.</p>
   ) : (
@@ -25,8 +23,6 @@ import { DEMO_BOOKING_URL } from '../../config';
   )}
   <p>If you message us on WhatsApp, WhatsApp (Meta) carries the conversation and your number. The WhatsApp links on this site go through our own <code>/whatsapp</code> page, which only forwards you to WhatsApp.</p>
   <p>We use what you send to reply, arrange the demo and talk about the pilot. Please don't send customer lists, bank statements or other records. The demo uses sample data.</p>
-
-  <h2>Demo stations</h2>
   <p>For a hands-on demo we may create a sample station filled with sample data. If you give us an email address, PumpOS sends you a sign-in invitation for that station. Each demo has an expiry date that we set when we create it. On that date its logins stop working. Seven days later PumpOS deletes the demo organisation, its sample records and its logins. We can extend a demo if you ask.</p>
 
   <h2>Pilot stations</h2>
@@ -36,7 +32,7 @@ import { DEMO_BOOKING_URL } from '../../config';
 
   <h2>Providers that handle data</h2>
   <ul>
-    <li><strong>Cloudflare.</strong> Hosts this website, the web console, the mobile web app and the PumpOS API, and connects the API to the database. Cloudflare keeps a sample of API request logs, which can include IP addresses, so we can find and fix errors. Only we can see them.</li>
+    <li><strong>Cloudflare.</strong> Hosts this website, the web console, the mobile web app and the PumpOS API, and connects the API to the database. When you visit this website, Cloudflare receives your IP address and browser details to deliver the page. This site sets no cookies and loads no tracking scripts. Cloudflare also keeps a sample of API request logs, which can include IP addresses, so we can find and fix errors. Only we can see them.</li>
     <li><strong>Supabase.</strong> Hosts the database that holds station records, and runs sign-in, including the sign-in invitation emails.</li>
     <li><strong>GitHub.</strong> Serves the desktop app download and its update checks. Each check sends GitHub a normal web request from your computer.</li>
     <li><strong>Google (Gmail).</strong> Receives email sent to hello@pumpos.app.</li>
@@ -54,7 +50,4 @@ import { DEMO_BOOKING_URL } from '../../config';
   <h2>Your requests</h2>
   <p>To see, correct or delete information you have sent us, email <a href="mailto:hello@pumpos.app?subject=Privacy%20request">hello@pumpos.app</a>. If you work at a pilot station, ask your station's owner first: they control the records your station keeps in PumpOS. We reply within 14 days.</p>
   <p>Grievance contact: Abdullah Nettoor, <a href="mailto:hello@pumpos.app?subject=Privacy%20grievance">hello@pumpos.app</a>.</p>
-
-  <h2>Changes</h2>
-  <p>We update this page when PumpOS or the way we handle data changes. The date at the top shows the latest version.</p>
 </ProseLayout>
