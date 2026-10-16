@@ -8,6 +8,7 @@ import {
   isAuthorizedForStation,
   isHandoverSelfScoped,
   redactPurchaseCosts,
+  redactSupplierBalances,
   type Role,
 } from '@pump/shared';
 import {
@@ -342,7 +343,10 @@ transactionsRouter.get('/suppliers', async (c) => {
   const shown = stationId ? suppliersAtStation(list, stationId, new Set(balances.keys())) : list;
   return c.json({
     success: true,
-    data: shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+    data: redactSupplierBalances(
+      shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+      user,
+    ),
   });
 });
 

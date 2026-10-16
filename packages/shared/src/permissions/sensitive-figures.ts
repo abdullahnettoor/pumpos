@@ -55,6 +55,15 @@ export function redactStockLoss<T extends object>(rows: T[], principal: Principa
   return rows.map((r) => ({ ...r, valueAtCost: null }));
 }
 
+/** Drop a supplier's `currentBalance` (purchases owed) without `purchases.viewCosts`. */
+export function redactSupplierBalances<T extends object>(rows: T[], principal: Principal): T[] {
+  if (can(principal, 'purchases.viewCosts')) return rows;
+  return rows.map((r) => {
+    const { currentBalance: _b, ...rest } = r as Loose;
+    return rest as T;
+  });
+}
+
 const PURCHASE_COST_FIELDS = [
   'amount',
   'taxableAmount',

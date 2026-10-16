@@ -5,6 +5,7 @@ import {
   redactSensitiveDssr,
   redactProductCosts,
   redactStockLoss,
+  redactSupplierBalances,
 } from './sensitive-figures.js';
 
 const row = () => ({
@@ -83,5 +84,10 @@ describe('unit-cost figures', () => {
     const l = [{ tankId: 't', valueAtCost: 10 }];
     expect(redactStockLoss(l, noCosts)).toEqual([{ tankId: 't', valueAtCost: null }]);
     expect(redactStockLoss(l, principalOf('Owner'))).toBe(l);
+  });
+  it('drops supplier balances (purchases owed) without View costs', () => {
+    const l = [{ id: 's', name: 'IOCL', currentBalance: 5000 }];
+    expect(redactSupplierBalances(l, noCosts)).toEqual([{ id: 's', name: 'IOCL' }]);
+    expect(redactSupplierBalances(l, principalOf('Owner'))).toBe(l);
   });
 });
