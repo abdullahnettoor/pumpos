@@ -65,9 +65,9 @@ const Row: React.FC<{ label: string; children: React.ReactNode; note?: string }>
   note,
 }) => (
   <div className="grid grid-cols-[140px_1fr_auto] items-center gap-4 border-b border-border-soft py-3 last:border-b-0">
-    <div className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">{label}</div>
+    <div className="font-mono text-[12px] uppercase tracking-wider text-ink-faint">{label}</div>
     <div className="flex flex-wrap items-center gap-2">{children}</div>
-    {note && <div className="font-mono text-[10px] text-ink-faint">{note}</div>}
+    {note && <div className="font-mono text-[12px] text-ink-faint">{note}</div>}
   </div>
 );
 
@@ -170,7 +170,7 @@ const ChipAdornments: React.FC = () => {
         </Chip>
       </Row>
       <Row label="removable" note="onRemove wires a close button with its own focus ring">
-        {filters.length === 0 && <span className="text-[11px] text-ink-faint">No filters</span>}
+        {filters.length === 0 && <span className="text-[12px] text-ink-faint">No filters</span>}
         {filters.map((label) => (
           <Chip
             key={label}
@@ -195,7 +195,7 @@ const DotMatrix: React.FC = () => {
       {sizes.map((s) => (
         <Row key={s} label={`size=${s}`}>
           {tones.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <span key={t} className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
               <Dot tone={t} size={s} />
               <span>{t}</span>
             </span>
@@ -203,19 +203,19 @@ const DotMatrix: React.FC = () => {
         </Row>
       ))}
       <Row label="pulse" note="motion-safe:animate-pulse — reduced-motion users get a static dot">
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="brand" size="md" pulse /> brand
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="info" size="md" pulse /> info
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="success" size="md" pulse /> success
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="warning" size="md" pulse /> warning
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="danger" size="md" pulse /> danger
         </span>
       </Row>
@@ -411,7 +411,7 @@ const ButtonMatrix: React.FC = () => {
 const ButtonInContext: React.FC = () => (
   <div className="space-y-4 py-2">
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         drawer footer (one primary action, one secondary)
       </div>
       <div className="flex items-center justify-end gap-2 rounded-card border border-border-soft bg-surface px-4 py-3">
@@ -424,7 +424,7 @@ const ButtonInContext: React.FC = () => (
       </div>
     </div>
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         destructive confirm (danger primary + safe escape)
       </div>
       <div className="flex items-center justify-end gap-2 rounded-card border border-border-soft bg-surface px-4 py-3">
@@ -437,7 +437,7 @@ const ButtonInContext: React.FC = () => (
       </div>
     </div>
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         toolbar (xs ghost + icon-only cluster)
       </div>
       <div className="flex items-center gap-1.5 rounded-card border border-border-soft bg-surface px-3 py-2">
@@ -503,7 +503,7 @@ const StatusInContext: React.FC = () => (
   <div className="space-y-6 py-2">
     {/* A short shift-list row using StatusChip and Chip together. */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         shift list row
       </div>
       <div className="divide-y divide-border-soft rounded-card border border-border-soft bg-surface">
@@ -541,7 +541,7 @@ const StatusInContext: React.FC = () => (
             key={r.id}
             className="grid grid-cols-[120px_1fr_auto_auto_120px] items-center gap-4 px-4 py-2.5 text-[13px]"
           >
-            <span className="font-mono text-[11px] text-ink-muted">{r.id}</span>
+            <span className="font-mono text-[12px] text-ink-muted">{r.id}</span>
             <span className="text-ink-strong">{r.operator}</span>
             <StatusChip status={r.status} size="xs" />
             <StatusChip status={r.sync} size="xs" showIcon={false} />
@@ -553,7 +553,7 @@ const StatusInContext: React.FC = () => (
 
     {/* A customers-list row showing overdue + partial payment states. */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         receivables row
       </div>
       <div className="divide-y divide-border-soft rounded-card border border-border-soft bg-surface">
@@ -593,14 +593,14 @@ const StatusInContext: React.FC = () => (
           >
             <div className="min-w-0">
               <div className="truncate text-ink-strong">{r.name}</div>
-              <div className="truncate font-mono text-[11px] text-ink-muted">{r.code}</div>
+              <div className="truncate font-mono text-[12px] text-ink-muted">{r.code}</div>
             </div>
             <StatusChip
               status={r.status}
               size="xs"
               label={r.status === 'overdue' ? `Overdue ${r.days}` : undefined}
             />
-            <span className="w-16 text-right font-mono text-[11px] text-ink-muted">{r.days}</span>
+            <span className="w-16 text-right font-mono text-[12px] text-ink-muted">{r.days}</span>
             <span className="text-right font-mono font-medium text-ink-strong">{r.balance}</span>
           </div>
         ))}
@@ -615,7 +615,7 @@ const DashboardBlocks: React.FC = () => (
   <div className="space-y-6">
     {/* PageHeader */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         PageHeader · title + subtitle + actions + meta
       </div>
       <div className="rounded-card border border-border-soft bg-surface p-4">
@@ -646,7 +646,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* Panel */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         Panel · titled surface (header + body + footer)
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -685,7 +685,7 @@ const DashboardBlocks: React.FC = () => (
             <span className="font-mono text-[12px] font-semibold text-ink-strong">₹3,68,540</span>
           }
           footer={
-            <span className="text-[11px] text-ink-muted">Cash reconciled at shift close.</span>
+            <span className="text-[12px] text-ink-muted">Cash reconciled at shift close.</span>
           }
         >
           <BreakdownBar
@@ -703,7 +703,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* MeterRow tones */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         MeterRow · auto-tone (critical &lt;5% · low &lt;15% · else brand)
       </div>
       <div className="space-y-3 rounded-card border border-border-soft bg-surface p-4">
@@ -715,7 +715,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* TankGauge (#520) */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         TankGauge · tube + bar · station tank levels (default critical &lt;25% · low &lt;40%)
       </div>
       <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
@@ -745,7 +745,7 @@ const DashboardBlocks: React.FC = () => (
           ))}
         </div>
       </div>
-      <div className="mb-2.5 mt-4 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 mt-4 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         TankGauge · tube · size=&quot;lg&quot; · Inventory → Tanks (#536)
       </div>
       <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
@@ -765,7 +765,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* Sparkline */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         Sparkline · dependency-free trend (line + optional area fill)
       </div>
       <div className="flex flex-wrap items-center gap-6 rounded-card border border-border-soft bg-surface p-4">
@@ -783,7 +783,7 @@ const DashboardBlocks: React.FC = () => (
             <Sparkline data={s.data} tone={s.tone} fill={s.fill} aria-label={s.label} />
             <div>
               <div className="text-[12px] font-medium text-ink-strong">{s.label}</div>
-              <div className="flex items-center gap-1 text-[11px] text-ink-muted">
+              <div className="flex items-center gap-1 text-[12px] text-ink-muted">
                 <TrendingUp className="size-3" /> trend
               </div>
             </div>
@@ -794,7 +794,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* EmptyState */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         EmptyState · compact (inline) + default (block)
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

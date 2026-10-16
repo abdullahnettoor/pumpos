@@ -179,7 +179,7 @@ export const IconBtn = forwardRef<
     >
       {children}
       {badge != null && badge > 0 && (
-        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-on-danger">
+        <span className="absolute right-0.5 top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger-fg px-1 text-[12px] font-bold leading-4 text-on-danger">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
@@ -389,10 +389,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Icon name="search" size="sm" />
           <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
           <span className="flex items-center gap-0.5">
-            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
               {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
             </kbd>
-            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
               K
             </kbd>
           </span>
@@ -435,7 +435,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <div className="flex items-center justify-between border-b border-border-soft px-3 py-2.5">
               <span className="text-[12px] font-semibold text-ink-strong">Notifications</span>
               {notifCount > 0 && (
-                <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-fg">
+                <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[12px] font-medium text-danger-fg">
                   {notifCount} new
                 </span>
               )}
@@ -468,10 +468,10 @@ export const TopBar: React.FC<TopBarProps> = ({
                       <span className="block text-[12.5px] font-medium text-ink-strong">
                         {n.title}
                       </span>
-                      {n.meta && <span className="block text-[11px] text-ink-muted">{n.meta}</span>}
+                      {n.meta && <span className="block text-[12px] text-ink-muted">{n.meta}</span>}
                     </span>
                     {n.actionLabel && (
-                      <span className="shrink-0 self-center font-mono text-[10px] uppercase tracking-wide text-brand">
+                      <span className="shrink-0 self-center font-mono text-[12px] uppercase tracking-wide text-brand">
                         {n.actionLabel}
                       </span>
                     )}
@@ -488,7 +488,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Menu>
           <MenuTrigger asChild>
             <button className="inline-flex h-8 items-center gap-1.5 rounded-button pl-1 pr-1.5 transition-colors hover:bg-surface-alt">
-              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[11px] font-semibold text-brand">
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[12px] font-semibold text-brand">
                 {userInitials}
               </span>
               <span className="hidden text-[12px] font-medium text-ink-strong sm:inline">
@@ -504,7 +504,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
               <div className="min-w-0">
                 <div className="truncate text-[13px] font-semibold text-ink-strong">{userName}</div>
-                <div className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">
+                <div className="font-mono text-[12px] uppercase tracking-wide text-ink-muted">
                   {userRole}
                 </div>
               </div>

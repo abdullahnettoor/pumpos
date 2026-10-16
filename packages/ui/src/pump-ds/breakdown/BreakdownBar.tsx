@@ -76,7 +76,7 @@ export const BreakdownBar = forwardRef<HTMLDivElement, BreakdownBarProps>(functi
             return (
               <span
                 key={`${seg.label}-${i}`}
-                className="inline-flex items-center gap-1.5 text-[11.5px]"
+                className="inline-flex items-center gap-1.5 text-[12px]"
               >
                 <Dot tone={seg.tone} size="sm" />
                 <span className="text-ink-muted">{seg.label}</span>

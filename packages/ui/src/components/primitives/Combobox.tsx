@@ -319,7 +319,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                         {a.label}
                       </span>
                       {a.sublabel && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                           {a.sublabel}
                         </span>
                       )}
@@ -360,7 +360,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                         {opt.label}
                       </span>
                       {opt.sublabel && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                           {opt.sublabel}
                         </span>
                       )}

@@ -91,7 +91,7 @@ const StatementTableDemo: React.FC = () => (
 );
 
 const Caption: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+  <div className="mb-2 text-[12px] font-medium uppercase tracking-wide text-ink-muted">
     {children}
   </div>
 );

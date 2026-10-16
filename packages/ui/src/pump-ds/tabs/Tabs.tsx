@@ -229,7 +229,7 @@ export const Tabs: React.FC<TabsProps> = ({
             {typeof tab.badge === 'number' ? (
               <span
                 className={cn(
-                  'inline-flex h-4 min-w-4 items-center justify-center rounded-chip px-1.5 font-mono text-[10px] font-semibold leading-none',
+                  'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-chip px-1.5 font-mono text-[12px] font-semibold leading-none',
                   active ? COUNT_ACTIVE[tab.tone ?? 'brand'] : 'bg-surface-alt text-ink-muted',
                 )}
               >

@@ -35,7 +35,7 @@ export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProp
         <Calendar className="size-3.5 text-ink-muted" />
         <span className="font-medium text-ink-strong">{date}</span>
         {status === 'not-created' || status === 'unknown' || status === 'unavailable' ? (
-          <span className="rounded-chip bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+          <span className="rounded-chip bg-surface-alt px-1.5 py-0.5 text-[12px] font-medium text-ink-muted">
             {status === 'unknown'
               ? 'Checking'
               : status === 'unavailable'
@@ -46,7 +46,7 @@ export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProp
           <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
         )}
         {pastOpenCount > 0 && (
-          <span className="rounded-chip bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning-fg">
+          <span className="rounded-chip bg-warning-bg px-1.5 py-0.5 text-[12px] font-semibold text-warning-fg">
             {pastOpenCount} past open
           </span>
         )}
