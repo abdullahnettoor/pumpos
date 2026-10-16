@@ -27,6 +27,20 @@ export interface LineTax {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Whether a product has an MRP a Handover Product Sale can be priced at: a
+ * selling price above zero, the server's own rule (core
+ * `record-merchandise-handover`, "Product has no selling price set").
+ */
+export const hasMrp = (product: PricedProduct | undefined): boolean =>
+  product?.sellingPrice != null && Number(product.sellingPrice) > 0;
+
+/** The price a product picker shows: its MRP, or that it has none. */
+export const mrpLabel = (
+  product: PricedProduct,
+  format: (amount: number | string) => string,
+): string => (hasMrp(product) ? `MRP ${format(product.sellingPrice ?? 0)}` : 'No price set');
+
 /** One line's taxable value, tax and total (mirrors core `computeLineTax`). */
 export function lineTax(product: PricedProduct | undefined, qty: number): LineTax {
   const price = product?.sellingPrice != null ? Number(product.sellingPrice) : 0;
@@ -62,6 +76,27 @@ export function saleLines(rows: DraftLine[]): { productId: string; quantity: num
     .map((r) => ({ productId: r.productId, quantity: Number(r.quantity) }));
 }
 
+/**
+ * The lines (by index) whose product has no MRP (#638). The server refuses a
+ * sale with such a line, so the form blocks it rather than failing on save. A
+ * line with no product picked yet is not one of them.
+ */
+export function linesWithoutMrp(
+  rows: DraftLine[],
+  productById: Record<string, PricedProduct | undefined>,
+): number[] {
+  return rows.flatMap((r, i) =>
+    r.productId && productById[r.productId] && !hasMrp(productById[r.productId]) ? [i] : [],
+  );
+}
+
+/** Why Save is disabled while lines lack an MRP; null when none does. */
+export function noMrpReason(missing: number, canSetMrp: boolean): string | null {
+  if (missing === 0) return null;
+  const what = missing === 1 ? 'An item has no MRP' : `${missing} items have no MRP`;
+  return `${what}. ${canSetMrp ? 'Use Set MRP on it first.' : 'Ask your Owner or Manager to set an MRP.'}`;
+}
+
 /** Σ of the lines, in whole paise so the total is the sum of the lines shown. */
 export function draftTotals(
   rows: DraftLine[],
@@ -95,20 +130,23 @@ export interface HandoverProductSaleFormValues {
 
 /**
  * The form's rules (React Hook Form + Zod, through `useZodForm`): an employee,
- * at least one product with a quantity, and a card / UPI part that is an
- * amount no larger than the sale total. `totalOf` prices the lines (the
- * products' own configuration), so the schema is built per product list.
+ * at least one product with a quantity, every picked product with an MRP (the
+ * server's rule), and a card / UPI part that is an amount no larger than the
+ * sale total. `totalOf` prices the lines and `missingMrp` lists the lines
+ * without an MRP (the products' own configuration), so the schema is built per
+ * product list.
  */
-export function handoverProductSaleSchema(totalOf: (lines: DraftLine[]) => number) {
+export function handoverProductSaleSchema(
+  totalOf: (lines: DraftLine[]) => number,
+  missingMrp: (lines: DraftLine[]) => number[] = () => [],
+) {
   return z
     .object({
       attendantId: z.string().min(1, 'Select the employee who made the sales.'),
       lines: z
         .array(z.object({ productId: z.string(), quantity: z.string() }))
-        .refine(
-          (lines) => saleLines(lines).length > 0,
-          'Add at least one product with a quantity.',
-        ),
+        .refine((lines) => saleLines(lines).length > 0, 'Add at least one product with a quantity.')
+        .refine((lines) => missingMrp(lines).length === 0, 'Set an MRP for every item first.'),
       nonCash: z
         .string()
         .refine(

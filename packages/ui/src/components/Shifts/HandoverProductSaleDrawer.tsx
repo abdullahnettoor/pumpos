@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { Button, DataSection, Form, Icon, type SectionQuery } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Field, MoneyInput, NumberInput, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
+import { MrpDrawer, type MerchRow } from '../StationSetup/PricingDrawers.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
 import { flashRows } from '../../utils/rowFlash.js';
@@ -19,7 +20,11 @@ import {
   cashToDrawer,
   draftTotals,
   handoverProductSaleSchema,
+  hasMrp,
   lineTax,
+  linesWithoutMrp,
+  mrpLabel,
+  noMrpReason,
   saleLines,
   type DraftLine,
   type HandoverProductSaleFormValues,
@@ -69,6 +74,11 @@ export interface HandoverProductSaleDrawerProps {
   employeeId: string | null;
   handoverSales: HandoverSaleRecord[];
   billed: BilledSaleRecord[];
+  /**
+   * Owner / Manager (`canManageProduct`): a line whose product has no MRP
+   * offers "Set MRP", the Pricing › Products drawer. Others are told who can.
+   */
+  canSetMrp?: boolean;
 }
 
 const BLANK: DraftLine = { productId: '', quantity: '' };
@@ -117,33 +127,43 @@ export const HandoverProductSaleDrawer: React.FC<HandoverProductSaleDrawerProps>
   const editing = !!(
     props.employeeId && props.handoverSales.some((h) => h.attendantId === props.employeeId)
   );
+  /** The product whose MRP is being set from a line (#638); null when closed. */
+  const [settingMrp, setSettingMrp] = useState<MerchRow | null>(null);
 
   return (
-    <Drawer
-      isOpen={isOpen}
-      onClose={onClose}
-      title={editing ? 'Edit handover product sale' : 'Record handover product sale'}
-      subtitle="Products sold this shift and not billed one by one"
-    >
-      <DataSection
-        title="products and employees"
-        query={queries}
-        shape="bare"
-        placeholderHeight={360}
-        enabled={isOpen}
+    <>
+      <Drawer
+        isOpen={isOpen}
+        onClose={onClose}
+        title={editing ? 'Edit handover product sale' : 'Record handover product sale'}
+        subtitle="Products sold this shift and not billed one by one"
       >
-        <SaleForm
-          {...props}
-          products={(productsQ.data ?? []) as ProductOption[]}
-          users={(usersQ.data ?? []) as UserOption[]}
-          stockRows={(stockQ.data ?? []) as { productId: string; quantity: number | string }[]}
-        />
-      </DataSection>
-    </Drawer>
+        <DataSection
+          title="products and employees"
+          query={queries}
+          shape="bare"
+          placeholderHeight={360}
+          enabled={isOpen}
+        >
+          <SaleForm
+            {...props}
+            products={(productsQ.data ?? []) as ProductOption[]}
+            users={(usersQ.data ?? []) as UserOption[]}
+            stockRows={(stockQ.data ?? []) as { productId: string; quantity: number | string }[]}
+            onSetMrp={setSettingMrp}
+          />
+        </DataSection>
+      </Drawer>
+      {/* On top of the sale, outside its form: saving the MRP never submits the
+        sale, and the line reads the new price from the patched product list. */}
+      {settingMrp && <MrpDrawer product={settingMrp} onClose={() => setSettingMrp(null)} />}
+    </>
   );
 };
 
 interface SaleFormProps extends HandoverProductSaleDrawerProps {
+  /** Opens the MRP drawer for a line's product (Owner / Manager only). */
+  onSetMrp: (product: MerchRow) => void;
   products: ProductOption[];
   users: UserOption[];
   stockRows: { productId: string; quantity: number | string }[];
@@ -159,6 +179,8 @@ const SaleForm: React.FC<SaleFormProps> = ({
   products: allProducts,
   users,
   stockRows,
+  canSetMrp = false,
+  onSetMrp,
 }) => {
   const save = useKeyedSave(`handover-product-sale:${shiftId}`);
   const record = useRecordHandoverProductSale(stationId);
@@ -188,8 +210,7 @@ const SaleForm: React.FC<SaleFormProps> = ({
     () =>
       products.map((p) => {
         const onHand = stock[p.id];
-        const price =
-          p.sellingPrice != null ? `MRP ${formatMoney(p.sellingPrice)}` : 'No price set';
+        const price = mrpLabel(p, formatMoney);
         return {
           value: p.id,
           label: `${p.name}${p.brand ? ` · ${p.brand}` : ''}`,
@@ -197,13 +218,19 @@ const SaleForm: React.FC<SaleFormProps> = ({
             onHand != null
               ? `${price} · ${formatQuantity(onHand, p.unit || 'Nos')} on hand`
               : price,
+          // Still offered, but marked: the line cannot be saved until it has one.
+          sublabelTone: hasMrp(p) ? undefined : ('warning' as const),
         };
       }),
     [products, stock],
   );
 
   const schema = useMemo(
-    () => handoverProductSaleSchema((lines) => draftTotals(lines, productById).total),
+    () =>
+      handoverProductSaleSchema(
+        (lines) => draftTotals(lines, productById).total,
+        (lines) => linesWithoutMrp(lines, productById),
+      ),
     [productById],
   );
   const initial = useMemo(
@@ -230,6 +257,9 @@ const SaleForm: React.FC<SaleFormProps> = ({
     [handoverSales, attendantId],
   );
   const totals = useMemo(() => draftTotals(lines, productById), [lines, productById]);
+  // The server refuses a line with no MRP, so Save waits for one (#638).
+  const missingMrp = useMemo(() => linesWithoutMrp(lines, productById), [lines, productById]);
+  const blockedReason = noMrpReason(missingMrp.length, canSetMrp);
   const theirBilled = billed.filter((b) => attendantId && b.attendantId === attendantId);
 
   // Picking an employee who already has a sale loads it, so it is edited and
@@ -294,7 +324,8 @@ const SaleForm: React.FC<SaleFormProps> = ({
             const line = lines[i] ?? BLANK;
             const p = productById[line.productId];
             const qty = Number(line.quantity) || 0;
-            const t = p && qty > 0 ? lineTax(p, qty) : null;
+            const noMrp = !!p && !hasMrp(p);
+            const t = p && !noMrp && qty > 0 ? lineTax(p, qty) : null;
             return (
               <div
                 key={field.id}
@@ -315,9 +346,18 @@ const SaleForm: React.FC<SaleFormProps> = ({
                   </label>
                   <div className="flex flex-1 flex-col gap-0.5 text-[12px] text-ink-muted">
                     MRP
-                    <span className="flex h-8 items-center justify-end rounded-input border border-dashed border-border-strong bg-surface-alt px-2.5 font-mono text-[13px] text-ink-strong">
-                      {p?.sellingPrice != null ? formatMoney(p.sellingPrice) : '—'}
-                    </span>
+                    {noMrp ? (
+                      <span
+                        data-testid="hps-no-mrp"
+                        className="flex h-8 items-center justify-end rounded-input border border-dashed border-danger-fg bg-surface-alt px-2.5 text-[12px] font-medium text-danger-fg"
+                      >
+                        No MRP set
+                      </span>
+                    ) : (
+                      <span className="flex h-8 items-center justify-end rounded-input border border-dashed border-border-strong bg-surface-alt px-2.5 font-mono text-[13px] text-ink-strong">
+                        {p ? formatMoney(p.sellingPrice ?? 0) : '—'}
+                      </span>
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -330,6 +370,26 @@ const SaleForm: React.FC<SaleFormProps> = ({
                     onClick={() => remove(i)}
                   />
                 </div>
+                {noMrp &&
+                  (canSetMrp ? (
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() =>
+                          onSetMrp({ id: p.id, name: p.name, sellingPrice: p.sellingPrice })
+                        }
+                        aria-label={`Set MRP of ${p.name}`}
+                      >
+                        Set MRP
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-right text-[12px] text-ink-muted">
+                      Ask your Owner or Manager to set an MRP.
+                    </p>
+                  ))}
                 {t && (
                   <div className="text-right font-mono text-[12px] text-ink-muted">
                     {formatMoney(t.taxable)} + tax {formatMoney(t.tax)} ={' '}
@@ -419,8 +479,22 @@ const SaleForm: React.FC<SaleFormProps> = ({
         </section>
       )}
 
+      {blockedReason && (
+        // Blocking, like a shift that cannot open without a rate (#630):
+        // announced, beside the Save it disables.
+        <p role="alert" data-testid="hps-no-mrp-reason" className="mt-3 text-[12px] text-danger-fg">
+          {blockedReason}
+        </p>
+      )}
       <div className="mt-3 flex gap-2">
-        <Button type="submit" variant="primary" size="md" fullWidth loading={submitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          fullWidth
+          loading={submitting}
+          disabled={missingMrp.length > 0}
+        >
           {editingId ? 'Update sale' : 'Record sale'}
         </Button>
         <Button type="button" variant="secondary" size="md" onClick={onClose} disabled={submitting}>

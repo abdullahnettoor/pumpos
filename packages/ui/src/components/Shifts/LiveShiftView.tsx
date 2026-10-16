@@ -51,6 +51,8 @@ export interface LiveShiftViewProps {
   money?: ShiftMoneyState;
   /** Retries the shift status after a failed confirmation. */
   onRetryMoney?: () => void;
+  /** Owner / Manager: a product sale line with no MRP offers Set MRP (#638). */
+  canSetMrp?: boolean;
 }
 
 const wholeMoney = (v: number) => formatMoney(v, { decimals: 0 });
@@ -76,6 +78,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
   handoverWrites,
   money = 'confirmed',
   onRetryMoney,
+  canSetMrp = false,
 }) => {
   const handoversQ = useMerchandiseHandovers(
     shift.id,
@@ -145,6 +148,7 @@ export const LiveShiftView: React.FC<LiveShiftViewProps> = ({
             sales={figures.products}
             handoverSales={handoverSales}
             billed={billed}
+            canSetMrp={canSetMrp}
           />
         </div>
         <aside className="flex flex-col gap-4" aria-label="Shift so far">

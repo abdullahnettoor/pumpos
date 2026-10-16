@@ -148,6 +148,8 @@ interface HandoverDrawerProps {
   onCreditChanged?: () => void | Promise<void>;
   existingHandover: any;
   onSaveSuccess: () => void;
+  /** Owner / Manager: a product sale line with no MRP offers Set MRP (#638). */
+  canSetMrp?: boolean;
 }
 
 /**
@@ -221,6 +223,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   onCreditChanged,
   existingHandover,
   onSaveSuccess,
+  canSetMrp = false,
 }) => {
   const formId = `handover-form-${duId}`;
   const [submitting, setSubmitting] = useState(false);
@@ -1554,6 +1557,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         employeeId={userId}
         handoverSales={productHandoversQ.data ?? []}
         billed={productBilledQ.data ?? []}
+        canSetMrp={canSetMrp}
       />
 
       {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}

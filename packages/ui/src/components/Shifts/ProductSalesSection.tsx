@@ -51,6 +51,8 @@ export interface ProductSalesSectionProps {
   sales: ProductSales;
   handoverSales: HandoverSaleRecord[];
   billed: BilledSaleRecord[];
+  /** Owner / Manager: a product sale line with no MRP offers Set MRP (#638). */
+  canSetMrp?: boolean;
 }
 
 /**
@@ -102,6 +104,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
   sales,
   handoverSales,
   billed,
+  canSetMrp = false,
 }) => {
   const confirm = useConfirm();
   const runTask = useRunTask();
@@ -307,6 +310,7 @@ export const ProductSalesSection: React.FC<ProductSalesSectionProps> = ({
         employeeId={drawer.employeeId}
         handoverSales={handoverSales}
         billed={billed}
+        canSetMrp={canSetMrp}
       />
     </section>
   );

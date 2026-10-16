@@ -3,7 +3,11 @@ import {
   cashToDrawer,
   handoverProductSaleSchema,
   draftTotals,
+  hasMrp,
   lineTax,
+  linesWithoutMrp,
+  mrpLabel,
+  noMrpReason,
   saleLines,
 } from './handoverProductSale.js';
 
@@ -77,5 +81,66 @@ describe('handoverProductSaleSchema', () => {
     expect(errorOf({ nonCash: 'abc' })?.[0]).toMatch(/as an amount/);
     expect(errorOf({ nonCash: '450' })).toBeNull();
     expect(errorOf({})).toBeNull();
+  });
+});
+
+describe('a product with no MRP (#638)', () => {
+  const noMrp = { sellingPrice: null, taxCategory: 'GST' };
+  const zero = { sellingPrice: '0', taxCategory: 'GST' };
+  const products = { oil, noMrp, zero };
+
+  it('has an MRP only above zero, as the server requires', () => {
+    expect(hasMrp(oil)).toBe(true);
+    expect(hasMrp(coolant)).toBe(true);
+    expect(hasMrp(noMrp)).toBe(false);
+    expect(hasMrp(zero)).toBe(false);
+    expect(hasMrp(undefined)).toBe(false);
+  });
+
+  it('labels a product in the picker by its MRP, or says it has none', () => {
+    const fmt = (v: number | string) => `₹${Number(v).toFixed(2)}`;
+    expect(mrpLabel(oil, fmt)).toBe('MRP ₹450.00');
+    expect(mrpLabel(noMrp, fmt)).toBe('No price set');
+    expect(mrpLabel(zero, fmt)).toBe('No price set');
+  });
+
+  it('finds the lines whose product has no MRP, not blank ones', () => {
+    expect(
+      linesWithoutMrp(
+        [
+          { productId: 'oil', quantity: '1' },
+          { productId: 'noMrp', quantity: '' },
+          { productId: '', quantity: '2' },
+          { productId: 'zero', quantity: '1' },
+        ],
+        products,
+      ),
+    ).toEqual([1, 3]);
+  });
+
+  it('says why Save is off, and who can fix it', () => {
+    expect(noMrpReason(0, true)).toBeNull();
+    expect(noMrpReason(1, true)).toBe('An item has no MRP. Use Set MRP on it first.');
+    expect(noMrpReason(2, false)).toBe(
+      '2 items have no MRP. Ask your Owner or Manager to set an MRP.',
+    );
+  });
+
+  it('refuses a sale with a line that has no MRP, like the server', () => {
+    const schema = handoverProductSaleSchema(
+      (lines) => draftTotals(lines, products).total,
+      (lines) => linesWithoutMrp(lines, products),
+    );
+    const r = schema.safeParse({
+      attendantId: 'u1',
+      lines: [
+        { productId: 'oil', quantity: '1' },
+        { productId: 'noMrp', quantity: '1' },
+      ],
+      nonCash: '',
+    });
+    expect(r.success ? [] : r.error.issues.map((i) => i.message)).toEqual([
+      'Set an MRP for every item first.',
+    ]);
   });
 });
