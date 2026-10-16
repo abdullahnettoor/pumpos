@@ -48,7 +48,7 @@ export const DensityReading: React.FC<DensityReadingProps> = ({
       data-state={display.status}
     >
       <div className="min-w-0">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+        <div className="text-[12px] font-medium uppercase tracking-wide text-ink-muted">
           Density at 15 °C
         </div>
         <div className="text-[12px] text-ink-muted">{display.detail}</div>
@@ -68,7 +68,7 @@ export const DensityReading: React.FC<DensityReadingProps> = ({
             <div className="font-mono text-[13px] font-semibold tabular-nums text-ink">
               {display.value}
             </div>
-            <div className={cn('text-[11.5px]', jump ? 'text-danger-fg' : 'text-ink-muted')}>
+            <div className={cn('text-[12px]', jump ? 'text-danger-fg' : 'text-ink-muted')}>
               {display.change}
             </div>
             {flag}

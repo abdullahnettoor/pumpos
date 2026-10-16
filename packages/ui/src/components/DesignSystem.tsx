@@ -102,7 +102,7 @@ const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }>
 );
 
 const Mono: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}>
     {children}
   </code>
 );
@@ -137,7 +137,7 @@ const ColorSwatch: React.FC<{ name: string; token: string; fg?: string }> = ({
         alignItems: 'flex-end',
         padding: '6px 8px',
         color: fg ? `var(${fg})` : 'transparent',
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 600,
       }}
     >
@@ -392,7 +392,7 @@ const TokensPanel: React.FC = () => (
                   width: 44,
                   flexShrink: 0,
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-faint)',
                 }}
               >
@@ -408,7 +408,7 @@ const TokensPanel: React.FC = () => (
               >
                 The quick brown fox
               </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>
                 {t.use}
               </span>
             </div>
@@ -436,7 +436,7 @@ const TokensPanel: React.FC = () => (
                   width: 40,
                   flexShrink: 0,
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-faint)',
                 }}
               >
@@ -1068,7 +1068,7 @@ const DataMoneyPanel: React.FC = () => {
                 <th
                   style={{
                     padding: '8px 12px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1081,7 +1081,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1094,7 +1094,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1107,7 +1107,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',

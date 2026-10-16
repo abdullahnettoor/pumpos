@@ -42,7 +42,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
       <div className="flex flex-col gap-2.5">
         <div>
           <div className="flex items-baseline justify-between">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+            <span className="text-[12px] font-medium uppercase tracking-wide text-ink-muted">
               {MONEY_TERMS.receivable}
             </span>
             <span
@@ -77,7 +77,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
                 {p2 > 0 && <div style={{ width: `${p2}%` }} className="bg-warning-fg" />}
                 {p3 > 0 && <div style={{ width: `${p3}%` }} className="bg-danger-fg" />}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-ink-muted">
+              <div className="flex items-center justify-between text-[12px] text-ink-muted">
                 <span>
                   0–7d{' '}
                   <strong className="font-mono font-medium text-ink">
@@ -100,7 +100,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
         </div>
 
         <div className="pt-2 border-t border-border-soft flex items-baseline justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          <span className="text-[12px] font-medium uppercase tracking-wide text-ink-muted">
             {MONEY_TERMS.payable}
           </span>
           <span className="font-mono text-sm font-medium text-ink" data-testid="payables-total">

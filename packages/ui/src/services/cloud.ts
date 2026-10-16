@@ -46,6 +46,7 @@ import {
   DensityReadingWithContext,
   DensityTodaySummary,
   RecordDensityReadingPayload,
+  OrganizationPayload,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -526,6 +527,36 @@ export class CloudTankService implements ITankService {
   }
 }
 
+/** A nozzle created with its dispenser: station and dispenser come from the dispenser. */
+export interface DispenserNozzleBody {
+  name: string;
+  tankId: string;
+  productId: string;
+  currentReading: number;
+}
+
+/** `POST /setup/dispensers/with-nozzles` (#591). */
+export interface DispenserWithNozzlesBody {
+  stationId: string;
+  name: string;
+  code: string;
+  status: 'ACTIVE';
+  nozzles: DispenserNozzleBody[];
+}
+
+export interface DispenserWithNozzles {
+  dispenser: DispenserUnit;
+  nozzles: Nozzle[];
+}
+
+/** One template in `POST /setup/shift-templates/batch` (#591). */
+export interface ShiftTemplateBody {
+  name: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+}
+
 export class CloudDispenserService implements IDispenserService {
   async listDispensers(stationId: string): Promise<DispenserUnit[]> {
     return request<DispenserUnit[]>(`/setup/dispensers?stationId=${stationId}`);
@@ -534,6 +565,21 @@ export class CloudDispenserService implements IDispenserService {
   async createDispenser(data: any, opts?: { idempotencyKey?: string }): Promise<DispenserUnit> {
     return request<DispenserUnit>(
       '/setup/dispensers',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /**
+   * Create a dispenser and its nozzles in one request (#591), so a retry under
+   * the same key cannot leave a dispenser without nozzles or add a second one.
+   */
+  async createDispenserWithNozzles(
+    data: DispenserWithNozzlesBody,
+    opts?: { idempotencyKey?: string },
+  ): Promise<DispenserWithNozzles> {
+    return request<DispenserWithNozzles>(
+      '/setup/dispensers/with-nozzles',
       { method: 'POST', body: JSON.stringify(data) },
       { idempotencyKey: opts?.idempotencyKey },
     );
@@ -599,6 +645,18 @@ export class CloudShiftTemplateService implements IShiftTemplateService {
     return request<ShiftTemplate>(
       '/setup/shift-templates',
       { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /** Create several templates in one all-or-nothing request (#591). */
+  async createTemplates(
+    templates: ShiftTemplateBody[],
+    opts?: { idempotencyKey?: string },
+  ): Promise<ShiftTemplate[]> {
+    return request<ShiftTemplate[]>(
+      '/setup/shift-templates/batch',
+      { method: 'POST', body: JSON.stringify({ templates }) },
       { idempotencyKey: opts?.idempotencyKey },
     );
   }
@@ -1846,8 +1904,9 @@ export class CloudDesktopDownloadsService {
 }
 
 export class CloudOrganizationService {
-  async getOrganization(): Promise<any> {
-    return request<any>('/organization');
+  /** Role-shaped: plan and billing fields reach Owners and Managers only (#616). */
+  async getOrganization(): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>('/organization');
   }
 
   async updateOrganization(
@@ -1856,8 +1915,8 @@ export class CloudOrganizationService {
       metadata?: Record<string, unknown> | null;
     },
     opts?: { idempotencyKey?: string },
-  ): Promise<any> {
-    return request<any>(
+  ): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>(
       '/organization',
       { method: 'PUT', body: JSON.stringify(payload) },
       { idempotencyKey: opts?.idempotencyKey },

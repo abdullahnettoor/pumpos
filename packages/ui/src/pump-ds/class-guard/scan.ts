@@ -15,6 +15,7 @@ export const RULES = [
   'raw-color',
   'palette-class',
   'fill-text-pair',
+  'small-text',
 ] as const;
 export type Rule = (typeof RULES)[number];
 export type Findings = Record<Rule, string[]>;
@@ -63,6 +64,103 @@ const CSS_KEYWORDS = new Set([
   'text-top',
   'text-bottom',
 ]);
+
+/**
+ * Text below the 12px floor (#515, #602): `text-[11px]`, `text-[0.6rem]`,
+ * `text-2xs`, and `fontSize` under 12 in style objects (react-pdf typography
+ * excepted, see `inReactPdfTypography`). Table headers (10px)
+ * are the only exception, kept on the allow-list file by file.
+ */
+const MIN_TEXT_PX = 12;
+const ARBITRARY_SIZE = /^text-\[(\d*\.?\d+)(px|rem)\]$/;
+export function isSmallTextUtility(utility: string): boolean {
+  if (utility === 'text-2xs') return true;
+  const m = ARBITRARY_SIZE.exec(utility);
+  if (!m) return false;
+  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  return px < MIN_TEXT_PX;
+}
+/** A px/rem length under 12px, as px, or null (`'11px'`, `'0.6rem'`). */
+function smallLength(value: string): number | null {
+  const m = /^(\d*\.?\d+)(px|rem)$/.exec(value.trim());
+  if (!m) return null;
+  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  return px < MIN_TEXT_PX ? px : null;
+}
+
+/** A `fontSize` style value under 12px (`11`, `'11px'`, `'0.7rem'`). */
+function isSmallFontSize(node: ts.Expression): string | null {
+  if (ts.isNumericLiteral(node)) return Number(node.text) < MIN_TEXT_PX ? node.text : null;
+  const lit = literalOf(node);
+  if (!lit || lit.chunks.length !== 1) return null;
+  return smallLength(lit.chunks[0]) === null ? null : lit.chunks[0];
+}
+
+const REACT_PDF = '@react-pdf/renderer';
+
+/** Local names bound by `import … from '@react-pdf/renderer'` (named, default, namespace). */
+function reactPdfNames(sf: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    if (st.moduleSpecifier.text !== REACT_PDF) continue;
+    const clause = st.importClause;
+    if (clause?.name) names.add(clause.name.text);
+    const bindings = clause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) names.add(bindings.name.text);
+    if (bindings && ts.isNamedImports(bindings))
+      for (const el of bindings.elements) names.add(el.name.text);
+  }
+  return names;
+}
+
+/** The root identifier of `Text` / `Pdf.Text` / `StyleSheet.create`. */
+function rootName(expr: ts.Node): string | null {
+  let e = expr;
+  while (ts.isPropertyAccessExpression(e)) e = e.expression;
+  return ts.isIdentifier(e) ? e.text : null;
+}
+
+/**
+ * Whether a `fontSize` sits in react-pdf typography, which is a print scale in
+ * points: a `StyleSheet.create(…)` argument, or the `style` prop of an element
+ * imported from `@react-pdf/renderer`. Anything else (an HTML element in the
+ * same file, a loose style object) is screen text and counts.
+ */
+function inReactPdfTypography(node: ts.Node, pdf: ReadonlySet<string>): boolean {
+  if (!pdf.size) return false;
+  for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+    if (
+      ts.isCallExpression(n) &&
+      ts.isPropertyAccessExpression(n.expression) &&
+      n.expression.name.text === 'create' &&
+      pdf.has(rootName(n.expression.expression) ?? '')
+    )
+      return true;
+    if (ts.isJsxAttribute(n)) {
+      if (n.name.getText() !== 'style') return false;
+      const tag = n.parent.parent.tagName;
+      return pdf.has(rootName(tag) ?? '');
+    }
+  }
+  return false;
+}
+
+/**
+ * Text below 12px in a CSS file: `font-size` declarations and Tailwind
+ * `--text-*` size tokens (`--text-2xs: 0.625rem`). Line-height, letter-spacing
+ * and weight companions (`--text-xs--line-height`) are not sizes.
+ */
+export function scanCssSmallText(text: string): string[] {
+  const body = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const out: string[] = [];
+  for (const m of body.matchAll(/(?<![\w-])font-size\s*:\s*([^;}!]+)/g))
+    if (smallLength(m[1]) !== null) out.push(`font-size: ${m[1].trim()}`);
+  for (const m of body.matchAll(/(--text-[\w-]+)\s*:\s*([^;}!]+)/g))
+    if (!/--(line-height|letter-spacing|font-weight)$/.test(m[1]) && smallLength(m[2]) !== null)
+      out.push(`${m[1]}: ${m[2].trim()}`);
+  return out;
+}
 
 const COLOR_UTILITY = /^(bg|text|border|divide|ring|from|to|via|fill|stroke|shadow|outline)-/;
 /**
@@ -326,6 +424,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'raw-color': [],
     'palette-class': [],
     'fill-text-pair': [],
+    'small-text': [],
     'side-only-dash': [],
     'quoted-interpolation': [],
   };
@@ -339,6 +438,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
   const allLits: ts.Node[] = [];
   /** Expressions that are one class string as a whole (`className={…}`, `cn(…)`). */
   const classRoots: ts.Node[] = [];
+  const pdfNames = reactPdfNames(sf);
 
   const collectInto = (root: ts.Node, into: Set<ts.Node>) => {
     const visit = (n: ts.Node) => {
@@ -376,6 +476,10 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
         collectInto(node.initializer, classLits);
         if (!inRoot) classRoots.push(node.initializer);
         root = true;
+      } else if (name === 'fontSize') {
+        const small = isSmallFontSize(node.initializer);
+        if (small && !inReactPdfTypography(node, pdfNames))
+          findings['small-text'].push(`fontSize: ${small}`);
       } else if (name && CSS_COLOR_PROP.test(name) && literalOf(node.initializer))
         styleLits.add(node.initializer);
       else if (name && CSS_VALUE_PROP.test(name) && literalOf(node.initializer))
@@ -406,6 +510,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     for (const token of classTokens(lit)) {
       if (!looksLikeClass(token) || !checkable(token)) continue;
       if (RAW_COLOR.test(token)) findings['raw-color'].push(token);
+      if (isSmallTextUtility(utilityOf(token).utility)) findings['small-text'].push(token);
       if (PALETTE_CLASS.test(utilityOf(token).utility)) {
         findings['palette-class'].push(token);
         continue;

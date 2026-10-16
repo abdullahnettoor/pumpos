@@ -268,7 +268,7 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
           />
           <div className="flex items-center justify-between bg-canvas px-4 py-6">
             <span className="text-[12px] text-ink-faint">page canvas</span>
-            <span className="font-mono text-[11px] text-ink-muted">
+            <span className="font-mono text-[12px] text-ink-muted">
               last action: <span className="text-ink-strong">{lastAction}</span>
             </span>
           </div>
@@ -293,7 +293,7 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
             className="inline-flex items-center gap-2 rounded-button border border-border-soft bg-surface px-3 py-2 text-[13px] text-ink-muted transition-colors hover:border-border-strong"
           >
             Open command palette
-            <kbd className="inline-flex h-[18px] items-center gap-0.5 rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            <kbd className="inline-flex h-[18px] items-center gap-0.5 rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
               ⌘K
             </kbd>
           </button>

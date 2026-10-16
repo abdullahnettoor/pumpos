@@ -2,6 +2,7 @@ export * from './payment-terminals/index.js';
 export * from './products/index.js';
 export * from './tanks/index.js';
 export * from './dispensers/index.js';
+export * from './dispensers/create-with-nozzles.js';
 export * from './nozzles/index.js';
 export * from './shift-templates/index.js';
 export * from './stations/index.js';

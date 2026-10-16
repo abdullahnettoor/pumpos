@@ -23,8 +23,8 @@ const deltaVariants = cva(
   {
     variants: {
       size: {
-        xs: 'h-[16px] px-[5px] text-[10px] [&_svg]:size-[7px]',
-        sm: 'h-[18px] px-1.5 text-[11px] [&_svg]:size-2',
+        xs: 'h-[18px] px-[5px] text-[12px] [&_svg]:size-[7px]',
+        sm: 'h-5 px-1.5 text-[12px] [&_svg]:size-2',
         md: 'h-[22px] px-2 text-[12px] [&_svg]:size-2.5',
       },
       tone: {

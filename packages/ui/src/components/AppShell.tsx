@@ -187,7 +187,7 @@ function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.
       aria-label={badge.label}
       data-testid={testId}
       className={cn(
-        'ml-auto inline-flex min-w-[18px] items-center justify-center rounded-chip px-1.5 font-mono text-[10px] font-medium',
+        'ml-auto inline-flex min-w-[18px] items-center justify-center rounded-chip px-1.5 font-mono text-[12px] font-medium',
         BADGE_CHIP[tone],
       )}
     >

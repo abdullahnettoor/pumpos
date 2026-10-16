@@ -70,8 +70,8 @@ const Column: React.FC<{ label: string; note: string; children: React.ReactNode 
 }) => (
   <div className="flex min-w-0 flex-col gap-2">
     <div>
-      <div className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className="font-mono text-[10px] text-ink-faint">{note}</div>
+      <div className="font-mono text-[12px] uppercase tracking-wider text-ink-faint">{label}</div>
+      <div className="font-mono text-[12px] text-ink-faint">{note}</div>
     </div>
     {children}
   </div>
@@ -90,7 +90,7 @@ const StateGrid: React.FC<{ render: (s: DemoState) => React.ReactNode }> = ({ re
 export const DataSectionShowcase: React.FC = () => (
   <div>
     <div className="border-b border-border-soft">
-      <div className="pt-3 font-mono text-[11px] uppercase tracking-wider text-ink-strong">
+      <div className="pt-3 font-mono text-[12px] uppercase tracking-wider text-ink-strong">
         DataSection · shape="card"
       </div>
       <StateGrid
@@ -108,7 +108,7 @@ export const DataSectionShowcase: React.FC = () => (
       />
     </div>
     <div>
-      <div className="pt-3 font-mono text-[11px] uppercase tracking-wider text-ink-strong">
+      <div className="pt-3 font-mono text-[12px] uppercase tracking-wider text-ink-strong">
         DataTable · bare DataSection inside
       </div>
       <StateGrid

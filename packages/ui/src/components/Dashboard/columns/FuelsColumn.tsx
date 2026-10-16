@@ -29,7 +29,7 @@ export const FuelsColumn: React.FC = () => {
         }
       />
       <FuelsCard />
-      <p className="px-1 text-[11.5px] text-ink-muted">{footnote}</p>
+      <p className="px-1 text-[12px] text-ink-muted">{footnote}</p>
     </>
   );
 };

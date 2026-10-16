@@ -69,7 +69,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
           />
         ))}
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-x-3.5 text-[11.5px] text-ink-muted">
+      <div className="mt-1.5 flex flex-wrap gap-x-3.5 text-[12px] text-ink-muted">
         <span>
           Floats <b className="font-mono tabular-nums text-ink">{inr(m.floats)}</b>
         </span>
@@ -96,7 +96,7 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
     data-testid="last-closed"
   >
     <div className="flex items-center">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+      <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
         Last closed: {last.label}
       </span>
       <button
@@ -109,19 +109,19 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
     </div>
     <div className="mt-1.5 flex gap-[18px] text-[12.5px]">
       <div>
-        <div className="text-[11px] text-ink-muted">Sales</div>
+        <div className="text-[12px] text-ink-muted">Sales</div>
         <div className="font-mono text-[13px] tabular-nums">
           {last.sales == null ? '—' : inr(last.sales)}
         </div>
       </div>
       <div>
-        <div className="text-[11px] text-ink-muted">Litres</div>
+        <div className="text-[12px] text-ink-muted">Litres</div>
         <div className="font-mono text-[13px] tabular-nums">
           {last.litres == null ? '—' : formatQty(last.litres, 0)}
         </div>
       </div>
       <div>
-        <div className="text-[11px] text-ink-muted">Variance</div>
+        <div className="text-[12px] text-ink-muted">Variance</div>
         {last.variance == null ? (
           <div>—</div>
         ) : (

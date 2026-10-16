@@ -102,7 +102,7 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
                 height: '24px',
                 flexShrink: 0,
                 borderRadius: '999px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 backgroundColor: isStepComplete(step)
                   ? 'var(--state-success-bg)'
@@ -133,7 +133,7 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
               >
                 {step.label}
               </span>
-              <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                 {step.locked && !step.done
                   ? (step.lockedHint ?? step.description)
                   : step.description}

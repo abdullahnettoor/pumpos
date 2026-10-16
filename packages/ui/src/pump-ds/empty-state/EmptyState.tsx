@@ -42,7 +42,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
         <div className="min-w-0 flex-1">
           <div className="text-[12.5px] font-semibold text-ink-strong">{title}</div>
           {description && (
-            <div className="text-[11.5px] leading-snug text-ink-muted">{description}</div>
+            <div className="text-[12px] leading-snug text-ink-muted">{description}</div>
           )}
         </div>
         {action && <div className="flex-shrink-0">{action}</div>}

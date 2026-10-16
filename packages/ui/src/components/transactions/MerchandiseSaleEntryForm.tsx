@@ -284,7 +284,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                   </div>
                   {t && (
                     <div
-                      style={{ fontSize: '10px', color: 'var(--text-faint)', paddingLeft: '2px' }}
+                      style={{ fontSize: '12px', color: 'var(--text-faint)', paddingLeft: '2px' }}
                     >
                       {inr(t.taxable)}
                       {t.hasTax ? ` + tax ${inr(t.tax)}` : ''} = {inr(t.total)}
@@ -293,7 +293,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                   {oversell && (
                     <div
                       style={{
-                        fontSize: '11px',
+                        fontSize: '12px',
                         color: 'var(--brand-warning)',
                         paddingLeft: '2px',
                       }}
@@ -324,7 +324,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
             Add item
           </Button>
           {typeof errors.lines?.message === 'string' && (
-            <div style={{ fontSize: '11px', color: 'var(--brand-danger)', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--brand-danger)', marginTop: '4px' }}>
               {errors.lines.message}
             </div>
           )}
@@ -380,7 +380,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
         >
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               color: 'var(--text-muted)',
               textTransform: 'uppercase',
@@ -389,7 +389,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           >
             Buyer details (optional)
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '-6px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '-6px' }}>
             For a walk-in not in your registry — used on the bill/invoice.
           </span>
           <Field label="Name">

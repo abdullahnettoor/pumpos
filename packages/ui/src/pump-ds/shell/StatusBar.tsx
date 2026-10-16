@@ -127,7 +127,7 @@ const Segment: React.FC<React.HTMLAttributes<HTMLDivElement> & { as?: 'div' }> =
 }) => (
   <div
     className={cn(
-      'inline-flex h-full items-center gap-1.5 px-2.5 text-[11.5px] text-ink-muted',
+      'inline-flex h-full items-center gap-1.5 px-2.5 text-[12px] text-ink-muted',
       className,
     )}
     {...rest}
@@ -198,7 +198,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               <button
                 type="button"
                 data-testid="statusbar-business-day"
-                className="inline-flex h-full items-center gap-1.5 rounded-none px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong focus:outline-none focus-visible:outline-none"
+                className="inline-flex h-full items-center gap-1.5 rounded-none px-2.5 text-[12px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong focus:outline-none focus-visible:outline-none"
               >
                 <Dot tone={businessDayStatus === 'open' ? 'success' : 'neutral'} size="sm" />
                 <span>
@@ -215,7 +215,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   <span>Current Business Date · {businessDate}</span>
                   <span
                     className={cn(
-                      'text-[11px] font-medium',
+                      'text-[12px] font-medium',
                       businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted',
                     )}
                   >
@@ -230,17 +230,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 </>
               )}
               {businessDaysState === 'loading' && (
-                <div className="px-2 py-1.5 text-[11px] text-ink-faint">
+                <div className="px-2 py-1.5 text-[12px] text-ink-faint">
                   Checking Past Open Business Days
                 </div>
               )}
               {businessDaysState === 'unavailable' && (
-                <div className="px-2 py-1.5 text-[11px] text-danger-fg">
+                <div className="px-2 py-1.5 text-[12px] text-danger-fg">
                   Past Open Business Days unavailable
                 </div>
               )}
               {businessDays.length === 0 && businessDaysState === 'ready' && (
-                <div className="px-2 py-1.5 text-[11px] text-ink-faint">
+                <div className="px-2 py-1.5 text-[12px] text-ink-faint">
                   No Past Open Business Days
                 </div>
               )}
@@ -250,11 +250,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     <span className="flex flex-1 items-center justify-between gap-4">
                       <span className="flex flex-col">
                         <span>{d.label}</span>
-                        <span className="text-[10px] text-ink-faint">
+                        <span className="text-[12px] text-ink-faint">
                           {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
                         </span>
                       </span>
-                      <span className="text-[11px] text-brand">Open</span>
+                      <span className="text-[12px] text-brand">Open</span>
                     </span>
                   </MenuItem>
                 ))}
@@ -294,7 +294,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               onClick={onUpdate}
               disabled={!onUpdate}
               className={cn(
-                'inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[11px] font-medium text-info-fg transition-colors',
+                'inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[12px] font-medium text-info-fg transition-colors',
                 onUpdate ? 'hover:brightness-95' : 'cursor-default opacity-80',
               )}
             >
@@ -308,7 +308,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               title="Check for updates"
               onClick={onCheckUpdates}
               disabled={checkingUpdates}
-              className="inline-flex h-full items-center px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong disabled:cursor-default"
+              className="inline-flex h-full items-center px-2.5 text-[12px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong disabled:cursor-default"
             >
               <span>{checkingUpdates ? 'Checking\u2026' : `v${appVersion}`}</span>
             </button>

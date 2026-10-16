@@ -25,6 +25,7 @@ import {
   OnboardingDraft,
   Role,
 } from '@pump/shared';
+import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
 import {
   CreateStation,
@@ -38,12 +39,14 @@ import {
   UpdateTank,
   DeleteTank,
   CreateDispenser,
+  CreateDispenserWithNozzles,
   UpdateDispenser,
   DeleteDispenser,
   CreateNozzle,
   UpdateNozzle,
   DeleteNozzle,
   CreateShiftTemplate,
+  CreateShiftTemplates,
   UpdateShiftTemplate,
   DeleteShiftTemplate,
   FinalizeStationOnboarding,
@@ -62,6 +65,7 @@ import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
+import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
 import {
@@ -417,6 +421,54 @@ stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'
   return sendResult(c, result);
 });
 
+/**
+ * Ids the dispenser-with-nozzles body names, checked at the edge so a
+ * malformed one answers VALIDATION_ERROR instead of reaching the driver. The
+ * rest of the command is validated by the use-case.
+ */
+const dispenserWithNozzlesIds = z
+  .object({
+    stationId: z.string().uuid(),
+    nozzles: z
+      .array(z.object({ tankId: z.string().uuid(), productId: z.string().uuid() }).passthrough())
+      .default([]),
+  })
+  .passthrough();
+
+/**
+ * Create a dispenser and its nozzles in one request (#591): one use-case, one
+ * transaction, one Idempotency-Key. A refused nozzle leaves no dispenser, and a
+ * replayed key answers with the first result instead of a second dispenser.
+ * `POST /dispensers` and `POST /nozzles` stay for adding one later.
+ */
+stationSetupRouter.post(
+  '/dispensers/with-nozzles',
+  writePolicyGuard('POST /setup/dispensers/with-nozzles'),
+  validateJson(dispenserWithNozzlesIds),
+  async (c) => {
+    const user = c.var.user;
+    const body = c.req.valid('json');
+    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
+        403,
+      );
+    }
+    if (!(await stationInOrg(c, body.stationId))) return stationNotFound(c);
+    const db = c.var.db;
+    const result = await runInTransaction(db, (tx, events) =>
+      new CreateDispenserWithNozzles({
+        dispensers: new DrizzleDispenserRepository(tx),
+        nozzles: new DrizzleNozzleRepository(tx),
+        tanks: new DrizzleTankRepository(tx),
+        products: new DrizzleProductRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body.stationId })),
+    );
+    return sendResult(c, result);
+  },
+);
+
 // ----------------------------------------------------
 // Nozzles CRUD
 // ----------------------------------------------------
@@ -461,6 +513,7 @@ stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), asy
     new CreateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body.stationId })),
   );
@@ -504,6 +557,35 @@ stationSetupRouter.post(
       events: createDispatcher(db),
     });
     const result = await useCase.execute(body, buildContext(user));
+    return sendResult(c, result);
+  },
+);
+
+/**
+ * Create several shift templates in one request (#591), e.g. the three-shift
+ * pre-fill: all or nothing in one transaction under one Idempotency-Key.
+ */
+stationSetupRouter.post(
+  '/shift-templates/batch',
+  writePolicyGuard('POST /setup/shift-templates/batch'),
+  async (c) => {
+    const user = c.var.user;
+    if (user.role !== 'Owner' && user.role !== 'Manager') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new CreateShiftTemplates({
+        repository: new DrizzleShiftTemplateRepository(tx),
+        events,
+      }).execute(body, buildContext(user)),
+    );
     return sendResult(c, result);
   },
 );
@@ -978,6 +1060,7 @@ stationSetupRouter.put('/nozzles/:id', writePolicyGuard('PUT /setup/nozzles/:id'
     new UpdateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
       events,
     }).execute({ ...body, id }, buildContext(user, { stationId })),
   );
@@ -996,6 +1079,7 @@ stationSetupRouter.delete(
     const useCase = new DeleteNozzle({
       repository: new DrizzleNozzleRepository(db),
       tanks: new DrizzleTankRepository(db),
+      products: new DrizzleProductRepository(db),
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id }, buildContext(user));
