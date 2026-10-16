@@ -17,6 +17,8 @@ import { createIdempotencyMiddleware } from '../../idempotency.js';
  * the real route behind the real idempotency middleware and prove the request
  * is all or nothing, and that a replayed key answers with the first result
  * instead of writing again. The three-shift pre-fill gets the same proof.
+ * The single-nozzle routes are here too: their dispenser must be the caller's,
+ * at the nozzle's station (#629).
  */
 
 const CONNECTION = process.env.TEST_DATABASE_URL;
@@ -29,6 +31,13 @@ const MS = '00000000-0000-0000-0000-000000059104';
 const HSD = '00000000-0000-0000-0000-000000059105';
 const MS_TANK = '00000000-0000-0000-0000-000000059106';
 const HSD_TANK = '00000000-0000-0000-0000-000000059107';
+// #629: dispensers a single nozzle must not be hung on.
+const OTHER_ORG = '00000000-0000-0000-0000-000000062901';
+const OTHER_ORG_STATION = '00000000-0000-0000-0000-000000062902';
+const OTHER_ORG_DU = '00000000-0000-0000-0000-000000062903';
+const OTHER_STATION = '00000000-0000-0000-0000-000000062904';
+const OTHER_STATION_DU = '00000000-0000-0000-0000-000000062905';
+const OWN_DU = '00000000-0000-0000-0000-000000062906';
 
 const BOOTSTRAP = `
   do $$ begin
@@ -198,6 +207,28 @@ describe.skipIf(!CONNECTION)('dispenser with nozzles in one request (#591)', () 
         name: 'T2',
         productId: HSD,
         capacity: '20000',
+      },
+    ]);
+    await db.insert(schema.organizations).values({ id: OTHER_ORG, name: 'Tenant B' });
+    await db.insert(schema.stations).values([
+      { id: OTHER_ORG_STATION, organizationId: OTHER_ORG, name: 'Station B', code: 'STB' },
+      { id: OTHER_STATION, organizationId: ORG, name: 'Station A2', code: 'STA2' },
+    ]);
+    await db.insert(schema.dispenserUnits).values([
+      { id: OWN_DU, organizationId: ORG, stationId: STATION, name: 'Own', code: 'DU-OWN' },
+      {
+        id: OTHER_STATION_DU,
+        organizationId: ORG,
+        stationId: OTHER_STATION,
+        name: 'Elsewhere',
+        code: 'DU-ELSE',
+      },
+      {
+        id: OTHER_ORG_DU,
+        organizationId: OTHER_ORG,
+        stationId: OTHER_ORG_STATION,
+        name: 'Foreign',
+        code: 'DU-FOREIGN',
       },
     ]);
   }
@@ -415,5 +446,60 @@ describe.skipIf(!CONNECTION)('dispenser with nozzles in one request (#591)', () 
     expect(retry.json.success).toBe(true);
     expect(await reliefs()).toEqual(['Relief A', 'Relief B']);
     expect(await eventCount()).toBe(eventsBefore + 2);
+  });
+
+  describe('a single nozzle names a dispenser of its own station (#629)', () => {
+    const nozzleBody = (duId: string, name: string) => ({
+      stationId: STATION,
+      duId,
+      name,
+      tankId: MS_TANK,
+      productId: MS,
+      currentReading: 0,
+    });
+    const nozzlesNamed = (name: string) =>
+      db.select().from(schema.nozzles).where(eq(schema.nozzles.name, name));
+
+    it.each([
+      ['another organization', OTHER_ORG_DU],
+      ['another station of the same organization', OTHER_STATION_DU],
+    ])('POST /setup/nozzles refuses a dispenser of %s with 404', async (_label, duId) => {
+      const name = `IT-629-${duId.slice(-4)}`;
+      const { status, json } = await post('/setup/nozzles', nozzleBody(duId, name));
+
+      expect(status).toBe(404);
+      expect(json.success).toBe(false);
+      expect(json.error.code).toBe('NOT_FOUND');
+      expect(await nozzlesNamed(name)).toEqual([]);
+    });
+
+    it('POST /setup/nozzles hangs a nozzle on its own dispenser', async () => {
+      const { status, json } = await post<{ duId: string }>(
+        '/setup/nozzles',
+        nozzleBody(OWN_DU, 'IT-629-OWN'),
+      );
+
+      expect(status).toBeLessThan(300);
+      expect(json.data.duId).toBe(OWN_DU);
+    });
+
+    it('PUT /setup/nozzles/:id refuses moving a nozzle onto a foreign dispenser', async () => {
+      const created = await post<{ id: string }>(
+        '/setup/nozzles',
+        nozzleBody(OWN_DU, 'IT-629-MOVE'),
+      );
+      expect(created.json.success).toBe(true);
+
+      const res = await app.request(`/setup/nozzles/${created.json.data.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duId: OTHER_ORG_DU }),
+      });
+
+      expect(res.status).toBe(404);
+      expect(((await res.json()) as Envelope<unknown>).error.code).toBe('NOT_FOUND');
+      const [row] = await nozzlesNamed('IT-629-MOVE');
+      expect(row.duId).toBe(OWN_DU);
+    });
   });
 });

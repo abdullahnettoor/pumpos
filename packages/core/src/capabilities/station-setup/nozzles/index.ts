@@ -17,6 +17,7 @@ import type {
 } from '../../../kernel/index.js';
 import type { TankRepository } from '../tanks/index.js';
 import type { ProductRepository } from '../products/ports.js';
+import type { DispenserRepository } from '../dispensers/index.js';
 
 export interface Nozzle {
   id: string;
@@ -74,11 +75,37 @@ const updateSchema = z.object({
 /** The one product read a nozzle needs: does this Product belong to the Organization. */
 export type NozzleProductLookup = Pick<ProductRepository, 'findById'>;
 
+/** The one dispenser read a nozzle needs: which Organization and Station this Dispenser is at. */
+export type NozzleDispenserLookup = Pick<DispenserRepository, 'findById'>;
+
 export interface NozzleDeps {
   repository: NozzleRepository;
   tanks: TankRepository;
   products: NozzleProductLookup;
+  dispensers: NozzleDispenserLookup;
   events: EventPublisher;
+}
+
+/**
+ * A Nozzle hangs on a Dispenser of its own Organization at its own Station
+ * (#629). Anything else is refused as not found, so another tenant's
+ * dispenser ids reveal nothing. Dispenser-with-nozzles create needs no such
+ * check: it makes the dispenser itself.
+ */
+export async function checkNozzleDispenser(
+  deps: { dispensers: NozzleDispenserLookup },
+  nozzle: { stationId: string; duId: string },
+  ctx: ExecutionContext,
+): Promise<Result<void>> {
+  const dispenser = await deps.dispensers.findById(nozzle.duId);
+  if (
+    !dispenser ||
+    dispenser.organizationId !== ctx.organizationId ||
+    dispenser.stationId !== nozzle.stationId
+  ) {
+    return err(notFoundError('Dispenser', nozzle.duId));
+  }
+  return ok(undefined);
 }
 
 /**
@@ -149,6 +176,8 @@ export class CreateNozzle implements UseCase<CreateNozzleCommand, Nozzle> {
     const p = nozzleCreateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid CreateNozzle command', { issues: p.error.flatten() }));
+    const dispenserCheck = await checkNozzleDispenser(this.deps, p.data, ctx);
+    if (!dispenserCheck.success) return err(dispenserCheck.error);
     const sourceCheck = await checkNozzleSource(this.deps, p.data, ctx);
     if (!sourceCheck.success) return err(sourceCheck.error);
     const { nozzle, event } = newNozzle(p.data, ctx);
@@ -167,6 +196,15 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Nozzle', p.data.id));
+    const duId = p.data.duId ?? existing.duId;
+    if (duId !== existing.duId) {
+      const dispenserCheck = await checkNozzleDispenser(
+        this.deps,
+        { stationId: existing.stationId, duId },
+        ctx,
+      );
+      if (!dispenserCheck.success) return err(dispenserCheck.error);
+    }
     const tankId = p.data.tankId ?? existing.tankId;
     const productId = p.data.productId ?? existing.productId;
     const sourceCheck = await checkNozzleSource(
@@ -177,7 +215,7 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
     if (!sourceCheck.success) return err(sourceCheck.error);
     const updated: Nozzle = {
       ...existing,
-      duId: p.data.duId ?? existing.duId,
+      duId,
       tankId,
       productId,
       name: p.data.name ?? existing.name,
