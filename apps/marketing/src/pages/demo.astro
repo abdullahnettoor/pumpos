@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Button from '../components/ds/Button.astro';
 import HeroBg from '../components/home/HeroBg.astro';
-import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY } from '../config';
+import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY, WHATSAPP_NUMBER } from '../config';
 import '../styles/home.css';
 
 const stats = [
@@ -80,7 +80,7 @@ const stats = [
             <form
               id="demo-booking-form"
               class="d-form"
-              action={DEMO_BOOKING_URL ?? 'mailto:hello@pumpos.app'}
+              action={DEMO_BOOKING_URL ?? WHATSAPP_URL}
               method="GET"
             >
               <div class="d-field">
@@ -166,7 +166,7 @@ const stats = [
               </div>
 
               <button type="submit" class="ds-btn ds-btn--primary d-submit-btn" id="demo-submit-btn">
-                <span>{DEMO_BOOKING_URL ? 'Continue to choose demo time' : 'Book guided demo'}</span>
+                <span>{DEMO_BOOKING_URL ? 'Continue to choose demo time' : 'Send request on WhatsApp'}</span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
 
@@ -182,13 +182,15 @@ const stats = [
           <!-- Side / WhatsApp Alternative -->
           <aside class="d-side">
             <div class="ds-card d-wa-card">
-              <div class="d-wa-badge">Direct option</div>
-              <h3>Prefer WhatsApp? Text us directly</h3>
-              <p>Skip the form and message us directly on WhatsApp. We can talk about your station, answer questions, or coordinate a demo time right in chat.</p>
+              <div class="d-wa-badge">Other ways to reach us</div>
+              <h3>Skip the form</h3>
+              <p>Message us on WhatsApp with any question about your station, or write to us by email if you prefer.</p>
               <Button variant="wa" href={WHATSAPP_URL} target="_blank" rel="noopener" class="d-wa-btn">
                 <span>WhatsApp {WHATSAPP_DISPLAY}</span>
               </Button>
-              <span class="d-wa-note">Opens WhatsApp directly to our team.</span>
+              <Button variant="secondary" href="mailto:hello@pumpos.app?subject=PumpOS%20guided%20demo" class="d-wa-btn">
+                <span>Email hello@pumpos.app</span>
+              </Button>
             </div>
 
             <div class="ds-card d-expect-card">
@@ -238,7 +240,7 @@ const stats = [
     </section>
   </div>
 
-  <script is:inline define:vars={{ bookingUrl: DEMO_BOOKING_URL }}>
+  <script is:inline define:vars={{ bookingUrl: DEMO_BOOKING_URL, waNumber: WHATSAPP_NUMBER.replace(/\D/g, '') }}>
     const form = document.getElementById('demo-booking-form');
     const feedback = document.getElementById('demo-form-feedback');
 
@@ -288,11 +290,11 @@ const stats = [
             window.location.href = url.toString();
             return;
           } catch {
-            // fall through to email if URL parse fails
+            // fall through to WhatsApp if URL parse fails
           }
         }
 
-        // Email fallback
+        // WhatsApp request
         const setupParts = [
           tanks ? `${tanks} tanks` : '',
           nozzles ? `${nozzles} nozzles` : '',
@@ -306,22 +308,21 @@ const stats = [
           setupParts ? `Station setup: ${setupParts}` : '',
         ].filter(Boolean);
 
-        const subject = `PumpOS guided demo - ${station || name}`;
-        const body = lines.join('\n');
-        const mailtoUrl = `mailto:hello@pumpos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        const text = ["Hi, I'd like a PumpOS guided demo.", '', ...lines].join('\n');
+        const whatsappUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
 
         if (feedback) {
           feedback.hidden = false;
           feedback.className = 'd-feedback d-feedback--info';
           feedback.replaceChildren();
-          feedback.appendChild(document.createTextNode('Opening your email client… '));
+          feedback.appendChild(document.createTextNode('Opening WhatsApp… '));
           const link = document.createElement('a');
-          link.href = mailtoUrl;
-          link.textContent = "Click here if your email didn't open";
+          link.href = whatsappUrl;
+          link.textContent = "Click here if WhatsApp didn't open";
           feedback.appendChild(link);
         }
 
-        window.location.href = mailtoUrl;
+        window.location.href = whatsappUrl;
       });
     }
   </script>
@@ -390,7 +391,6 @@ const stats = [
   .d-wa-card h3 { font-size: 21px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; margin: 0; color: var(--h-ink); }
   .d-wa-card p { color: var(--h-muted); font-size: 14px; line-height: 1.55; margin: 0; }
   .d-wa-btn { width: 100%; }
-  .d-wa-note { font-size: 12px; color: var(--h-muted); text-align: center; }
 
   .d-expect-card { padding: 28px; background: var(--h-alt); border: 1px solid var(--h-line); border-radius: 20px; display: flex; flex-direction: column; gap: 14px; }
   .d-expect-card h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--h-primary); margin: 0; }

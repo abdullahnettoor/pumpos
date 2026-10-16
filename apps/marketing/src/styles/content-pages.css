@@ -766,3 +766,10 @@
 .docs-index-card b { font-size: 18px; letter-spacing: -.01em; }
 .docs-index-card span { font-size: 14px; line-height: 1.5; color: var(--ds-muted); flex: 1; }
 .docs-index-card i { font-style: normal; font-weight: 700; font-size: 14px; color: var(--ds-primary); margin-top: 6px; }
+
+.legal-updated {
+  margin: 12px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--ds-text-small);
+  font-weight: 600;
+}
