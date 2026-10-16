@@ -44,7 +44,7 @@ export const ShiftBusinessDateContext: React.FC<ShiftBusinessDateContextProps> =
             color: 'var(--text-strong)',
           }}
         >
-          <CalendarRange size={14} /> Shift Business Date · {formatDate(businessDate)}
+          <CalendarRange size={14} /> Shift business date · {formatDate(businessDate)}
         </strong>
         {scheduledStartTime && scheduledEndTime && (
           <span
@@ -55,17 +55,17 @@ export const ShiftBusinessDateContext: React.FC<ShiftBusinessDateContextProps> =
               color: 'var(--text-muted)',
             }}
           >
-            <Clock3 size={13} /> Scheduled Shift Window · {scheduledStartTime}–{scheduledEndTime}
+            <Clock3 size={13} /> Scheduled shift window · {scheduledStartTime}–{scheduledEndTime}
           </span>
         )}
         {openedAt && (
           <span style={{ color: 'var(--text-faint)' }}>
-            Shift Opened At · {formatStationDateTime(openedAt, timeZone)}
+            Shift opened at · {formatStationDateTime(openedAt, timeZone)}
           </span>
         )}
         {closedAt && (
           <span style={{ color: 'var(--text-faint)' }}>
-            Shift Closed At · {formatStationDateTime(closedAt, timeZone)}
+            Shift closed at · {formatStationDateTime(closedAt, timeZone)}
           </span>
         )}
       </div>

@@ -193,7 +193,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Density Calculator"
+      aria-label="Density calculator"
       style={{
         position: 'fixed',
         top: pos.top,
@@ -222,7 +222,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             color: 'var(--text-muted)',
           }}
         >
-          15 °C Density Calculator
+          15 °C Density calculator
         </span>
         <span
           style={{

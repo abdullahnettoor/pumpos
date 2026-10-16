@@ -69,13 +69,13 @@ describe('ShiftBusinessDateContext', () => {
         />
       </QueryClientProvider>,
     );
-    expect(html).toContain('Shift Business Date · 10 Sep 2026');
-    expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
+    expect(html).toContain('Shift business date · 10 Sep 2026');
+    expect(html).toContain('Scheduled shift window · 06:00–14:00');
     expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
     expect(html).toContain('10 Sep 2026 · Open');
     expect(html).toContain('13 Sep 2026 · Open · Unavailable (future)');
     expect(html).not.toMatch(/\d{4}-\d{2}-\d{2} · Open/);
-    expect(html).toContain('Custom Business Date');
+    expect(html).toContain('Custom business date');
   });
 
   it('shows the Station-local opened time and the historical context on the live shift', () => {

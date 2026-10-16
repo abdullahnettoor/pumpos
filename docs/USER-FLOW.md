@@ -41,7 +41,7 @@ navigation (a bottom dock, no sidebar): see
 ## 1. Sign in
 
 1. Open the app → **Sign in to operational console**.
-2. Enter **Email or phone** + **Password** → **Sign In**.
+2. Enter **Email or phone** + **Password** → **Sign in**.
 3. Invited team members instead follow their email invite link → **Set
    password & continue**.
 
@@ -52,20 +52,20 @@ checklist: Create your organization → Onboard your station → Invite your tea
 ## 2. Onboard the station (web console, one time)
 
 Onboarding runs on the **web console** only — the desktop app shows a notice
-to finish setup on the web. Sidebar → **Onboarding Setup** opens a full-screen
+to finish setup on the web. Sidebar → **Onboarding setup** opens a full-screen
 9-step wizard. Progress is saved as a draft; you can leave and resume.
 
-| Step                        | What you enter                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1. Station Basics           | Station name, address, contact details                                                            |
-| 2. Business Rules           | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime                       |
-| 3. Fuels & Rates            | **Add Fuel** for each fuel sold (MS, HSD, XP…) with current rate                                  |
-| 4. Tanks                    | One entry per underground tank: fuel, capacity, current stock                                     |
-| 5. Dispensers & Nozzles     | **Add Dual (2 Nozzles)** / **Add Quad (4 Nozzles)** per dispenser unit; map each nozzle to a tank |
-| 6. Opening / Current Values | Current totalizer reading per nozzle, current tank stock                                          |
-| 7. Shift Templates          | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night)                                     |
-| 8. Payment Terminals        | **Add Payment Terminal**: Provider/Acquirer, Terminal ID (TID), label — one per POS machine       |
-| 9. Review & Provision       | Summary counts; fix any "Add at least one…" validation, then provision                            |
+| Step                        | What you enter                                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1. Station basics           | Station name, address, contact details                                                                                 |
+| 2. Business rules           | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime                                            |
+| 3. Fuels & rates            | **Add fuel** for each fuel sold (MS, HSD, XP…) with current rate                                                       |
+| 4. Tanks                    | One entry per underground tank: fuel, capacity, current stock                                                          |
+| 5. Dispensers & nozzles     | **Add dual (2 nozzles)** / **Add quad (4 nozzles)** per dispenser unit; map each nozzle to a tank                      |
+| 6. Opening / current values | Current selling rate per fuel; opening stock and purchase rate per tank (nozzle readings come at the first shift open) |
+| 7. Shift templates          | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night)                                                          |
+| 8. Payment terminals        | **Add terminal**: Provider/acquirer, Terminal ID (TID), label — one per POS machine                                    |
+| 9. Review & provision       | Summary counts; fix any "Add at least one…" validation, then provision                                                 |
 
 Done when: the review step provisions the station and the full app unlocks.
 
@@ -82,7 +82,7 @@ Additive, Accessory, Consumable…), unit, tax category ("GST (lubricants /
 merchandise)" for most merchandise), GST rate, HSN code, selling price, stock
 type **Item (packaged stock)** → **Create item**.
 
-**Bulk (recommended for a real catalog)**: **Import Products (CSV)** drawer →
+**Bulk (recommended for a real catalog)**: **Import products (CSV)** drawer →
 **Download sample CSV** → fill columns
 `name, code, productType, unit, taxCategory, gstRate, hsnCode, brand,
 category, sellingPrice, costPriceExGst, openingStock` → **Choose CSV file** →
@@ -97,9 +97,9 @@ rate": product, Rate/L, effective-from) or **Products** tab → **Set price**.
 ## 4. Register customers and suppliers
 
 **Customers** (fleet/credit accounts): Sidebar → **Customers** → **Customers**
-tab → **Register New Customer** → name, phone, account type,
+tab → **Register new customer** → name, phone, account type,
 settlement cycle, **credit limit**, fleet code, opening due, GSTIN/billing
-details. Add fleet vehicles under the **Vehicles** tab → **Add Vehicle**. Customer
+details. Add fleet vehicles under the **Vehicles** tab → **Add vehicle**. Customer
 records may show legacy prepaid fields; dealer-held prepaid wallet top-up/drawdown
 is not a supported workflow.
 
@@ -131,7 +131,7 @@ Sidebar → **Shifts** → **Live shift** tab. With no shift open it shows today
 so far and what closed last; **Open shift** (top right) shows the open-shift
 form:
 
-1. Pick the **Shift template** and confirm the **Shift Business Date** (it
+1. Pick the **Shift template** and confirm the **Shift business date** (it
    defaults correctly for the station's day-start; before 06:00 the date is
    still "yesterday").
 2. Assign an **Attendant** to each dispenser unit and enter the **Opening
@@ -143,7 +143,7 @@ form:
    an Owner or Manager sets one with **Change price**.
 4. Verify **Opening nozzle readings** — they default from the previous close;
    correct only if the pump display disagrees.
-5. **Start Shift Operations**.
+5. **Start shift operations**.
 
 Done when: the active-shift workspace appears and the status bar shows the
 open shift.
@@ -152,7 +152,7 @@ open shift.
 
 The Live shift tab is the operator's home during the day: the shift bar (Live,
 running time, scheduled end, handovers done), four "This shift" tiles (Fuel
-sold · Sales · Card / UPI / Credit · Drawer variance), the **Nozzle readings**
+sold · Sales · Card / UPI / credit · Drawer variance), the **Nozzle readings**
 grouped by attendant and the **Product sales** per employee, with the takings
 and a **Before close** checklist on the right. **Record ▾** (top right, on
 every tab) holds **Product sale (M)** and the Office Records: **Expense (E)** ·
@@ -196,7 +196,10 @@ What happens during a typical shift, and where to record it:
   (Balanced, +₹… surplus, −₹… short) — record the actual count; variance is
   tracked, not hidden. Products sold without a bill go on the employee's
   **Handover Product Sale** (Product sales → **Record**, or **Edit** on the
-  Product sales (cash) line in the handover).
+  Product sales (cash) line in the handover). It is sold at each product's
+  MRP: a line whose product has none reads **No MRP set** and blocks the save.
+  An Owner or Manager sets it from the line (**Set MRP**); anyone else asks
+  them to.
 
 Done when: every attendant has handed over — all readings, cash counts, and
 credit sales are in before you close.

@@ -265,7 +265,7 @@ describe('opening a shift (#533 review)', () => {
     getShiftStatus.mockResolvedValue({ activeShift: null, templates: [] });
     mount('Manager', null);
     fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
-    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    const start = () => screen.getByRole('button', { name: /Start shift operations/ });
     await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start());
     await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
@@ -285,7 +285,7 @@ describe('opening a shift (#533 review)', () => {
     getShiftStatus.mockResolvedValue({ activeShift: null, templates: [] });
     mount('Manager', null);
     fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
-    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    const start = () => screen.getByRole('button', { name: /Start shift operations/ });
     await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start());
     await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
@@ -308,7 +308,7 @@ describe('opening a shift (#533 review)', () => {
     getShiftStatus.mockReturnValue(new Promise(() => {}));
     mount('Manager', null);
     fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
-    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    const start = () => screen.getByRole('button', { name: /Start shift operations/ });
     await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start());
     // Explicit waits, not a race with the toast's own timer (#606 review 2).
@@ -329,7 +329,7 @@ describe('opening a shift (#533 review)', () => {
     );
     mount('Manager', null);
     fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
-    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    const start = () => screen.getByRole('button', { name: /Start shift operations/ });
     await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start());
     await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));

@@ -17,7 +17,7 @@ describe('Action Icons migration', () => {
       </Drawer>,
     );
 
-    const closeBtn = screen.getByRole('button', { name: 'Close Drawer' });
+    const closeBtn = screen.getByRole('button', { name: 'Close drawer' });
     expect(closeBtn).toBeTruthy();
 
     const svg = closeBtn.querySelector('svg');
@@ -85,15 +85,15 @@ describe('Action Icons migration', () => {
       />,
     );
 
-    const dualBtn = screen.getByRole('button', { name: /Add Dual \(2 Nozzles\)/i });
-    const quadBtn = screen.getByRole('button', { name: /Add Quad \(4 Nozzles\)/i });
+    const dualBtn = screen.getByRole('button', { name: /Add dual \(2 nozzles\)/i });
+    const quadBtn = screen.getByRole('button', { name: /Add quad \(4 nozzles\)/i });
 
     expect(dualBtn.textContent).not.toContain('+');
-    expect(dualBtn.textContent).toContain('Add Dual (2 Nozzles)');
+    expect(dualBtn.textContent).toContain('Add dual (2 nozzles)');
     expect(dualBtn.querySelector('svg')?.classList.contains('lucide-plus')).toBe(true);
 
     expect(quadBtn.textContent).not.toContain('+');
-    expect(quadBtn.textContent).toContain('Add Quad (4 Nozzles)');
+    expect(quadBtn.textContent).toContain('Add quad (4 nozzles)');
     expect(quadBtn.querySelector('svg')?.classList.contains('lucide-plus')).toBe(true);
   });
 });

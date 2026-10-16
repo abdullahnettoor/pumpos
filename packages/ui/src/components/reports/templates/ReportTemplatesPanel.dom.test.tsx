@@ -209,13 +209,13 @@ describe('Customize drawer', () => {
   it('asks before closing with unsaved changes', async () => {
     const drawer = openShiftSummary();
     fireEvent.click(within(drawer).getByRole('switch', { name: 'Warnings' }));
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close drawer' }));
     await screen.findByText('Discard unsaved changes?');
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
     await waitFor(() => expect(screen.queryByText('Discard unsaved changes?')).toBeNull());
     expect(document.querySelector('.drawer-container')).toBeTruthy();
 
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close drawer' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(document.querySelector('.drawer-container')).toBeNull());
     expect(updateStation).not.toHaveBeenCalled();
@@ -223,7 +223,7 @@ describe('Customize drawer', () => {
 
   it('closes straight away when nothing changed', () => {
     const drawer = openShiftSummary();
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close drawer' }));
     expect(document.querySelector('.drawer-container')).toBeNull();
   });
 });

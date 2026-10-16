@@ -232,7 +232,7 @@ describe('Suppliers page (#528)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'IOCL Depot' }));
     let balance = await screen.findByTestId('supplier-balance');
     expect(balance.textContent).toBe('You owe₹1,000.00');
-    fireEvent.click(screen.getByRole('button', { name: 'Close Drawer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close drawer' }));
 
     fireEvent.click(await screen.findByRole('button', { name: 'HPCL Terminal' }));
     balance = await screen.findByTestId('supplier-balance');

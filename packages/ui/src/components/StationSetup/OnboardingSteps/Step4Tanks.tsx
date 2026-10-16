@@ -22,17 +22,17 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
 }) => {
   return (
     <OnboardingStep
-      title="Storage Tanks"
+      title="Storage tanks"
       subtitle="Map each tank to its fuel and define its capacity."
       actions={
         <Button type="button" variant="secondary" size="sm" onClick={onAddTank}>
-          Add Tank
+          Add tank
         </Button>
       }
     >
       {draft.products.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionHeader title="Quick Add Tanks" />
+          <SectionHeader title="Quick add tanks" />
           <div className="flex flex-wrap items-center gap-4 rounded-card border border-border-soft bg-surface-alt px-4 py-3">
             {draft.products.map((product) => {
               const inputId = `quick-tank-cap-${product.draftId}`;
@@ -71,7 +71,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
         {draft.tanks.length === 0 ? (
           <EmptyState
             title="No storage tanks configured yet"
-            description='Use Quick Add above or click "Add Tank".'
+            description='Use quick add above or click "Add tank".'
           />
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">

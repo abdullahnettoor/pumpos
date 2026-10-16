@@ -27,7 +27,7 @@ export const isVoided = (r: CategoryRecord) => r.status === 'VOIDED';
 
 export const FALLBACK_CATEGORY: Record<CategoryRecordKind, string> = {
   expense: 'General',
-  income: 'Other Income',
+  income: 'Other income',
 };
 
 const VOID_LABEL: Record<CategoryRecordKind, string> = {

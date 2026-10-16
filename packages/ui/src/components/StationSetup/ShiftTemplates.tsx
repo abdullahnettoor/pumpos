@@ -189,7 +189,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
                     runTask(prefillDefaultShifts(), 'Could not add the default shifts.')
                   }
                 >
-                  Pre-fill Default Shifts
+                  Pre-fill default shifts
                 </Button>
               }
             />
@@ -211,10 +211,10 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
           resetForm();
           setIsFormOpen(false);
         }}
-        title="Add Shift Template"
+        title="Add shift template"
       >
         <Form onSubmit={handleCreate} className="flex flex-col">
-          <Field label="Shift Name" required>
+          <Field label="Shift name" required>
             <TextInput
               type="text"
               placeholder="e.g. Morning Shift"
@@ -223,7 +223,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
               required
             />
           </Field>
-          <Field label="Start Time" required>
+          <Field label="Start time" required>
             <TextInput
               type="time"
               value={startTime}
@@ -231,7 +231,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
               required
             />
           </Field>
-          <Field label="End Time" required>
+          <Field label="End time" required>
             <TextInput
               type="time"
               value={endTime}
@@ -251,7 +251,7 @@ export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
               Cancel
             </Button>
             <Button type="submit" variant="primary">
-              Create Shift
+              Create shift
             </Button>
           </div>
         </Form>

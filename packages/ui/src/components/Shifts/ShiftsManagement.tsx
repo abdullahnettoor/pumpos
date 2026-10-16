@@ -59,6 +59,7 @@ import {
   businessDateSettings,
   canChangeFuelPrice,
   canCloseShift,
+  canManageProduct,
   canOpenShift,
 } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
@@ -582,6 +583,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         }}
         shiftId={activeShift.id}
         stationId={stationId}
+        canSetMrp={canManageProduct(userRole)}
         userId={selectedHandoverAssignment.userId}
         userName={selectedHandoverAssignment.userName}
         duId={selectedHandoverAssignment.duId}
@@ -892,6 +894,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   handoverWrites={handoverWrites}
                   money={money}
                   onRetryMoney={retryMoney}
+                  canSetMrp={canManageProduct(userRole)}
                 />
               ) : awaitingOpenedShift ? (
                 <Skeleton aria-label="Loading the new shift" height={420} />

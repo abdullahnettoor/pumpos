@@ -54,11 +54,11 @@ const STEP_TITLES = [
   'Review',
 ] as const;
 const NEXT_LABEL = [
-  'Continue to Tanks',
-  'Continue to Tanker chambers',
-  'Continue to Unloading',
-  'Continue to After unloading',
-  'Continue to Review',
+  'Continue to tanks',
+  'Continue to tanker chambers',
+  'Continue to unloading',
+  'Continue to after unloading',
+  'Continue to review',
 ];
 
 /** The step that owns a failing field, so the stepper opens where the problem is. */
@@ -328,7 +328,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
         disabled={submitting}
         onClick={() => save(false)}
       >
-        {sealed ? 'Save after dip' : flagged ? 'Save with flag' : 'Save Decantation'}
+        {sealed ? 'Save after dip' : flagged ? 'Save with flag' : 'Save decantation'}
       </Button>
     </div>
   );
@@ -337,7 +337,7 @@ const DecantationForm: React.FC<Omit<DecantationDrawerProps, 'isOpen'>> = ({
     <Drawer
       isOpen
       onClose={onClose}
-      title={decantation ? `Decantation ${decantation.documentNumber}` : 'New Decantation'}
+      title={decantation ? `Decantation ${decantation.documentNumber}` : 'New decantation'}
       widthVariant="wide"
       footer={footer}
     >

@@ -157,7 +157,7 @@ describe('Rates for this shift (#619)', () => {
         'Close and reopen the shift at 10:00\u00a0am to use the new rate.',
     );
     // Open shift stays the one primary, with no extra confirmation.
-    expect(screen.getAllByRole('button', { name: /Start Shift Operations/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Start shift operations/ })).toHaveLength(1);
   });
 
   it('does not warn for a change after the planned end; the rate names it quietly', () => {
@@ -330,7 +330,7 @@ describe('a fuel with no rate in effect (#630)', () => {
   }
 
   const start = () =>
-    screen.getByRole('button', { name: /Start Shift Operations/ }) as HTMLButtonElement;
+    screen.getByRole('button', { name: /Start shift operations/ }) as HTMLButtonElement;
 
   it('marks the fuel, offers Change price, and disables Open shift with the reason', () => {
     setupNoRate();

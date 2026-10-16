@@ -39,7 +39,7 @@ export const FinishUnloadingPage: React.FC<{ station: Station; decantation: Deca
           onClick={() => void save(false)}
           className={`flex h-11 flex-1 items-center justify-center rounded-[13px] text-[13.5px] font-bold text-on-accent disabled:opacity-60 ${flagged ? 'bg-bad' : 'bg-accent'}`}
         >
-          {saving ? 'Saving…' : flagged ? 'Save with flag' : 'Save Decantation'}
+          {saving ? 'Saving…' : flagged ? 'Save with flag' : 'Save decantation'}
         </button>
       }
     >

@@ -14,12 +14,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, u
 
   return (
     <OnboardingStep
-      title="Station Basics"
+      title="Station basics"
       subtitle="Capture the core station identity once, then finish all provisioning in one smooth submit."
     >
       <div className={STEP_PANEL}>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Station Name" htmlFor="onb-station-name" required>
+          <Field label="Station name" htmlFor="onb-station-name" required>
             <TextInput
               id="onb-station-name"
               value={draft.station.name}
@@ -27,7 +27,7 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, u
               placeholder="e.g. Shell Gachibowli"
             />
           </Field>
-          <Field label="Station Code" htmlFor="onb-station-code" required>
+          <Field label="Station code" htmlFor="onb-station-code" required>
             <TextInput
               id="onb-station-code"
               value={draft.station.code}
@@ -37,7 +37,7 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, u
           </Field>
         </div>
 
-        <Field label="Station Address" htmlFor="onb-station-address">
+        <Field label="Station address" htmlFor="onb-station-address">
           <Textarea
             id="onb-station-address"
             value={draft.station.address || ''}
@@ -47,7 +47,7 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, u
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Contact Phone" htmlFor="onb-station-phone">
+          <Field label="Contact phone" htmlFor="onb-station-phone">
             <TextInput
               id="onb-station-phone"
               value={draft.station.phone || ''}
@@ -55,7 +55,7 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({ draft, u
               placeholder="+91 9876543210"
             />
           </Field>
-          <Field label="Shift Grace Period (Minutes)" htmlFor="onb-station-grace">
+          <Field label="Shift grace period (minutes)" htmlFor="onb-station-grace">
             <NumberInput
               id="onb-station-grace"
               value={draft.station.shiftGraceMinutes}

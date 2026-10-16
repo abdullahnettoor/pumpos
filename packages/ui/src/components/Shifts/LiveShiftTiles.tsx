@@ -20,7 +20,7 @@ const whole = (v: number) => formatMoney(v, { decimals: 0 });
 
 /**
  * Live shift's three tiles (#533), all "This shift": Sales (fuel + products),
- * Card / UPI / Credit, and Drawer variance. No Fuel sold tile: its litres are
+ * Card / UPI / credit, and Drawer variance. No Fuel sold tile: its litres are
  * the nozzle table's total (#515), so they sit in the Sales hint. Plain figures; only the
  * variance takes colour, through `alert`, and only when it is not balanced.
  * Everyone sees the variance (owner decision, 15 Oct).
@@ -68,7 +68,7 @@ export const LiveShiftTiles: React.FC<LiveShiftTilesProps> = ({ figures, product
         />
       </TileSection>
       <KpiTile
-        label="Card / UPI / Credit"
+        label="Card / UPI / credit"
         value={formatMoney(takings.nonCash)}
         hint={`Card ${whole(takings.card)} · UPI ${whole(takings.upi)} · Credit ${whole(takings.credit)}`}
       />

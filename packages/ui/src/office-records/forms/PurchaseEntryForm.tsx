@@ -427,7 +427,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
                   </div>
                   {fuel ? (
                     <div className="flex flex-col gap-1">
-                      <label className={LABEL}>Total Amount (₹)</label>
+                      <label className={LABEL}>Total amount (₹)</label>
                       <NumberInput
                         value={fuelTotal}
                         onChange={(e) =>
@@ -487,7 +487,7 @@ const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
 
                 {fuel && (
                   <div className="flex flex-col gap-1.5 border-t border-border-soft pt-2">
-                    <label className={LABEL}>Invoice Density (kg/m³ @15 °C)</label>
+                    <label className={LABEL}>Invoice density (kg/m³ @15 °C)</label>
                     <NumberInput
                       step="0.01"
                       placeholder="Optional"

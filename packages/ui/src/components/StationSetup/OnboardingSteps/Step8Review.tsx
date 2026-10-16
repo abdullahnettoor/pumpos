@@ -23,7 +23,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
     { label: 'Tanks', value: draft.tanks.length },
     { label: 'Dispensers', value: draft.dispensers.length },
     { label: 'Nozzles', value: draft.nozzles.length },
-    { label: 'Payment Terminals', value: (draft.paymentTerminals ?? []).length },
+    { label: 'Payment terminals', value: (draft.paymentTerminals ?? []).length },
   ];
 
   const openingStock = (() => {
@@ -38,7 +38,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
   return (
     <OnboardingStep
-      title="Review & Provision"
+      title="Review & provision"
       subtitle="Review the full setup, resolve any issues, then provision the entire station in one shot."
       actions={
         <Chip tone={validationIssues.length === 0 ? 'success' : 'warning'} size="md">
@@ -74,7 +74,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
           <section className="flex flex-col gap-2">
             <SectionHeader
-              title="Station & Rules"
+              title="Station & rules"
               action={{ label: 'Edit', onClick: () => moveToStep(1) }}
             />
             <div className={STEP_PANEL}>
@@ -89,7 +89,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                   </div>
                 </div>
                 <div>
-                  <div className={LABEL}>Business Day Starts</div>
+                  <div className={LABEL}>Business day starts</div>
                   <div className="mt-1 font-semibold text-ink-strong">
                     {draft.businessRules.businessDayStartsAt}
                   </div>
@@ -101,7 +101,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
           <section className="flex flex-col gap-2">
             <SectionHeader
-              title="Infrastructure & Values"
+              title="Infrastructure & values"
               controls={{
                 actions: (
                   <span className="flex gap-1.5">
@@ -148,7 +148,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
         <div className="flex flex-col gap-5">
           <section className="flex flex-col gap-2">
-            <SectionHeader title="Opening Values Snapshot" />
+            <SectionHeader title="Opening values snapshot" />
             <div className={STEP_PANEL}>
               <div className="flex flex-col gap-2.5 text-[12px]">
                 <div className="flex justify-between">
@@ -167,7 +167,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
           </section>
 
           <section className="flex flex-col gap-2">
-            <SectionHeader title="Shift Templates" />
+            <SectionHeader title="Shift templates" />
             <div className={STEP_PANEL}>
               <div className="text-[12px] text-ink-muted">
                 {draft.shiftTemplates.length > 0
@@ -181,7 +181,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                 className="self-start"
                 onClick={() => moveToStep(7)}
               >
-                Edit Shift Templates
+                Edit shift templates
               </Button>
             </div>
           </section>

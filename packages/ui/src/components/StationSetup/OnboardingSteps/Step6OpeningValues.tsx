@@ -42,11 +42,11 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({ draft, u
 
   return (
     <OnboardingStep
-      title="Opening / Current Values"
+      title="Opening / current values"
       subtitle="Finalize current rates and opening tank stock before provisioning the station. Nozzle opening readings are captured when you open the first operational shift."
     >
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Current Fuel Selling Rates" />
+        <SectionHeader title="Current fuel selling rates" />
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
           {draft.products.map((product) => {
             const id = `onb-price-${product.draftId}`;
@@ -68,7 +68,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({ draft, u
       </section>
 
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Tanks Opening Stock Reserves" />
+        <SectionHeader title="Tanks opening stock reserves" />
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {draft.tanks.map((tank) => {
             const product = draft.products.find((p) => p.draftId === tank.productDraftId);
@@ -82,7 +82,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({ draft, u
                 <div className="text-[12px] text-ink-muted">
                   Capacity: {formatQuantity(tank.capacity, unit, { decimals: 0 })}
                 </div>
-                <Field label={`Opening Stock (${unit})`} htmlFor={`onb-stock-${tank.draftId}`}>
+                <Field label={`Opening stock (${unit})`} htmlFor={`onb-stock-${tank.draftId}`}>
                   <NumberInput
                     id={`onb-stock-${tank.draftId}`}
                     max={tank.capacity}
@@ -93,7 +93,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({ draft, u
                   />
                 </Field>
                 <Field
-                  label={`Purchase Rate (₹/${unit}) — landed cost`}
+                  label={`Purchase rate (₹/${unit}) — landed cost`}
                   htmlFor={`onb-cost-${tank.draftId}`}
                   hint="Seeds cost basis for margin. Leave 0 if unknown."
                 >

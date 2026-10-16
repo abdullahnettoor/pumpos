@@ -243,7 +243,7 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('Purchases')).toBeTruthy();
     expect(screen.getByText('Total sales')).toBeTruthy();
     expect(screen.getByText('Lubricants')).toBeTruthy();
-    expect(screen.getByText('Included Shifts')).toBeTruthy();
+    expect(screen.getByText('Included shifts')).toBeTruthy();
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Closed 1:58 pm · 2,210 L')).toBeTruthy();
     expect(screen.getByText('Tank 1 · Petrol')).toBeTruthy();

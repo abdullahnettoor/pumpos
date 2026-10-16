@@ -74,11 +74,11 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
 
   return (
     <OnboardingStep
-      title="Payment Terminals"
+      title="Payment terminals"
       subtitle="Add the card/UPI machines (POS devices) at this station. These are linked to dispensers when a shift is opened. Optional — you can run cash-only and add terminals later from Station → Payment terminals."
       actions={
         <Button type="button" variant="secondary" size="sm" onClick={addTerminal}>
-          Add Terminal
+          Add terminal
         </Button>
       }
     >
@@ -87,7 +87,7 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
         <SectionHeader title="Quick add" />
         <div className={STEP_PANEL}>
           <div className="flex flex-wrap items-end gap-3">
-            <Field label="Provider / Acquirer" className="min-w-[220px] flex-1">
+            <Field label="Provider / acquirer" className="min-w-[220px] flex-1">
               <ProviderField value={quickProvider} onChange={setQuickProvider} />
             </Field>
             <Field label="No. of machines" htmlFor="onb-quick-count" className="w-[120px]">
@@ -152,7 +152,7 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
                       placeholder="e.g. Counter HDFC POS"
                     />
                   </Field>
-                  <Field label="Provider / Acquirer">
+                  <Field label="Provider / acquirer">
                     <ProviderField
                       key={terminal.draftId}
                       value={terminal.provider}
@@ -173,7 +173,7 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
 
                 <div className="flex items-center gap-5">
                   <Checkbox
-                    label="Accepts Card"
+                    label="Accepts card"
                     checked={terminal.supportsCard}
                     onChange={(e) =>
                       updateTerminal(terminal.draftId, { supportsCard: e.target.checked })

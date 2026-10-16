@@ -55,7 +55,7 @@ const mount = (userRole?: string) =>
 
 const limit = () => screen.getByPlaceholderText('50000') as HTMLInputElement;
 const saveForm = async () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Save Customer' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save customer' }));
   await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
   return update.mock.calls[0]![1] as Record<string, unknown>;
 };

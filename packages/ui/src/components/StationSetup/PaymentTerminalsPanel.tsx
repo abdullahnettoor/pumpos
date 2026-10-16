@@ -280,7 +280,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
           resetForm();
           setIsFormOpen(false);
         }}
-        title={editingId ? 'Edit Payment Terminal' : 'Add Payment Terminal'}
+        title={editingId ? 'Edit payment terminal' : 'Add payment terminal'}
       >
         <Form onSubmit={handleSubmit} className="flex flex-col">
           <Field label="Label" required>
@@ -293,7 +293,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
             />
           </Field>
 
-          <Field label="Provider / Acquirer">
+          <Field label="Provider / acquirer">
             <ProviderField key={editingId ?? 'new'} value={provider} onChange={setProvider} />
           </Field>
 
@@ -309,7 +309,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
 
           <div className="mb-4 flex gap-5">
             <Checkbox
-              label="Accepts Card"
+              label="Accepts card"
               checked={supportsCard}
               onChange={(e) => setSupportsCard(e.target.checked)}
             />
@@ -349,7 +349,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={submitting}>
-              {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Add Terminal'}
+              {submitting ? 'Saving…' : editingId ? 'Save changes' : 'Add terminal'}
             </Button>
           </div>
         </Form>

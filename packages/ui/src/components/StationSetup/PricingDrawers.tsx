@@ -15,6 +15,8 @@ import {
   type FuelPriceRow,
 } from './fuelPriceRows.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
+import { patchQueryData } from '../../query/patches/applyPatch.js';
+import { withProductPrice } from '../../query/patches/products.js';
 import { isScheduledFuelPrice } from '@pump/shared';
 
 const productService = new CloudProductService();
@@ -175,7 +177,12 @@ export const ChangePriceDrawer: React.FC<{
   );
 };
 
-/** Set a product's MRP. Mounted per open, so each edit gets its own key session. */
+/**
+ * Set a product's MRP. Mounted per open, so each edit gets its own key session.
+ * The answer's price (only the server's, never the typed one) is patched into
+ * the product list before the background refresh, so a form waiting on it (a Handover Product Sale line, #638) reads it
+ * at once.
+ */
 export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = ({
   product,
   onClose,
@@ -191,9 +198,10 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
 
   const submit = async () => {
     const body = { sellingPrice: value === '' ? null : Number(value) };
+    let answer: { id: string; sellingPrice?: number | string | null };
     try {
       setSaving(true);
-      await save(body, (idempotencyKey) =>
+      answer = await save(body, (idempotencyKey) =>
         productService.updateProduct(product.id, body, { idempotencyKey }),
       );
     } catch (err: any) {
@@ -202,6 +210,14 @@ export const MrpDrawer: React.FC<{ product: MerchRow; onClose: () => void }> = (
       );
       setSaving(false);
       return;
+    }
+    // Only what the server answered (#606): a returned null is kept, and an
+    // answer without the price patches nothing; never the typed value.
+    if (answer && 'sellingPrice' in answer) {
+      const answered = { id: product.id, sellingPrice: answer.sellingPrice };
+      patchQueryData<MerchRow[]>(qc, queryKeys.products(), (list) =>
+        withProductPrice(list, answered),
+      );
     }
     toast.success('Price updated.');
     onClose();

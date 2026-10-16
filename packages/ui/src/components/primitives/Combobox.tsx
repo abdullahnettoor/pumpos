@@ -47,6 +47,8 @@ export interface ComboboxOption {
   label: string;
   /** Optional secondary line shown under the label (e.g. code / balance). */
   sublabel?: string;
+  /** Marks the secondary line as a problem (e.g. a product with no price, #638). */
+  sublabelTone?: 'warning';
 }
 
 /** An action (e.g. “＋ New customer”) shown only when the search has no matches. */
@@ -360,7 +362,12 @@ export const Combobox: React.FC<ComboboxProps> = ({
                         {opt.label}
                       </span>
                       {opt.sublabel && (
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        <span
+                          className={cx(
+                            'text-[12px]',
+                            opt.sublabelTone === 'warning' ? 'text-warning-fg' : 'text-ink-muted',
+                          )}
+                        >
                           {opt.sublabel}
                         </span>
                       )}

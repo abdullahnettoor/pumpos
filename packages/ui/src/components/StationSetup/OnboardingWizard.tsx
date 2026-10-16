@@ -57,15 +57,15 @@ interface OnboardingWizardProps {
 }
 
 const steps = [
-  { num: 1, title: 'Station Basics' },
-  { num: 2, title: 'Business Rules' },
-  { num: 3, title: 'Fuels & Rates' },
+  { num: 1, title: 'Station basics' },
+  { num: 2, title: 'Business rules' },
+  { num: 3, title: 'Fuels & rates' },
   { num: 4, title: 'Tanks' },
-  { num: 5, title: 'Dispensers & Nozzles' },
-  { num: 6, title: 'Opening / Current Values' },
-  { num: 7, title: 'Shift Templates' },
-  { num: 8, title: 'Payment Terminals' },
-  { num: 9, title: 'Review & Provision' },
+  { num: 5, title: 'Dispensers & nozzles' },
+  { num: 6, title: 'Opening / current values' },
+  { num: 7, title: 'Shift templates' },
+  { num: 8, title: 'Payment terminals' },
+  { num: 9, title: 'Review & provision' },
 ] as const;
 
 const provisioningStages = [
@@ -692,7 +692,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   if (!isHydrated) {
     return (
       <div className="flex min-h-[100vh] items-center justify-center text-[13px] text-ink-muted">
-        Preparing onboarding workspace...
+        Preparing onboarding workspace…
       </div>
     );
   }
@@ -852,7 +852,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               Draft saved
             </Chip>
             <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
-              Discard Draft
+              Discard draft
             </Button>
           </div>
           {/* Global Progress Bar */}
@@ -953,7 +953,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 1))}
           disabled={currentStep === 1}
         >
-          Previous Step
+          Previous step
         </Button>
 
         <div className="text-[12px] text-ink-muted">
@@ -976,7 +976,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       <Drawer
         isOpen={!!fuelDrawer}
         onClose={() => setFuelDrawer(null)}
-        title={fuelDrawer?.draftId ? 'Fuel Configuration' : 'Add Fuel'}
+        title={fuelDrawer?.draftId ? 'Fuel configuration' : 'Add fuel'}
       >
         {fuelDrawer && (
           <form
@@ -986,7 +986,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             }}
             className="flex flex-col"
           >
-            <Field label="Fuel Name" htmlFor="onb-fuel-name" required>
+            <Field label="Fuel name" htmlFor="onb-fuel-name" required>
               <TextInput
                 id="onb-fuel-name"
                 value={fuelDrawer.name}
@@ -996,7 +996,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               />
             </Field>
 
-            <Field label="Fuel Code" htmlFor="onb-fuel-code" required>
+            <Field label="Fuel code" htmlFor="onb-fuel-code" required>
               <TextInput
                 id="onb-fuel-code"
                 value={fuelDrawer.code}
@@ -1017,7 +1017,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </Field>
 
             <Field
-              label="Sales Unit"
+              label="Sales unit"
               htmlFor="onb-fuel-unit"
               required
               hint="Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for this fuel are tracked in kg."
@@ -1033,12 +1033,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </Select>
             </Field>
 
-            <DrawerActions saveLabel="Save Fuel" onCancel={() => setFuelDrawer(null)} />
+            <DrawerActions saveLabel="Save fuel" onCancel={() => setFuelDrawer(null)} />
           </form>
         )}
       </Drawer>
 
-      <Drawer isOpen={!!tankDrawer} onClose={() => setTankDrawer(null)} title="Tank Configuration">
+      <Drawer isOpen={!!tankDrawer} onClose={() => setTankDrawer(null)} title="Tank configuration">
         {tankDrawer && (
           <form
             onSubmit={(e) => {
@@ -1047,7 +1047,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             }}
             className="flex flex-col"
           >
-            <Field label="Tank Identifier" htmlFor="onb-tank-name" required>
+            <Field label="Tank identifier" htmlFor="onb-tank-name" required>
               <TextInput
                 id="onb-tank-name"
                 value={tankDrawer.name}
@@ -1057,7 +1057,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               />
             </Field>
 
-            <Field label="Linked Fuel Product" htmlFor="onb-tank-fuel" required>
+            <Field label="Linked fuel product" htmlFor="onb-tank-fuel" required>
               <Select
                 id="onb-tank-fuel"
                 value={tankDrawer.productDraftId}
@@ -1092,7 +1092,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               />
             </Field>
 
-            <DrawerActions saveLabel="Save Tank" onCancel={() => setTankDrawer(null)} />
+            <DrawerActions saveLabel="Save tank" onCancel={() => setTankDrawer(null)} />
           </form>
         )}
       </Drawer>
@@ -1100,7 +1100,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       <Drawer
         isOpen={!!shiftTemplateDrawer}
         onClose={() => setShiftTemplateDrawer(null)}
-        title="Shift Template"
+        title="Shift template"
       >
         {shiftTemplateDrawer && (
           <form
@@ -1110,7 +1110,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             }}
             className="flex flex-col"
           >
-            <Field label="Template Name" htmlFor="onb-shift-name" required>
+            <Field label="Template name" htmlFor="onb-shift-name" required>
               <TextInput
                 id="onb-shift-name"
                 value={shiftTemplateDrawer.name}
@@ -1123,7 +1123,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Start Time" htmlFor="onb-shift-start" required>
+              <Field label="Start time" htmlFor="onb-shift-start" required>
                 <TextInput
                   id="onb-shift-start"
                   type="time"
@@ -1134,7 +1134,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   required
                 />
               </Field>
-              <Field label="End Time" htmlFor="onb-shift-end" required>
+              <Field label="End time" htmlFor="onb-shift-end" required>
                 <TextInput
                   id="onb-shift-end"
                   type="time"
@@ -1148,7 +1148,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
 
             <DrawerActions
-              saveLabel="Save Template"
+              saveLabel="Save template"
               onCancel={() => setShiftTemplateDrawer(null)}
             />
           </form>
@@ -1158,7 +1158,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       <Drawer
         isOpen={!!dispenserDrawer}
         onClose={() => setDispenserDrawer(null)}
-        title="Dispenser & Nozzles"
+        title="Dispenser & nozzles"
       >
         {dispenserDrawer && (
           <form
@@ -1168,7 +1168,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             }}
             className="flex flex-col"
           >
-            <Field label="Dispenser Name" htmlFor="onb-du-name" required>
+            <Field label="Dispenser name" htmlFor="onb-du-name" required>
               <TextInput
                 id="onb-du-name"
                 value={dispenserDrawer.dispenser.name}
@@ -1183,7 +1183,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               />
             </Field>
 
-            <Field label="Code / Reference ID" htmlFor="onb-du-code" required>
+            <Field label="Code / reference ID" htmlFor="onb-du-code" required>
               <TextInput
                 id="onb-du-code"
                 value={dispenserDrawer.dispenser.code}
@@ -1200,7 +1200,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
             <section className="flex flex-col gap-3 border-t border-border-soft pt-4">
               <SectionHeader
-                title="Nozzle Mappings"
+                title="Nozzle mappings"
                 subtitle="Map each nozzle to a storage tank and fuel type."
                 controls={{
                   actions: (
@@ -1290,7 +1290,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         </Field>
 
                         <div className="grid grid-cols-2 gap-2">
-                          <Field label="Fuel" htmlFor={`onb-nozzle-fuel-${nozzle.draftId}`}>
+                          <Field
+                            label="Linked fuel product"
+                            htmlFor={`onb-nozzle-fuel-${nozzle.draftId}`}
+                          >
                             <Select
                               id={`onb-nozzle-fuel-${nozzle.draftId}`}
                               value={nozzle.productDraftId}
@@ -1337,7 +1340,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
             </section>
 
-            <DrawerActions saveLabel="Save Dispenser" onCancel={() => setDispenserDrawer(null)} />
+            <DrawerActions saveLabel="Save dispenser" onCancel={() => setDispenserDrawer(null)} />
           </form>
         )}
       </Drawer>
@@ -1410,7 +1413,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <div className="flex w-full max-w-[520px] flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-6 shadow-lg">
               <div>
                 <h3 className="text-[18px] font-semibold text-ink-strong">
-                  {provisioning.completed ? 'Station Provisioned' : 'Provisioning Station'}
+                  {provisioning.completed ? 'Station provisioned' : 'Provisioning station…'}
                 </h3>
                 <p className="mt-1 text-[13px] text-ink-muted">
                   {provisioning.failedMessage
@@ -1545,7 +1548,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                         setErrorMsg(msg);
                       }}
                     >
-                      Go to Section
+                      Go to section
                     </Button>
                   )}
                   <Button type="button" variant="secondary" size="sm" onClick={closeProvisioning}>

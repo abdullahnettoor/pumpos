@@ -327,7 +327,7 @@ const App: React.FC = () => {
     ? [...NAV_PAGES]
     : [
         {
-          label: 'Onboarding Setup',
+          label: 'Onboarding setup',
           path: '/onboarding',
           icon: 'onboarding',
           roles: ['Owner', 'Manager'],
@@ -335,7 +335,7 @@ const App: React.FC = () => {
       ];
 
   const navItemsWithDev: NavItem[] = showDeveloperSurfaces
-    ? [...navItems, { label: 'Design System', path: '/design-system', icon: 'design-system' }]
+    ? [...navItems, { label: 'Design system', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {
@@ -381,7 +381,7 @@ const App: React.FC = () => {
             }}
           >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              {isNetworkError ? 'API Server Connection Failed' : 'User Profile Connection Error'}
+              {isNetworkError ? 'API server connection failed' : 'User profile connection error'}
             </h2>
             <div
               style={{
@@ -439,7 +439,7 @@ const App: React.FC = () => {
                 color: 'var(--text-default)',
               }}
             >
-              Sign Out & Try Again
+              Sign out and try again
             </button>
           </div>
         </div>

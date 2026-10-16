@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { BootScreen } from './index.js';
 
 /**
- * The boot screen is the first thing an operator sees after pressing Sign In,
+ * The boot screen is the first thing an operator sees after pressing Sign in,
  * and for a cold sign-in on a station connection it is on screen for real
  * seconds. What it must never do is leak how the software is built.
  */

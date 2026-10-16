@@ -27,7 +27,7 @@ export function createOpenShiftFormSchema(
 ) {
   return z
     .object({
-      shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
+      shiftTemplateId: z.string().min(1, 'Choose a shift template'),
       businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
     })
     .superRefine((values, ctx) => {
@@ -526,7 +526,7 @@ export const attendantHandoverSchema = z
     terminalEntries: z
       .array(
         z.object({
-          terminalId: z.string().uuid('Invalid Payment Terminal ID'),
+          terminalId: z.string().uuid('Invalid payment terminal ID'),
           duId: z.string().uuid('Invalid DU ID').nullish(),
           cardAmount: handoverAmountSchema,
           upiAmount: handoverAmountSchema,

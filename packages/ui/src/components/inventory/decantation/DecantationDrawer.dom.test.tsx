@@ -58,7 +58,7 @@ const save = (name: string) =>
 /** Tanker + one HSD line with a before dip. */
 const fillBasics = () => {
   type('Tanker no.', 'KL-07-CB-4412');
-  click('Continue to Tanks');
+  click('Continue to tanks');
   fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
   type('Before dip, line 1', '4000');
 };
@@ -81,7 +81,7 @@ describe('DecantationDrawer stepper', () => {
     open();
     type('Tanker no.', 'KL-07-CB-4412');
     type('Driver', 'Ravi');
-    click('Continue to Tanks');
+    click('Continue to tanks');
 
     // Step 1 is collapsed: its inputs are gone, the recorded values show as a card.
     expect(screen.queryByLabelText('Tanker no.')).toBeNull();
@@ -135,8 +135,8 @@ describe('DecantationDrawer save', () => {
   it('saves a clean visit and does not send chambers or links that were not set', async () => {
     open();
     fillBasics();
-    expect(screen.getByRole('button', { name: 'Save Decantation' })).toBeTruthy();
-    await save('Save Decantation');
+    expect(screen.getByRole('button', { name: 'Save decantation' })).toBeTruthy();
+    await save('Save decantation');
     const [body, opts] = saveDecantation.mock.calls[0];
     expect(body).toMatchObject({
       stationId: 'st-1',
@@ -155,13 +155,13 @@ describe('DecantationDrawer save', () => {
     type('Tanker no.', 'KL-07-CB-4412');
     // Pick the HSD invoice (density 830).
     fireEvent.click(screen.getByRole('button', { name: /INV-77/ }));
-    click('Continue to Tanks');
+    click('Continue to tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
     type('Before dip, line 1', '4000');
-    expect(screen.getByRole('button', { name: 'Save Decantation' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save decantation' })).toBeTruthy();
 
     type('RO density, line 1', '836');
-    expect(screen.queryByRole('button', { name: 'Save Decantation' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save decantation' })).toBeNull();
     expect(screen.getByText(/RO density differs from invoice density/)).toBeTruthy();
 
     await save('Save with flag');
@@ -175,7 +175,7 @@ describe('DecantationDrawer save', () => {
   it('saves as draft with only the tanker and a tank', async () => {
     open();
     type('Tanker no.', 'KL-07-CB-4412');
-    click('Continue to Tanks');
+    click('Continue to tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
     type('Before dip, line 1', '4000');
     await save('Save as draft');
@@ -185,7 +185,7 @@ describe('DecantationDrawer save', () => {
   it('never sends a draft line without a before dip: says so on the field instead', async () => {
     open();
     type('Tanker no.', 'KL-07-CB-4412');
-    click('Continue to Tanks');
+    click('Continue to tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
     await save('Save as draft');
     expect(saveDecantation).not.toHaveBeenCalled();
@@ -205,10 +205,10 @@ describe('DecantationDrawer save', () => {
   it('asks for the before dip on a full save and opens the Tanks step', async () => {
     open();
     type('Tanker no.', 'KL-07-CB-4412');
-    click('Continue to Tanks');
+    click('Continue to tanks');
     fireEvent.change(screen.getByLabelText('Tank, line 1'), { target: { value: 't-hsd' } });
-    click('Continue to Tanker chambers');
-    await save('Save Decantation');
+    click('Continue to tanker chambers');
+    await save('Save decantation');
     expect(saveDecantation).not.toHaveBeenCalled();
     expect(screen.getByText(/Enter the before dip/)).toBeTruthy();
   });
@@ -217,7 +217,7 @@ describe('DecantationDrawer save', () => {
     saveDecantation.mockRejectedValue(Object.assign(new Error('Tank not found'), { status: 404 }));
     open();
     fillBasics();
-    await save('Save Decantation');
+    await save('Save decantation');
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Tank not found');
   });
@@ -231,7 +231,7 @@ describe('DecantationDrawer save', () => {
     type('After dip time, line 1', '15:10');
     type('Sales during, line 1', '50');
     expect(screen.getByText('5,050.00 L')).toBeTruthy();
-    await save('Save Decantation');
+    await save('Save decantation');
     expect(saveDecantation.mock.calls[0][0].lines[0]).toMatchObject({
       afterDip: 9000,
       salesDuring: 50,

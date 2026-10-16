@@ -452,7 +452,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
         reset();
         onClose();
       }}
-      title="Import Products (CSV)"
+      title="Import products (CSV)"
       widthVariant="wide"
     >
       <div className="flex flex-col gap-4">
