@@ -81,6 +81,7 @@ function selectFrom(table: unknown): unknown[] {
   if (table === schema.userPermissionChanges) {
     return state.changes ? [{ organizationId: ORG_ID, ...state.changes }] : [];
   }
+  if (table === schema.userStationAssignments) return [{ stationId: 's1' }];
   if (table === schema.idempotencyKeys) return state.idempotencyKey ? [state.idempotencyKey] : [];
   return [];
 }
@@ -100,6 +101,7 @@ const fakeDb: Record<string, unknown> = {
       }),
     },
   },
+  execute: async () => [],
   select: () => ({ from: (table: unknown) => chain(() => selectFrom(table)) }),
   insert: (table: unknown) => ({
     values: (row: any) => ({
@@ -321,5 +323,43 @@ describe('Permission changes API (#553)', () => {
     expect(state.changes).not.toBeNull();
     const bad = await call('GET', `${TARGET}/role-change-preview?role=Wizard`);
     expect(bad.status).toBe(400);
+  });
+
+  it('applies a stored change on the very next request, without waiting for the auth cache', async () => {
+    state.actorRole = 'Accountant';
+    const days = () =>
+      worker
+        .fetch(
+          new Request('https://api.example.com/api/dssr/days?stationId=s1', {
+            headers: { Authorization: `Bearer ${bearerToken}` },
+          }),
+          ENV,
+        )
+        .then((r) => r.status);
+    const bearerToken = await bearer('auth-acct');
+    expect(await days()).not.toBe(403);
+    state.changes = { granted: [], revoked: ['reports.view'] };
+    expect(await days()).toBe(403);
+    state.changes = null;
+    expect(await days()).not.toBe(403);
+  });
+
+  it('keeps profit & loss to View profit & loss, and a Manager only with a grant', async () => {
+    state.actorRole = 'Manager';
+    const pnl = async (sub: string) =>
+      (
+        await worker.fetch(
+          new Request(
+            'https://api.example.com/api/dssr/profit-loss?stationId=s1&from=2026-01-01&to=2026-01-31',
+            {
+              headers: { Authorization: `Bearer ${await bearer(sub)}` },
+            },
+          ),
+          ENV,
+        )
+      ).status;
+    expect(await pnl('auth-mgr')).toBe(403);
+    state.changes = { granted: ['finance.viewProfitLoss'], revoked: [] };
+    expect(await pnl('auth-mgr')).not.toBe(403);
   });
 });

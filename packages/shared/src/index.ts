@@ -15,6 +15,7 @@ export * from './permissions/catalogue.js';
 export * from './permissions/effective.js';
 export * from './permissions/changes.js';
 export * from './permissions/guards.js';
+export * from './permissions/sensitive-figures.js';
 export * from './services/interfaces.js';
 export * from './utils/business-date.js';
 export * from './utils/display-date.js';

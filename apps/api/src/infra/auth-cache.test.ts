@@ -8,7 +8,6 @@ const user = {
   organizationId: 'o',
   role: 'Manager' as const,
   assignedStationIds: [],
-  permissions: new Set<never>(),
 };
 
 describe('auth cache eviction', () => {

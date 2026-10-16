@@ -33,7 +33,7 @@ import {
   DrizzleOrganizationAccessReader,
   DrizzleOrganizationSubscriptionRepository,
 } from './infra/repositories/organization-access.repo.js';
-import { DrizzleUserPermissionChangesReader } from './infra/repositories/user-permission-changes.repo.js';
+import { DrizzleUserPermissionChangesRepository } from './infra/repositories/user-permission-changes.repo.js';
 import { buildPlatformContext } from './infra/context.js';
 import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
@@ -386,16 +386,6 @@ api.use('*', async (c, next) => {
           .where(eq(schema.userStationAssignments.userId, dbUser.id)),
       );
 
-      const permissions = await runWithFallback((client) =>
-        resolveUserPermissions(
-          {
-            access: new DrizzleOrganizationAccessReader(client),
-            changes: new DrizzleUserPermissionChangesReader(client),
-          },
-          { organizationId: dbUser.organizationId, userId: dbUser.id, role: dbUser.role },
-        ),
-      );
-
       cachedUser = {
         id: dbUser.id,
         email: dbUser.email,
@@ -403,12 +393,25 @@ api.use('*', async (c, next) => {
         organizationId: dbUser.organizationId,
         role: dbUser.role as Role,
         assignedStationIds: assigns.map((a) => a.stationId),
-        permissions,
       };
       setCachedAuthUser(authId, cachedUser);
     }
 
-    c.set('user', cachedUser);
+    // Identity (Role, stations) may be served from the warm cache, but
+    // effective Permissions are resolved on every request so an Owner's change
+    // or an entitlement lapse applies immediately (ADR 0013). Fixed Roles skip
+    // the reads; others cost one indexed query (a second only when changes exist).
+    const identity = cachedUser;
+    const permissions = await runWithFallback((client) =>
+      resolveUserPermissions(
+        {
+          access: new DrizzleOrganizationAccessReader(client),
+          changes: new DrizzleUserPermissionChangesRepository(client),
+        },
+        { organizationId: identity.organizationId, userId: identity.id, role: identity.role },
+      ),
+    );
+    c.set('user', { ...identity, permissions });
 
     await next();
   } catch (err: any) {

@@ -65,7 +65,7 @@ import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js
 import { createDispatcher } from '../infra/events.js';
 import { evictCachedAuthUser } from '../infra/auth-cache.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';
-import { DrizzleUserPermissionChangesReader } from '../infra/repositories/user-permission-changes.repo.js';
+import { DrizzleUserPermissionChangesRepository } from '../infra/repositories/user-permission-changes.repo.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
@@ -799,7 +799,7 @@ stationSetupRouter.put(
       new UpdateUser({
         repository: new DrizzleUserRepository(tx),
         events,
-        permissionChanges: new DrizzleUserPermissionChangesReader(tx),
+        permissionChanges: new DrizzleUserPermissionChangesRepository(tx),
       }).execute({ ...body, id }, buildContext(user)),
     );
     // Role, status and stations feed the cached principal: next request re-reads.
@@ -838,7 +838,7 @@ stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
   }
   const result = await new PreviewUserRoleChange({
     users: repo,
-    changes: new DrizzleUserPermissionChangesReader(c.var.db),
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
   }).execute({ userId: id, role: role.data }, buildContext(user));
   return sendResult(c, result);
 });
@@ -847,7 +847,7 @@ stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
 stationSetupRouter.get('/users/:id/permissions', async (c) => {
   const result = await new GetUserPermissions({
     users: new DrizzleUserRepository(c.var.db),
-    changes: new DrizzleUserPermissionChangesReader(c.var.db),
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
     access: new DrizzleOrganizationAccessReader(c.var.db),
   }).execute({ userId: c.req.param('id') }, buildContext(c.var.user));
   return sendResult(c, result);
@@ -884,7 +884,7 @@ stationSetupRouter.put(
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new SetUserPermissions({
         users: new DrizzleUserRepository(tx),
-        changes: new DrizzleUserPermissionChangesReader(tx),
+        changes: new DrizzleUserPermissionChangesRepository(tx),
         access: new DrizzleOrganizationAccessReader(tx),
         events,
       }).execute(

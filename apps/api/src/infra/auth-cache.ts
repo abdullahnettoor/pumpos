@@ -1,12 +1,13 @@
-import type { PermissionId, Role } from '@pump/shared';
+import type { Role } from '@pump/shared';
 
 // --- Auth cache (per-isolate) --------------------------------------------
 // Cloudflare Workers reuse isolates across many requests, so a module-level
 // Map behaves as a warm per-isolate LRU. This eliminates the 2 DB round-trips
 // (users + userStationAssignments) that would otherwise fire on every
 // authenticated request — the single biggest source of Hyperdrive queries.
-// TTL is deliberately short (60s) so role / assignment changes propagate
-// promptly; Permission and Role edits also evict the edited user (below).
+// Identity only (Role, stations): effective Permissions are NEVER cached; the
+// auth middleware resolves them on every request (ADR 0013). TTL is short (60s)
+// and Role edits also evict the edited user (below).
 export type CachedAuthUser = {
   id: string;
   email: string | null;
@@ -14,7 +15,6 @@ export type CachedAuthUser = {
   organizationId: string;
   role: Role;
   assignedStationIds: string[];
-  permissions: ReadonlySet<PermissionId>;
 };
 const AUTH_CACHE_TTL_MS = 60_000;
 const AUTH_CACHE_MAX = 500;
@@ -39,9 +39,8 @@ export function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
 }
 
 /**
- * Drop one user's cached principal so their next request re-reads Role,
- * stations and effective Permissions. Called after a Permission change or a
- * Role change. Per-isolate: other isolates still expire within the TTL.
+ * Drop one user's cached principal so their next request re-reads Role and
+ * stations. Called after a Role change. Per-isolate: other isolates still expire within the TTL.
  */
 export function evictCachedAuthUser(authId: string | null | undefined): void {
   if (authId) authCache.delete(authId);

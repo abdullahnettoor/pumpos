@@ -8,19 +8,23 @@ function toIds(value: unknown): string[] {
 }
 
 /** Reads and writes a user's stored Permission differences (table `user_permission_changes`). */
-export class DrizzleUserPermissionChangesReader implements UserPermissionChangesWriter {
+export class DrizzleUserPermissionChangesRepository implements UserPermissionChangesWriter {
   constructor(private readonly db: DbClient) {}
 
   async load(organizationId: string, userId: string): Promise<PermissionChanges | null> {
     const [row] = await this.db
       .select({
-        organizationId: schema.userPermissionChanges.organizationId,
         granted: schema.userPermissionChanges.granted,
         revoked: schema.userPermissionChanges.revoked,
       })
       .from(schema.userPermissionChanges)
-      .where(eq(schema.userPermissionChanges.userId, userId));
-    if (!row || row.organizationId !== organizationId) return null;
+      .where(
+        and(
+          eq(schema.userPermissionChanges.organizationId, organizationId),
+          eq(schema.userPermissionChanges.userId, userId),
+        ),
+      );
+    if (!row) return null;
     return { granted: toIds(row.granted), revoked: toIds(row.revoked) };
   }
 
@@ -40,6 +44,7 @@ export class DrizzleUserPermissionChangesReader implements UserPermissionChanges
       })
       .onConflictDoUpdate({
         target: schema.userPermissionChanges.userId,
+        setWhere: eq(schema.userPermissionChanges.organizationId, input.organizationId),
         set: {
           granted: input.changes.granted,
           revoked: input.changes.revoked,

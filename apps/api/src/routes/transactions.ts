@@ -7,6 +7,7 @@ import {
   isAttendant,
   isAuthorizedForStation,
   isHandoverSelfScoped,
+  redactPurchaseCosts,
   type Role,
 } from '@pump/shared';
 import {
@@ -2020,14 +2021,19 @@ transactionsRouter.get('/purchases', async (c) => {
     .orderBy(desc(schema.purchases.createdAt));
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.purchase,
-      businessDate: r.businessDate,
-      awaitingDecantation: Boolean(r.awaitingDecantation),
-      supplierName: r.supplierName ?? 'Unknown Supplier',
-      itemsSummary: r.itemsSummary,
-      itemCount: Number(r.itemCount || 0),
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.purchase,
+          businessDate: r.businessDate,
+          awaitingDecantation: Boolean(r.awaitingDecantation),
+          supplierName: r.supplierName ?? 'Unknown Supplier',
+          itemsSummary: r.itemsSummary,
+          itemCount: Number(r.itemCount || 0),
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -2078,14 +2084,19 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .orderBy(schema.purchaseItems.createdAt);
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.item,
-      businessDate: r.businessDate,
-      entryDate: r.entryDate,
-      productName: r.productName ?? 'Product',
-      productCode: r.productCode ?? null,
-      unit: r.unit ?? null,
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.item,
+          businessDate: r.businessDate,
+          entryDate: r.entryDate,
+          productName: r.productName ?? 'Product',
+          productCode: r.productCode ?? null,
+          unit: r.unit ?? null,
+        },
+        user,
+      ),
+    ),
   });
 });
 
