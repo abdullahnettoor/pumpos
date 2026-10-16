@@ -111,39 +111,39 @@ export const DEFAULT_ATTENDANT_REPORT_CONFIG: AttendantReportConfig = {
 
 /** Human labels for the section-config UI (R2). `header` is always rendered. */
 export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
-  header: 'Header / Letterhead',
-  meta: 'Shift Meta',
+  header: 'Header / letterhead',
+  meta: 'Shift meta',
   warnings: 'Warnings',
-  nozzles: 'Nozzle Reconciliation',
-  handovers: 'Attendant Handovers',
-  terminals: 'POS Terminals',
-  creditSales: 'Fuel-on-Credit Sales',
-  cashRecon: 'Cash Reconciliation',
+  nozzles: 'Nozzle reconciliation',
+  handovers: 'Attendant handovers',
+  terminals: 'POS terminals',
+  creditSales: 'Fuel-on-credit sales',
+  cashRecon: 'Cash reconciliation',
   drawers: 'Drawers (per attendant)',
   signatures: 'Signatures',
 };
 
 export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
-  header: 'Header / Letterhead',
-  meta: 'Day Meta',
+  header: 'Header / letterhead',
+  meta: 'Day meta',
   kpis: 'KPIs',
-  financial: 'Financial Summary',
-  fuelByProduct: 'Fuel Sales by Product',
-  nozzles: 'Nozzle Aggregation',
-  fuelStockVariance: 'Tank Dip & Fuel Variance',
-  merchandiseStockVariance: 'Product Stock Variance',
-  shifts: 'Included Shifts',
+  financial: 'Financial summary',
+  fuelByProduct: 'Fuel sales by product',
+  nozzles: 'Nozzle aggregation',
+  fuelStockVariance: 'Tank dip & fuel variance',
+  merchandiseStockVariance: 'Product stock variance',
+  shifts: 'Included shifts',
 };
 
 export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, string> = {
-  header: 'Header / Letterhead',
-  summary: 'Period Summary',
-  fuelSales: 'Fuel Sales by Shift',
-  merchandise: 'Product Sales (Billed + Handover)',
-  creditSales: 'Fuel-on-Credit Sales',
-  terminals: 'Payment Terminals',
-  variance: 'Variance by Shift',
-  signature: 'Acknowledgement & Signatures',
+  header: 'Header / letterhead',
+  summary: 'Period summary',
+  fuelSales: 'Fuel sales by shift',
+  merchandise: 'Product sales (billed + handover)',
+  creditSales: 'Fuel-on-credit sales',
+  terminals: 'Payment terminals',
+  variance: 'Variance by shift',
+  signature: 'Acknowledgement & signatures',
 };
 
 /**

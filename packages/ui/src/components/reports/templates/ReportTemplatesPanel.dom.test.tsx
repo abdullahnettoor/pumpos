@@ -115,16 +115,16 @@ describe('Customize drawer', () => {
   it('keeps the letterhead on and in place', () => {
     const drawer = openShiftSummary();
     const header = within(drawer).getByRole('switch', {
-      name: 'Header / Letterhead',
+      name: 'Header / letterhead',
     }) as HTMLInputElement;
     expect(header.checked).toBe(true);
     expect(header.disabled).toBe(true);
     expect(within(drawer).getByText('Always')).toBeTruthy();
     expect(
-      within(drawer).queryByRole('button', { name: 'Move Header / Letterhead up' }),
+      within(drawer).queryByRole('button', { name: 'Move Header / letterhead up' }),
     ).toBeNull();
     expect(
-      (within(drawer).getByRole('button', { name: 'Move Shift Meta up' }) as HTMLButtonElement)
+      (within(drawer).getByRole('button', { name: 'Move Shift meta up' }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(
@@ -176,7 +176,7 @@ describe('Customize drawer', () => {
   it('shows unsaved changes and saves the enabled sections in order', async () => {
     const drawer = openShiftSummary();
     expect(within(drawer).queryByText('Unsaved changes')).toBeNull();
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Move Shift Meta down' }));
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Move Shift meta down' }));
     fireEvent.click(within(drawer).getByRole('switch', { name: 'Drawers (per attendant)' }));
     expect(within(drawer).getByText('Unsaved changes')).toBeTruthy();
 

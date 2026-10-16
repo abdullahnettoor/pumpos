@@ -30,6 +30,7 @@ import {
   createTankDraft,
   loadStoredOnboardingDraft,
   saveStoredOnboardingDraft,
+  standardOnboardingNozzles,
   validateOnboardingDraft,
   WEEKDAY_ORDER,
 } from './onboardingDraft.js';
@@ -233,128 +234,33 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     });
   };
 
-  const handleAddDualDispenser = () => {
+  const addStandardDispenser = (perFuel: 1 | 2) => {
     const nextIndex = draft.dispensers.length + 1;
-    const dispenserId = createDraftId();
-    const newDispenser: OnboardingDispenserDraft = {
-      draftId: dispenserId,
+    const dispenser: OnboardingDispenserDraft = {
+      draftId: createDraftId(),
       name: `Dispenser ${nextIndex}`,
       code: `DU-${nextIndex}`,
       status: 'ACTIVE',
     };
 
-    const msProducts = draft.products.filter((p) => p.code.toUpperCase() === 'MS');
-    const hsdProducts = draft.products.filter((p) => p.code.toUpperCase() === 'HSD');
-
-    const msProduct = msProducts[0] || draft.products[0];
-    const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
-
-    const msTanks = msProduct
-      ? draft.tanks.filter((t) => t.productDraftId === msProduct.draftId)
-      : [];
-    const hsdTanks = hsdProduct
-      ? draft.tanks.filter((t) => t.productDraftId === hsdProduct.draftId)
-      : [];
-
-    const msTank = msTanks[0] || draft.tanks[0];
-    const hsdTank = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
-
-    const nozzleBase = draft.nozzles.length;
-    const nozzle1: OnboardingNozzleDraft = {
-      draftId: createDraftId(),
-      dispenserDraftId: dispenserId,
-      tankDraftId: msTank?.draftId || '',
-      productDraftId: msProduct?.draftId || '',
-      name: `N${nozzleBase + 1}`,
-      openingReading: 0,
-    };
-
-    const nozzle2: OnboardingNozzleDraft = {
-      draftId: createDraftId(),
-      dispenserDraftId: dispenserId,
-      tankDraftId: hsdTank?.draftId || '',
-      productDraftId: hsdProduct?.draftId || '',
-      name: `N${nozzleBase + 2}`,
-      openingReading: 0,
-    };
+    const nozzles = standardOnboardingNozzles({
+      perFuel,
+      dispenserDraftId: dispenser.draftId,
+      products: draft.products,
+      tanks: draft.tanks,
+      existingNozzles: draft.nozzles.length,
+    });
 
     updateDraft((prev) => ({
       ...prev,
-      dispensers: [...prev.dispensers, newDispenser],
-      nozzles: [...prev.nozzles, nozzle1, nozzle2],
-    }));
-  };
-
-  const handleAddQuadDispenser = () => {
-    const nextIndex = draft.dispensers.length + 1;
-    const dispenserId = createDraftId();
-    const newDispenser: OnboardingDispenserDraft = {
-      draftId: dispenserId,
-      name: `Dispenser ${nextIndex}`,
-      code: `DU-${nextIndex}`,
-      status: 'ACTIVE',
-    };
-
-    const msProducts = draft.products.filter((p) => p.code.toUpperCase() === 'MS');
-    const hsdProducts = draft.products.filter((p) => p.code.toUpperCase() === 'HSD');
-
-    const msProduct = msProducts[0] || draft.products[0];
-    const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
-
-    const msTanks = msProduct
-      ? draft.tanks.filter((t) => t.productDraftId === msProduct.draftId)
-      : [];
-    const hsdTanks = hsdProduct
-      ? draft.tanks.filter((t) => t.productDraftId === hsdProduct.draftId)
-      : [];
-
-    const msTank1 = msTanks[0] || draft.tanks[0];
-    const msTank2 = msTanks[1] || msTanks[0] || draft.tanks[0];
-    const hsdTank1 = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
-    const hsdTank2 = hsdTanks[1] || hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
-
-    const nozzleBase = draft.nozzles.length;
-    const nozzles: OnboardingNozzleDraft[] = [
-      {
-        draftId: createDraftId(),
-        dispenserDraftId: dispenserId,
-        tankDraftId: msTank1?.draftId || '',
-        productDraftId: msProduct?.draftId || '',
-        name: `N${nozzleBase + 1}`,
-        openingReading: 0,
-      },
-      {
-        draftId: createDraftId(),
-        dispenserDraftId: dispenserId,
-        tankDraftId: msTank2?.draftId || '',
-        productDraftId: msProduct?.draftId || '',
-        name: `N${nozzleBase + 2}`,
-        openingReading: 0,
-      },
-      {
-        draftId: createDraftId(),
-        dispenserDraftId: dispenserId,
-        tankDraftId: hsdTank1?.draftId || '',
-        productDraftId: hsdProduct?.draftId || '',
-        name: `N${nozzleBase + 3}`,
-        openingReading: 0,
-      },
-      {
-        draftId: createDraftId(),
-        dispenserDraftId: dispenserId,
-        tankDraftId: hsdTank2?.draftId || '',
-        productDraftId: hsdProduct?.draftId || '',
-        name: `N${nozzleBase + 4}`,
-        openingReading: 0,
-      },
-    ];
-
-    updateDraft((prev) => ({
-      ...prev,
-      dispensers: [...prev.dispensers, newDispenser],
+      dispensers: [...prev.dispensers, dispenser],
       nozzles: [...prev.nozzles, ...nozzles],
     }));
   };
+
+  const handleAddDualDispenser = () => addStandardDispenser(1);
+
+  const handleAddQuadDispenser = () => addStandardDispenser(2);
 
   const saveFuel = () => {
     if (!fuelDrawer) return;
