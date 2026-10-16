@@ -54,6 +54,7 @@ export function buildContext(
       role: user.role,
       subjectId: user.id,
     },
+    permissions: user.permissions,
     groupingRole: opts.groupingRole ?? 'primary',
     timeZone: opts.timeZone ?? null,
     businessDayStartsAt: opts.businessDayStartsAt ?? null,

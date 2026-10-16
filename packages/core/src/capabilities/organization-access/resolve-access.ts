@@ -9,7 +9,7 @@ import type {
   Role,
   SubscriptionStatus,
 } from '@pump/shared';
-import { PAYMENT_GRACE_DAYS, isUnlimitedLimit } from '@pump/shared';
+import { can, isUnlimitedLimit, PAYMENT_GRACE_DAYS } from '@pump/shared';
 import { PRODUCT_ACCESS_REGISTRY, resolveProductPlan, type AccessRegistry } from './registry.js';
 import type { OrganizationAccessInputs } from './ports.js';
 
@@ -73,17 +73,14 @@ export function normalizeSubscriptionStatus(raw: string | null | undefined): Sub
  * An Accountant is in the second set and not the first: chasing an overdue
  * invoice is their job, choosing to buy a new capability is not.
  */
-const COMMERCIAL_ROLES: readonly Role[] = ['Owner', 'Manager'];
-const BILLING_ROLES: readonly Role[] = ['Owner', 'Manager', 'Accountant'];
-
 /** Does this Role make or escalate purchasing decisions? */
 export function seesCommercialAccess(role: Role): boolean {
-  return COMMERCIAL_ROLES.includes(role);
+  return can({ role }, 'subscription.viewCommercial');
 }
 
 /** Does this Role deal with what the Organization owes? */
 export function seesBillingDetail(role: Role): boolean {
-  return BILLING_ROLES.includes(role);
+  return can({ role }, 'subscription.viewBilling');
 }
 
 /**
@@ -375,6 +372,8 @@ export function buildAccessDocument(input: {
   registry?: AccessRegistry;
   /** Evaluation instant; defaults to now. Passed explicitly by use-cases. */
   now?: Date;
+  /** The requesting user's effective Permission ids, exposed to clients. */
+  permissions?: readonly string[];
 }): AccessDocument {
   const registry = input.registry ?? PRODUCT_ACCESS_REGISTRY;
   const { inputs, role } = input;
@@ -384,5 +383,6 @@ export function buildAccessDocument(input: {
     capabilities: resolveCapabilities(inputs, role, registry),
     limits: resolveLimits(inputs, registry),
     subscription: resolveSubscription(inputs, role, input.now ?? new Date()),
+    ...(input.permissions ? { permissions: [...input.permissions] } : {}),
   };
 }

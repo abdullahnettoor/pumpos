@@ -1,4 +1,6 @@
 import React, { useMemo } from 'react';
+import { can } from '@pump/shared';
+import { currentPrincipal } from '../../access/effectivePrincipal.js';
 import { Drawer } from '../Drawer.js';
 import {
   DataSection,
@@ -161,6 +163,13 @@ export const PurchaseDetailDrawer: React.FC<PurchaseDetailDrawerProps> = ({
   const itemsQ = usePurchaseItems(purchase?.id ?? null);
   const items = useMemo<PurchaseItem[]>(() => itemsQ.data ?? [], [itemsQ.data]);
   const p = purchase;
+  // `purchases.viewCosts`: without it only quantities show; the server withholds the prices too.
+  const showCosts = can(currentPrincipal(), 'purchases.viewCosts');
+  const columns = useMemo(
+    () =>
+      showCosts ? ITEM_COLUMNS : ITEM_COLUMNS.filter((c) => ['product', 'qty'].includes(c.id)),
+    [showCosts],
+  );
 
   return (
     <Drawer isOpen={p !== null} onClose={onClose} title="Purchase invoice" widthVariant="wide">
@@ -199,24 +208,26 @@ export const PurchaseDetailDrawer: React.FC<PurchaseDetailDrawerProps> = ({
             >
               <InteractiveTable
                 bare
-                columns={ITEM_COLUMNS}
+                columns={columns}
                 rows={items}
                 rowKey={(it) => it.id}
-                totalRow
+                totalRow={showCosts}
                 title="line items"
               />
             </DataSection>
           </section>
 
-          <div className="flex flex-col gap-1 rounded-card border border-border-soft bg-surface-alt px-4 py-3 text-[12px]">
-            <TaxLine label="Taxable" value={figure(p.taxableAmount)} />
-            {figure(p.cgstTotal) > 0 && (
-              <TaxLine label="CGST + SGST" value={figure(p.cgstTotal) + figure(p.sgstTotal)} />
-            )}
-            {figure(p.igstTotal) > 0 && <TaxLine label="IGST" value={figure(p.igstTotal)} />}
-            {figure(p.cessTotal) > 0 && <TaxLine label="Cess" value={figure(p.cessTotal)} />}
-            <TaxLine label="Invoice total" value={figure(p.amount)} strong />
-          </div>
+          {showCosts && (
+            <div className="flex flex-col gap-1 rounded-card border border-border-soft bg-surface-alt px-4 py-3 text-[12px]">
+              <TaxLine label="Taxable" value={figure(p.taxableAmount)} />
+              {figure(p.cgstTotal) > 0 && (
+                <TaxLine label="CGST + SGST" value={figure(p.cgstTotal) + figure(p.sgstTotal)} />
+              )}
+              {figure(p.igstTotal) > 0 && <TaxLine label="IGST" value={figure(p.igstTotal)} />}
+              {figure(p.cessTotal) > 0 && <TaxLine label="Cess" value={figure(p.cessTotal)} />}
+              <TaxLine label="Invoice total" value={figure(p.amount)} strong />
+            </div>
+          )}
 
           {p.notes && (
             <p className="text-[12px] text-ink-muted">

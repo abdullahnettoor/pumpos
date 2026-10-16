@@ -54,14 +54,8 @@ import {
 } from '../../query/hooks.js';
 import type { PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import {
-  Station,
-  businessDateSettings,
-  canChangeFuelPrice,
-  canCloseShift,
-  canManageProduct,
-  canOpenShift,
-} from '@pump/shared';
+import { businessDateSettings, can, Station } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
@@ -161,12 +155,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     stationSettings.timezone,
     stationSettings.business_day_starts_at,
   );
+  const canWorkLiveShift = can(principalFor(userRole), 'shifts.viewLive');
   const statusQ = useShiftStatus(stationId, { refetchOnWindowFocus: false });
   // Idle Live shift: today so far, from the Business Day's DSR (the Dashboard
   // and Business days read the same cached preview).
   const todayQ = useDailyDssrPreview(stationId, currentBusinessDate, {
-    enabled:
-      !!stationId && !!statusQ.data && !statusQ.data.activeShift && userRole !== 'Accountant',
+    enabled: !!stationId && !!statusQ.data && !statusQ.data.activeShift && canWorkLiveShift,
   });
   const todayFigures = useMemo(() => dayFigures(todayQ.data?.snapshotData), [todayQ.data]);
   const invalidateOperational = useInvalidateOperational();
@@ -182,7 +176,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Shift Tab Sub-Navigation
   const [selectedSubTab, setSelectedSubTab] = useState<'today' | 'business-day' | 'history'>(
-    userRole === 'Accountant' ? 'business-day' : 'today',
+    canWorkLiveShift ? 'today' : 'business-day',
   );
   const [selectedBusinessDayDate, setSelectedBusinessDayDate] = useState<string | null>(null);
   // Deep link from the top-bar business-day pill. Derived rather than synced by
@@ -298,7 +292,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // query so lifecycle transitions cannot render its stale active Shift.
   const loadShiftStatus = (opts?: { throwOnError?: boolean }) =>
     refreshShiftStatus(qc, invalidateOperational, stationId, opts);
-  const mayClose = canCloseShift(userRole);
+  const mayClose = can(principalFor(userRole), 'shifts.close');
   // The Close shift page (#534): draft, figures, the keyed close and its outcome.
   const flow = useCloseShiftFlow({
     stationId,
@@ -583,7 +577,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         }}
         shiftId={activeShift.id}
         stationId={stationId}
-        canSetMrp={canManageProduct(userRole)}
+        canSetMrp={can(principalFor(userRole), 'products.manage')}
         userId={selectedHandoverAssignment.userId}
         userName={selectedHandoverAssignment.userName}
         duId={selectedHandoverAssignment.duId}
@@ -790,7 +784,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onClick: startClose,
         }
       : null
-    : data && canOpenShift(userRole) && !openFormVisible
+    : data && can(principalFor(userRole), 'shifts.open') && !openFormVisible
       ? {
           label: 'Open shift',
           icon: 'play' as const,
@@ -812,7 +806,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       { id: 'business-day', label: 'Business days', concept: 'business-days' },
       { id: 'history', label: 'History', concept: 'history' },
     ] satisfies TabItem[]
-  ).filter((tab) => userRole !== 'Accountant' || tab.id !== 'today');
+  ).filter((tab) => canWorkLiveShift || tab.id !== 'today');
 
   const historyTab = (
     <ShiftHistoryTab
@@ -894,7 +888,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   handoverWrites={handoverWrites}
                   money={money}
                   onRetryMoney={retryMoney}
-                  canSetMrp={canManageProduct(userRole)}
+                  canSetMrp={can(principalFor(userRole), 'products.manage')}
                 />
               ) : awaitingOpenedShift ? (
                 <Skeleton aria-label="Loading the new shift" height={420} />
@@ -927,7 +921,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                     isOpening={isOpening}
                     onSubmit={handleOpenShift}
                     clock={stationClock}
-                    canChangePrice={canChangeFuelPrice(userRole)}
+                    canChangePrice={can(principalFor(userRole), 'pricing.change')}
                     openRefusal={openRefusal}
                   />
                 </section>

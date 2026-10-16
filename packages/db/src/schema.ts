@@ -100,6 +100,42 @@ export const userStationAssignments = pgTable('user_station_assignments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Per-user Permission changes (ADR 0013): the DIFFERENCE from the user's Role
+ * defaults, never a full copy, so a Permission added to the catalogue later
+ * follows Role defaults for everyone who has not changed it. One row per
+ * user; absent row = no changes. Unknown ids are ignored at resolution time.
+ */
+export const userPermissionChanges = pgTable(
+  'user_permission_changes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    userId: uuid('user_id')
+      .references(() => users.id)
+      .notNull(),
+    /** Permission ids added on top of the Role defaults (string[]). */
+    granted: jsonb('granted')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    /** Permission ids removed from the Role defaults (string[]). */
+    revoked: jsonb('revoked')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    userUniq: uniqueIndex('user_permission_changes_user_uniq').on(t.userId),
+    orgIdx: index('user_permission_changes_org_idx').on(t.organizationId),
+  }),
+);
+
 // ----------------------------------------------------
 // INFRASTRUCTURE DOMAIN
 // ----------------------------------------------------

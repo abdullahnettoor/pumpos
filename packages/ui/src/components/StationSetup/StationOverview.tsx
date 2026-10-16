@@ -3,15 +3,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
 import {
-  canManageInfrastructure,
-  canManageProduct,
-  canManageTankLevels,
+  can,
   resolveTankLevelSettings,
-  TANK_LEVEL_SETTINGS_KEY,
-  canManageReportTemplates,
   Station,
+  TANK_LEVEL_SETTINGS_KEY,
   type TankLevelSettings,
 } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
@@ -173,10 +171,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   // While a form is changed, its bar's Save is the page's one primary.
   const formChanged = useHasUnsavedChanges();
 
-  const canRules = userRole === 'Owner' || userRole === 'Manager';
+  const canRules = can(principalFor(userRole), 'station.manage');
   const fuelProducts = (productsQ.data ?? []).filter((product) => product.productType === 'FUEL');
-  const canAddInfrastructure = canManageInfrastructure(userRole);
-  const canAddProduct = canManageProduct(userRole);
+  const canAddInfrastructure = can(principalFor(userRole), 'station.infrastructure');
+  const canAddProduct = can(principalFor(userRole), 'products.manage');
   // The one page primary, the same on every tab (#537 review): Add ▾.
   const actions =
     selectedStation && (canAddInfrastructure || canAddProduct) ? (
@@ -268,7 +266,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 ...(canRules
                   ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
                   : []),
-                ...(canManageReportTemplates(userRole)
+                ...(can(principalFor(userRole), 'station.reportTemplates')
                   ? [
                       {
                         id: 'report-templates',
@@ -293,9 +291,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
               className="flex flex-col gap-6"
             >
               {/* Report templates carry their own panels (moved from Reports, #540). */}
-              {activeTab === 'report-templates' && canManageReportTemplates(userRole) && (
-                <ReportTemplatesPanel selectedStation={selectedStation} />
-              )}
+              {activeTab === 'report-templates' &&
+                can(principalFor(userRole), 'station.reportTemplates') && (
+                  <ReportTemplatesPanel selectedStation={selectedStation} />
+                )}
 
               {activeTab === 'general' && (
                 <>
@@ -326,7 +325,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                   <TankLevelSettingsPanel
                     key={selectedStation.id}
                     value={resolveTankLevelSettings(selectedStation.settings)}
-                    canEdit={canManageTankLevels(userRole)}
+                    canEdit={can(principalFor(userRole), 'station.tankLevels')}
                     onSave={handleSaveTankLevels}
                     onDiscard={() => openSession('tank-levels')}
                   />

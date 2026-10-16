@@ -47,6 +47,8 @@ import {
   DensityTodaySummary,
   RecordDensityReadingPayload,
   OrganizationPayload,
+  type RoleChangePreview,
+  type UserPermissionsView,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -703,11 +705,48 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     );
   }
 
-  async updateUser(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<User> {
-    return request<User>(
+  async updateUser(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<
+    User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+  > {
+    return request<
+      User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+    >(
       `/setup/users/${id}`,
       { method: 'PUT', body: JSON.stringify(data) },
       { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /** Owner only. Default Permissions, stored changes and effective set for a member. */
+  async getUserPermissions(id: string): Promise<UserPermissionsView> {
+    return request<UserPermissionsView>(`/setup/users/${id}/permissions`);
+  }
+
+  /**
+   * Owner only; needs "Custom permissions". Replaces the member's changes with
+   * what is asked for (granted/revoked relative to Role defaults); the server
+   * adds prerequisites, drops dependants and returns the resulting view.
+   */
+  async setUserPermissions(
+    id: string,
+    changes: { granted?: string[]; revoked?: string[] },
+    opts?: { idempotencyKey?: string },
+  ): Promise<UserPermissionsView> {
+    return request<UserPermissionsView>(
+      `/setup/users/${id}/permissions`,
+      { method: 'PUT', body: JSON.stringify(changes) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /** The Permission changes a Role change would drop; writes nothing. */
+  async previewUserRoleChange(id: string, role: string): Promise<RoleChangePreview> {
+    return request<RoleChangePreview>(
+      `/setup/users/${id}/role-change-preview?role=${encodeURIComponent(role)}`,
     );
   }
 

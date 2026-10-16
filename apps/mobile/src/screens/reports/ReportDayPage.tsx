@@ -1,5 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { generateDssrPdf, useBusinessDayList, useToast, withNextStep } from '@pump/ui';
+import React, { useContext, useMemo, useRef, useState } from 'react';
+import {
+  generateDssrPdf,
+  principalFor,
+  useBusinessDayList,
+  useToast,
+  withNextStep,
+} from '@pump/ui';
 import { DSR_LABEL, type BusinessDayListItem, type Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
@@ -7,6 +13,7 @@ import { plural, rupees } from '../../lib/format.js';
 import { businessDateLabel } from '../../lib/dates.js';
 import { liveTabFor, liveTabLabel } from '../../lib/reports/days.js';
 import { stepTargets, type StepTarget } from '../../lib/reports/dssr.js';
+import { ShellContext } from '../../shell/context.js';
 import { useNav } from '../../shell/nav.js';
 import { DetailPage, ListGroup, ListRow, Note, SectionLabel } from '../../ui/index.js';
 import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
@@ -32,6 +39,7 @@ interface Props {
  */
 export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
   const nav = useNav();
+  const role = useContext(ShellContext)?.role;
   const toast = useToast();
   const [date, setDate] = useState(businessDate);
   const [stepping, setStepping] = useState(false);
@@ -128,7 +136,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
         <SectionLabel right={model.draft ? undefined : 'Sealed'}>Summary</SectionLabel>
         <div className="grid grid-cols-2 gap-2 px-3">
-          <DayTiles tiles={model.tiles} />
+          <DayTiles tiles={model.tiles} principal={principalFor(role)} />
         </div>
         {model.omcCard && (
           <div className="pt-2">

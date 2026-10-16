@@ -37,7 +37,7 @@ export const isPurchasedToday = (p: PurchaseRow, clock: PurchaseClock) =>
 /** Today's purchases: total and invoice count. */
 export function purchasedToday(purchases: readonly PurchaseRow[], clock: PurchaseClock) {
   const rows = purchases.filter((p) => isPurchasedToday(p, clock));
-  return { total: sumAmounts(rows), count: rows.length };
+  return { total: sumAmounts(rows.map((p) => ({ amount: p.amount ?? 0 }))), count: rows.length };
 }
 
 /** Purchases dated inside a range. An undated purchase falls in no range. */

@@ -1,11 +1,6 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
-import {
-  canCreateExpense,
-  canManageFinancialAccounts,
-  isAuthorizedForStation,
-  isValidBusinessDate,
-} from '@pump/shared';
+import { can, isAuthorizedForStation, isValidBusinessDate } from '@pump/shared';
 import {
   CreateFinancialAccount,
   UpdateFinancialAccount,
@@ -41,7 +36,7 @@ const forbidden = (c: any) =>
 financeRouter.get('/accounts', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const stationId = c.req.query('stationId') || undefined;
   const accounts = await new DrizzleFinancialAccountReader(db).listWithBalances(
     user.organizationId,
@@ -54,7 +49,7 @@ financeRouter.get('/accounts', async (c) => {
 financeRouter.get('/accounts/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const from = c.req.query('from') || undefined;
   const to = c.req.query('to') || undefined;
   const data = await new DrizzleFinancialAccountReader(db).accountLedger(
@@ -76,7 +71,7 @@ financeRouter.get('/accounts/:id/ledger', async (c) => {
 financeRouter.get('/movements', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const stationId = c.req.query('stationId');
   if (!stationId)
     return c.json(
@@ -100,7 +95,7 @@ financeRouter.get('/movements', async (c) => {
 financeRouter.get('/funding-accounts', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canCreateExpense(user.role)) return forbidden(c);
+  if (!can(user, 'expenses.create')) return forbidden(c);
   const stationId = c.req.query('stationId');
   if (!stationId)
     return c.json(
@@ -121,7 +116,7 @@ financeRouter.get('/funding-accounts', async (c) => {
 financeRouter.get('/cash-book', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const stationId = c.req.query('stationId');
   const date = c.req.query('date');
   if (!stationId || !date || !isValidBusinessDate(date))
@@ -149,7 +144,7 @@ financeRouter.get('/cash-book', async (c) => {
 financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const body = await c.req.json().catch(() => ({}));
   const stationId: string | null = body?.stationId ?? null;
   if (
@@ -177,7 +172,7 @@ financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), asyn
 financeRouter.put('/accounts/:id', writePolicyGuard('PUT /finance/accounts/:id'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(db, (tx, events) =>
     new UpdateFinancialAccount({
@@ -196,7 +191,7 @@ financeRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+    if (!can(user, 'accounts.manage')) return forbidden(c);
     const body = await c.req.json().catch(() => ({}));
     const result = await runInTransaction(db, (tx, events) =>
       new SetOpeningBalance({
@@ -213,7 +208,7 @@ financeRouter.put(
 financeRouter.post('/transfers', writePolicyGuard('POST /finance/transfers'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(db, (tx, events) =>
     new RecordTransfer({
@@ -229,7 +224,7 @@ financeRouter.post('/transfers', writePolicyGuard('POST /finance/transfers'), as
 financeRouter.post('/settlements', writePolicyGuard('POST /finance/settlements'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  if (!can(user, 'accounts.manage')) return forbidden(c);
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(db, (tx, events) =>
     new RecordSettlement({
@@ -248,7 +243,7 @@ financeRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+    if (!can(user, 'accounts.manage')) return forbidden(c);
     const body = await c.req.json().catch(() => ({}));
     const result = await runInTransaction(db, (tx, events) =>
       new RecordLedgerAdjustment({

@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useToast } from '@pump/ui';
+import { hasOrganizationWideStationAccess } from '@pump/shared';
+import { fetchRoleChangePreview, useToast } from '@pump/ui';
 import {
   generatePassword,
   memberFormSchema,
@@ -13,6 +15,7 @@ import type { TeamFailure } from '../../lib/team/failure.js';
 import { assignableRoles } from '../../lib/team/permissions.js';
 import type { TeamActor } from '../../lib/team/permissions.js';
 import { loginIdentity } from '../../lib/team/members.js';
+import { droppedLines, roleChangeCheckFailure } from '../../lib/team/roleChange.js';
 import { SheetButtons } from '../../ui/SheetButtons.js';
 import type { TeamWriteResult } from './useTeamWrite.js';
 import { CredentialsCard } from './CredentialsCard.js';
@@ -26,6 +29,8 @@ interface Props {
   initial: MemberFormValues;
   /** Edit: the member already has a login (contact details do not change how they sign in). */
   hasLogin?: boolean;
+  /** Edit: the member's id and current Role, so a Role change can be previewed first. */
+  member?: { id: string; role: string };
   /** Edit: it is the signed-in user, so the Role stays. */
   roleLocked?: boolean;
   save: (body: Record<string, unknown>) => Promise<TeamWriteResult<object | undefined>>;
@@ -65,12 +70,17 @@ export const MemberForm: React.FC<Props> = ({
   stations,
   initial,
   hasLogin,
+  member,
   roleLocked,
   save,
   isSaving,
   onClose,
 }) => {
   const toast = useToast();
+  const qc = useQueryClient();
+  // The custom Permissions a Role change would drop, shown for the Owner to confirm.
+  const [pendingReset, setPendingReset] = useState<string[] | null>(null);
+  const confirmedRole = useRef<string | null>(null);
   const [refusal, setRefusal] = useState<TeamFailure | null>(null);
   const [credentials, setCredentials] = useState<{ login: string; password: string } | null>(null);
 
@@ -78,15 +88,16 @@ export const MemberForm: React.FC<Props> = ({
     () => (roleLocked ? [initial.role] : assignableRoles(actor.role)),
     [roleLocked, initial.role, actor.role],
   );
+  const requireStation = !hasOrganizationWideStationAccess(actor);
   const schema = useMemo(
     () =>
       memberFormSchema({
         mode,
         allowedRoles: roles,
         allowedStationIds: stations.map((s) => s.id),
-        requireStation: actor.role === 'Manager',
+        requireStation,
       }),
-    [mode, roles, stations, actor.role],
+    [mode, roles, stations, requireStation],
   );
 
   const {
@@ -98,7 +109,11 @@ export const MemberForm: React.FC<Props> = ({
   } = useForm<MemberFormValues>({ resolver: zodResolver(schema), defaultValues: initial });
 
   const values = watch();
-  const clear = () => setRefusal(null);
+  const clear = () => {
+    setRefusal(null);
+    setPendingReset(null);
+    confirmedRole.current = null;
+  };
   const set = <K extends keyof MemberFormValues>(key: K, value: MemberFormValues[K]) => {
     clear();
     setValue(key, value as never, { shouldDirty: true, shouldValidate: false });
@@ -118,8 +133,23 @@ export const MemberForm: React.FC<Props> = ({
   const showEmail = !loginOnly || values.identity === 'Email';
 
   const submit = handleSubmit(async (data) => {
-    clear();
+    setRefusal(null);
     const body = memberRequest(data, mode);
+    // A Role change resets the member's custom Permissions: preview and confirm first.
+    // If the preview cannot be read nothing is saved, so the warning is never skipped.
+    if (member && hasLogin && data.role !== member.role && confirmedRole.current !== data.role) {
+      try {
+        const lines = droppedLines(await fetchRoleChangePreview(qc, member.id, data.role));
+        if (lines.length > 0) {
+          setPendingReset(lines);
+          confirmedRole.current = data.role;
+          return;
+        }
+      } catch {
+        setRefusal(roleChangeCheckFailure);
+        return;
+      }
+    }
     const result = await save(body);
     if (!result.ok) {
       setRefusal(result.failure);
@@ -175,13 +205,13 @@ export const MemberForm: React.FC<Props> = ({
         hint={
           roleLocked
             ? 'You cannot change your own role.'
-            : actor.role === 'Manager'
+            : !hasOrganizationWideStationAccess(actor)
               ? 'Managers can add Staff and Attendants.'
               : undefined
         }
       />
 
-      {values.role === 'Owner' ? (
+      {hasOrganizationWideStationAccess(values) ? (
         <p className="m-0 text-[12px] text-text-muted">Owners can use every station.</p>
       ) : (
         <StationChecks
@@ -259,6 +289,13 @@ export const MemberForm: React.FC<Props> = ({
         </div>
       )}
 
+      {pendingReset && (
+        <FormRefusal>
+          Changing the role resets this member to the {values.role} defaults. These custom
+          Permissions will be dropped: {pendingReset.join(', ')}. Tap "Change role" to continue.
+        </FormRefusal>
+      )}
+
       {refusal && (
         <FormRefusal>
           {refusal.message}
@@ -268,7 +305,7 @@ export const MemberForm: React.FC<Props> = ({
 
       <SheetButtons
         onCancel={onClose}
-        submitLabel={create ? 'Add member' : 'Save changes'}
+        submitLabel={create ? 'Add member' : pendingReset ? 'Change role' : 'Save changes'}
         busyLabel="Saving…"
         busy={isSaving}
       />

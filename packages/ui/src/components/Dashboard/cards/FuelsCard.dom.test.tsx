@@ -163,11 +163,12 @@ describe('FuelsCard', () => {
     expect(nav).toHaveBeenCalledWith('/inventory', { focusInventoryTab: 'density' });
   });
 
-  it.each(['Accountant'] as const)('not recorded hides Record for %s', (role) => {
+  // #551: the API already lets Accountants record density; the Dashboard now offers it too.
+  it.each(['Accountant'] as const)('not recorded offers Record to %s', (role) => {
     hooks.useDensityTodaySummary.mockReturnValue(dens({}));
     mount(role);
     expect(screen.getByText('Not recorded')).toBeTruthy();
-    expect(screen.queryByText('Record ›')).toBeNull();
+    expect(screen.getByText('Record ›')).toBeTruthy();
   });
 
   it('no sales history falls back to the cover note; low tank outlines red', () => {

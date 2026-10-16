@@ -14,7 +14,8 @@ import {
 } from '../Desktop/desktopDownload.js';
 import { isDesktopApp } from '../../utils/platform.js';
 import { Button, PageHeader, EmptyState } from '../../pump-ds/index.js';
-import { Station, canOnboardStation, canViewReports, type OperatorRole } from '@pump/shared';
+import { can, type OperatorRole, Station } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLockout.js';
 import type { NavIntent } from '../AppShell.js';
 import { TriangleAlert, Fuel, Users } from 'lucide-react';
@@ -38,7 +39,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   userName,
   onNavigate,
 }) => {
-  const canSeeFinancials = canViewReports(userRole);
+  const canSeeFinancials = can(principalFor(userRole), 'reports.view');
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
   const [gsDismissed, setGsDismissed] = useState(() => {
@@ -70,7 +71,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     !!selectedStation && (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
   const stationInProgress =
     !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
-  const canManageOnboarding = canOnboardStation(userRole);
+  const canManageOnboarding = can(principalFor(userRole), 'station.onboard');
   const showDesktopStep = canManageOnboarding && isReadyStation && !isDesktopApp();
   const { data: desktopDownloads } = useDesktopDownloads({ enabled: showDesktopStep });
   const [desktopDownloaded, setDesktopDownloaded] = useState(readDesktopDownloaded);

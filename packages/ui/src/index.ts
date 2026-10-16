@@ -297,3 +297,4 @@ export {
   confirmDiscardUnsaved,
   guardLeave,
 } from './pump-ds/form/index.js';
+export * from './access/effectivePrincipal.js';

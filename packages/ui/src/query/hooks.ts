@@ -27,7 +27,12 @@ import {
   CloudDesktopDownloadsService,
   type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
-import { resolveTankLevelSettings, type TankLevelSettings } from '@pump/shared';
+import {
+  resolveTankLevelSettings,
+  type RoleChangePreview,
+  type TankLevelSettings,
+  type UserPermissionsView,
+} from '@pump/shared';
 import { patchQueryData } from './patches/applyPatch.js';
 import { flashRows } from '../utils/rowFlash.js';
 import {
@@ -221,6 +226,9 @@ export const queryKeys = {
   dispensers: (stationId: string) => ['dispensers', stationId] as const,
   nozzles: (stationId: string) => ['nozzles', stationId] as const,
   users: () => ['users'] as const,
+  userPermissions: (userId: string) => ['user-permissions', userId] as const,
+  roleChangePreview: (userId: string, role: string) =>
+    ['user-role-change-preview', userId, role] as const,
   shiftTemplates: () => ['shift-templates'] as const,
   paymentTerminals: (stationId: string) => ['payment-terminals', stationId] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
@@ -417,6 +425,43 @@ export function useUsers(options?: Options<any[]>) {
   });
 }
 
+/**
+ * One member's Permissions (Owner only). Operational tier and never persisted:
+ * an edit on another device must show, and a stale switch is a wrong grant.
+ */
+export function useUserPermissions(
+  userId: string | null | undefined,
+  options?: Options<UserPermissionsView>,
+) {
+  return useQuery({
+    queryKey: queryKeys.userPermissions(userId ?? ''),
+    queryFn: () => userSvc.getUserPermissions(userId!),
+    enabled: !!userId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What a Role change would drop (Owner / Manager). Read at the moment the form
+ * saves, through the query cache under a centralized key: operational tier, so
+ * a preview older than the stale time is refetched, never persisted.
+ */
+export function fetchRoleChangePreview(
+  client: QueryClient,
+  userId: string,
+  role: string,
+): Promise<RoleChangePreview> {
+  return client.fetchQuery({
+    queryKey: queryKeys.roleChangePreview(userId, role),
+    queryFn: () => userSvc.previewUserRoleChange(userId, role),
+    staleTime: TIER.operational.staleTime,
+    gcTime: TIER.operational.gcTime,
+    // The caller blocks the save on a failure and offers a retry itself.
+    retry: false,
+  });
+}
+
 export function useDispensers(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.dispensers(stationId ?? ''),
@@ -539,14 +584,16 @@ export function usePricingHistory(stationId: string | null | undefined, options?
   });
 }
 
+/** How often the Access Document (and so the effective Permissions) refreshes. */
+export const ACCESS_REFRESH_MS = 60_000;
+
 /**
- * The Organization's Access Document: what it may use, filtered for this
- * user's Role. Semi-static — access changes when PumpOS changes a plan, grant
- * or Limit, not during a shift — plus a focus refresh so a change made while
- * the app sat in the background lands on return.
+ * The Organization's Access Document: what it may use and the user's effective
+ * Permissions. Operational tier and never persisted (it is authorization data:
+ * an old copy must not outlive a revoke), refreshed on focus and every minute so
+ * a change lands within about a minute.
  *
- * It is persisted, so a warm client keeps working through a network drop. A
- * cold start has no document at all: read it with `capabilityState` (or the
+ * A cold start has no document at all: read it with `capabilityState` (or the
  * `CapabilityGate` components built on it), which hides optional capabilities
  * rather than inventing access.
  */
@@ -554,8 +601,10 @@ export function useAccess(options?: Options<AccessDocument>) {
   return useQuery({
     queryKey: queryKeys.access(),
     queryFn: () => accessSvc.getAccess(),
-    ...TIER.semi,
+    ...TIER.operational,
     refetchOnWindowFocus: true,
+    // Menus follow Permission changes within about a minute (ADR 0013).
+    refetchInterval: ACCESS_REFRESH_MS,
     ...options,
   });
 }

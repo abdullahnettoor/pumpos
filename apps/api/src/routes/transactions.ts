@@ -2,20 +2,13 @@ import { Hono, type Context } from 'hono';
 import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
-  isAuthorizedForStation,
-  canManageCustomers,
-  canManageSuppliers,
-  canArchiveParty,
-  canRecordPurchase,
-  canManageExpenseCategory,
-  canVoidExpense,
-  canCreateExpense,
-  canRecordCollection,
-  canRecordIncome,
-  canRecordStockCount,
-  canRecordHandover,
+  can,
+  hasOrganizationWideStationAccess,
   isAttendant,
+  isAuthorizedForStation,
   isHandoverSelfScoped,
+  redactPurchaseCosts,
+  redactSupplierBalances,
   type Role,
 } from '@pump/shared';
 import {
@@ -350,7 +343,10 @@ transactionsRouter.get('/suppliers', async (c) => {
   const shown = stationId ? suppliersAtStation(list, stationId, new Set(balances.keys())) : list;
   return c.json({
     success: true,
-    data: shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+    data: redactSupplierBalances(
+      shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+      user,
+    ),
   });
 });
 
@@ -359,7 +355,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/suppliers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -426,7 +422,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -448,7 +444,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'suppliers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -475,6 +471,15 @@ transactionsRouter.delete(
 transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const supplierId = c.req.param('id');
   const stationId = c.req.query('stationId') || undefined;
   if (stationId) {
@@ -589,7 +594,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -656,7 +661,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -678,7 +683,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -873,7 +878,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers/:id/vehicles'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -896,7 +901,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -919,7 +924,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1013,7 +1018,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1075,7 +1080,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1189,7 +1194,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1243,7 +1248,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1290,7 +1295,7 @@ transactionsRouter.put(
 // ---- Other income (indirect income; money IN to drawer/bank/owner) ----
 transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income'), async (c) => {
   const user = c.var.user;
-  if (!canRecordIncome(user.role)) {
+  if (!can(user, 'income.record')) {
     return c.json(
       {
         success: false,
@@ -1332,7 +1337,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/income/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1461,7 +1466,7 @@ transactionsRouter.get('/income/gst-register', async (c) => {
 
 transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expenses'), async (c) => {
   const user = c.var.user;
-  if (!canCreateExpense(user.role)) {
+  if (!can(user, 'expenses.create')) {
     return c.json(
       {
         success: false,
@@ -1490,7 +1495,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/expenses/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1528,7 +1533,7 @@ transactionsRouter.post(
     // DU handover — Attendants may record those. True payment collections are
     // desk operations and exclude the mobile-only Attendant.
     const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
-    if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
+    if (isHandoverCreditSale ? !can(user, 'handover.record') : !can(user, 'collections.record')) {
       return c.json(
         {
           success: false,
@@ -1624,7 +1629,7 @@ async function authorizeLedgerVoid(
   c: Context<{ Variables: Variables }>,
   id: string,
 ): Promise<{ ok: true; stationId: string } | { ok: false; response: Response }> {
-  if (!canRecordHandover(c.var.user.role)) {
+  if (!can(c.var.user, 'handover.record')) {
     return {
       ok: false,
       response: c.json(
@@ -1688,7 +1693,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/purchases'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1786,7 +1791,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/supplier-payments'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1969,11 +1974,11 @@ transactionsRouter.get('/expenses', async (c) => {
  * (none assigned → no rows). Owners see the organization.
  */
 export function purchaseStationScope(
-  user: { role: string; assignedStationIds: string[] },
+  user: { role: Role; assignedStationIds: string[] },
   stationId: string | undefined,
 ) {
   if (stationId) return eq(schema.purchases.stationId, stationId);
-  if (user.role === 'Owner') return undefined;
+  if (hasOrganizationWideStationAccess(user)) return undefined;
   return user.assignedStationIds.length
     ? inArray(schema.purchases.stationId, user.assignedStationIds)
     : sql`false`;
@@ -2029,14 +2034,19 @@ transactionsRouter.get('/purchases', async (c) => {
     .orderBy(desc(schema.purchases.createdAt));
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.purchase,
-      businessDate: r.businessDate,
-      awaitingDecantation: Boolean(r.awaitingDecantation),
-      supplierName: r.supplierName ?? 'Unknown Supplier',
-      itemsSummary: r.itemsSummary,
-      itemCount: Number(r.itemCount || 0),
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.purchase,
+          businessDate: r.businessDate,
+          awaitingDecantation: Boolean(r.awaitingDecantation),
+          supplierName: r.supplierName ?? 'Unknown Supplier',
+          itemsSummary: r.itemsSummary,
+          itemCount: Number(r.itemCount || 0),
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -2087,14 +2097,19 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .orderBy(schema.purchaseItems.createdAt);
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.item,
-      businessDate: r.businessDate,
-      entryDate: r.entryDate,
-      productName: r.productName ?? 'Product',
-      productCode: r.productCode ?? null,
-      unit: r.unit ?? null,
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.item,
+          businessDate: r.businessDate,
+          entryDate: r.entryDate,
+          productName: r.productName ?? 'Product',
+          productCode: r.productCode ?? null,
+          unit: r.unit ?? null,
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -2165,6 +2180,15 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const from = c.req.query('from');
   const to = c.req.query('to');
   const stationId = c.req.query('stationId');
@@ -2231,12 +2255,12 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
  * Account it came from. Backs the Suppliers → Payments tab (#528). Office
  * Records (ADR 0005): dated by Entry Date, never a shift; `from`/`to` bound the
  * Entry Date (inclusive). Read-only; open to the Roles that record them
- * (`canRecordPurchase`), scoped to stations like the purchases list.
+ * (`purchases.record`), scoped to stations like the purchases list.
  */
 transactionsRouter.get('/supplier-payments', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canRecordPurchase(user.role))
+  if (!can(user, 'purchases.record'))
     return c.json(
       {
         success: false,
@@ -2258,7 +2282,7 @@ transactionsRouter.get('/supplier-payments', async (c) => {
   const t = schema.supplierTransactions;
   const stationScope = stationId
     ? eq(t.stationId, stationId)
-    : user.role === 'Owner'
+    : hasOrganizationWideStationAccess(user)
       ? undefined
       : user.assignedStationIds.length
         ? inArray(t.stationId, user.assignedStationIds)
@@ -2564,8 +2588,6 @@ transactionsRouter.get('/money-movements', async (c) => {
 // INVOICING — GST tax invoices (Phase T4)
 // ====================================================
 
-const INVOICE_ROLES = new Set<Role>(['Owner', 'Manager', 'Accountant']);
-
 // POST /transactions/sales/:id/invoice — issue a GST tax invoice for a sale.
 // Idempotent: if the sale was already invoiced, the existing invoice is returned.
 transactionsRouter.post(
@@ -2574,7 +2596,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!INVOICE_ROLES.has(user.role)) {
+    if (!can(user, 'reports.invoice')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -3319,7 +3341,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/inventory/count'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordStockCount(user.role)) {
+    if (!can(user, 'inventory.stockCount')) {
       return c.json(
         {
           success: false,

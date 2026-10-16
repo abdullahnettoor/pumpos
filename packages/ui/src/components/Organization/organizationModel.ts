@@ -1,5 +1,6 @@
 import {
   businessDateSettings,
+  hasOrganizationWideStationAccess,
   resolveEntryDate,
   shiftBusinessDate,
   isUnlimitedLimit,
@@ -184,7 +185,7 @@ export const loginIdentity = (u: MemberLike): string | null => u.email || u.phon
 
 /** The stations a member works at, by name; an Owner reaches every station. */
 export function memberStations(u: MemberLike, stations: readonly { id: string; name: string }[]) {
-  if (u.role === 'Owner') return 'All stations';
+  if (hasOrganizationWideStationAccess(u)) return 'All stations';
   const names = (u.stationIds ?? []).map(
     (id) => stations.find((s) => s.id === id)?.name ?? 'Unknown station',
   );

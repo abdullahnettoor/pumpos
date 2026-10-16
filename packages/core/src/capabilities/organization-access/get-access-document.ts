@@ -17,15 +17,22 @@ export interface GetAccessDocumentDeps {
  * This is presentation data. Every protected operation re-checks access on the
  * server; nothing is authorized because the client holds a document saying so.
  */
-export class GetAccessDocument implements UseCase<{ role: Role }, AccessDocument> {
+export class GetAccessDocument implements UseCase<
+  { role: Role; permissions?: readonly string[] },
+  AccessDocument
+> {
   constructor(private readonly deps: GetAccessDocumentDeps) {}
 
-  async execute(input: { role: Role }, ctx: ExecutionContext): Promise<Result<AccessDocument>> {
+  async execute(
+    input: { role: Role; permissions?: readonly string[] },
+    ctx: ExecutionContext,
+  ): Promise<Result<AccessDocument>> {
     const inputs = await this.deps.access.load(ctx.organizationId);
     return ok(
       buildAccessDocument({
         inputs,
         role: input.role,
+        permissions: input.permissions,
         registry: this.deps.registry,
         // Request-time evaluation: a lapsed grace period restricts on the very
         // next request, with no scheduled transition to run or miss.

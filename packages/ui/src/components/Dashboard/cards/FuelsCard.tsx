@@ -4,6 +4,7 @@ import {
   canSeeDashboardCard,
   resolveDecantationSettings,
 } from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import { DashboardCard } from '../frame/DashboardCard.js';
 import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
 import {
@@ -36,7 +37,7 @@ export const FuelsCard: React.FC = () => {
   const densityQ = useDensityTodaySummary(station.id, businessDate, { enabled });
   const inventoryQ = useInventoryStatus(station.id, { enabled });
 
-  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', role);
+  const canPlanDecant = canSeeDashboardCard('planPurchaseDecant', principalFor(role));
   const decantsQ = useDecantations(station.id, 'PENDING_MEASUREMENT', {
     enabled: enabled && canPlanDecant,
   });
@@ -44,7 +45,7 @@ export const FuelsCard: React.FC = () => {
     () => resolveDecantationSettings(station.settings).densityToleranceKgM3,
     [station.settings],
   );
-  const canRecord = canRecordDensityFromDashboard(role);
+  const canRecord = canRecordDensityFromDashboard(principalFor(role));
   const tankLevels = useTankLevelSettings(station.id);
 
   const fuels = pricingQ.data ?? [];

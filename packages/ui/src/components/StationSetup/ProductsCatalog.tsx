@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, useProducts } from '../../query/hooks.js';
-import { Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
+import { can, Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
+import { currentPrincipal } from '../../access/effectivePrincipal.js';
 import {
   Button,
   Chip,
@@ -519,23 +520,24 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          {productType !== 'FUEL' && (
-            <Field
-              label={`Cost price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
-              hint={
-                editingProduct
-                  ? 'Cost basis updates automatically as a weighted-average from purchases.'
-                  : 'Enter the pre-tax (ex-GST) purchase cost — input GST is creditable, not a cost. Leave blank if unknown.'
-              }
-            >
-              <MoneyInput
-                value={costPrice}
-                onChange={(e) => setCostPrice(e.target.value)}
-                placeholder="Opening pre-tax cost per unit — seeds margin"
-                disabled={!!editingProduct}
-              />
-            </Field>
-          )}
+          {productType !== 'FUEL' &&
+            (!editingProduct || can(currentPrincipal(), 'purchases.viewCosts')) && (
+              <Field
+                label={`Cost price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
+                hint={
+                  editingProduct
+                    ? 'Cost basis updates automatically as a weighted-average from purchases.'
+                    : 'Enter the pre-tax (ex-GST) purchase cost — input GST is creditable, not a cost. Leave blank if unknown.'
+                }
+              >
+                <MoneyInput
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(e.target.value)}
+                  placeholder="Opening pre-tax cost per unit — seeds margin"
+                  disabled={!!editingProduct}
+                />
+              </Field>
+            )}
 
           {productType !== 'FUEL' && !editingProduct && inventoryType === 'ITEM' && (
             <Field

@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
-import { canRecordDecantation, canRecordDensity } from '@pump/shared';
+import { can } from '@pump/shared';
 import type { BusinessDayListItem, Station } from '@pump/shared';
-import { useBusinessDayList } from '@pump/ui';
+import { useBusinessDayList, principalFor } from '@pump/ui';
 import { shortDate } from '../lib/dates.js';
 import { plural } from '../lib/format.js';
 import {
@@ -141,26 +141,28 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
 
   return (
     <>
-      {role && (canRecordDecantation(role) || canRecordDensity(role)) && (
-        <ListGroup className="mb-3">
-          {canRecordDecantation(role) && (
-            <ListRow
-              title="Decantations"
-              meta="Tanker visits and unloading"
-              onPress={() =>
-                nav.push(<DecantationsListPage station={station} />, DECANTATIONS_ROUTE)
-              }
-            />
-          )}
-          {canRecordDensity(role) && (
-            <ListRow
-              title="Density"
-              meta="Today and the register"
-              onPress={() => nav.push(<DensityPage />, 'density')}
-            />
-          )}
-        </ListGroup>
-      )}
+      {role &&
+        (can(principalFor(role), 'inventory.decantation') ||
+          can(principalFor(role), 'inventory.density')) && (
+          <ListGroup className="mb-3">
+            {can(principalFor(role), 'inventory.decantation') && (
+              <ListRow
+                title="Decantations"
+                meta="Tanker visits and unloading"
+                onPress={() =>
+                  nav.push(<DecantationsListPage station={station} />, DECANTATIONS_ROUTE)
+                }
+              />
+            )}
+            {can(principalFor(role), 'inventory.density') && (
+              <ListRow
+                title="Density"
+                meta="Today and the register"
+                onPress={() => nav.push(<DensityPage />, 'density')}
+              />
+            )}
+          </ListGroup>
+        )}
       <div className="grid grid-cols-2 gap-2 px-3">
         <StatTile
           label="Last 7 days"

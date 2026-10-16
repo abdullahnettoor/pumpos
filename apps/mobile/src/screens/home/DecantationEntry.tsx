@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
-import { canRecordDecantation, type Station } from '@pump/shared';
-import { isoToLocalTime, useDecantations } from '@pump/ui';
+import { can, type Station } from '@pump/shared';
+import { isoToLocalTime, useDecantations, principalFor } from '@pump/ui';
 import { DECANTATIONS_ROUTE } from '../../lib/attention/routes.js';
 import { useDecantationNames } from '../../lib/decantation/names.js';
 import { ShellContext, useStationTimeZone } from '../../shell/context.js';
@@ -12,7 +12,7 @@ import { TankerArrivedPage } from '../decantation/TankerArrivedPage.js';
 /** Owner, Manager and Accountant record tanker visits; Attendants never see these. */
 export function useCanRecordDecantation(): boolean {
   const role = useContext(ShellContext)?.role;
-  return !!role && canRecordDecantation(role);
+  return !!role && can(principalFor(role), 'inventory.decantation');
 }
 
 /** "Tanker arrived" and "Decantations ›", the Tanks section's actions. */

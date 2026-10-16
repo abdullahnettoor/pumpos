@@ -12,9 +12,10 @@
  */
 import { z } from 'zod';
 import {
-  canRecordCollection,
-  collectionEntryFormSchema,
   type AccessMode,
+  can,
+  type Principal,
+  collectionEntryFormSchema,
   type Role,
 } from '@pump/shared';
 import { collectionPayload } from '@pump/ui';
@@ -112,7 +113,7 @@ export function collectionRequest(stationId: string, customerId: string, form: C
 /**
  * May this user record a payment from here?
  *
- *  - Role: `canRecordCollection` (every Role except the Attendant), the same
+ *  - Role: `collections.record` (every Role except the Attendant), the same
  *    guard `POST /transactions/collections` applies.
  *  - Access mode: the route is declared FINISH_OPEN_WORK ("money handed over by
  *    a customer must be recorded when it is received"), so Restricted Access
@@ -120,10 +121,12 @@ export function collectionRequest(stationId: string, customerId: string, form: C
  */
 export function collectionAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   accessMode?: AccessMode;
 }): OfficePaymentAccess {
   return officePaymentAccess({
-    allowed: canRecordCollection(input.role),
+    allowed: can(input, 'collections.record'),
     accessMode: input.accessMode,
   });
 }

@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 import {
-  DASHBOARD_TREND_DAYS,
   canSeeDashboardCard,
   comparisonView,
+  DASHBOARD_TREND_DAYS,
   deriveComparison,
   deriveSales,
   num,
   readSnapshot,
   shiftBusinessDate,
 } from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import { formatBusinessDate, formatCompactMoney, formatMoney } from '../../../utils/format.js';
 import { buildTrendChart, deriveCashInHand } from './money/moneyModel.js';
 import { Button } from '../../../pump-ds/index.js';
@@ -27,8 +28,8 @@ import { DashboardCard } from '../frame/DashboardCard.js';
 export const MoneyCard: React.FC = () => {
   const { station, role, businessDate, entryDate, onNavigate } = useDashboard();
   const enabled = useCardEnabled('money');
-  const canTrend = canSeeDashboardCard('trend', role);
-  const isOwner = canSeeDashboardCard('liveMargin', role);
+  const canTrend = canSeeDashboardCard('trend', principalFor(role));
+  const isOwner = canSeeDashboardCard('liveMargin', principalFor(role));
 
   const todayPreviewQ = useDailyDssrPreview(station.id, businessDate, { enabled });
   const prevDate = shiftBusinessDate(businessDate, -1);

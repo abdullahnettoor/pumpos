@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { canChangeCreditLimit, customerCreateSchema, resolveEntryDate } from '@pump/shared';
+import { can, customerCreateSchema, resolveEntryDate } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
@@ -21,7 +22,7 @@ interface CustomerFormDrawerProps {
   onClose: () => void;
   /**
    * The signed-in user's Role. Editing a customer's credit limit is an Owner /
-   * Manager right (`canChangeCreditLimit`; the API refuses anyone else), so for
+   * Manager right (`customers.changeCreditLimit`; the API refuses anyone else), so for
    * other Roles the limit field is shown but locked when editing. Unknown = not
    * locked (the API still decides).
    */
@@ -52,7 +53,9 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   userRole,
 }) => {
   const limitLocked =
-    Boolean(editingCustomer) && userRole !== undefined && !canChangeCreditLimit(userRole as Role);
+    Boolean(editingCustomer) &&
+    userRole !== undefined &&
+    !can(principalFor(userRole), 'customers.changeCreditLimit');
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);

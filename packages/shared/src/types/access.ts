@@ -20,6 +20,9 @@ export type ProductPlanKey = 'CORE';
  */
 export const ATTENDANT_REPORT_CAPABILITY = 'reports.attendant';
 
+/** Per-user Permission changes on top of Role defaults (ADR 0013). */
+export const CUSTOM_PERMISSIONS_CAPABILITY = 'permissions.custom';
+
 /**
  * A numeric allowance supplied by a Product Plan. `station_count` is the only
  * Limit in E1: every Station row an Organization owns consumes one.
@@ -110,6 +113,12 @@ export interface AccessDocument {
   capabilities: Record<string, AccessCapabilityEntry>;
   limits: Record<LimitKey, AccessLimitEntry>;
   subscription: AccessSubscription;
+  /**
+   * The requesting user's effective Permission ids (Role defaults, plus their
+   * changes when entitled). Presentation only: the API checks the same set on
+   * every request. Absent on documents not built for a user (platform view).
+   */
+  permissions?: string[];
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import type { z } from 'zod';
 import type { DbClient } from '@pump/db';
-import { canRecordDensity, isAuthorizedForStation } from '@pump/shared';
+import { can, isAuthorizedForStation } from '@pump/shared';
 import {
   GetDensityTodaySummary,
   ListDensityReadings,
@@ -53,7 +53,7 @@ const forbidden = (c: Ctx, message: string) =>
 
 function guardStation(c: Ctx, stationId: string | null | undefined) {
   const user = c.var.user;
-  if (!canRecordDensity(user.role))
+  if (!can(user, 'inventory.density'))
     return forbidden(c, 'Insufficient permissions for density register');
   if (!stationId)
     return c.json(

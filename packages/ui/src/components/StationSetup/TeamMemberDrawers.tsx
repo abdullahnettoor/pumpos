@@ -3,12 +3,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { INDIAN_MOBILE_MESSAGE, normalizeIndianMobile, type Station } from '@pump/shared';
+import {
+  hasOrganizationWideStationAccess,
+  INDIAN_MOBILE_MESSAGE,
+  normalizeIndianMobile,
+  type Role,
+  type Station,
+} from '@pump/shared';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
-import { queryKeys, useStations } from '../../query/hooks.js';
+import { fetchRoleChangePreview, queryKeys, useStations } from '../../query/hooks.js';
 import { Drawer } from '../Drawer.js';
 import { Field, Select, TextInput } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
+import { labelOf } from './permissionsModel.js';
 import { useToast, withNextStep, type ToastApi } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
@@ -151,10 +159,43 @@ const PasswordRow: React.FC<{
 
 // --- member drawer -----------------------------------------------------------
 
+/** A team member as the Team list and the member drawer read it. */
+export interface TeamMember {
+  id: string;
+  fullName: string;
+  email?: string | null;
+  phone?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE';
+  role?: Role;
+  hasLogin?: boolean;
+  hasCustomPermissions?: boolean;
+  stationIds?: string[];
+}
+
+/** What the member drawer sends (create or update). */
+interface MemberPayload {
+  fullName: string;
+  email?: string | null;
+  phone: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  role: Role;
+  stationIds: string[];
+  enableAppAccess?: boolean;
+  password?: string | null;
+}
+
+/** The server's answer to a member save; `droppedPermissionChanges` is set when a Role change reset custom Permissions. */
+type SavedMember = Partial<TeamMember> & {
+  droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null;
+};
+
+const errorMessage = (err: unknown): string | undefined =>
+  err instanceof Error ? err.message : undefined;
+
 export interface MemberDrawerProps {
   isOpen: boolean;
   /** null = a new member. */
-  editingUser: any | null;
+  editingUser: TeamMember | null;
   /** Shown instead of the form: the new login to hand over (after a password reset). */
   credentials?: Credentials | null;
   /** The station the operator is working in; pre-checked for a new member (#299). */
@@ -171,6 +212,8 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
 }) => {
   const toast = useToast();
   const team = useTeamCache();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
   const save = useKeyedSave(editingUser ? `team:update:${editingUser.id}` : 'team:create');
   const stationsQ = useStations();
   const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
@@ -253,7 +296,7 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       }
     }
 
-    const payload: any = {
+    const payload: MemberPayload = {
       fullName: values.fullName,
       // For a phone identity we deliberately clear email so the server uses
       // the synthetic phone handle as the login identity.
@@ -269,26 +312,75 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       payload.password = values.password;
     }
 
-    let saved: any;
+    // A Role change resets the member's custom Permissions: say what is lost first.
+    // If the preview cannot be read the change is not saved: the Owner must see the warning.
+    if (editingUser && editingUser.hasLogin && payload.role !== editingUser.role) {
+      try {
+        const preview = await fetchRoleChangePreview(qc, editingUser.id, payload.role);
+        const d = preview.droppedChanges;
+        if (d) {
+          const lines = [
+            ...d.granted.map((id) => `${labelOf(id)} (extra)`),
+            ...d.revoked.map((id) => `${labelOf(id)} (removed)`),
+          ];
+          const ok = await confirm({
+            title: `Change role to ${payload.role}?`,
+            message: `Changing the role resets this member to the ${payload.role} defaults. These custom Permissions will be dropped: ${lines.join(', ')}.`,
+            confirmLabel: 'Change role',
+            danger: true,
+          });
+          if (!ok) return;
+        }
+      } catch (err) {
+        toast.error(
+          withNextStep(
+            errorMessage(err) || "Couldn't check what a role change would reset",
+            'Nothing was saved. Try again.',
+          ),
+        );
+        return;
+      }
+    }
+
+    let saved: SavedMember;
     try {
       saved = await save(payload, (idempotencyKey) =>
         editingUser
           ? userService.updateUser(editingUser.id, payload, { idempotencyKey })
           : userService.createUser(payload, { idempotencyKey }),
       );
-    } catch (err: any) {
+    } catch (err) {
       toast.error(
         withNextStep(
-          err.message || "Couldn't save the team member",
+          errorMessage(err) || "Couldn't save the team member",
           'Check the details and save again.',
         ),
       );
       return;
     }
 
-    if (editingUser) team.merge({ ...editingUser, ...saved, ...payload, id: editingUser.id });
+    if (editingUser)
+      team.merge({
+        ...editingUser,
+        ...saved,
+        ...payload,
+        ...(saved?.droppedPermissionChanges ? { hasCustomPermissions: false } : {}),
+        id: editingUser.id,
+      });
     else team.refresh();
-    toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
+    const dropped = saved?.droppedPermissionChanges;
+    if (editingUser) {
+      void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(editingUser.id) });
+      void qc.invalidateQueries({ queryKey: ['user-role-change-preview', editingUser.id] });
+      void qc.invalidateQueries({ queryKey: queryKeys.access() });
+    }
+    if (dropped) {
+      toast.success(
+        `Team member updated. Custom Permissions dropped: ${[...dropped.granted, ...dropped.revoked].map(labelOf).join(', ')}.`,
+      );
+    } else {
+      toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
+    }
 
     // Show credentials to hand over when a fresh login was provisioned.
     if (!editingUser && wantsLogin) {
@@ -417,7 +509,7 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
             </Field>
           )}
 
-          {watchRole !== 'Owner' && (
+          {!hasOrganizationWideStationAccess({ role: watchRole }) && (
             <div
               role="group"
               aria-labelledby="team-assign-stations"

@@ -2,28 +2,27 @@ import { Hono } from 'hono';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
-  canManageProduct,
-  canManageInfrastructure,
-  canManageReportTemplates,
-  canManageTankLevels,
+  can,
   DECANTATION_SETTINGS_KEY_SET,
-  TANK_LEVEL_SETTINGS_KEY,
-  tankLevelsChanged,
-  decantationSettingsSchema,
   DECANTATION_SETTINGS_KEYS,
-  canManageStaff,
-  isManageableByManager,
+  decantationSettingsSchema,
+  finalizeOnboardingSchema,
+  fuelPriceSchema,
+  canActOnTeamMember,
+  canWriteStationSetup,
+  canEditMemberPermissions,
+  CUSTOM_PERMISSIONS_CAPABILITY,
   isAuthorizedForStation,
   normalizeIndianMobile,
+  OnboardingDraft,
   phoneToAuthEmail,
-  stationSchema,
   resolveDecantationSettings,
+  Role,
+  stationSchema,
+  TANK_LEVEL_SETTINGS_KEY,
+  tankLevelsChanged,
   userSchema,
   userUpdateSchema,
-  fuelPriceSchema,
-  finalizeOnboardingSchema,
-  OnboardingDraft,
-  Role,
 } from '@pump/shared';
 import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
@@ -32,6 +31,9 @@ import {
   UpdateStation,
   CreateUser,
   UpdateUser,
+  GetUserPermissions,
+  SetUserPermissions,
+  PreviewUserRoleChange,
   ResetUserPassword,
   SetUserStatus,
   RecordFuelPrice,
@@ -61,12 +63,18 @@ import {
 } from '../infra/repositories/fuel-price-queries.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
+import { evictCachedAuthUser } from '../infra/auth-cache.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
+import { DrizzleUserPermissionChangesRepository } from '../infra/repositories/user-permission-changes.repo.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleStationCapacityPort,
+} from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
 import {
   loadStationDecantationSettings,
@@ -100,13 +108,7 @@ export const stationSetupRouter = new Hono<{ Bindings: Bindings; Variables: Vari
 // Helper Checkers
 // ----------------------------------------------------
 function checkWriteAccess(c: any, stationId?: string | null): boolean {
-  const user = c.var.user;
-  if (user.role === 'Owner') return true;
-  if (user.role === 'Manager') {
-    if (!stationId) return false;
-    return user.assignedStationIds.includes(stationId);
-  }
-  return false; // Accountant & Staff are read-only
+  return canWriteStationSetup(c.var.user, stationId);
 }
 
 /**
@@ -178,7 +180,7 @@ stationSetupRouter.post(
   validateJson(stationSchema),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,
@@ -225,7 +227,7 @@ stationSetupRouter.put(
       !!submittedSettings &&
       Object.keys(submittedSettings).some((key) => DECANTATION_SETTINGS_KEY_SET.has(key));
     if (updatesDecantationSettings) {
-      if (!['Owner', 'Manager'].includes(user.role)) {
+      if (!can(user, 'station.manage')) {
         return c.json(
           {
             success: false,
@@ -260,7 +262,7 @@ stationSetupRouter.put(
     if (
       body.settings &&
       'report_config' in (body.settings as Record<string, unknown>) &&
-      !canManageReportTemplates(user.role)
+      !can(user, 'station.reportTemplates')
     ) {
       return c.json(
         {
@@ -280,7 +282,7 @@ stationSetupRouter.put(
     if (
       submittedSettings &&
       TANK_LEVEL_SETTINGS_KEY in submittedSettings &&
-      !canManageTankLevels(user.role)
+      !can(user, 'station.tankLevels')
     ) {
       const existing = await new DrizzleStationRepository(c.var.db).findById(stationId);
       const stored =
@@ -357,7 +359,7 @@ stationSetupRouter.get('/tanks', async (c) => {
 stationSetupRouter.post('/tanks', writePolicyGuard('POST /setup/tanks'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -405,7 +407,7 @@ stationSetupRouter.get('/dispensers', async (c) => {
 stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -448,7 +450,7 @@ stationSetupRouter.post(
   async (c) => {
     const user = c.var.user;
     const body = c.req.valid('json');
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
         403,
@@ -501,7 +503,7 @@ stationSetupRouter.get('/nozzles', async (c) => {
 stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -542,7 +544,7 @@ stationSetupRouter.post(
   writePolicyGuard('POST /setup/shift-templates'),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -571,7 +573,7 @@ stationSetupRouter.post(
   writePolicyGuard('POST /setup/shift-templates/batch'),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -600,7 +602,26 @@ stationSetupRouter.get('/users', async (c) => {
   const repo = new DrizzleUserRepository(c.var.db);
   const data = await repo.listWithAssignments(user.organizationId);
   // Never expose auth linkage ids to clients; they only need "has a login".
-  const sanitized = data.map(({ authUserId, ...rest }) => ({ ...rest, hasLogin: !!authUserId }));
+  // `hasCustomPermissions` lets the Team list badge members whose Permissions differ from
+  // their Role's defaults (ADR 0013); the detail comes from GET /users/:id/permissions.
+  const changed = await c.var.db
+    .select({
+      userId: schema.userPermissionChanges.userId,
+      granted: schema.userPermissionChanges.granted,
+      revoked: schema.userPermissionChanges.revoked,
+    })
+    .from(schema.userPermissionChanges)
+    .where(eq(schema.userPermissionChanges.organizationId, user.organizationId));
+  const custom = new Set(
+    changed
+      .filter((r) => (r.granted?.length ?? 0) + (r.revoked?.length ?? 0) > 0)
+      .map((r) => r.userId),
+  );
+  const sanitized = data.map(({ authUserId, ...rest }) => ({
+    ...rest,
+    hasLogin: !!authUserId,
+    hasCustomPermissions: custom.has(rest.id),
+  }));
   return c.json({ success: true, data: sanitized });
 });
 
@@ -612,20 +633,17 @@ function getSupabaseAdmin(c: any): SupabaseAdmin | null {
   return new SupabaseAdmin({ url, secretKey: key });
 }
 
-// Owner = full; Manager = Staff/Attendant on own stations only.
+// Owner = full; Manager = Staff/Attendant on own stations only (whose-data rule).
 function canActOnTarget(
   actor: { role: Role; assignedStationIds: string[] },
   targetRole: Role,
   targetStationIds: string[] = [],
 ): boolean {
-  if (actor.role === 'Owner') return true;
-  if (actor.role !== 'Manager') return false;
-  if (!isManageableByManager(targetRole)) return false;
-  // A Manager must be assigned to EVERY station the target touches (current
-  // and requested). A target with no station scope is NOT implicitly
-  // manageable — that previously let Managers control any org account.
-  if (targetStationIds.length === 0) return false;
-  return targetStationIds.every((s) => actor.assignedStationIds.includes(s));
+  return canActOnTeamMember(
+    { role: actor.role, stationIds: actor.assignedStationIds },
+    targetRole,
+    targetStationIds,
+  );
 }
 
 /** Current station assignments of a target user (for authorization). */
@@ -644,7 +662,7 @@ stationSetupRouter.post(
   validateJson(userSchema, 'BAD_REQUEST'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageStaff(user.role)) {
+    if (!can(user, 'team.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } },
         403,
@@ -775,12 +793,113 @@ stationSetupRouter.put(
         403,
       );
     }
-    const db = c.var.db;
-    const useCase = new UpdateUser({
-      repository: new DrizzleUserRepository(db),
-      events: createDispatcher(db),
-    });
-    const result = await useCase.execute({ ...body, id }, buildContext(user));
+    // The update, the Permission-change reset on a Role change, and their
+    // events commit together.
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateUser({
+        repository: new DrizzleUserRepository(tx),
+        events,
+        permissionChanges: new DrizzleUserPermissionChangesRepository(tx),
+      }).execute({ ...body, id }, buildContext(user)),
+    );
+    // Role, status and stations feed the cached principal: next request re-reads.
+    if (result.success) evictCachedAuthUser(target.authUserId);
+    return sendResult(c, result);
+  },
+);
+
+/**
+ * What changing this member's Role would drop. A read, so the UI can warn
+ * before it calls PUT /users/:id (whose response lists what was dropped).
+ */
+stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const role = z
+    .enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'])
+    .safeParse(c.req.query('role'));
+  if (!role.success) {
+    return c.json(
+      { success: false, error: { code: 'BAD_REQUEST', message: 'A valid role is required' } },
+      400,
+    );
+  }
+  const repo = new DrizzleUserRepository(c.var.db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+  const scope = await loadTargetStationIds(c.var.db, id);
+  if (!canActOnTarget(user, target.role, scope) || !canActOnTarget(user, role.data, scope)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
+      403,
+    );
+  }
+  const result = await new PreviewUserRoleChange({
+    users: repo,
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
+  }).execute({ userId: id, role: role.data }, buildContext(user));
+  return sendResult(c, result);
+});
+
+/** A member's Default Permissions, stored changes and effective set (Owner only). */
+stationSetupRouter.get('/users/:id/permissions', async (c) => {
+  const result = await new GetUserPermissions({
+    users: new DrizzleUserRepository(c.var.db),
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
+    access: new DrizzleOrganizationAccessReader(c.var.db),
+  }).execute({ userId: c.req.param('id') }, buildContext(c.var.user));
+  return sendResult(c, result);
+});
+
+/**
+ * Replace a member's Permission changes. Owner only and gated on the
+ * "Custom permissions" capability; the Restricted Access answer is declared in
+ * write-policy-declarations.ts. The Owner check runs before the capability
+ * guard so a non-Owner is told FORBIDDEN, not "not entitled".
+ */
+stationSetupRouter.put(
+  '/users/:id/permissions',
+  writePolicyGuard('PUT /setup/users/:id/permissions'),
+  async (c, next) => {
+    if (!canEditMemberPermissions(c.var.user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: "Only Owners can change a team member's permissions",
+          },
+        },
+        403,
+      );
+    }
+    await next();
+  },
+  requireCapabilityGuard(CUSTOM_PERMISSIONS_CAPABILITY),
+  async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new SetUserPermissions({
+        users: new DrizzleUserRepository(tx),
+        changes: new DrizzleUserPermissionChangesRepository(tx),
+        access: new DrizzleOrganizationAccessReader(tx),
+        events,
+      }).execute(
+        {
+          userId: id,
+          granted: body.granted as string[] | undefined,
+          revoked: body.revoked as string[] | undefined,
+        },
+        buildContext(c.var.user),
+      ),
+    );
+    if (result.success) {
+      const target = await new DrizzleUserRepository(c.var.db).findById(id);
+      evictCachedAuthUser(target?.authUserId);
+    }
     return sendResult(c, result);
   },
 );
@@ -952,7 +1071,7 @@ async function authorizeInfrastructure(
   id: string,
 ): Promise<{ error: Response | null; stationId: string | null }> {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!can(user, 'station.infrastructure')) {
     return {
       error: c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
@@ -1096,7 +1215,7 @@ stationSetupRouter.put(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1122,7 +1241,7 @@ stationSetupRouter.delete(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1321,7 +1440,7 @@ stationSetupRouter.post(
     const db = c.var.db;
     const user = c.var.user;
 
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,

@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import type { Role } from '@pump/shared';
-import { optionalIndianMobileSchema } from '@pump/shared';
+import {
+  hasFixedPermissions,
+  optionalIndianMobileSchema,
+  resolveEffectivePermissions,
+} from '@pump/shared';
+import type { UserPermissionChangesWriter } from '../../organization-access/ports.js';
+import { userPermissionsChangedEvent } from '../../organization-access/user-permissions.js';
 import {
   BusinessEvents,
   err,
@@ -10,6 +16,7 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type {
+  DomainEvent,
   EventPublisher,
   ExecutionContext,
   Repository,
@@ -152,9 +159,19 @@ export class CreateUser implements UseCase<CreateUserCommand, User> {
   }
 }
 
-export class UpdateUser implements UseCase<UpdateUserCommand, User> {
-  constructor(private readonly deps: UserDeps) {}
-  async execute(input: UpdateUserCommand, ctx: ExecutionContext): Promise<Result<User>> {
+export interface UpdateUserDeps extends UserDeps {
+  /** When present, a Role change resets the member's stored Permission changes. */
+  permissionChanges?: UserPermissionChangesWriter;
+}
+
+/** The updated user, plus any Permission changes a Role change reset. */
+export type UpdatedUser = User & {
+  droppedPermissionChanges: { granted: string[]; revoked: string[] } | null;
+};
+
+export class UpdateUser implements UseCase<UpdateUserCommand, UpdatedUser> {
+  constructor(private readonly deps: UpdateUserDeps) {}
+  async execute(input: UpdateUserCommand, ctx: ExecutionContext): Promise<Result<UpdatedUser>> {
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateUser command', { issues: p.error.flatten() }));
@@ -178,15 +195,55 @@ export class UpdateUser implements UseCase<UpdateUserCommand, User> {
         ctx.organizationId,
       );
     }
-    await this.deps.events.publish([
+    const events: DomainEvent[] = [
       eventFromContext(ctx, {
         eventType: BusinessEvents.USER_UPDATED,
         aggregateType: 'User',
         aggregateId: updated.id,
         payload: { userId: updated.id },
       }),
-    ]);
-    return ok(updated);
+    ];
+    let dropped: UpdatedUser['droppedPermissionChanges'] = null;
+    const store = this.deps.permissionChanges;
+    if (store && updated.role !== existing.role) {
+      const stored = await store.load(ctx.organizationId, updated.id);
+      const before = {
+        granted: [...(stored?.granted ?? [])].sort(),
+        revoked: [...(stored?.revoked ?? [])].sort(),
+      };
+      if (before.granted.length > 0 || before.revoked.length > 0) {
+        await store.clear(ctx.organizationId, updated.id);
+        dropped = before;
+        const effective = (role: string, changes: typeof before | null) =>
+          [
+            ...resolveEffectivePermissions({
+              role,
+              changes,
+              entitled: !hasFixedPermissions(role),
+            }),
+          ].sort();
+        events.push(
+          userPermissionsChangedEvent(
+            ctx,
+            updated,
+            {
+              userId: updated.id,
+              reason: 'ROLE_CHANGED',
+              fromRole: existing.role,
+              toRole: updated.role,
+              before: { changes: before, effective: effective(existing.role, before) },
+              after: {
+                changes: { granted: [], revoked: [] },
+                effective: effective(updated.role, null),
+              },
+            },
+            'related',
+          ),
+        );
+      }
+    }
+    await this.deps.events.publish(events);
+    return ok({ ...updated, droppedPermissionChanges: dropped });
   }
 }
 

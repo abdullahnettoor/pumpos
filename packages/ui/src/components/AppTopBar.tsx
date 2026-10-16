@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
 import { LogOut, TriangleAlert, Clock } from 'lucide-react';
 import {
+  can,
   type OperatorRole,
-  type Station,
-  canCreateCustomer,
-  canViewReports,
   reachableStations,
   showStationDropdown,
+  type Station,
 } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent, NavItem } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
@@ -94,7 +94,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // Desktop only: makes this bar double as the OS window title bar (#117).
   // `null` in the browser, where the top bar renders exactly as before.
   const titleBar = useDesktopTitleBar();
-  const canSeeFinancials = canViewReports(userRole);
+  const canSeeFinancials = can(principalFor(userRole), 'reports.view');
   const stationId = selectedStation?.id;
 
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
@@ -203,7 +203,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       isOfficeRecordKind(i.id)
         ? canRecordOfficeRecord(i.id, userRole)
         : i.id === 'customer'
-          ? canCreateCustomer(userRole)
+          ? can(principalFor(userRole), 'customers.manage')
           : true,
     );
   }, [onNavigate, userRole, stationReady]);
@@ -350,7 +350,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     groups.push({
       heading: 'Go to',
       items: navItems
-        .filter((n) => !n.roles || n.roles.includes(userRole))
+        .filter((n) => !n.permission || can(principalFor(userRole), n.permission))
         .map<CommandItem>((n) => ({
           id: `nav-${n.path}`,
           label: n.label,

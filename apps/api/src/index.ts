@@ -15,7 +15,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, isOwner } from '@pump/shared';
+import { can, type PermissionId, type Role } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
@@ -27,9 +27,13 @@ import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
-import { RestoreOrganization, SuspendOrganization } from '@pump/core';
+import { RestoreOrganization, SuspendOrganization, resolveUserPermissions } from '@pump/core';
 import type { AccessChangeResult } from '@pump/core';
-import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleOrganizationSubscriptionRepository,
+} from './infra/repositories/organization-access.repo.js';
+import { DrizzleUserPermissionChangesRepository } from './infra/repositories/user-permission-changes.repo.js';
 import { buildPlatformContext } from './infra/context.js';
 import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
@@ -50,42 +54,7 @@ import {
   type ActivityGroupSummary,
 } from './infra/activity-events.js';
 
-// --- Auth cache (per-isolate) --------------------------------------------
-// Cloudflare Workers reuse isolates across many requests, so a module-level
-// Map behaves as a warm per-isolate LRU. This eliminates the 2 DB round-trips
-// (users + userStationAssignments) that would otherwise fire on every
-// authenticated request — the single biggest source of Hyperdrive queries.
-// TTL is deliberately short (60s) so role / assignment changes propagate
-// promptly without any explicit invalidation.
-type CachedAuthUser = {
-  id: string;
-  email: string | null;
-  fullName: string | null;
-  organizationId: string;
-  role: Role;
-  assignedStationIds: string[];
-};
-const AUTH_CACHE_TTL_MS = 60_000;
-const AUTH_CACHE_MAX = 500;
-const authCache = new Map<string, { user: CachedAuthUser; expiresAt: number }>();
-
-function getCachedAuthUser(authId: string): CachedAuthUser | null {
-  const entry = authCache.get(authId);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    authCache.delete(authId);
-    return null;
-  }
-  return entry.user;
-}
-
-function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
-  authCache.set(authId, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
-  if (authCache.size > AUTH_CACHE_MAX) {
-    const firstKey = authCache.keys().next().value;
-    if (firstKey !== undefined) authCache.delete(firstKey);
-  }
-}
+import { getCachedAuthUser, setCachedAuthUser, type CachedAuthUser } from './infra/auth-cache.js';
 
 type Bindings = {
   HYPERDRIVE: Hyperdrive;
@@ -428,7 +397,21 @@ api.use('*', async (c, next) => {
       setCachedAuthUser(authId, cachedUser);
     }
 
-    c.set('user', cachedUser);
+    // Identity (Role, stations) may be served from the warm cache, but
+    // effective Permissions are resolved on every request so an Owner's change
+    // or an entitlement lapse applies immediately (ADR 0013). Fixed Roles skip
+    // the reads; others cost one indexed query (a second only when changes exist).
+    const identity = cachedUser;
+    const permissions = await runWithFallback((client) =>
+      resolveUserPermissions(
+        {
+          access: new DrizzleOrganizationAccessReader(client),
+          changes: new DrizzleUserPermissionChangesRepository(client),
+        },
+        { organizationId: identity.organizationId, userId: identity.id, role: identity.role },
+      ),
+    );
+    c.set('user', { ...identity, permissions });
 
     await next();
   } catch (err: any) {
@@ -556,7 +539,7 @@ async function auditActivityFeed(c: Context<{ Variables: Pick<Variables, 'db' | 
 // GET /api/activity/:groupId - one grouped command, including lazy siblings.
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
-  if (!isOwner(user.role)) {
+  if (!can(user, 'activity.view')) {
     return c.json(
       {
         success: false,

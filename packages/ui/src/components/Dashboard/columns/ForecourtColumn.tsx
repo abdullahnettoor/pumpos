@@ -1,5 +1,6 @@
 import React from 'react';
 import { shiftWorkspaceAction } from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import { ForecourtCard } from '../cards/ForecourtCard.js';
 import { liveSubtitle } from '../cards/forecourt/derive.js';
 import { useForecourtModel } from '../cards/forecourt/useForecourtModel.js';
@@ -10,7 +11,7 @@ import { useDashboard } from '../frame/DashboardContext.js';
 export const ForecourtColumn: React.FC = () => {
   const { role, onNavigate } = useDashboard();
   const { model } = useForecourtModel();
-  const workspace = shiftWorkspaceAction(role);
+  const workspace = shiftWorkspaceAction(principalFor(role));
   const subtitle =
     model?.kind === 'live'
       ? liveSubtitle(model)

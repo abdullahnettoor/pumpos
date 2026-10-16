@@ -1,8 +1,8 @@
 import {
-  isOwner,
-  organizationUpdateSchema,
+  can,
   type OrganizationPayload,
   type OrganizationProfileMetadata,
+  organizationUpdateSchema,
   type Role,
 } from '@pump/shared';
 import {
@@ -77,7 +77,7 @@ function ownerRole(ctx: ExecutionContext): Role | null {
   const actor = ctx.actorSnapshot;
   if (!actor || actor.kind !== 'tenant_user' || actor.role === null) return null;
   const role = actor.role as Role;
-  return isOwner(role) ? role : null;
+  return can({ role }, 'organization.edit') ? role : null;
 }
 
 /** Profile keys as written: present keys are kept, omitted ones are cleared. */

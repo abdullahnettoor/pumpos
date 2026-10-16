@@ -125,6 +125,24 @@ Roles:
 | Staff      | Day-to-day operational entries                                                |
 | Attendant  | Mobile-only (handover app); accountable for one dispenser unit (DU) per shift |
 
+### Custom permissions (Owner only)
+
+Each Role has default Permissions (the full matrix is in
+`packages/shared/src/permissions/permission-matrix.generated.md`). An Owner can
+give or take away single abilities for one member without inventing a role:
+Sidebar → **Organization** → **Team** tab → the member → **Permissions**.
+Areas expand to switches; the header shows "Role defaults" or "N custom", and
+**Reset to role defaults** clears every change. **Save** applies it.
+
+- **Changing a Role** warns that the member's custom changes may be dropped
+  because the new Role's defaults apply; confirm to continue.
+- **Plan note:** Custom permissions is a plan feature. Without it the drawer is
+  read-only with an upgrade note, and existing changes are kept but not applied.
+- Sensitive figures follow Permissions, not just screens: without **View
+  purchase prices / costs** the server withholds purchase amounts, product cost
+  price, stock-variance unit cost and stock-loss rupee value; without **View
+  margin** it withholds COGS and margin.
+
 ## 6. Open a shift
 
 Sidebar → **Shifts** → **Live shift** tab. With no shift open it shows today

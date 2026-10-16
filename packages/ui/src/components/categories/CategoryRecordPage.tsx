@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { ROUTES, type RoutePath } from '../../nav-intent/routes.js';
 import {
   mutationKeys,
@@ -193,8 +194,8 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
   const flashing = useFlashingRows();
 
   const role = (userRole as any) ?? 'Staff';
-  const canManageCategories = canManageExpenseCategory(role);
-  const canVoid = canVoidExpense(role);
+  const canManageCategories = can(principalFor(role), 'expenses.categories');
+  const canVoid = can(principalFor(role), 'expenses.void');
 
   const timeZone = selectedStation?.settings?.timezone;
   // Office records are dated by entry date: the plain station calendar date (ADR 0005).

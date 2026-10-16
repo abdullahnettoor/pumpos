@@ -90,6 +90,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /setup/nozzles': 'org-scoped-query',
   'GET /setup/shift-templates': 'not-station-scoped',
   'GET /setup/users': 'not-station-scoped',
+  'GET /setup/users/:id/permissions': 'org-scoped-query',
+  'GET /setup/users/:id/role-change-preview': 'org-scoped-query',
   'GET /setup/onboarding/status': 'refuses-foreign-station',
   'GET /setup/pricing': 'org-scoped-query',
   'GET /setup/pricing/history': 'org-scoped-query',

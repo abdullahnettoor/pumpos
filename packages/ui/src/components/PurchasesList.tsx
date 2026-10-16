@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { resolveBusinessDate, resolveEntryDate } from '@pump/shared';
+import { can, resolveBusinessDate, resolveEntryDate } from '@pump/shared';
+import { currentPrincipal } from '../access/effectivePrincipal.js';
 import { useNavIntent, clearNavIntent, type NavIntent } from '../nav-intent/store.js';
 import { ROUTES } from '../nav-intent/routes.js';
 import { usePayables, usePurchases, useStationSuppliers } from '../query/hooks.js';
@@ -227,6 +228,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, o
               entryClock={entryClock}
               onOpen={openPurchase}
               onLinkToDecantation={setLinkingPurchase}
+              canViewCosts={can(currentPrincipal(), 'purchases.viewCosts')}
             />
           )}
           {activeTab === 'payments' && (

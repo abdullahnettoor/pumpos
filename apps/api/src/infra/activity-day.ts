@@ -1,8 +1,10 @@
 import { BusinessEvents } from '@pump/core';
 import {
-  isOwner,
-  canSeeDashboardCard,
   businessDayWindow as sharedBusinessDayWindow,
+  can,
+  canSeeDashboardCard,
+  principalOf,
+  type Principal,
   type Role,
 } from '@pump/shared';
 
@@ -70,14 +72,26 @@ export const OFFICE_ACTIVITY_EVENTS: readonly string[] = [
   E.CREDIT_PAYMENT_RECEIVED,
 ];
 
+/**
+ * Events whose description carries a purchase or supplier-payment amount.
+ * Withheld without `purchases.viewCosts`, which also gates supplier work (ADR 0013).
+ */
+export const PURCHASE_COST_ACTIVITY_EVENTS: readonly string[] = [
+  E.PURCHASE_CREATED,
+  E.SUPPLIER_PAID,
+  E.PAYMENT_MADE,
+];
+
 /** Event types a role may read through the dated feed; Owner gets everything. */
-export function dashboardEventTypesForRole(role: Role): readonly string[] | null {
-  if (!canSeeDashboardCard('timeline', role)) return [];
-  if (isOwner(role)) return null; // Owner
-  if (canSeeDashboardCard('timelineOfficeEvents', role)) {
-    return [...FORECOURT_ACTIVITY_EVENTS, ...STAFF_HIDDEN_ACTIVITY_EVENTS];
-  }
-  return FORECOURT_ACTIVITY_EVENTS;
+export function dashboardEventTypesForRole(who: Role | Principal): readonly string[] | null {
+  const principal = typeof who === 'string' ? principalOf(who) : who;
+  if (!canSeeDashboardCard('timeline', principal)) return [];
+  if (can(principal, 'activity.view')) return null; // sees every event
+  const types = canSeeDashboardCard('timelineOfficeEvents', principal)
+    ? [...FORECOURT_ACTIVITY_EVENTS, ...STAFF_HIDDEN_ACTIVITY_EVENTS]
+    : FORECOURT_ACTIVITY_EVENTS;
+  if (can(principal, 'purchases.viewCosts')) return types;
+  return types.filter((t) => !PURCHASE_COST_ACTIVITY_EVENTS.includes(t));
 }
 
 /**

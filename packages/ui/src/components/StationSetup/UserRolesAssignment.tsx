@@ -27,12 +27,15 @@ import {
   memberStations,
   type MemberFilter,
 } from '../Organization/organizationModel.js';
+import { PermissionsDrawer } from './PermissionsDrawer.js';
+import { RoleMatrixDrawer } from './RoleMatrixDrawer.js';
 import {
   MemberDrawer,
   ResetPasswordDrawer,
   useTeamCache,
   userService,
   type Credentials,
+  type TeamMember,
 } from './TeamMemberDrawers.js';
 
 export { defaultNewMemberStationIds } from './TeamMemberDrawers.js';
@@ -47,10 +50,11 @@ const RoleChip: React.FC<{ role?: string | null }> = ({ role }) =>
 
 const buildUserColumns = (
   stations: Station[],
-  startEdit: (u: any) => void,
-  onReset: (u: any) => void,
-  onToggleActive: (u: any) => void,
-): TableColumn<any>[] => [
+  startEdit: (u: TeamMember) => void,
+  onReset: (u: TeamMember) => void,
+  onToggleActive: (u: TeamMember) => void,
+  onPermissions: (u: TeamMember) => void,
+): TableColumn<TeamMember>[] => [
   {
     id: 'name',
     header: 'Member',
@@ -76,7 +80,16 @@ const buildUserColumns = (
     kind: 'text',
     value: (u) => u.role,
     width: '13%',
-    cell: (u) => <RoleChip role={u.hasLogin ? u.role : null} />,
+    cell: (u) => (
+      <span className="inline-flex items-center gap-1">
+        <RoleChip role={u.hasLogin ? u.role : null} />
+        {u.hasLogin && u.hasCustomPermissions && (
+          <Chip tone="info" size="md">
+            Custom
+          </Chip>
+        )}
+      </span>
+    ),
   },
   {
     id: 'status',
@@ -97,7 +110,7 @@ const buildUserColumns = (
     header: '',
     kind: 'text',
     value: () => null,
-    width: '13%',
+    width: '16%',
     cell: (u) => {
       const isActive = u.status !== 'INACTIVE';
       return (
@@ -112,6 +125,18 @@ const buildUserColumns = (
           >
             <Icon name="edit" size="xs" />
           </Button>
+          {u.hasLogin && (
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              title="Permissions"
+              aria-label="Permissions"
+              onClick={() => onPermissions(u)}
+            >
+              <Icon name="shield" size="xs" />
+            </Button>
+          )}
           {u.hasLogin && (
             <Button
               variant="ghost"
@@ -147,11 +172,29 @@ export interface UserRolesAssignmentProps {
   currentStationId?: string | null;
 }
 
+const EXPLAINER_KEY = 'pump.team.permissionsExplainer.dismissed';
+const explainerDismissed = (): boolean => {
+  try {
+    return localStorage.getItem(EXPLAINER_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const dismissExplainer = () => {
+  try {
+    localStorage.setItem(EXPLAINER_KEY, '1');
+  } catch {
+    /* persistence is best effort */
+  }
+};
+
 const members = (n: number) => countOf(n, 'member', 'members');
 
 /** The open drawer: edit a member (or hand over a reset login), or reset a password. */
 type TeamDrawer =
-  { kind: 'member'; user: any; credentials?: Credentials } | { kind: 'reset'; user: any };
+  | { kind: 'member'; user: TeamMember | null; credentials?: Credentials }
+  | { kind: 'reset'; user: TeamMember }
+  | { kind: 'permissions'; user: TeamMember };
 
 /**
  * Organization › Team (#538): the org-wide team list (Table module, status
@@ -195,9 +238,9 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
 
   // One click is one logical submit; a retry of the same switch after an
   // unknown outcome recovers its key from the shared store.
-  const toggleActive = async (u: any) => {
+  const toggleActive = async (u: TeamMember) => {
     const reactivate = u.status === 'INACTIVE';
-    let updated: any;
+    let updated: Partial<TeamMember>;
     try {
       updated = await sendKeyed(
         officeSubmitKeys.session(`team:${reactivate ? 'reactivate' : 'deactivate'}:${u.id}`),
@@ -207,9 +250,12 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
             ? userService.reactivateUser(u.id, { idempotencyKey })
             : userService.deactivateUser(u.id, { idempotencyKey }),
       );
-    } catch (err: any) {
+    } catch (err) {
       toast.error(
-        withNextStep(err.message || "Couldn't update the member", 'Try again from their row.'),
+        withNextStep(
+          (err instanceof Error && err.message) || "Couldn't update the member",
+          'Try again from their row.',
+        ),
       );
       return;
     }
@@ -222,7 +268,10 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
     (user) => open({ kind: 'member', user }),
     (user) => open({ kind: 'reset', user }),
     (u) => runTask(toggleActive(u), 'Could not update the team member.'),
+    (user) => open({ kind: 'permissions', user }),
   );
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [explainer, setExplainer] = useState(() => !explainerDismissed());
 
   const options: FilterChipOption<MemberFilter>[] = [
     { value: 'all', label: 'All', count: counts.all },
@@ -237,8 +286,36 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
 
   return (
     <section className="flex flex-col gap-2">
+      {explainer && (
+        <div
+          role="note"
+          className="flex items-start justify-between gap-3 rounded-card border border-border-soft bg-surface-alt p-3 text-[12px] text-ink-default"
+        >
+          <span>
+            <strong className="text-ink-strong">Permissions are now per member.</strong> Each Role
+            starts with default Permissions; an Owner can switch individual ones on or off from a
+            member&apos;s <em>Permissions</em> button. See what each role can do first.
+          </span>
+          <span className="flex shrink-0 gap-1">
+            <Button variant="secondary" size="xs" onClick={() => setMatrixOpen(true)}>
+              What each role can do
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                dismissExplainer();
+                setExplainer(false);
+              }}
+            >
+              Got it
+            </Button>
+          </span>
+        </div>
+      )}
       <SectionHeader
         title="Team"
+        action={{ label: 'What each role can do', onClick: () => setMatrixOpen(true) }}
         subtitle={
           usersQ.data
             ? filtered
@@ -299,6 +376,13 @@ export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
         currentStationId={currentStationId}
         onClose={close}
       />
+      <PermissionsDrawer
+        key={`permissions-${drawerKey}`}
+        isOpen={isOpen && drawer?.kind === 'permissions'}
+        user={drawer?.kind === 'permissions' ? drawer.user : null}
+        onClose={close}
+      />
+      <RoleMatrixDrawer isOpen={matrixOpen} onClose={() => setMatrixOpen(false)} />
       <ResetPasswordDrawer
         key={`reset-${drawerKey}`}
         isOpen={isOpen && drawer?.kind === 'reset'}

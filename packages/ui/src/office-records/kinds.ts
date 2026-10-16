@@ -1,10 +1,5 @@
-import {
-  canCreateExpense,
-  canRecordCollection,
-  canRecordIncome,
-  canRecordPurchase,
-  type Role,
-} from '@pump/shared';
+import { can, type Role } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
 import type { Concept } from '../pump-ds/icon/index.js';
 import { formatBusinessDate } from '../utils/format.js';
 import { ROUTES, type RoutePath } from '../nav-intent/routes.js';
@@ -111,14 +106,14 @@ export function isOfficeRecordKind(value: string | null | undefined): value is O
 export function canRecordOfficeRecord(kind: OfficeRecordKind, role: Role): boolean {
   switch (kind) {
     case 'expense':
-      return canCreateExpense(role);
+      return can(principalFor(role), 'expenses.create');
     case 'income':
-      return canRecordIncome(role);
+      return can(principalFor(role), 'income.record');
     case 'collection':
-      return canRecordCollection(role);
+      return can(principalFor(role), 'collections.record');
     case 'purchase':
     case 'supplier-payment':
-      return canRecordPurchase(role);
+      return can(principalFor(role), 'purchases.record');
   }
 }
 

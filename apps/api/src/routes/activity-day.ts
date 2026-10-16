@@ -14,7 +14,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, isOwner, isValidBusinessDate } from '@pump/shared';
+import { can, isAuthorizedForStation, isValidBusinessDate } from '@pump/shared';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import {
   OFFICE_ACTIVITY_EVENTS,
@@ -52,7 +52,7 @@ export const activityDayHandler = async (c: Context<Env>) => {
   const entryDate = c.req.query('entryDate') ?? date;
   if (!isValidBusinessDate(entryDate)) return bad('entryDate must be a valid YYYY-MM-DD date');
 
-  const allowed = dashboardEventTypesForRole(user.role);
+  const allowed = dashboardEventTypesForRole(user);
   if (allowed !== null && allowed.length === 0) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
@@ -172,7 +172,7 @@ export const activityDayHandler = async (c: Context<Env>) => {
 export function activityHandler(auditFeed: (c: Context<Env>) => Response | Promise<Response>) {
   return (c: Context<Env>) => {
     if (c.req.query('date') !== undefined) return activityDayHandler(c);
-    if (!isOwner(c.var.user.role)) {
+    if (!can(c.var.user, 'activity.view')) {
       return c.json(
         {
           success: false,

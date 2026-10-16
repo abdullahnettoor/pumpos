@@ -9,7 +9,7 @@
  * the Customer page cannot disagree (and `creditLimit.test.ts` pins them).
  */
 import { z } from 'zod';
-import { canChangeCreditLimit, creditLimitSchema, type AccessMode, type Role } from '@pump/shared';
+import { type AccessMode, can, type Principal, creditLimitSchema, type Role } from '@pump/shared';
 import { standing, type MoneyCustomer, type Standing } from './parties.js';
 
 export type ParsedLimit = { ok: true; value: number | null } | { ok: false; message: string };
@@ -62,7 +62,7 @@ export type CreditLimitAccess =
 /**
  * May this user change this Customer's limit from here?
  *
- *  - Role: `canChangeCreditLimit` (Owner, Manager). The server enforces the
+ *  - Role: `customers.changeCreditLimit` (Owner, Manager). The server enforces the
  *    same rule (`UpdateCustomer` refuses anyone else with FORBIDDEN); this only
  *    decides what to show.
  *  - Only Credit and Fleet Customers carry a limit.
@@ -73,10 +73,12 @@ export type CreditLimitAccess =
  */
 export function creditLimitAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   customerType?: string | null;
   accessMode?: AccessMode;
 }): CreditLimitAccess {
-  if (!canChangeCreditLimit(input.role)) return { status: 'hidden' };
+  if (!can(input, 'customers.changeCreditLimit')) return { status: 'hidden' };
   if (input.customerType !== 'Credit' && input.customerType !== 'Fleet')
     return { status: 'hidden' };
   if (input.accessMode === 'RESTRICTED' || input.accessMode === 'SUSPENDED')
