@@ -215,7 +215,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -226,7 +226,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         </span>
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 600,
             padding: '2px 5px',
             borderRadius: '4px',
@@ -250,7 +250,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             htmlFor="density-calc-obs"
             style={{
               display: 'block',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               color: 'var(--text-strong)',
               marginBottom: '2px',
@@ -276,7 +276,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             htmlFor="density-calc-temp"
             style={{
               display: 'block',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               color: 'var(--text-strong)',
               marginBottom: '2px',
@@ -314,7 +314,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             <div
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}
             >
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 Density at 15 °C:
               </span>
               <span
@@ -329,11 +329,11 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>VCF (CTL):</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>VCF (CTL):</span>
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-muted)',
                 }}
               >
@@ -350,7 +350,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  fontSize: '10px',
+                  fontSize: '12px',
                 }}
               >
                 <span style={{ color: 'var(--text-muted)' }}>

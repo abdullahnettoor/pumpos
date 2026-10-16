@@ -15,6 +15,7 @@ export const RULES = [
   'raw-color',
   'palette-class',
   'fill-text-pair',
+  'small-text',
 ] as const;
 export type Rule = (typeof RULES)[number];
 export type Findings = Record<Rule, string[]>;
@@ -63,6 +64,31 @@ const CSS_KEYWORDS = new Set([
   'text-top',
   'text-bottom',
 ]);
+
+/**
+ * Text below the 12px floor (#515, #602): `text-[11px]`, `text-[0.6rem]`,
+ * `text-2xs`, and `fontSize` under 12 in style objects. Table headers (10px)
+ * are the only exception, kept on the allow-list file by file.
+ */
+const MIN_TEXT_PX = 12;
+const ARBITRARY_SIZE = /^text-\[(\d*\.?\d+)(px|rem)\]$/;
+export function isSmallTextUtility(utility: string): boolean {
+  if (utility === 'text-2xs') return true;
+  const m = ARBITRARY_SIZE.exec(utility);
+  if (!m) return false;
+  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  return px < MIN_TEXT_PX;
+}
+/** A `fontSize` style value under 12px (`11`, `'11px'`, `'0.7rem'`). */
+function isSmallFontSize(node: ts.Expression): string | null {
+  if (ts.isNumericLiteral(node)) return Number(node.text) < MIN_TEXT_PX ? node.text : null;
+  const lit = literalOf(node);
+  if (!lit || lit.chunks.length !== 1) return null;
+  const m = /^(\d*\.?\d+)(px|rem)$/.exec(lit.chunks[0]!.trim());
+  if (!m) return null;
+  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  return px < MIN_TEXT_PX ? lit.chunks[0]! : null;
+}
 
 const COLOR_UTILITY = /^(bg|text|border|divide|ring|from|to|via|fill|stroke|shadow|outline)-/;
 /**
@@ -326,6 +352,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'raw-color': [],
     'palette-class': [],
     'fill-text-pair': [],
+    'small-text': [],
     'side-only-dash': [],
     'quoted-interpolation': [],
   };
@@ -339,6 +366,8 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
   const allLits: ts.Node[] = [];
   /** Expressions that are one class string as a whole (`className={…}`, `cn(…)`). */
   const classRoots: ts.Node[] = [];
+  /** `fontSize` style values under 12px (dropped for PDF documents below). */
+  const smallStyles: string[] = [];
 
   const collectInto = (root: ts.Node, into: Set<ts.Node>) => {
     const visit = (n: ts.Node) => {
@@ -376,6 +405,9 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
         collectInto(node.initializer, classLits);
         if (!inRoot) classRoots.push(node.initializer);
         root = true;
+      } else if (name === 'fontSize') {
+        const small = isSmallFontSize(node.initializer);
+        if (small) smallStyles.push(`fontSize: ${small}`);
       } else if (name && CSS_COLOR_PROP.test(name) && literalOf(node.initializer))
         styleLits.add(node.initializer);
       else if (name && CSS_VALUE_PROP.test(name) && literalOf(node.initializer))
@@ -406,6 +438,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     for (const token of classTokens(lit)) {
       if (!looksLikeClass(token) || !checkable(token)) continue;
       if (RAW_COLOR.test(token)) findings['raw-color'].push(token);
+      if (isSmallTextUtility(utilityOf(token).utility)) findings['small-text'].push(token);
       if (PALETTE_CLASS.test(utilityOf(token).utility)) {
         findings['palette-class'].push(token);
         continue;
@@ -442,6 +475,8 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
       ts.isStringLiteral(st.moduleSpecifier) &&
       /^(@react-pdf\/renderer|pdfmake)/.test(st.moduleSpecifier.text),
   );
+  // PDF typography sets its own print scale (points, not screen px).
+  if (!isPdf) findings['small-text'].push(...smallStyles);
   for (const node of isPdf ? [] : allLits) {
     if (classLits.has(node)) continue;
     const value = fullText(knownLiteral(node));

@@ -190,6 +190,11 @@ combined with its static parts, all args of one `cn()` call, and local `const`
 strings and object maps it names. `${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`
 and `cn(base, 'text-on-brand')` are both checked.
 
+**Small text (#602).** Nothing on screen is below 12px. `text-[11px]`,
+`text-[0.6rem]`, `text-2xs` (any variant) and a style `fontSize` under 12 all
+count. PDF documents are skipped: their typography is a print scale. Use
+`text-[12px]` for captions, chips, counts and kbd hints.
+
 Plain CSS classes defined in `index.css` are allowed.
 
 ```sh
@@ -202,11 +207,13 @@ Violations are recorded in `class-guard/allowlist.json` as
 `rule → file → count`. The check fails when a file gains a violation, when a
 file not on the list has one, and when a file has **fewer** than its entry.
 
-Since #539 the list holds one documented exception and nothing else:
+The list holds documented exceptions and nothing else:
 `theme/config.ts` keeps the canvas colour as literal hex (`THEME_COLORS`),
 because the pre-paint script sets `<meta name="theme-color">` before any CSS
-loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. The fill/text
-pair rule has no entries. Any new entry needs the same: a reason in
+loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. Under
+`small-text`, the two 10px table-header constants (`table/columns.tsx`
+`HEADER`, `primitives/DataTable.tsx` `HEADER_CLASS`) are the only lasting
+entries. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
 `classGuard.test.ts` and a test that keeps the literal in step.
 
 **Lowering an entry.** After fixing violations, run `test:classes:update` and

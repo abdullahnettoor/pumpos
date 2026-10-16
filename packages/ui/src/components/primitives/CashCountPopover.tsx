@@ -176,7 +176,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -185,7 +185,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         >
           Count cash
         </span>
-        <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+        <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
           {countedCount} note{countedCount === 1 ? '' : 's'}/coins
         </span>
       </div>
@@ -270,7 +270,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '10px', color: 'var(--state-warning-fg)' }}>
+        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
           Field shows {inr(currentValue)} — Apply to replace with the counted total.
         </div>
       )}

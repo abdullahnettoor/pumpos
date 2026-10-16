@@ -83,7 +83,7 @@ const PinPopover: React.FC<{
             <span className="min-w-0 flex-1 truncate">{ev.label}</span>
             <span
               data-testid="timeline-pin-time"
-              className="shrink-0 text-[11px] tabular-nums text-ink-muted"
+              className="shrink-0 text-[12px] tabular-nums text-ink-muted"
             >
               {clockLabel(typeof ev.at === 'number' ? ev.at : Date.parse(ev.at), timeZone)}
             </span>
@@ -133,7 +133,7 @@ const PinButton: React.FC<{
         data-testid="timeline-pin"
         data-count={pin.count}
         aria-label={pin.count > 1 ? `${pin.count} events` : first.label}
-        className={`flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border-[1.5px] bg-surface text-[10px] font-semibold ${
+        className={`flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border-[1.5px] bg-surface text-[12px] font-semibold ${
           pin.count > 1 ? 'px-1' : ''
         } ${PIN_TONE[pin.tone]}`}
         onClick={() => {
@@ -185,7 +185,7 @@ export const TimelineNowPill: React.FC<React.HTMLAttributes<HTMLSpanElement>> = 
   ...rest
 }) => (
   <span
-    className={`whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[9.5px] font-semibold leading-[14px] text-on-danger ${className ?? ''}`}
+    className={`whitespace-nowrap rounded-full bg-brand-danger px-1.5 text-[12px] font-semibold leading-4 text-on-danger ${className ?? ''}`}
     {...rest}
   />
 );
@@ -212,7 +212,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             key={b.id}
             data-testid={`timeline-bar-${b.kind}`}
             title={b.times ? `${b.text} · ${b.times}` : b.text}
-            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[11.5px] ${
+            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[12px] ${
               b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
             } ${BAR_CLASS[b.kind]}`}
             style={{
@@ -238,7 +238,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             {chip && (
               <span
                 data-testid="timeline-opening-chip"
-                className={`ml-auto flex h-4 min-w-0 items-center truncate rounded-full border bg-surface px-1.5 text-[10.5px] font-semibold ${CHIP_TONE[chip.tone]}`}
+                className={`ml-auto flex h-[18px] min-w-0 items-center truncate rounded-full border bg-surface px-1.5 text-[12px] font-semibold ${CHIP_TONE[chip.tone]}`}
               >
                 {b.widthPct < SHORT_BAR_PCT ? chip.shortText : chip.text}
               </span>
@@ -267,7 +267,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             {Math.abs(t.leftPct - nowPct) >= NOW_LABEL_CLEARANCE_PCT && (
               <span
                 data-testid="timeline-axis-label"
-                className={`absolute top-[7px] whitespace-nowrap text-[9.5px] leading-none ${
+                className={`absolute top-[7px] whitespace-nowrap text-[12px] leading-none ${
                   t.major ? 'font-semibold text-ink' : 'text-ink-faint'
                 } ${i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2'}`}
                 style={{ left: `${t.leftPct}%` }}

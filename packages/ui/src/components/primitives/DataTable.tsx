@@ -13,7 +13,7 @@ import { DataSection } from '../../pump-ds/data-section/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 
 /** Header type for a column without meta; a kind-styled column's meta overrides it. */
-const HEADER_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted';
+const HEADER_CLASS = 'text-[10px] font-semibold uppercase tracking-[0.04em] text-ink-muted';
 
 declare module '@tanstack/react-table' {
   /**

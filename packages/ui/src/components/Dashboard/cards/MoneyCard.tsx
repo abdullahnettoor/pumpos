@@ -80,7 +80,7 @@ export const MoneyCard: React.FC = () => {
       >
         {!hasClosedShift ? (
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+            <div className="text-[12px] font-medium uppercase tracking-wide text-ink-muted">
               Sales so far today
             </div>
             <div
@@ -95,7 +95,7 @@ export const MoneyCard: React.FC = () => {
           </div>
         ) : (
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+            <div className="text-[12px] font-medium uppercase tracking-wide text-ink-muted">
               Sales so far today
             </div>
             <div
@@ -258,10 +258,12 @@ export const MoneyCard: React.FC = () => {
                         />
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-ink-muted mt-1">
-                      <span>{fromLabel}</span>
-                      <span className="mx-auto">dashed = draft days · dotted = previous 14</span>
-                      <span>today</span>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 text-[12px] text-ink-muted">
+                      <span className="whitespace-nowrap">{fromLabel}</span>
+                      <span className="order-last w-full text-center">
+                        dashed = draft days · dotted = previous 14
+                      </span>
+                      <span className="whitespace-nowrap">today</span>
                     </div>
                   </>
                 )}

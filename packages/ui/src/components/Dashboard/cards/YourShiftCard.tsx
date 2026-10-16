@@ -86,7 +86,7 @@ export const YourShiftCard: React.FC = () => {
             To do
           </h3>
           <span
-            className="rounded-full bg-warning-bg px-2 text-[11px] font-semibold tabular-nums text-warning-fg"
+            className="rounded-full bg-warning-bg px-2 text-[12px] font-semibold tabular-nums text-warning-fg"
             aria-label={`${todos.length} to do`}
           >
             {todos.length}
@@ -168,7 +168,7 @@ const TodoRow: React.FC<{
       </span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] font-semibold text-ink">{alert.title}</div>
-        {meta && <div className="truncate text-[11px] text-ink-muted">{meta}</div>}
+        {meta && <div className="truncate text-[12px] text-ink-muted">{meta}</div>}
       </div>
       {action && (
         <Button

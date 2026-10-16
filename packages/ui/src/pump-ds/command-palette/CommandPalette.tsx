@@ -44,7 +44,7 @@ export interface CommandPaletteProps {
 }
 
 const Kbd: React.FC<{ children: ReactNode }> = ({ children }) => (
-  <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+  <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
     {children}
   </kbd>
 );
@@ -97,7 +97,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 <Command.Group
                   key={group.heading}
                   heading={group.heading}
-                  className="px-1.5 py-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-ink-faint"
+                  className="px-1.5 py-1 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[12px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-ink-faint"
                 >
                   {group.items.map((item) => (
                     <Command.Item
@@ -120,7 +120,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       )}
                       <span className="flex-1 truncate">{item.label}</span>
                       {item.meta ? (
-                        <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">
+                        <span className="ml-auto shrink-0 font-mono text-[12px] text-ink-faint">
                           {item.meta}
                         </span>
                       ) : item.shortcut ? (
@@ -134,7 +134,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               ))}
             </Command.List>
 
-            <div className="flex items-center gap-4 border-t border-border-soft px-4 py-2 text-[11px] text-ink-muted">
+            <div className="flex items-center gap-4 border-t border-border-soft px-4 py-2 text-[12px] text-ink-muted">
               <span className="inline-flex items-center gap-1.5">
                 <Kbd>↑</Kbd>
                 <Kbd>↓</Kbd> navigate

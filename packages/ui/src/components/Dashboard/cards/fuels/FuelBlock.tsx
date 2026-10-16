@@ -121,21 +121,21 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
         <div className="flex items-center gap-2">
           <span className={`size-2 shrink-0 rounded-[3px] ${p.swatch}`} aria-hidden="true" />
           <h3 className="text-[14px] font-semibold text-ink">{p.name}</h3>
-          <span className="text-[11px] text-ink-muted">{p.code}</span>
+          <span className="text-[12px] text-ink-muted">{p.code}</span>
         </div>
         <div className="text-right">
           <div className="font-mono text-[15px] font-semibold tabular-nums text-ink">
             {p.price > 0 ? (
               <>
                 {formatMoney(p.price)}
-                <span className="text-[11px] font-normal text-ink-muted">/L</span>
+                <span className="text-[12px] font-normal text-ink-muted">/L</span>
               </>
             ) : (
               'No price'
             )}
           </div>
           {p.effectiveFrom && (
-            <div className="text-[11px] text-ink-muted">
+            <div className="text-[12px] text-ink-muted">
               since {formatDayMonth(p.effectiveFrom, p.timeZone)}
             </div>
           )}

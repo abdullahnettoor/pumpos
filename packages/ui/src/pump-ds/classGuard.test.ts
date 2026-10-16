@@ -15,6 +15,9 @@
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
+ * - `small-text`     text below the 12px floor (#515, #602): `text-[11px]`,
+ *                    `text-[0.6rem]`, `text-2xs`, or a style `fontSize` under
+ *                    12. PDF documents are skipped (print scale, not screen).
  *
  * Class strings are `className` / `cn()` values, plus any other string whose
  * tokens are all class-shaped with at least one utility prefix (class maps).
@@ -30,6 +33,11 @@
  * - `theme/config.ts` raw-color 2: `THEME_COLORS` is the canvas as literal hex
  *   because the pre-paint script sets `<meta name="theme-color">` before any
  *   CSS loads. `theme/tokens.test.ts` keeps it equal to `--bg-canvas`.
+ * - `small-text` (#602), table headers only (10px uppercase, the one exception
+ *   to the 12px floor): `pump-ds/table/columns.tsx` 1 (`HEADER`) and
+ *   `components/primitives/DataTable.tsx` 1 (`HEADER_CLASS`).
+ * - `small-text` `components/Shifts/OpenShiftForm.tsx` 1: temporary, swept once
+ *   #619 (which rewrites that form) merges. Remove the entry then.
  *
  * Run: `npm run test:classes -w @pump/ui`
  * Plain CSS classes defined in `index.css` are allowed; add marker classes
@@ -322,6 +330,38 @@ describe('style check rules', () => {
     expect(pair("<i className={cn('bg-danger-fg text-on-brand', 'p-2')} />")).toEqual([
       'bg-danger-fg + text-on-brand',
     ]);
+  });
+});
+
+describe('style check: small-text (#602)', () => {
+  const small = (src: string, file = 'x.tsx') => scanSource(src, file, fake([]))['small-text'];
+
+  it('flags arbitrary sizes under 12px, text-2xs, and variants', () => {
+    expect(
+      small(
+        "<i className='text-[11px] text-[10.5px] hover:text-[9px] text-[0.6rem] text-2xs' />; const T = 'px-1 text-[11px]';",
+      ),
+    ).toEqual([
+      'text-[11px]',
+      'text-[10.5px]',
+      'hover:text-[9px]',
+      'text-[0.6rem]',
+      'text-2xs',
+      'text-[11px]',
+    ]);
+  });
+
+  it('passes 12px and up, and non-size text utilities', () => {
+    expect(
+      small("<i className='text-[12px] text-[13px] text-[0.75rem] text-sm text-ink-muted' />"),
+    ).toEqual([]);
+  });
+
+  it('flags fontSize under 12 in style objects; PDF documents are exempt', () => {
+    const style =
+      "<i style={{ fontSize: 11 }} />; const s = { fontSize: '10px' }; const t = { fontSize: '12px', a: 9 };";
+    expect(small(style)).toEqual(['fontSize: 11', 'fontSize: 10px']);
+    expect(small(`import { Text } from '@react-pdf/renderer';\n${style}`)).toEqual([]);
   });
 });
 
