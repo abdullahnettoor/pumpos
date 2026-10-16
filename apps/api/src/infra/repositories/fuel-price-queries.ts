@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 
 /**
@@ -14,11 +14,17 @@ export const fuelPricesNewestFirst = () => [
   desc(schema.fuelPrices.id),
 ];
 
-/** Every active fuel of the organization with its latest price at the station (0 / null before the first). */
+/**
+ * Every active fuel of the organization with its current price at the station
+ * (0 / null before the first): the latest price in effect at `now`. A price
+ * scheduled for later is stored but not current until its time (#619); the
+ * history lists it.
+ */
 export async function listCurrentFuelPrices(
   db: DbClient,
   organizationId: string,
   stationId: string,
+  now: Date = new Date(),
 ) {
   const fuels = await db
     .select()
@@ -42,6 +48,7 @@ export async function listCurrentFuelPrices(
               eq(schema.fuelPrices.organizationId, organizationId),
               eq(schema.fuelPrices.stationId, stationId),
               inArray(schema.fuelPrices.productId, fuelIds),
+              lte(schema.fuelPrices.effectiveFrom, now),
             ),
           )
           .orderBy(...fuelPricesNewestFirst())

@@ -20,7 +20,12 @@ export interface FuelPrice {
 
 export interface FuelPriceRepository {
   save(price: FuelPrice): Promise<void>;
-  listByStation(organizationId: string, stationId: string): Promise<FuelPrice[]>;
+  /**
+   * The station's prices in effect at `asOf` (effective at or before it), in
+   * the one order (latest first). A scheduled price, effective after `asOf`,
+   * is not listed (#619).
+   */
+  listByStation(organizationId: string, stationId: string, asOf: string): Promise<FuelPrice[]>;
 }
 
 export interface RecordFuelPriceCommand {

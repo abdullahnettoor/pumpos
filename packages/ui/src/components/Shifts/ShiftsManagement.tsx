@@ -53,7 +53,13 @@ import {
 } from '../../query/hooks.js';
 import type { PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, canCloseShift, canOpenShift } from '@pump/shared';
+import {
+  Station,
+  businessDateSettings,
+  canChangeFuelPrice,
+  canCloseShift,
+  canOpenShift,
+} from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
@@ -144,6 +150,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     timezone?: string;
     business_day_starts_at?: string;
   };
+  // The Open shift form's clock: its planned window and rate times (#619).
+  const stationClock = useMemo(
+    () => businessDateSettings(selectedStation?.settings),
+    [selectedStation?.settings],
+  );
   const currentBusinessDate = useStationBusinessDate(
     stationSettings.timezone,
     stationSettings.business_day_starts_at,
@@ -898,6 +909,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                     onInitialReadingChange={handleInitialReadingChange}
                     isOpening={isOpening}
                     onSubmit={handleOpenShift}
+                    clock={stationClock}
+                    canChangePrice={canChangeFuelPrice(userRole)}
                   />
                 </section>
               ) : (

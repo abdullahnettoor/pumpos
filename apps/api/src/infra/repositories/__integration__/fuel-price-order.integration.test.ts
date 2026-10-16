@@ -33,8 +33,14 @@ const P_LATE = '00000000-0000-0000-0000-00000000f5a1';
 const D_LOW = '00000000-0000-0000-0000-00000000f5b1';
 const D_HIGH = '00000000-0000-0000-0000-00000000f5b2';
 
+// Petrol: a change scheduled for later than "now" (#619).
+const P_NEXT = '00000000-0000-0000-0000-00000000f5c1';
+
 const EFFECTIVE = new Date('2026-10-10T00:30:00Z');
 const RECORDED = new Date('2026-10-09T12:00:00Z');
+// The server's clock in these cases, and the scheduled change after it.
+const NOW = new Date('2026-10-12T12:00:00Z');
+const SCHEDULED = new Date('2026-10-13T00:30:00Z');
 
 const BOOTSTRAP = `
   do $$ begin
@@ -137,6 +143,7 @@ describe.skipIf(!CONNECTION)('fuel price order against real Postgres', () => {
         price(P_OLD, PETROL, '98.00', RECORDED, new Date('2026-09-01T00:00:00Z')),
         price(D_LOW, DIESEL, '90.00', RECORDED),
         price(D_HIGH, DIESEL, '91.00', RECORDED),
+        price(P_NEXT, PETROL, '105.00', NOW, SCHEDULED),
       ]);
   }, 60_000);
 
@@ -150,7 +157,7 @@ describe.skipIf(!CONNECTION)('fuel price order against real Postgres', () => {
   });
 
   it('the current price is the tied price recorded last, then the higher id', async () => {
-    const current = await listCurrentFuelPrices(db, ORG, STATION);
+    const current = await listCurrentFuelPrices(db, ORG, STATION, NOW);
     const byId = Object.fromEntries(current.map((p) => [p.productId, p.price]));
     expect(byId).toEqual({ [PETROL]: 104, [DIESEL]: 91 });
   });
@@ -158,6 +165,7 @@ describe.skipIf(!CONNECTION)('fuel price order against real Postgres', () => {
   it('the history lists tied prices in that same order', async () => {
     const history = await listFuelPriceHistory(db, ORG, STATION);
     expect(history.filter((h) => h.productId === PETROL).map((h) => h.id)).toEqual([
+      P_NEXT,
       P_LATE,
       P_EARLY,
       P_OLD,
@@ -165,8 +173,37 @@ describe.skipIf(!CONNECTION)('fuel price order against real Postgres', () => {
     expect(history.filter((h) => h.productId === DIESEL).map((h) => h.id)).toEqual([D_HIGH, D_LOW]);
   });
 
-  it('shift close reads the same order (listByStation)', async () => {
-    const list = await new DrizzleFuelPriceRepository(db).listByStation(ORG, STATION);
+  it('shift open reads the same order (listByStation)', async () => {
+    const list = await new DrizzleFuelPriceRepository(db).listByStation(
+      ORG,
+      STATION,
+      NOW.toISOString(),
+    );
     expect(list.map((p) => p.id)).toEqual([P_LATE, P_EARLY, D_HIGH, D_LOW, P_OLD]);
+  });
+
+  it('a scheduled price is not current before its effective time (#619)', async () => {
+    const current = await listCurrentFuelPrices(db, ORG, STATION, NOW);
+    expect(current.find((p) => p.productId === PETROL)).toMatchObject({
+      price: 104,
+      effectiveFrom: EFFECTIVE,
+    });
+    const forShiftOpen = await new DrizzleFuelPriceRepository(db).listByStation(
+      ORG,
+      STATION,
+      NOW.toISOString(),
+    );
+    expect(forShiftOpen.map((p) => p.id)).not.toContain(P_NEXT);
+  });
+
+  it('from its effective time on, the scheduled price is the current one (#619)', async () => {
+    const current = await listCurrentFuelPrices(db, ORG, STATION, SCHEDULED);
+    expect(current.find((p) => p.productId === PETROL)?.price).toBe(105);
+    const forShiftOpen = await new DrizzleFuelPriceRepository(db).listByStation(
+      ORG,
+      STATION,
+      SCHEDULED.toISOString(),
+    );
+    expect(forShiftOpen[0].id).toBe(P_NEXT);
   });
 });

@@ -237,6 +237,18 @@ A Sale whose volume derives from Nozzle Reading deltas (Closing − Opening).
 Never entered by hand; never re-moves stock.
 _Avoid_: pump sale, petrol sale
 
+**Fuel Price**:
+A fuel's price per unit at a Station, effective from an instant. The current
+price is the latest one in effect (effective at or before now, by the server's
+clock). A Shift's fuel sales are valued at the price current when the Shift
+opens, for the whole Shift: a later change reaches only Shifts opened after it.
+_Avoid_: rate card, MRP (reserved for products)
+
+**Scheduled Price**:
+A Fuel Price recorded with an effective time still ahead. It is stored and
+listed in the price history, but it isn't current until that time (#619).
+_Avoid_: future price, pending price
+
 **Product Sale**:
 A Sale of directly-entered non-fuel lines — engine oil, coolant, grease,
 accessories. What earlier docs called a manual sale.

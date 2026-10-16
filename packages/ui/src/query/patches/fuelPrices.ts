@@ -1,4 +1,4 @@
-import { isProvablyNewerFuelPrice } from '@pump/shared';
+import { isFuelPriceInEffect, isProvablyNewerFuelPrice } from '@pump/shared';
 import {
   sortNewestFirst,
   type CurrentFuelPrice,
@@ -65,8 +65,10 @@ export function withRecordedPriceInHistory<T extends FuelPriceHistoryRow>(
  * Anything unproven (an equal-time replay with no history, a stale history, a
  * backdated or out-of-order answer) is left to the refetch.
  *
- * A future-dated price is current on the server at once (#619 tracks that),
- * so it is current here too.
+ * A scheduled price (#619), effective after `now`, is not current on the
+ * server until its time, so it never replaces the current price here: it
+ * joins the history only. Likewise, only history entries in effect at `now`
+ * are weighed against it.
  *
  * `history` is the cached history *before* the answer joined it, or undefined
  * when none is cached.
@@ -75,12 +77,16 @@ export function withRecordedCurrentPrice<T extends CurrentFuelPrice>(
   current: T[],
   answer: RecordedFuelPrice,
   history: FuelPriceHistoryEntry[] | undefined,
+  now: Date | number,
 ): T[] {
   const at = current.findIndex((c) => c.productId === answer.productId);
   if (at < 0) return current;
+  if (!isFuelPriceInEffect(answer, now)) return current;
   const row = current[at];
   const mine = sortNewestFirst(
-    (history ?? []).filter((h) => h.productId === answer.productId && h.id !== answer.id),
+    (history ?? []).filter(
+      (h) => h.productId === answer.productId && h.id !== answer.id && isFuelPriceInEffect(h, now),
+    ),
   );
   const key = { id: answer.id, effectiveFrom: answer.effectiveFrom, createdAt: answer.createdAt };
   if (row.effectiveFrom) {

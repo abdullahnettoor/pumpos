@@ -61,6 +61,8 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['purchase-not-linked', 'Purchase not linked', 'warning'],
     // A write in flight (#606): not a problem, so neutral
     ['saving', 'Saving…', 'neutral'],
+    // A fuel price waiting for its effective time (#619): information only
+    ['price-scheduled', 'Scheduled', 'info'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {

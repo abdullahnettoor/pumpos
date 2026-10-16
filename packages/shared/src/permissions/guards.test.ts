@@ -8,6 +8,7 @@ import {
   canOpenShift,
   canCloseShift,
   canReopenShift,
+  canChangeFuelPrice,
   canEditExpense,
   canCreatePurchase,
   isAuthorizedForStation,
@@ -54,6 +55,16 @@ describe('Role and Shift Permissions Guards', () => {
       expect(canReopenShift('Manager')).toBe(true);
       expect(canReopenShift('Staff')).toBe(false);
       expect(canReopenShift('Accountant')).toBe(false);
+    });
+  });
+
+  describe('Fuel price guard (#619)', () => {
+    it('lets Owners and Managers change a fuel price, as the API does', () => {
+      expect(canChangeFuelPrice('Owner')).toBe(true);
+      expect(canChangeFuelPrice('Manager')).toBe(true);
+      expect(canChangeFuelPrice('Staff')).toBe(false);
+      expect(canChangeFuelPrice('Accountant')).toBe(false);
+      expect(canChangeFuelPrice('Attendant')).toBe(false);
     });
   });
 

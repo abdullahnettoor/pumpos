@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
+import { currentFuelPriceByProduct, isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
 import {
   BusinessEvents,
   conflictError,
@@ -285,12 +285,15 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(
         nozzles.map((n) => n.id),
       );
-      const prices = await this.deps.fuelPrices.listByStation(ctx.organizationId, cmd.stationId);
-      const latestPriceByProduct = new Map<string, string>();
-      for (const pr of prices) {
-        if (!latestPriceByProduct.has(pr.productId))
-          latestPriceByProduct.set(pr.productId, pr.price);
-      }
+      // The rate each nozzle sells at for the whole shift: its fuel's price in
+      // effect now. A scheduled price, effective later, is not used (#619);
+      // the shift keeps its opening rate until it is closed.
+      const prices = await this.deps.fuelPrices.listByStation(
+        ctx.organizationId,
+        cmd.stationId,
+        nowIso,
+      );
+      const currentPrice = currentFuelPriceByProduct(prices, now);
       const initialByNozzle = new Map<string, number>();
       for (const ir of cmd.initialReadings ?? [])
         initialByNozzle.set(ir.nozzleId, ir.openingReading);
@@ -306,7 +309,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
           closingReading: String(opening),
           volumeSold: '0',
           testingVolume: '0',
-          unitPrice: latestPriceByProduct.get(n.productId) ?? '0',
+          unitPrice: currentPrice.get(n.productId)?.price ?? '0',
           createdAt: nowIso,
         };
       });

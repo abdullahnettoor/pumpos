@@ -131,6 +131,8 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   'sync-failed': { label: 'Sync failed', tone: 'danger', icon: AlertTriangle },
   // A write in flight (#606); the outbox's "Waiting to sync" will sit beside it.
   saving: vocab('saving', CloudUpload, { pulse: true }),
+  // A fuel price waiting for its effective time (#619).
+  'price-scheduled': vocab('price-scheduled', Clock),
 
   // Financial
   paid: { label: 'Paid', tone: 'success', icon: CheckCircle },

@@ -3,7 +3,7 @@ import { businessDateSettings, formatStationDateTime, type Station } from '@pump
 import { PageFrame } from '../page-frame/index.js';
 import { ROUTES } from '../../nav-intent/routes.js';
 import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
-import { mutationKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
+import { mutationKeys, useProducts } from '../../query/hooks.js';
 import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
 import { useFlashingRows } from '../../utils/rowFlash.js';
 import { cn } from '../../pump-ds/lib/cn.js';
@@ -26,16 +26,17 @@ import {
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { countOf } from '../../utils/ledgerWindow.js';
 import {
-  buildFuelPriceRows,
+  formatPriceTime,
   fuelPriceWriteKey,
   sortNewestFirst,
   unconfirmedAttempt,
   type FuelPriceAttempt,
   type FuelPriceWriteVars,
-  type CurrentFuelPrice,
   type FuelPriceHistoryEntry,
   type FuelPriceRow,
 } from './fuelPriceRows.js';
+import { isScheduledFuelPrice } from '@pump/shared';
+import { useFuelPriceRows } from './useFuelPriceRows.js';
 import { ChangePriceDrawer, MrpDrawer, type MerchRow } from './PricingDrawers.js';
 
 type TabType = 'fuels' | 'merchandise';
@@ -50,21 +51,6 @@ interface HistoryRow extends FuelPriceHistoryEntry {
 }
 
 const isPriced = (p: MerchRow) => p.sellingPrice != null && Number(p.sellingPrice) > 0;
-
-/** The fuel rows and the queries they read, shared by the page action and the Fuels tab. */
-function useFuelPriceRows(stationId: string) {
-  const pricingQ = usePricing(stationId);
-  const historyQ = usePricingHistory(stationId);
-  const productsQ = useProducts();
-  const rows = useMemo(() => {
-    const products: { id: string; unit?: string | null }[] = productsQ.data ?? [];
-    const units = new Map(products.map((p) => [p.id, p.unit]));
-    const current: CurrentFuelPrice[] = pricingQ.data ?? [];
-    const entries: FuelPriceHistoryEntry[] = historyQ.data ?? [];
-    return buildFuelPriceRows(current, entries, (id) => units.get(id));
-  }, [pricingQ.data, historyQ.data, productsQ.data]);
-  return { rows, pricingQ, historyQ, productsQ };
-}
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
   if (!selectedStation) {
@@ -191,8 +177,12 @@ const FuelPriceCard: React.FC<{
         ) : row.price == null ? (
           <span className="text-[20px] font-semibold text-ink-faint">Not set</span>
         ) : (
-          <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
-            {formatMoney(row.price)}/{row.unit}
+          <span className="flex items-baseline gap-1.5">
+            <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
+              {formatMoney(row.price)}/{row.unit}
+            </span>
+            {/* "now" only beside a change still ahead (#619). */}
+            {row.scheduled && <span className="text-[12px] text-ink-muted">now</span>}
           </span>
         )}
         <span className="text-[12px] text-ink-muted">
@@ -201,6 +191,21 @@ const FuelPriceCard: React.FC<{
             : 'No price recorded yet'}
         </span>
       </div>
+      {row.scheduled && write?.state !== 'saving' && (
+        // A price recorded for later (#619): stored, not current until its time.
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]"
+          data-testid="fuel-price-scheduled"
+        >
+          <StatusChip status="price-scheduled" />
+          <span className="font-mono text-[13px] tabular-nums text-ink-default">
+            {formatMoney(row.scheduled.price)}/{row.unit}
+          </span>
+          <span className="text-ink-muted">
+            from {formatPriceTime(row.scheduled.effectiveFrom, timeZone)}
+          </span>
+        </div>
+      )}
       <div className="flex flex-col gap-0.5 text-[12px]">
         <span className="text-ink-muted">Last change</span>
         {row.lastChange ? (
@@ -256,7 +261,7 @@ const FuelsTab: React.FC<
     timeZone: string;
     onChange: (row: FuelPriceRow) => void;
   }
-> = ({ rows, pricingQ, historyQ, productsQ, timeZone, onChange, writes }) => {
+> = ({ rows, now, pricingQ, historyQ, productsQ, timeZone, onChange, writes }) => {
   const flashing = useFlashingRows();
   const history = useMemo(
     () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
@@ -273,8 +278,24 @@ const FuelsTab: React.FC<
         kind: 'text',
         value: (r) => formatStationDateTime(r.effectiveFrom, timeZone),
       },
+      {
+        // A change recorded for later is not current yet (#619).
+        id: 'status',
+        header: 'Status',
+        kind: 'text',
+        width: '140px',
+        value: (r) => (isScheduledFuelPrice(r, now) ? 'Scheduled' : null),
+        cell: (r) =>
+          isScheduledFuelPrice(r, now) ? <StatusChip status="price-scheduled" /> : null,
+      },
     ],
-    [timeZone],
+    [timeZone, now],
+  );
+  // The status column only while a change is scheduled: otherwise every cell is blank.
+  const anyScheduled = history.some((r) => isScheduledFuelPrice(r, now));
+  const shownColumns = useMemo(
+    () => (anyScheduled ? historyColumns : historyColumns.filter((c) => c.id !== 'status')),
+    [anyScheduled, historyColumns],
   );
 
   return (
@@ -343,7 +364,7 @@ const FuelsTab: React.FC<
           <InteractiveTable
             bare
             title="price history"
-            columns={historyColumns}
+            columns={shownColumns}
             rows={history}
             rowKey={(r) => r.id}
           />
