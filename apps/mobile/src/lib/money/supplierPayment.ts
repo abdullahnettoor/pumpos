@@ -11,7 +11,13 @@
  * Idempotency-Key, preview, access, refusals) is in `officePayment.ts`.
  */
 import { z } from 'zod';
-import { type AccessMode, can, type Role, supplierPaymentEntryFormSchema } from '@pump/shared';
+import {
+  type AccessMode,
+  can,
+  type Principal,
+  type Role,
+  supplierPaymentEntryFormSchema,
+} from '@pump/shared';
 import { supplierPaymentPayload } from '@pump/ui';
 import {
   amountForValidation,
@@ -98,6 +104,8 @@ export function supplierPaymentRequest(
  */
 export function supplierPaymentAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   accessMode?: AccessMode;
 }): OfficePaymentAccess {
   return officePaymentAccess({

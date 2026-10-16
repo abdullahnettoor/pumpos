@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { customerStatementParty, useAccess, useToast, withNextStep } from '@pump/ui';
+import { customerStatementParty, principalFor, useAccess, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { collectionAccess } from '../../lib/money/collection.js';
 import { creditLimitAccess } from '../../lib/money/creditLimit.js';
@@ -64,6 +64,7 @@ export const CustomerPage: React.FC<{
   const accessMode = useAccess().data?.subscription.mode;
   const limitAccess = creditLimitAccess({
     role,
+    permissions: principalFor(role).permissions,
     customerType: customer.customerType,
     accessMode,
   });
@@ -72,7 +73,7 @@ export const CustomerPage: React.FC<{
   // Every Role except Attendant (the server's collection guard); only Suspension pauses it,
   // since a Collection finishes work already done (FINISH_OPEN_WORK). No station, no Office Record.
   const paymentAccess = station
-    ? collectionAccess({ role, accessMode })
+    ? collectionAccess({ role, permissions: principalFor(role).permissions, accessMode })
     : { status: 'hidden' as const };
   const [recordingPayment, setRecordingPayment] = useState(false);
 

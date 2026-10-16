@@ -7,6 +7,7 @@ import {
   tankLevelSettingsSchema,
 } from '@pump/shared';
 import {
+  actorPrincipal,
   BusinessEvents,
   err,
   eventFromContext,
@@ -102,7 +103,8 @@ const updateSchema = z.object({
 function mayChangeTankLevels(ctx: ExecutionContext): boolean {
   const actor = ctx.actorSnapshot;
   if (!actor || actor.kind !== 'tenant_user') return true;
-  return actor.role !== null && can({ role: actor.role as Role }, 'station.tankLevels');
+  const principal = actorPrincipal(ctx);
+  return principal !== null && can(principal, 'station.tankLevels');
 }
 
 /** Refusal for a settings write that changes the tank-level thresholds; null when allowed. */

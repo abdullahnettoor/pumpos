@@ -9,7 +9,7 @@
  * the Customer page cannot disagree (and `creditLimit.test.ts` pins them).
  */
 import { z } from 'zod';
-import { type AccessMode, can, creditLimitSchema, type Role } from '@pump/shared';
+import { type AccessMode, can, type Principal, creditLimitSchema, type Role } from '@pump/shared';
 import { standing, type MoneyCustomer, type Standing } from './parties.js';
 
 export type ParsedLimit = { ok: true; value: number | null } | { ok: false; message: string };
@@ -73,6 +73,8 @@ export type CreditLimitAccess =
  */
 export function creditLimitAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   customerType?: string | null;
   accessMode?: AccessMode;
 }): CreditLimitAccess {

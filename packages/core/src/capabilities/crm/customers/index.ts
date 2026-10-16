@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { can, creditLimitSchema } from '@pump/shared';
 import type { CustomerType, Role } from '@pump/shared';
 import {
+  actorPrincipal,
   BusinessEvents,
   conflictError,
   err,
@@ -132,7 +133,8 @@ const limitValue = (v: number | string | null | undefined): number =>
 function mayChangeLimit(ctx: ExecutionContext): boolean {
   const actor = ctx.actorSnapshot;
   if (!actor || actor.kind !== 'tenant_user') return true;
-  return actor.role !== null && can({ role: actor.role as Role }, 'customers.changeCreditLimit');
+  const principal = actorPrincipal(ctx);
+  return principal !== null && can(principal, 'customers.changeCreditLimit');
 }
 
 export interface CustomerDeps {

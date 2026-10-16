@@ -177,3 +177,14 @@ describe('supplierPaymentFailure', () => {
     expect(supplierPaymentFailure(new Error('')).message).toMatch(/try again/i);
   });
 });
+
+describe('supplierPaymentAccess with effective Permissions', () => {
+  it('follows the effective set, not the Role defaults', () => {
+    expect(supplierPaymentAccess({ role: 'Manager', permissions: ['pages.suppliers'] })).toEqual({
+      status: 'hidden',
+    });
+    expect(supplierPaymentAccess({ role: 'Staff', permissions: ['purchases.record'] })).toEqual({
+      status: 'enabled',
+    });
+  });
+});

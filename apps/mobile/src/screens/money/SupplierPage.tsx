@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supplierStatementParty, useAccess, useToast, withNextStep } from '@pump/ui';
+import { supplierStatementParty, principalFor, useAccess, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { supplierPaymentAccess } from '../../lib/money/supplierPayment.js';
 import { balanceOf, supplierIdentity, type MoneySupplier } from '../../lib/money/parties.js';
@@ -65,7 +65,7 @@ export const SupplierPage: React.FC<{
   // payment already made must be recorded (FINISH_OPEN_WORK). No station, no Office Record.
   const accessMode = useAccess().data?.subscription.mode;
   const paymentAccess = station
-    ? supplierPaymentAccess({ role, accessMode })
+    ? supplierPaymentAccess({ role, permissions: principalFor(role).permissions, accessMode })
     : { status: 'hidden' as const };
   const [paying, setPaying] = useState(false);
 

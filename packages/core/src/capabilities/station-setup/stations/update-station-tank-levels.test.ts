@@ -45,7 +45,7 @@ class Repo {
 }
 
 /** `role: undefined` = no actor snapshot (a system caller). */
-const ctx = (role?: string): ExecutionContext => ({
+const ctx = (role?: string, permissions?: readonly string[]): ExecutionContext => ({
   organizationId: 'org-1',
   stationId: null,
   businessDayId: null,
@@ -54,6 +54,7 @@ const ctx = (role?: string): ExecutionContext => ({
   ...(role === undefined
     ? {}
     : { actorSnapshot: { kind: 'tenant_user' as const, displayName: 'Someone', role } }),
+  ...(permissions ? { permissions: new Set(permissions) } : {}),
   clock: new FixedClock(new Date('2026-10-13T10:00:00Z')),
   ids: new SequentialIdGenerator('id'),
 });
@@ -148,5 +149,14 @@ describe('UpdateStation tank-level thresholds (#520)', () => {
       ctx(),
     );
     expect(result.success).toBe(true);
+  });
+
+  it('follows the effective Permissions, not the Role defaults', async () => {
+    const { useCase } = harness({ shift_grace_minutes: 15 });
+    const refused = await useCase.execute(
+      { id: 'st-1', settings: { shift_grace_minutes: 15, tankLevels: thresholds } } as never,
+      ctx('Manager', ['station.manage']),
+    );
+    expect(refused.success).toBe(false);
   });
 });

@@ -327,16 +327,16 @@ describe('Permission changes API (#553)', () => {
 
   it('applies a stored change on the very next request, without waiting for the auth cache', async () => {
     state.actorRole = 'Accountant';
-    const days = () =>
-      worker
-        .fetch(
+    const bearerToken = await bearer('auth-acct');
+    const days = async () =>
+      (
+        await worker.fetch(
           new Request('https://api.example.com/api/dssr/days?stationId=s1', {
             headers: { Authorization: `Bearer ${bearerToken}` },
           }),
           ENV,
         )
-        .then((r) => r.status);
-    const bearerToken = await bearer('auth-acct');
+      ).status;
     expect(await days()).not.toBe(403);
     state.changes = { granted: [], revoked: ['reports.view'] };
     expect(await days()).toBe(403);

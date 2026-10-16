@@ -11,7 +11,13 @@
  * the Customer page cannot disagree (`collection.test.ts` pins them).
  */
 import { z } from 'zod';
-import { type AccessMode, can, collectionEntryFormSchema, type Role } from '@pump/shared';
+import {
+  type AccessMode,
+  can,
+  type Principal,
+  collectionEntryFormSchema,
+  type Role,
+} from '@pump/shared';
 import { collectionPayload } from '@pump/ui';
 import {
   amountForValidation,
@@ -115,6 +121,8 @@ export function collectionRequest(stationId: string, customerId: string, form: C
  */
 export function collectionAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   accessMode?: AccessMode;
 }): OfficePaymentAccess {
   return officePaymentAccess({
