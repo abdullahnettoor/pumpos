@@ -9,3 +9,4 @@ export * from './require-capability.js';
 export * from './subscription-lifecycle.js';
 export * from './write-policy.js';
 export * from './organization-payload.js';
+export * from './update-organization.js';

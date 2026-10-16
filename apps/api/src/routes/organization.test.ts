@@ -126,9 +126,29 @@ async function put(
   { role = 'Owner', body = UPDATE }: { role?: Role; body?: unknown } = {},
 ) {
   let updates = 0;
+  let selects = 0;
+  const events: unknown[] = [];
   const access = fakeAccessDb(subscription);
+  const ACCESS_READS = 4;
   const db = {
     ...access,
+    // The write-policy guard reads access first; the use-case then loads the row.
+    select: () => {
+      selects += 1;
+      if (selects <= ACCESS_READS) return access.select();
+      const chain: any = {
+        from: () => chain,
+        where: () => chain,
+        for: async () => [STORED_ROW],
+      };
+      return chain;
+    },
+    insert: () => ({
+      values: async (rows: unknown[]) => {
+        events.push(...rows);
+      },
+    }),
+    transaction: async (run: (tx: unknown) => Promise<unknown>) => run(db),
     update: () => ({
       set: () => ({
         where: () => ({
@@ -160,7 +180,13 @@ async function put(
     body: JSON.stringify(body),
   });
   const json = (await res.json()) as { success: boolean; error?: { code: string } };
-  return { status: res.status, code: json.error?.code ?? null, success: json.success, updates };
+  return {
+    status: res.status,
+    code: json.error?.code ?? null,
+    success: json.success,
+    updates,
+    events,
+  };
 }
 
 describe('PUT /organization (#626)', () => {
@@ -175,6 +201,7 @@ describe('PUT /organization (#626)', () => {
     expect(result.status).toBe(200);
     expect(result.success).toBe(true);
     expect(result.updates).toBe(1);
+    expect(result.events).toHaveLength(1);
   });
 
   it.each<[string, Subscription]>([
@@ -189,6 +216,7 @@ describe('PUT /organization (#626)', () => {
     expect(result.success).toBe(false);
     expect(result.code).toBe('SUBSCRIPTION_RESTRICTED');
     expect(result.updates).toBe(0);
+    expect(result.events).toEqual([]);
   });
 
   it('refuses a suspended Organization before writing anything', async () => {
@@ -196,6 +224,7 @@ describe('PUT /organization (#626)', () => {
     expect(result.status).toBe(403);
     expect(result.code).toBe('ORGANIZATION_SUSPENDED');
     expect(result.updates).toBe(0);
+    expect(result.events).toEqual([]);
   });
 
   it.each<Role>(['Manager', 'Accountant', 'Staff', 'Attendant'])(
@@ -205,6 +234,7 @@ describe('PUT /organization (#626)', () => {
       expect(result.status).toBe(403);
       expect(result.code).toBe('FORBIDDEN');
       expect(result.updates).toBe(0);
+      expect(result.events).toEqual([]);
     },
   );
 
@@ -214,6 +244,7 @@ describe('PUT /organization (#626)', () => {
     expect(result.status).toBe(403);
     expect(result.code).toBe('SUBSCRIPTION_RESTRICTED');
     expect(result.updates).toBe(0);
+    expect(result.events).toEqual([]);
   });
 
   it('answers VALIDATION_ERROR for an invalid profile', async () => {
@@ -221,5 +252,6 @@ describe('PUT /organization (#626)', () => {
     expect(result.status).toBe(400);
     expect(result.code).toBe('VALIDATION_ERROR');
     expect(result.updates).toBe(0);
+    expect(result.events).toEqual([]);
   });
 });
