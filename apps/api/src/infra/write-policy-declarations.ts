@@ -215,6 +215,18 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
   },
 
   // ---------------------------------------------------------------------
+  // Organization profile (#626)
+  // ---------------------------------------------------------------------
+  {
+    operation: 'PUT /organization',
+    restricted: 'FINISH_OPEN_WORK',
+    rationale:
+      "The profile is the Organization's legal and billing identity (name, legal name, GSTIN, PAN, " +
+      'address, contact). Correcting it adds no Station, user or capability, and it is the identity ' +
+      'the Owner needs right to settle the invoice that lifts Restricted Access. Suspension still blocks it.',
+  },
+
+  // ---------------------------------------------------------------------
   // Setup and administration (#168)
   // ---------------------------------------------------------------------
   {

@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import type { OrganizationPayload, Role } from '@pump/shared';
-import { getOrganizationHandler } from './organization.js';
+import { getOrganizationHandler, organizationRouter } from './organization.js';
+import {
+  ACTIVE,
+  IN_GRACE,
+  LAPSED_GRACE,
+  RESTRICTED,
+  SUSPENDED,
+  fakeAccessDb,
+  type Subscription,
+} from './write-policy-harness.js';
 
 /**
- * `GET /organization` reaches every Role: the Profile, the mobile account
- * sheet and the letterhead read it. Plan and billing columns must leave the
- * server only for Owners and Managers (#616). These tests drive the real
- * handler against a fake DB returning the stored Organization row.
+ * `GET /organization` reaches every Role: the Profile and the mobile account
+ * sheet read it. (Letterheads read the Station's Branding, not this.) Plan and
+ * billing columns must leave the server only for Owners and Managers (#616).
+ * These tests drive the real handler against a fake DB returning the stored
+ * Organization row.
  */
 
 const STORED_ROW = {
@@ -94,5 +104,102 @@ describe('GET /organization (#616)', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe('NOT_FOUND');
+  });
+});
+
+/**
+ * `PUT /organization` (#626): Owner only, and declared FINISH_OPEN_WORK — the
+ * profile is the Organization's legal and billing identity, so Restricted
+ * Access lets the Owner correct it; Suspension stops it like every write.
+ * Driven through the mounted router, so the guard is proven attached.
+ */
+const UPDATE = {
+  name: 'Sri Lakshmi Fuels',
+  metadata: { legalName: 'Sri Lakshmi Fuels Pvt Ltd', gstin: '32AAACS1234A1Z5' },
+};
+
+async function put(
+  subscription: Subscription,
+  { role = 'Owner', body = UPDATE }: { role?: Role; body?: unknown } = {},
+) {
+  let updates = 0;
+  const access = fakeAccessDb(subscription);
+  const db = {
+    ...access,
+    update: () => ({
+      set: () => ({
+        where: () => ({
+          returning: async () => {
+            updates += 1;
+            return [STORED_ROW];
+          },
+        }),
+      }),
+    }),
+  };
+  const app = new Hono<{ Variables: { db: any; user: any } }>();
+  app.use('*', async (c, next) => {
+    c.set('db', db);
+    c.set('user', {
+      id: 'user-1',
+      email: 'owner@example.com',
+      fullName: 'Owner',
+      organizationId: 'org-1',
+      role,
+      assignedStationIds: [],
+    });
+    await next();
+  });
+  app.route('/organization', organizationRouter);
+  const res = await app.request('/organization', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as { success: boolean; error?: { code: string } };
+  return { status: res.status, code: json.error?.code ?? null, success: json.success, updates };
+}
+
+describe('PUT /organization (#626)', () => {
+  it.each([
+    ['active', ACTIVE],
+    ['in a Payment Grace Period', IN_GRACE],
+    ['under Restricted Access', RESTRICTED],
+    ['past a lapsed grace period', LAPSED_GRACE],
+  ])('lets the Owner edit the profile while %s', async (_label, subscription) => {
+    const result = await put(subscription);
+    expect(result.status).toBe(200);
+    expect(result.success).toBe(true);
+    expect(result.updates).toBe(1);
+  });
+
+  it('refuses a suspended Organization before writing anything', async () => {
+    const result = await put(SUSPENDED);
+    expect(result.status).toBe(403);
+    expect(result.code).toBe('ORGANIZATION_SUSPENDED');
+    expect(result.updates).toBe(0);
+  });
+
+  it.each<Role>(['Manager', 'Accountant', 'Staff', 'Attendant'])(
+    'refuses %s: only the Owner manages the organization',
+    async (role) => {
+      const result = await put(ACTIVE, { role });
+      expect(result.status).toBe(403);
+      expect(result.code).toBe('FORBIDDEN');
+      expect(result.updates).toBe(0);
+    },
+  );
+
+  it('keeps the Role check under Restricted Access', async () => {
+    const result = await put(RESTRICTED, { role: 'Manager' });
+    expect(result.status).toBe(403);
+    expect(result.code).toBe('FORBIDDEN');
+  });
+
+  it('answers VALIDATION_ERROR for an invalid profile', async () => {
+    const result = await put(ACTIVE, { body: { name: 'X' } });
+    expect(result.status).toBe(400);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(result.updates).toBe(0);
   });
 });
