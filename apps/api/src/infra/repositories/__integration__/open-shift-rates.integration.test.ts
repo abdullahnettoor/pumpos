@@ -6,7 +6,9 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { fuelsWithoutRate } from '@pump/shared';
 import { shiftsRouter } from '../../../routes/shifts.js';
+import { stationSetupRouter } from '../../../routes/station-setup.js';
 
 /**
  * POST /shifts/open refuses a fuel with no rate in effect (#630), against a
@@ -62,9 +64,16 @@ function shippedSchema(): string {
 
 const HOUR = 3_600_000;
 
-interface Envelope {
+interface Envelope<T = unknown> {
   success: boolean;
+  data?: T;
   error?: { code: string; message: string; details?: unknown };
+}
+
+interface PricingRow {
+  productId: string;
+  price: number;
+  effectiveFrom: string | null;
 }
 
 describe.skipIf(!CONNECTION)('POST /shifts/open with a fuel without a rate (#630)', () => {
@@ -110,6 +119,7 @@ describe.skipIf(!CONNECTION)('POST /shifts/open with a fuel without a rate (#630
       });
       await next();
     });
+    a.route('/setup', stationSetupRouter);
     a.route('/', shiftsRouter);
     app = a as unknown as Hono;
   }, 60_000);
@@ -253,8 +263,42 @@ describe.skipIf(!CONNECTION)('POST /shifts/open with a fuel without a rate (#630
     await nothingWritten();
   });
 
+  /**
+   * What the Open shift form checks (#633 review): the shift-status nozzles
+   * against GET /setup/pricing, by the server's own rule. It must agree with
+   * the open.
+   */
+  const formBlocks = async () => {
+    const status = (await (await app.request(`/status?stationId=${STATION}`)).json()) as Envelope<{
+      nozzles: { productId: string }[];
+    }>;
+    const pricing = (await (
+      await app.request(`/setup/pricing?stationId=${STATION}`)
+    ).json()) as Envelope<PricingRow[]>;
+    const rows = new Map((pricing.data ?? []).map((r) => [r.productId, r]));
+    return {
+      listed: [...rows.keys()],
+      blocked: fuelsWithoutRate(
+        status.data?.nozzles ?? [],
+        (id) => rows.get(id)?.effectiveFrom != null,
+      ),
+    };
+  };
+
+  it('the form blocks the same fuels the server refuses', async () => {
+    expect((await formBlocks()).blocked).toEqual([DIESEL]);
+  });
+
   it('opens once every fuel on a pump in service has a rate in effect; the pump in maintenance is ignored', async () => {
     await price(DIESEL, '89.70', new Date(Date.now() - HOUR));
+    // Petrol is archived but still on a pump in service, priced (#633 review):
+    // pricing still lists it with its rate, so the form does not block the
+    // open the server accepts.
+    await db.update(schema.products).set({ isActive: false }).where(eq(schema.products.id, PETROL));
+    const form = await formBlocks();
+    expect(form.blocked).toEqual([]);
+    expect(form.listed).toContain(PETROL);
+
     const res = await open();
     const body = (await res.json()) as Envelope;
     expect(body.success).toBe(true);

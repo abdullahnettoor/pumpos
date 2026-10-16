@@ -409,6 +409,40 @@ describe('a fuel with no rate in effect (#630)', () => {
     expect(start().disabled).toBe(false);
   });
 
+  it('an archived fuel still on a pump in service, priced, does not block (#633 review)', () => {
+    // Pricing lists it (the API includes fuels on in-service nozzles even when
+    // archived); the catalogue no longer does.
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.businessDayStatus(STATION, TODAY), {
+      requestedState: 'OPEN',
+      openBusinessDays: [{ id: 'bd', businessDate: TODAY }],
+    });
+    queryClient.setQueryData(queryKeys.products(), [
+      { id: 'ms', name: 'Petrol', productType: 'FUEL', unit: 'L' },
+    ]);
+    queryClient.setQueryData(queryKeys.pricing(STATION), [
+      {
+        productId: 'ms',
+        productName: 'Petrol',
+        productCode: 'MS',
+        price: 102.5,
+        effectiveFrom: ist('2026-10-12', '06:00'),
+      },
+      {
+        productId: 'hsd',
+        productName: 'Diesel',
+        productCode: 'HSD',
+        price: 90.1,
+        effectiveFrom: ist('2026-10-01', '06:00'),
+      },
+    ]);
+    queryClient.setQueryData(queryKeys.pricingHistory(STATION), []);
+    renderWithProviders(<OpenShiftForm {...props({ nozzles })} />, { queryClient });
+    expect(rate('Diesel').textContent).toMatch('₹90.10/L');
+    expect(screen.queryByTestId('open-shift-rate-block')).toBeNull();
+    expect(start().disabled).toBe(false);
+  });
+
   it('blocks nothing while the rates have not loaded', () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(queryKeys.businessDayStatus(STATION, TODAY), {
