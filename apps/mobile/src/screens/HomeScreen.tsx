@@ -69,7 +69,7 @@ export const HomeScreen: React.FC<Props> = ({ station, role = null }) => {
             openShift={m.openShiftInDay ? m.live : null}
             trend={m.trend}
           />
-          <DayTiles tiles={t} />
+          <DayTiles tiles={t} principal={principalFor(role)} />
         </div>
       )}
 

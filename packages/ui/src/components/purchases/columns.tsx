@@ -22,7 +22,7 @@ export interface PurchaseRow {
   invoiceNumber?: string | null;
   documentNumber?: string | null;
   notes?: string | null;
-  amount: number | string;
+  amount: number | string | null;
 }
 
 /** The purchase-row fields the Decantation link action reads. */
@@ -78,8 +78,10 @@ const Detail: React.FC<{ children: React.ReactNode; mono?: boolean }> = ({ child
  */
 export function buildPurchaseColumns(
   onLinkToDecantation?: (purchase: PurchaseLinkRow) => void,
+  /** `purchases.viewCosts`: the Amount column only shows to a user who may see costs. */
+  showCosts = true,
 ): TableColumn<PurchaseRow>[] {
-  const columns: TableColumn<PurchaseRow>[] = [
+  const allColumns: TableColumn<PurchaseRow>[] = [
     {
       id: 'entryDate',
       header: 'Date',
@@ -152,6 +154,7 @@ export function buildPurchaseColumns(
       width: '14%',
     },
   ];
+  const columns = showCosts ? allColumns : allColumns.filter((c) => c.id !== 'amount');
   if (!onLinkToDecantation) return columns;
   return [
     ...columns,

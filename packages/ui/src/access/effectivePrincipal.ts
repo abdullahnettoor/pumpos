@@ -64,3 +64,14 @@ export function useEffectivePrincipal(role: string | null | undefined): Principa
   publishEffective(role, data?.permissions);
   return principal;
 }
+
+/**
+ * The signed-in user's published Principal, for components that do not know the
+ * Role (nobody before the Access Document loads, so figures stay hidden until
+ * the server has answered).
+ */
+export function currentPrincipal(): Principal {
+  return effective
+    ? { role: principalOf(effective.role).role, permissions: effective.permissions }
+    : principalOf(null);
+}

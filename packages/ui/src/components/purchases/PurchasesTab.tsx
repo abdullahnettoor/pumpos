@@ -41,6 +41,8 @@ export interface PurchasesTabProps {
   entryClock: EntryClock;
   onOpen: (purchase: PurchaseRow) => void;
   onLinkToDecantation: (purchase: PurchaseLinkRow) => void;
+  /** `purchases.viewCosts`: hides the amounts (the figures are also withheld by the server). */
+  canViewCosts?: boolean;
 }
 
 const invoices = (n: number) => countOf(n, 'invoice', 'invoices');
@@ -64,6 +66,7 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
   entryClock,
   onOpen,
   onLinkToDecantation,
+  canViewCosts = true,
 }) => {
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', entryClock));
   const [search, setSearch] = useState('');
@@ -80,19 +83,24 @@ export const PurchasesTab: React.FC<PurchasesTabProps> = ({
       .sort((a, b) => (purchaseDate(b) ?? '').localeCompare(purchaseDate(a) ?? ''));
   }, [purchases, search, range]);
 
-  const columns = useMemo(() => buildPurchaseColumns(onLinkToDecantation), [onLinkToDecantation]);
+  const columns = useMemo(
+    () => buildPurchaseColumns(onLinkToDecantation, canViewCosts),
+    [onLinkToDecantation, canViewCosts],
+  );
 
   return (
     <>
       <KpiStrip columns="auto">
-        <TileSection title="purchased today" query={purchasesQ}>
-          <KpiTile
-            label="Purchased today"
-            scope="today"
-            value={formatMoney(today.total)}
-            hint={invoices(today.count)}
-          />
-        </TileSection>
+        {canViewCosts && (
+          <TileSection title="purchased today" query={purchasesQ}>
+            <KpiTile
+              label="Purchased today"
+              scope="today"
+              value={formatMoney(today.total)}
+              hint={invoices(today.count)}
+            />
+          </TileSection>
+        )}
         <TileSection title="payable" query={payablesQ}>
           {summary && (
             <KpiTile
