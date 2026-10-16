@@ -13,6 +13,7 @@ export * from './types/decantation.js';
 export * from './schemas/validation.js';
 export * from './permissions/catalogue.js';
 export * from './permissions/effective.js';
+export * from './permissions/changes.js';
 export * from './permissions/guards.js';
 export * from './services/interfaces.js';
 export * from './utils/business-date.js';

@@ -171,6 +171,16 @@ export const EventActivityCatalog = {
     'Team member reactivated',
   ),
   [BusinessEvents.USER_UPDATED]: info(BusinessEvents.USER_UPDATED, 'Team member updated'),
+  [BusinessEvents.USER_PERMISSIONS_CHANGED]: warning(
+    BusinessEvents.USER_PERMISSIONS_CHANGED,
+    'Team member permissions changed',
+    [
+      template('user-permissions-changed.v1', 'Changed permissions for {member}: {summary}.', {
+        member: 'text',
+        summary: 'text',
+      }),
+    ],
+  ),
   [BusinessEvents.PRODUCT_CREATED]: success(BusinessEvents.PRODUCT_CREATED, 'Product added'),
   [BusinessEvents.PRODUCT_UPDATED]: info(BusinessEvents.PRODUCT_UPDATED, 'Product updated'),
   [BusinessEvents.PRICE_CHANGED]: warning(BusinessEvents.PRICE_CHANGED, 'Price changed'),

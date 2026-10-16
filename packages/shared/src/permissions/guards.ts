@@ -97,3 +97,11 @@ export function canActOnTeamMember(
   if (targetStationIds.length === 0) return false;
   return targetStationIds.every((s) => actor.stationIds.includes(s));
 }
+
+/**
+ * Only an Owner edits another member's Permissions (ADR 0013). A fixed rule,
+ * not a Permission: it can never be delegated.
+ */
+export function canEditMemberPermissions(role: string | null | undefined): boolean {
+  return role === 'Owner';
+}

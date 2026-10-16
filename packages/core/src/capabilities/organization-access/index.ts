@@ -11,3 +11,4 @@ export * from './write-policy.js';
 export * from './organization-payload.js';
 export * from './update-organization.js';
 export * from './resolve-effective-permissions.js';
+export * from './user-permissions.js';

@@ -221,6 +221,7 @@ export const queryKeys = {
   dispensers: (stationId: string) => ['dispensers', stationId] as const,
   nozzles: (stationId: string) => ['nozzles', stationId] as const,
   users: () => ['users'] as const,
+  userPermissions: (userId: string) => ['user-permissions', userId] as const,
   shiftTemplates: () => ['shift-templates'] as const,
   paymentTerminals: (stationId: string) => ['payment-terminals', stationId] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,

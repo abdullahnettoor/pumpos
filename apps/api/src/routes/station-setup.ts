@@ -10,6 +10,8 @@ import {
   fuelPriceSchema,
   canActOnTeamMember,
   canWriteStationSetup,
+  canEditMemberPermissions,
+  CUSTOM_PERMISSIONS_CAPABILITY,
   isAuthorizedForStation,
   normalizeIndianMobile,
   OnboardingDraft,
@@ -29,6 +31,9 @@ import {
   UpdateStation,
   CreateUser,
   UpdateUser,
+  GetUserPermissions,
+  SetUserPermissions,
+  PreviewUserRoleChange,
   ResetUserPassword,
   SetUserStatus,
   RecordFuelPrice,
@@ -58,12 +63,18 @@ import {
 } from '../infra/repositories/fuel-price-queries.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
+import { evictCachedAuthUser } from '../infra/auth-cache.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
+import { DrizzleUserPermissionChangesReader } from '../infra/repositories/user-permission-changes.repo.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleStationCapacityPort,
+} from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
 import {
   loadStationDecantationSettings,
@@ -763,12 +774,113 @@ stationSetupRouter.put(
         403,
       );
     }
-    const db = c.var.db;
-    const useCase = new UpdateUser({
-      repository: new DrizzleUserRepository(db),
-      events: createDispatcher(db),
-    });
-    const result = await useCase.execute({ ...body, id }, buildContext(user));
+    // The update, the Permission-change reset on a Role change, and their
+    // events commit together.
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateUser({
+        repository: new DrizzleUserRepository(tx),
+        events,
+        permissionChanges: new DrizzleUserPermissionChangesReader(tx),
+      }).execute({ ...body, id }, buildContext(user)),
+    );
+    // Role, status and stations feed the cached principal: next request re-reads.
+    if (result.success) evictCachedAuthUser(target.authUserId);
+    return sendResult(c, result);
+  },
+);
+
+/**
+ * What changing this member's Role would drop. A read, so the UI can warn
+ * before it calls PUT /users/:id (whose response lists what was dropped).
+ */
+stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const role = z
+    .enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'])
+    .safeParse(c.req.query('role'));
+  if (!role.success) {
+    return c.json(
+      { success: false, error: { code: 'BAD_REQUEST', message: 'A valid role is required' } },
+      400,
+    );
+  }
+  const repo = new DrizzleUserRepository(c.var.db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+  const scope = await loadTargetStationIds(c.var.db, id);
+  if (!canActOnTarget(user, target.role, scope) || !canActOnTarget(user, role.data, scope)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
+      403,
+    );
+  }
+  const result = await new PreviewUserRoleChange({
+    users: repo,
+    changes: new DrizzleUserPermissionChangesReader(c.var.db),
+  }).execute({ userId: id, role: role.data }, buildContext(user));
+  return sendResult(c, result);
+});
+
+/** A member's Default Permissions, stored changes and effective set (Owner only). */
+stationSetupRouter.get('/users/:id/permissions', async (c) => {
+  const result = await new GetUserPermissions({
+    users: new DrizzleUserRepository(c.var.db),
+    changes: new DrizzleUserPermissionChangesReader(c.var.db),
+    access: new DrizzleOrganizationAccessReader(c.var.db),
+  }).execute({ userId: c.req.param('id') }, buildContext(c.var.user));
+  return sendResult(c, result);
+});
+
+/**
+ * Replace a member's Permission changes. Owner only and gated on the
+ * "Custom permissions" capability; the Restricted Access answer is declared in
+ * write-policy-declarations.ts. The Owner check runs before the capability
+ * guard so a non-Owner is told FORBIDDEN, not "not entitled".
+ */
+stationSetupRouter.put(
+  '/users/:id/permissions',
+  writePolicyGuard('PUT /setup/users/:id/permissions'),
+  async (c, next) => {
+    if (!canEditMemberPermissions(c.var.user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: "Only Owners can change a team member's permissions",
+          },
+        },
+        403,
+      );
+    }
+    await next();
+  },
+  requireCapabilityGuard(CUSTOM_PERMISSIONS_CAPABILITY),
+  async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new SetUserPermissions({
+        users: new DrizzleUserRepository(tx),
+        changes: new DrizzleUserPermissionChangesReader(tx),
+        access: new DrizzleOrganizationAccessReader(tx),
+        events,
+      }).execute(
+        {
+          userId: id,
+          granted: body.granted as string[] | undefined,
+          revoked: body.revoked as string[] | undefined,
+        },
+        buildContext(c.var.user),
+      ),
+    );
+    if (result.success) {
+      const target = await new DrizzleUserRepository(c.var.db).findById(id);
+      evictCachedAuthUser(target?.authUserId);
+    }
     return sendResult(c, result);
   },
 );

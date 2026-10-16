@@ -34,3 +34,24 @@ export interface UserPermissionChangesReader {
   /** Null when the user has no stored changes. */
   load(organizationId: string, userId: string): Promise<PermissionChanges | null>;
 }
+
+/** What the writer stores for one user: only differences from Role defaults. */
+export interface StoredPermissionChanges {
+  granted: string[];
+  revoked: string[];
+}
+
+/** Writes a user's stored Permission changes. One row per user; empty means no row. */
+export interface UserPermissionChangesWriter extends UserPermissionChangesReader {
+  /** Insert or replace the user's changes. `id` is used only when inserting. */
+  save(input: {
+    id: string;
+    organizationId: string;
+    userId: string;
+    changes: StoredPermissionChanges;
+    updatedByUserId: string | null;
+    at: string;
+  }): Promise<void>;
+  /** Remove the user's changes, if any. */
+  clear(organizationId: string, userId: string): Promise<void>;
+}
