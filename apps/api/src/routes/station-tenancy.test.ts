@@ -115,6 +115,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /reports/insights/credit-health': 'org-scoped-query',
 
   'GET /access': 'not-station-scoped',
+  'GET /organization': 'not-station-scoped',
 };
 
 function exposedGets(): string[] {

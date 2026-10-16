@@ -20,6 +20,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
 import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
+import { noRateRefusal } from './shiftRates.js';
 import { LiveShiftView } from './LiveShiftView.js';
 import { IdleShiftView } from './IdleShiftView.js';
 import { ShiftsHeaderActions, type RecordAction } from './ShiftsHeaderActions.js';
@@ -250,8 +251,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Opened: the success is shown at once; the new shift renders when the
   // status refresh (background) lands.
   const [awaitingOpenedShift, setAwaitingOpenedShift] = useState(false);
+  // The server's refusal of the last open for a fuel without a rate (#630).
+  const [openRefusal, setOpenRefusal] = useState<{ message: string; at: number } | null>(null);
   const showOpenForm = (visible: boolean) => {
     openShiftKeys.current = null;
+    setOpenRefusal(null);
     setOpenFormVisible(visible);
   };
   // Handover Drawer states
@@ -431,6 +435,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (!selectedStation) return;
     try {
       setIsOpening(true);
+      setOpenRefusal(null);
       setBusinessDate(values.businessDate);
       setSelectedTemplateId(values.shiftTemplateId);
       const payload: any = {
@@ -459,9 +464,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         'Shift opened.',
       );
     } catch (err: any) {
-      toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
-        title: 'Shift not opened',
-      });
+      const noRate = noRateRefusal(err);
+      if (noRate) {
+        // Said beside Open shift, where the form's own check says it; the
+        // rates this screen read were out of date, so read them again.
+        setOpenRefusal({ message: noRate, at: Date.now() });
+        void qc.invalidateQueries({ queryKey: queryKeys.pricing(selectedStation.id) });
+        void qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(selectedStation.id) });
+      } else {
+        toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
+          title: 'Shift not opened',
+        });
+      }
     } finally {
       setIsOpening(false);
     }
@@ -911,6 +925,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                     onSubmit={handleOpenShift}
                     clock={stationClock}
                     canChangePrice={canChangeFuelPrice(userRole)}
+                    openRefusal={openRefusal}
                   />
                 </section>
               ) : (

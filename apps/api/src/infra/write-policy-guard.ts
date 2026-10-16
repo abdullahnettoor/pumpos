@@ -46,7 +46,7 @@ export function writePolicyGuard(
     );
   }
 
-  return async (c, next) => {
+  const guard: MiddlewareHandler<{ Variables: Variables }> = async (c, next) => {
     const inputs = await new DrizzleOrganizationAccessReader(c.var.db).load(
       c.var.user.organizationId,
     );
@@ -58,4 +58,28 @@ export function writePolicyGuard(
 
     await next();
   };
+  GUARDED_OPERATIONS.set(guard, operation);
+  return guard;
+}
+
+/** Each guard this module built, keyed by the operation it enforces. */
+const GUARDED_OPERATIONS = new WeakMap<object, string>();
+
+/**
+ * Hono's key for the original handler when `route()` wraps a sub-app's
+ * handler in that sub-app's error handler.
+ */
+const COMPOSED_HANDLER = '__COMPOSED_HANDLER';
+
+/**
+ * The operation a route-table handler enforces, if it is a `writePolicyGuard`.
+ * Lets the coverage test prove a route carries the guard for its *own*
+ * declaration, rather than inferring it from how many handlers it has.
+ */
+export function writePolicyOperationOf(handler: unknown): string | undefined {
+  if (typeof handler !== 'function') return undefined;
+  const direct = GUARDED_OPERATIONS.get(handler);
+  if (direct) return direct;
+  const original: unknown = Reflect.get(handler, COMPOSED_HANDLER);
+  return original === undefined ? undefined : writePolicyOperationOf(original);
 }

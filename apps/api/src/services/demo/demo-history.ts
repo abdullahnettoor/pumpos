@@ -32,6 +32,7 @@ import {
   DrizzleShiftRepository,
   DrizzleShiftSummaryWriter,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
   DrizzleStockMovementWriter,
 } from '../../infra/repositories/station-ops-repositories.js';
 import {
@@ -330,6 +331,7 @@ export async function seedDemoHistory(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(
         {

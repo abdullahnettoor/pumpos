@@ -1,4 +1,9 @@
-import { localToInstant, templateWindow } from '@pump/shared';
+import {
+  fuelsWithoutRate,
+  localToInstant,
+  noRateInEffectMessage,
+  templateWindow,
+} from '@pump/shared';
 import type { FuelPriceRow } from '../StationSetup/fuelPriceRows.js';
 import { formatClockInZone, formatMoney } from '../../utils/format.js';
 
@@ -97,4 +102,49 @@ export function rateChangeWarning(c: ShiftRateChange, timeZone: string): string 
     `This shift keeps ${formatMoney(c.from)}. ` +
     `Close and reopen the shift at ${at} to use the new rate.`
   );
+}
+
+/** The nozzle fields the rate check reads: shift status lists only pumps in service. */
+export interface RatedNozzle {
+  productId: string;
+  productName?: string | null;
+}
+
+/**
+ * The fuels that block the open (#630): sold on a nozzle of a pump in
+ * service, with no rate in effect. The server's rule (`fuelsWithoutRate`)
+ * over the same nozzles: shift status lists those of dispensers in service,
+ * which is the set `OpenShift` checks. The reason reads as the server's does.
+ */
+export function fuelsBlockingOpen(
+  nozzles: readonly RatedNozzle[],
+  rows: readonly FuelPriceRow[],
+): { productIds: string[]; reason: string } | null {
+  const rowOf = new Map(rows.map((r) => [r.productId, r]));
+  const missing = fuelsWithoutRate(nozzles, (id) => rowOf.get(id)?.price != null);
+  if (missing.length === 0) return null;
+  const nameOf = (id: string) =>
+    nozzles.find((n) => n.productId === id)?.productName || rowOf.get(id)?.productName || 'A fuel';
+  const fuels = missing
+    .map((id) => ({ id, name: nameOf(id) }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return {
+    productIds: fuels.map((f) => f.id),
+    reason: noRateInEffectMessage(fuels.map((f) => f.name)),
+  };
+}
+
+/**
+ * The server's no-rate refusal of an open (#630), or null for any other
+ * failure: a validation error naming the fuels in `details.productIds`.
+ */
+export function noRateRefusal(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, message, details } = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: { productIds?: unknown } | null;
+  };
+  if (code !== 'VALIDATION_ERROR' || typeof message !== 'string') return null;
+  return Array.isArray(details?.productIds) ? message : null;
 }

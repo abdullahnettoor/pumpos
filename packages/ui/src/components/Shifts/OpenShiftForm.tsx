@@ -22,6 +22,7 @@ import {
 } from '../StationSetup/fuelPriceRows.js';
 import { ShiftRatesPanel } from './ShiftRatesPanel.js';
 import {
+  fuelsBlockingOpen,
   plannedShiftWindow,
   rateChangeWarning,
   scheduledChangesDuringShift,
@@ -53,6 +54,12 @@ interface OpenShiftFormProps {
   clock?: { timeZone: string; dayStartsAt: string };
   /** Whether "Change price" is offered beside each rate (Owner, Manager). */
   canChangePrice?: boolean;
+  /**
+   * The server's refusal of the last open for a fuel without a rate (#630),
+   * and when it came. Shown until the rates are read again: from then on the
+   * form's own check says the same, from fresher rates.
+   */
+  openRefusal?: { message: string; at: number } | null;
 }
 
 /** Without a station clock: the default zone and Day Start. */
@@ -266,6 +273,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onSubmit,
   clock = DEFAULT_CLOCK,
   canChangePrice = false,
+  openRefusal = null,
 }) => {
   /**
    * Terminals on no dispenser. They keep their own panel rather than vanishing:
@@ -373,6 +381,20 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
     () => new Set(changesDuringShift.map((c) => c.productId)),
     [changesDuringShift],
   );
+  // Fuels on a pump in service with no rate in effect block the open (#630).
+  // Unknown until the rates load: the server decides, so nothing is blocked
+  // on rates this screen has not read.
+  const rateBlock = useMemo(
+    () => (fuels.pricingQ.data ? fuelsBlockingOpen(nozzles ?? [], fuels.rows) : null),
+    [fuels.pricingQ.data, fuels.rows, nozzles],
+  );
+  const withoutRate = useMemo(() => new Set(rateBlock?.productIds ?? []), [rateBlock]);
+  const serverRefusal =
+    openRefusal &&
+    fuels.pricingQ.dataUpdatedAt <= openRefusal.at &&
+    openRefusal.message !== rateBlock?.reason
+      ? openRefusal.message
+      : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Main open-shift form */}
@@ -503,6 +525,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           timeZone={clock.timeZone}
           writes={writes}
           changingDuringShift={changingDuringShift}
+          withoutRate={withoutRate}
           onChangePrice={
             canChangePrice
               ? (row) =>
@@ -649,6 +672,17 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               into maintenance instead.
             </p>
           )}
+          {(rateBlock || serverRefusal) && (
+            <p
+              // Blocking, like the attendant message: announced, and named so
+              // the operator knows which rate to set.
+              role="alert"
+              data-testid="open-shift-rate-block"
+              className="text-right text-[12px] text-danger-fg"
+            >
+              {serverRefusal ?? rateBlock?.reason}
+            </p>
+          )}
           <Button
             type="submit"
             variant="primary"
@@ -659,7 +693,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               businessDayState === 'CLOSED' ||
               businessDayState === 'UNKNOWN' ||
               businessDayState === 'UNAVAILABLE' ||
-              unattendedDispensers.length > 0
+              unattendedDispensers.length > 0 ||
+              rateBlock != null
             }
             leftIcon={<Play style={{ fill: 'currentColor' }} />}
           >
