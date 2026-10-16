@@ -45,8 +45,10 @@ interface StoredKey {
 /** What the fake database has seen; reset per test. */
 const state = {
   subscriptionStatus: 'ACTIVE',
+  role: 'Owner',
   organizationUpdates: 0,
   idempotencyKey: null as StoredKey | null,
+  events: [] as Array<Record<string, unknown>>,
 };
 
 /** A thenable query chain that resolves to `result` wherever it is awaited. */
@@ -56,6 +58,7 @@ function chain(result: () => unknown[]) {
     where: () => link,
     limit: () => link,
     orderBy: () => link,
+    for: () => link,
     then: (resolve: (v: unknown[]) => void, reject?: (e: unknown) => void) =>
       Promise.resolve().then(result).then(resolve, reject),
   };
@@ -71,7 +74,8 @@ function selectFrom(table: unknown): unknown[] {
   return [];
 }
 
-const fakeDb = {
+const fakeDb: Record<string, unknown> = {
+  transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
   query: {
     users: {
       findFirst: async () => ({
@@ -80,14 +84,20 @@ const fakeDb = {
         email: 'owner@example.com',
         fullName: 'Owner',
         organizationId: ORG_ID,
-        role: 'Owner',
+        role: state.role,
         status: 'ACTIVE',
       }),
     },
   },
   select: () => ({ from: (table: unknown) => chain(() => selectFrom(table)) }),
-  insert: () => ({
+  insert: (table: unknown) => ({
     values: (row: Omit<StoredKey, 'id' | 'responseStatus' | 'responseBody'>) => ({
+      then: (resolve: (v: unknown) => void) => {
+        if (table === schema.events) {
+          state.events.push(...(row as unknown as Array<Record<string, unknown>>));
+        }
+        resolve(undefined);
+      },
       onConflictDoNothing: () => ({
         returning: async () => {
           if (state.idempotencyKey) return [];
@@ -131,10 +141,10 @@ vi.mock('@pump/db', async (importOriginal) => ({
 
 const { default: worker } = await import('../index.js');
 
-async function bearer(): Promise<string> {
+async function bearer(sub: string): Promise<string> {
   return sign(
     {
-      sub: AUTH_ID,
+      sub,
       iss: `${ENV.SUPABASE_URL}/auth/v1`,
       aud: 'authenticated',
       exp: Math.floor(Date.now() / 1000) + 600,
@@ -144,12 +154,12 @@ async function bearer(): Promise<string> {
   );
 }
 
-async function put(body: unknown, idempotencyKey: string) {
+async function put(body: unknown, idempotencyKey: string, sub = AUTH_ID) {
   const res = await worker.fetch(
     new Request('https://api.example.com/api/organization', {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${await bearer()}`,
+        Authorization: `Bearer ${await bearer(sub)}`,
         'Content-Type': 'application/json',
         'Idempotency-Key': idempotencyKey,
       },
@@ -165,8 +175,10 @@ const PROFILE = { name: 'Sri Lakshmi Fuels', metadata: { gstin: '32AAACS1234A1Z5
 describe('PUT /api/organization on the mounted app (#626)', () => {
   beforeEach(() => {
     state.subscriptionStatus = 'ACTIVE';
+    state.role = 'Owner';
     state.organizationUpdates = 0;
     state.idempotencyKey = null;
+    state.events = [];
   });
 
   it('answers in the envelope and replays a retried Idempotency-Key without writing again', async () => {
@@ -180,6 +192,46 @@ describe('PUT /api/organization on the mounted app (#626)', () => {
     const retry = await put(PROFILE, 'org-save-1');
     expect(retry).toEqual(first);
     expect(state.organizationUpdates).toBe(1);
+    expect(state.events).toHaveLength(1);
+  });
+
+  it('commits exactly one ORGANIZATION_UPDATED event with the update (#634)', async () => {
+    const res = await put(PROFILE, 'org-save-3');
+    expect(res.status).toBe(200);
+    expect(state.organizationUpdates).toBe(1);
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({
+      eventType: 'ORGANIZATION_UPDATED',
+      organizationId: ORG_ID,
+      stationId: null,
+      businessDayId: null,
+      aggregateType: 'Organization',
+      aggregateId: ORG_ID,
+      actorId: 'user-1',
+      payload: { changes: { gstin: { from: null, to: '32AAACS1234A1Z5' } } },
+    });
+    expect(state.events[0].eventId).toEqual(expect.any(String));
+  });
+
+  it('refuses a Manager in the envelope, writing no row and no event (#634)', async () => {
+    // A separate auth subject: the API caches each subject's principal.
+    state.role = 'Manager';
+    const res = await put(PROFILE, 'org-save-4', 'auth-manager');
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      success: false,
+      error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' },
+    });
+    expect(state.organizationUpdates).toBe(0);
+    expect(state.events).toEqual([]);
+  });
+
+  it('rejects an invalid profile in the envelope, writing no row and no event (#634)', async () => {
+    const res = await put({ name: 'S' }, 'org-save-5');
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false, error: { code: 'VALIDATION_ERROR' } });
+    expect(state.organizationUpdates).toBe(0);
+    expect(state.events).toEqual([]);
   });
 
   it('refuses the same key with a different profile', async () => {
@@ -202,5 +254,6 @@ describe('PUT /api/organization on the mounted app (#626)', () => {
       error: { code: 'SUBSCRIPTION_RESTRICTED' },
     });
     expect(state.organizationUpdates).toBe(0);
+    expect(state.events).toEqual([]);
   });
 });

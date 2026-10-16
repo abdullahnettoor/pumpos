@@ -7,10 +7,11 @@ import {
 } from '@pump/shared';
 import {
   BusinessEvents,
+  coreError,
+  ErrorCodes,
   err,
   eventFromContext,
   forbiddenError,
-  notFoundError,
   ok,
   validationError,
 } from '../../kernel/index.js';
@@ -142,7 +143,7 @@ export class UpdateOrganization implements UseCase<UpdateOrganizationCommand, Or
     }
 
     const existing = await this.deps.repository.findById(ctx.organizationId);
-    if (!existing) return err(notFoundError('Organization'));
+    if (!existing) return err(coreError(ErrorCodes.NOT_FOUND, 'Organization not found'));
 
     const name = parsed.data.name;
     const profile = profileFrom(parsed.data.metadata);
