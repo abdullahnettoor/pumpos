@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { Station } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
 import { tabsForRole } from '../shell/tabs.js';
+import { ShellContext } from '../shell/context.js';
 
 /**
  * Screen tests for the DSSR page: Sealed reads the snapshot and Draft the
@@ -185,9 +186,19 @@ const mount = (date: string, tabs: readonly TabKey[] = ['reports', 'home']) => {
   start.date = date;
   return render(
     <ToastProvider>
-      <NavProvider tabs={tabs}>
-        <Stage />
-      </NavProvider>
+      <ShellContext.Provider
+        value={{
+          station: null,
+          stationName: '',
+          userName: 'Owner',
+          role: 'Owner',
+          openAccount: () => {},
+        }}
+      >
+        <NavProvider tabs={tabs}>
+          <Stage />
+        </NavProvider>
+      </ShellContext.Provider>
     </ToastProvider>,
   );
 };

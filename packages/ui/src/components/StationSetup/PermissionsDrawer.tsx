@@ -50,7 +50,7 @@ export const PermissionsDrawer: React.FC<{
           {withNextStep("Couldn't load permissions", 'Close this and try again.')}
         </p>
       ) : (
-        <PermissionsEditor view={q.data as UserPermissionsView} onDone={onClose} />
+        <PermissionsEditor view={q.data} onDone={onClose} />
       )}
     </Drawer>
   );
