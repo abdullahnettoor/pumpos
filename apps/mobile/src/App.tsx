@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BootScreen, Login, useStations, runTask } from '@pump/ui';
+import { BootScreen, Login, useStations, runTask, useEffectivePrincipal } from '@pump/ui';
 import { isAttendant, type Station } from '@pump/shared';
 import { useOwnHandover } from './lib/handover/useOwnHandover.js';
 import { useSession, signOut } from './lib/session.js';
@@ -40,7 +40,13 @@ export const App: React.FC = () => {
   // Non-attendant roles who happen to be assigned to a DU on an open shift get a
   // pinned handover card on Home (the same self-service form as the Attendant shell).
   const hasHandover = useOwnHandover(status === 'ready' && !isAttendant(role)) !== null;
-  const allowedTabs = useMemo(() => tabsForRole(role, hasHandover), [role, hasHandover]);
+  // Tabs follow the effective Permissions (ADR 0013): the document refreshes on
+  // focus and every minute, and `permissions` re-derives the dock when it changes.
+  const principal = useEffectivePrincipal(role);
+  const allowedTabs = useMemo(
+    () => tabsForRole(role, hasHandover, principal),
+    [role, hasHandover, principal],
+  );
 
   // The operator's pick, falling back to the first station until stations load.
   // Derived rather than synced by an effect, so the fallback is right on first render.

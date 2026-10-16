@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { useSales, queryKeys } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../../services/cloud.js';
@@ -43,7 +44,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const canIssue = can(principalOf(userRole), 'reports.invoice');
+  const canIssue = can(principalFor(userRole), 'reports.invoice');
   const salesQ = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
   const sales = salesQ.data;
 

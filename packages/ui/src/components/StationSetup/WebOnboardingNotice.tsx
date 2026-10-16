@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { can, principalOf, type Role } from '@pump/shared';
+import { can, type Role } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { Globe, ExternalLink, Copy, Check, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { openExternal } from '../../utils/platform.js';
@@ -41,7 +42,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
 }) => {
   const runTask = useRunTask();
   const [copied, setCopied] = useState(false);
-  const canOnboard = can(principalOf(role), 'station.onboard');
+  const canOnboard = can(principalFor(role), 'station.onboard');
 
   const copyLink = async () => {
     try {

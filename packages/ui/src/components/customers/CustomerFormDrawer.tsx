@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { can, customerCreateSchema, principalOf, resolveEntryDate } from '@pump/shared';
+import { can, customerCreateSchema, resolveEntryDate } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
@@ -54,7 +55,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   const limitLocked =
     Boolean(editingCustomer) &&
     userRole !== undefined &&
-    !can(principalOf(userRole), 'customers.changeCreditLimit');
+    !can(principalFor(userRole), 'customers.changeCreditLimit');
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);

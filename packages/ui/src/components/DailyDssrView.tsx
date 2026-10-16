@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { can, DSR_FULL_NAME, DSR_LABEL, principalOf, resolveBusinessDate } from '@pump/shared';
+import { can, DSR_FULL_NAME, DSR_LABEL, resolveBusinessDate } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
 import type { Role } from '@pump/shared';
 import {
   Button,
@@ -115,7 +116,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
   const day = useMemo(() => (row ? readDssrDay(row) : null), [row]);
   const status = row ? dssrDayStatus(row, date, currentBusinessDate) : null;
 
-  const canGenerate = !!stationId && !!userRole && can(principalOf(userRole), 'reports.export');
+  const canGenerate = !!stationId && !!userRole && can(principalFor(userRole), 'reports.export');
   const generate = useMutation({
     // The day is the mutation's own variable, never the screen's current date:
     // the operator may step to another day while Generate is still in flight.

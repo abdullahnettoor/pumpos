@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import {
   DataSection,
   EmptyState,
@@ -196,7 +197,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
 
   if (activeSummary || viewShiftId) {
     const canReopen =
-      can(principalOf(userRole), 'shifts.reopen') &&
+      can(principalFor(userRole), 'shifts.reopen') &&
       (activeSummary?.shiftStatus ?? activeSummary?.status) === 'CLOSED';
 
     return (

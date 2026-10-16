@@ -1,5 +1,6 @@
 import React from 'react';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import { PageHeader } from '../ui/PageHeader.js';
 import { AlertsBell } from './AlertsBell.js';
 import { useShell } from './context.js';
@@ -18,8 +19,8 @@ export const TabHeader: React.FC<{ title: string; right?: React.ReactNode }> = (
   const { stationName, openAccount, role } = useShell();
   const nav = useNav();
   const bell =
-    can(principalOf(role), 'mobile.insights') || can(principalOf(role), 'inventory.density');
-  const densityAction = can(principalOf(role), 'mobile.densityShortcut') ? (
+    can(principalFor(role), 'mobile.insights') || can(principalFor(role), 'inventory.density');
+  const densityAction = can(principalFor(role), 'mobile.densityShortcut') ? (
     <button
       type="button"
       onClick={() => nav.push(<DensityPage />, 'density')}

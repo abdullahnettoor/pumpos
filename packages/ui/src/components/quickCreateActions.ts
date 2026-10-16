@@ -1,5 +1,6 @@
 import type { Role } from '@pump/shared';
-import { can, principalOf } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
+import { can } from '@pump/shared';
 
 /** Stable ids for the quick-create actions offered before a station is operational. */
 export type PreReadyQuickCreateId = 'onboard-station' | 'team-member';
@@ -17,7 +18,7 @@ export type PreReadyQuickCreateId = 'onboard-station' | 'team-member';
  */
 export function preReadyQuickCreateIds(role: Role): PreReadyQuickCreateId[] {
   const ids: PreReadyQuickCreateId[] = [];
-  if (can(principalOf(role), 'station.onboard')) ids.push('onboard-station');
+  if (can(principalFor(role), 'station.onboard')) ids.push('onboard-station');
   // Inviting the team stays open to everyone: it routes into the shell, where
   // the top bar keeps its sign-out, so it is not a dead end even for a role
   // that can do nothing there.

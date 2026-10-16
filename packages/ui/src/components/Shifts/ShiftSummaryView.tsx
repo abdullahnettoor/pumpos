@@ -1,5 +1,6 @@
 import React from 'react';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { useMutation } from '@tanstack/react-query';
 import {
   Button,
@@ -208,7 +209,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             timeZone={timeZone}
             dayStartsAt={dayStartsAt}
           >
-            {can(principalOf(userRole), 'shifts.reviewTransactions') && (
+            {can(principalFor(userRole), 'shifts.reviewTransactions') && (
               <section className="no-print flex flex-col gap-2">
                 <ShiftTransactionsPanel
                   shiftId={summary.shiftId}

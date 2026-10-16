@@ -3,9 +3,9 @@ import {
   canSeeDashboardCard,
   type DashboardCard,
   type OperatorRole,
-  principalOf,
   type Station,
 } from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import type { NavIntent } from '../../AppShell.js';
 
 export interface DashboardContextValue {
@@ -43,5 +43,5 @@ export function useDashboard(): DashboardContextValue {
  */
 export function useCardEnabled(card: DashboardCard): boolean {
   const { role, station } = useDashboard();
-  return canSeeDashboardCard(card, principalOf(role)) && !!station.id;
+  return canSeeDashboardCard(card, principalFor(role)) && !!station.id;
 }

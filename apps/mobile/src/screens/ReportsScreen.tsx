@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
 import type { BusinessDayListItem, Station } from '@pump/shared';
-import { useBusinessDayList } from '@pump/ui';
+import { useBusinessDayList, principalFor } from '@pump/ui';
 import { shortDate } from '../lib/dates.js';
 import { plural } from '../lib/format.js';
 import {
@@ -142,10 +142,10 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
   return (
     <>
       {role &&
-        (can(principalOf(role), 'inventory.decantation') ||
-          can(principalOf(role), 'inventory.density')) && (
+        (can(principalFor(role), 'inventory.decantation') ||
+          can(principalFor(role), 'inventory.density')) && (
           <ListGroup className="mb-3">
-            {can(principalOf(role), 'inventory.decantation') && (
+            {can(principalFor(role), 'inventory.decantation') && (
               <ListRow
                 title="Decantations"
                 meta="Tanker visits and unloading"
@@ -154,7 +154,7 @@ export const ReportsScreen: React.FC<{ station: Station }> = ({ station }) => {
                 }
               />
             )}
-            {can(principalOf(role), 'inventory.density') && (
+            {can(principalFor(role), 'inventory.density') && (
               <ListRow
                 title="Density"
                 meta="Today and the register"

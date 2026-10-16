@@ -1,5 +1,6 @@
 import React from 'react';
-import { handoverState, principalOf, shiftWorkspaceAction, statusPresentation } from '@pump/shared';
+import { handoverState, shiftWorkspaceAction, statusPresentation } from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import { Fuel, Play } from 'lucide-react';
 import { Button, Dot, StatusChip, VarianceChip } from '../../../pump-ds/index.js';
 import { inr, formatQty } from '../../../utils/format.js';
@@ -135,7 +136,7 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
 export const ForecourtCard: React.FC = () => {
   const { role, onNavigate } = useDashboard();
   const { model, queries } = useForecourtModel();
-  const canAct = shiftWorkspaceAction(principalOf(role)) === 'act';
+  const canAct = shiftWorkspaceAction(principalFor(role)) === 'act';
   const openSummary = (id: string) => onNavigate('/shifts', { openShiftSummaryId: id });
 
   return (

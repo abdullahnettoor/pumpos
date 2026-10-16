@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { can, formatStationDateTime, principalOf } from '@pump/shared';
+import { can, formatStationDateTime } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Button,
@@ -120,7 +121,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const runTask = useRunTask();
   const refresh = useRefreshTask();
   const [closing, setClosing] = useState(false);
-  const canClose = can(principalOf(userRole), 'shifts.closeDay');
+  const canClose = can(principalFor(userRole), 'shifts.closeDay');
 
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, {
     enabled: !!stationId,
@@ -192,7 +193,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
    * `guards.ts`, the same source the nav gates the route with — an inline role
    * list here could drift from it and offer a door that does not open.
    */
-  const mayOpenReports = can(principalOf(userRole), 'reports.view');
+  const mayOpenReports = can(principalFor(userRole), 'reports.view');
 
   // "Review in Shifts" from the dashboard notice: narrow the list to the
   // still-open past days until the operator clears the filter.

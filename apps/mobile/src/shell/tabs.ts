@@ -3,7 +3,8 @@
  * are declared. Adding or retiring a tab edits this file, `tabIcons.tsx` (the
  * dock glyph) and `TabRoot.tsx` (what the tab shows).
  */
-import { can, isAttendant, principalOf, type PermissionId, type Role } from '@pump/shared';
+import { can, isAttendant, type PermissionId, type Principal, type Role } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import type { TabKey } from '../lib/tabKey.js';
 
 export interface TabDef {
@@ -44,11 +45,15 @@ const TAB_PERMISSION: Record<TabKey, PermissionId> = {
  * Manager already have Home, and the card is pinned at the top of it. There is no
  * handover tab of its own.
  */
-export function tabsForRole(role: Role | null, hasHandover: boolean): TabKey[] {
+export function tabsForRole(
+  role: Role | null,
+  hasHandover: boolean,
+  principal: Principal = principalFor(role),
+): TabKey[] {
   if (!role) return [];
   return TAB_DEFS.map((t) => t.key).filter((key) =>
     key === 'home' && hasHandover && !isAttendant(role)
       ? true
-      : can(principalOf(role), TAB_PERMISSION[key]),
+      : can(principal, TAB_PERMISSION[key]),
   );
 }

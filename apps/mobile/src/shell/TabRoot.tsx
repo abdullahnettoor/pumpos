@@ -5,7 +5,8 @@
  * here, in `tabs.ts` and in `tabIcons.tsx`.
  */
 import React from 'react';
-import { can, principalOf, type Station } from '@pump/shared';
+import { can, type Station } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import { HomeScreen } from '../screens/HomeScreen.js';
 import { HandoverCard } from '../screens/home/HandoverCard.js';
 import { InsightsScreen } from '../screens/InsightsScreen.js';
@@ -35,8 +36,8 @@ export const TabRoot: React.FC<Props> = ({ tab, station, stationsLoading }) => {
   // pinned handover card when they man a pump. An Accountant or Staff member who
   // mans a pump gets Home only for that card (see `tabsForRole`): no overview, no
   // bell (neither Role may see alerts).
-  const showDensityShortcut = can(principalOf(role), 'mobile.densityShortcut');
-  const handoverOnlyHome = tab === 'home' && !can(principalOf(role), 'mobile.home');
+  const showDensityShortcut = can(principalFor(role), 'mobile.densityShortcut');
+  const handoverOnlyHome = tab === 'home' && !can(principalFor(role), 'mobile.home');
   const header =
     tab === 'home' && !handoverOnlyHome ? <HomeHeader /> : <TabHeader title={tabDef(tab).label} />;
 

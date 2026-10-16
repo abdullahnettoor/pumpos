@@ -4,7 +4,8 @@ import { AppStatusBar } from './AppStatusBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName } from '../pump-ds/icon/index.js';
 import { guardLeave } from '../pump-ds/form/unsavedChanges.js';
-import { can, type OperatorRole, type PermissionId, principalOf, Station } from '@pump/shared';
+import { can, type OperatorRole, type PermissionId, Station } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
@@ -262,7 +263,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     selectedStation?.id,
     stationReady && !!selectedStation,
     // Money alerts (overdue customers, open past days) follow Reports access.
-    can(principalOf(userRole), 'reports.view'),
+    can(principalFor(userRole), 'reports.view'),
     businessDate,
   );
 
@@ -281,7 +282,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   }, []);
 
   const visibleNavItems = navItems.filter(
-    (item) => !item.permission || can(principalOf(userRole), item.permission),
+    (item) => !item.permission || can(principalFor(userRole), item.permission),
   );
 
   // Bucket the flat nav list into ordered sections. Items not mapped to any

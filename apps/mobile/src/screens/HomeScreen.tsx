@@ -1,5 +1,6 @@
 import React from 'react';
-import { can, principalOf, type Role, type Station } from '@pump/shared';
+import { can, type Role, type Station } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import { DayTiles } from '../components/DayTiles.js';
 import { SalesByProduct } from '../components/SalesByProduct.js';
 import { comparisonView, type Comparison } from '../lib/home/sales.js';
@@ -103,7 +104,7 @@ export const HomeScreen: React.FC<Props> = ({ station, role = null }) => {
           <SectionLabel
             right={
               <div className="flex items-center gap-2">
-                {role && can(principalOf(role), 'inventory.density') && (
+                {role && can(principalFor(role), 'inventory.density') && (
                   <button type="button" onClick={() => nav.push(<DensityPage />, 'density')}>
                     Density ›
                   </button>

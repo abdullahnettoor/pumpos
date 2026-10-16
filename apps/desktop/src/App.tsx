@@ -43,6 +43,7 @@ import {
   navTarget,
   pageRoute,
   type NavItem,
+  useEffectivePrincipal,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
@@ -101,6 +102,9 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(
     null,
   );
+  // Effective Permissions (Access Document), refreshed on focus and every minute;
+  // re-renders this root so every screen re-reads them (ADR 0013).
+  useEffectivePrincipal(userRole);
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
 

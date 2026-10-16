@@ -15,7 +15,8 @@ import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
 import type { AlertCategory, AlertSeverity, MobileAlert } from './types.js';
-import { can, principalOf } from '@pump/shared';
+import { can } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
@@ -30,7 +31,7 @@ const VARIANCE_SHIFTS_CHECKED = 5;
  */
 const ACCOUNTANT_CATEGORIES: readonly AlertCategory[] = ['decantation', 'density', 'handover'];
 export const alertVisibleToRole = (category: AlertCategory, role?: Role | null): boolean =>
-  !role || can(principalOf(role), 'mobile.fullAlerts') || ACCOUNTANT_CATEGORIES.includes(category);
+  !role || can(principalFor(role), 'mobile.fullAlerts') || ACCOUNTANT_CATEGORIES.includes(category);
 
 const RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
 
@@ -69,7 +70,7 @@ const openedAt = (s: Snapshot) => {
 export function deriveAlerts(src: AlertSources): MobileAlert[] {
   const list: MobileAlert[] = [];
 
-  const canSeeInventoryWork = can(principalOf(src.role), 'pages.inventory');
+  const canSeeInventoryWork = can(principalFor(src.role), 'pages.inventory');
 
   for (const a of src.stock) {
     list.push({ id: a.id, severity: a.severity, category: 'stock', title: a.title, meta: a.meta });
@@ -188,7 +189,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
   const density = src.densityToday;
   if (
     src.role != null &&
-    can(principalOf(src.role), 'inventory.density') &&
+    can(principalFor(src.role), 'inventory.density') &&
     density &&
     density.missingCount > 0
   ) {

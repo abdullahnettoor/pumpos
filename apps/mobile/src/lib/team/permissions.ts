@@ -14,9 +14,9 @@ import {
   canAssignStation,
   canAssignTeamRole,
   can,
-  principalOf,
   type Role,
 } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import { ROLE_ORDER, type TeamMember } from './members.js';
 
 export interface TeamActor {
@@ -28,7 +28,7 @@ export interface TeamActor {
 }
 
 /** May this Role add or manage members at all? Owner and Manager. */
-export const canManageTeam = (role: Role): boolean => can(principalOf(role), 'team.manage');
+export const canManageTeam = (role: Role): boolean => can(principalFor(role), 'team.manage');
 
 /** The Roles this actor may give: all five for an Owner, Staff and Attendant for a Manager. */
 export function assignableRoles(role: Role): Role[] {

@@ -539,6 +539,9 @@ export function usePricingHistory(stationId: string | null | undefined, options?
   });
 }
 
+/** How often the Access Document (and so the effective Permissions) refreshes. */
+export const ACCESS_REFRESH_MS = 60_000;
+
 /**
  * The Organization's Access Document: what it may use, filtered for this
  * user's Role. Semi-static — access changes when PumpOS changes a plan, grant
@@ -555,7 +558,12 @@ export function useAccess(options?: Options<AccessDocument>) {
     queryKey: queryKeys.access(),
     queryFn: () => accessSvc.getAccess(),
     ...TIER.semi,
+    // Short stale time so a focus refetch really fires: a Permission change
+    // must reach the menus within ~a minute, not after the semi tier's 10m.
+    staleTime: 15_000,
     refetchOnWindowFocus: true,
+    // Menus follow Permission changes within about a minute (ADR 0013).
+    refetchInterval: ACCESS_REFRESH_MS,
     ...options,
   });
 }

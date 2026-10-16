@@ -4,12 +4,12 @@ import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
 import {
   can,
-  principalOf,
   resolveTankLevelSettings,
   Station,
   TANK_LEVEL_SETTINGS_KEY,
   type TankLevelSettings,
 } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
@@ -171,10 +171,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   // While a form is changed, its bar's Save is the page's one primary.
   const formChanged = useHasUnsavedChanges();
 
-  const canRules = can(principalOf(userRole), 'station.manage');
+  const canRules = can(principalFor(userRole), 'station.manage');
   const fuelProducts = (productsQ.data ?? []).filter((product) => product.productType === 'FUEL');
-  const canAddInfrastructure = can(principalOf(userRole), 'station.infrastructure');
-  const canAddProduct = can(principalOf(userRole), 'products.manage');
+  const canAddInfrastructure = can(principalFor(userRole), 'station.infrastructure');
+  const canAddProduct = can(principalFor(userRole), 'products.manage');
   // The one page primary, the same on every tab (#537 review): Add ▾.
   const actions =
     selectedStation && (canAddInfrastructure || canAddProduct) ? (
@@ -266,7 +266,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                 ...(canRules
                   ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
                   : []),
-                ...(can(principalOf(userRole), 'station.reportTemplates')
+                ...(can(principalFor(userRole), 'station.reportTemplates')
                   ? [
                       {
                         id: 'report-templates',
@@ -292,7 +292,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
             >
               {/* Report templates carry their own panels (moved from Reports, #540). */}
               {activeTab === 'report-templates' &&
-                can(principalOf(userRole), 'station.reportTemplates') && (
+                can(principalFor(userRole), 'station.reportTemplates') && (
                   <ReportTemplatesPanel selectedStation={selectedStation} />
                 )}
 
@@ -325,7 +325,7 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                   <TankLevelSettingsPanel
                     key={selectedStation.id}
                     value={resolveTankLevelSettings(selectedStation.settings)}
-                    canEdit={can(principalOf(userRole), 'station.tankLevels')}
+                    canEdit={can(principalFor(userRole), 'station.tankLevels')}
                     onSave={handleSaveTankLevels}
                     onDiscard={() => openSession('tank-levels')}
                   />

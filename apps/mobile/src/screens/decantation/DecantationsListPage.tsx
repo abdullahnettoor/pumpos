@@ -1,12 +1,12 @@
 import React, { useContext } from 'react';
+import { can, type DecantationView, resolveDecantationSettings, type Station } from '@pump/shared';
 import {
-  can,
-  type DecantationView,
-  principalOf,
-  resolveDecantationSettings,
-  type Station,
-} from '@pump/shared';
-import { isoToLocalTime, toDecantationRow, useDecantations, formatQuantity } from '@pump/ui';
+  isoToLocalTime,
+  toDecantationRow,
+  useDecantations,
+  formatQuantity,
+  principalFor,
+} from '@pump/ui';
 import { useDecantationNames } from '../../lib/decantation/names.js';
 import { decantationRoute } from '../../lib/attention/routes.js';
 import { ShellContext } from '../../shell/context.js';
@@ -54,7 +54,7 @@ export const DecantationsListPage: React.FC<{ station: Station }> = ({ station }
       title="Decantations"
       subtitle={station.name}
       right={
-        role && can(principalOf(role), 'inventory.decantation') ? (
+        role && can(principalFor(role), 'inventory.decantation') ? (
           <button
             type="button"
             onClick={() => nav.push(<TankerArrivedPage station={station} />, 'tanker-arrived')}
