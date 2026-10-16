@@ -378,7 +378,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
             >
-              <option value="">All Types</option>
+              <option value="">All types</option>
               <option value="FUEL">FUEL</option>
               <option value="LUBRICANT">LUBRICANT</option>
               <option value="ADDITIVE">ADDITIVE</option>
@@ -432,10 +432,10 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
           resetForm();
           setIsFormOpen(false);
         }}
-        title={editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
+        title={editingProduct ? 'Edit catalogue item' : 'New catalogue item'}
       >
         <Form onSubmit={handleCreateOrUpdate} className="flex flex-col">
-          <Field label="Product Name" required>
+          <Field label="Product name" required>
             <TextInput
               type="text"
               value={name}
@@ -445,7 +445,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          <Field label="Product Code" required>
+          <Field label="Product code" required>
             <TextInput
               type="text"
               value={code}
@@ -455,7 +455,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          <Field label="Product Type" required>
+          <Field label="Product type" required>
             <Select
               value={productType}
               onChange={(e) => {
@@ -475,7 +475,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Inventory Engine" required>
+          <Field label="Inventory engine" required>
             <Select
               value={inventoryType}
               onChange={(e) => setInventoryType(e.target.value as 'BULK' | 'ITEM' | 'NONE')}
@@ -486,7 +486,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Sales Unit" required>
+          <Field label="Sales unit" required>
             <Select value={unit} onChange={(e) => setUnit(e.target.value)} required>
               {!PRODUCT_UNITS.some((u) => u.value === unit) && unit && (
                 <option value={unit}>{unit}</option>
@@ -499,7 +499,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </Select>
           </Field>
 
-          <Field label="Brand / Company">
+          <Field label="Brand / company">
             <TextInput
               type="text"
               value={brand}
@@ -509,7 +509,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
           </Field>
 
           <Field
-            label={`Selling Price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}
+            label={`Selling price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}
           >
             <MoneyInput
               value={sellingPrice}
@@ -521,7 +521,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           {productType !== 'FUEL' && (
             <Field
-              label={`Cost Price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
+              label={`Cost price ex-GST (₹)${editingProduct ? ' — maintained by purchases' : ' — opening cost'}`}
               hint={
                 editingProduct
                   ? 'Cost basis updates automatically as a weighted-average from purchases.'
@@ -539,7 +539,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           {productType !== 'FUEL' && !editingProduct && inventoryType === 'ITEM' && (
             <Field
-              label={`Opening Stock (${unit || 'units'})`}
+              label={`Opening stock (${unit || 'units'})`}
               hint={
                 selectedStation
                   ? 'Posts an opening balance to inventory for this station. Leave blank if none.'
@@ -557,14 +557,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
           <div className="mb-4">
             <Checkbox
-              label="Track Inventory (Maintain stock levels automatically)"
+              label="Track inventory (maintain stock levels automatically)"
               checked={stockTracked}
               onChange={(e) => setStockTracked(e.target.checked)}
             />
           </div>
 
           <Field
-            label="Tax Category"
+            label="Tax category"
             hint="Petrol/diesel attract state VAT (no input credit); lubes & other products attract GST."
           >
             <Select
@@ -573,14 +573,14 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             >
               <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
               <option value="GST">GST (lubricants / products)</option>
-              <option value="EXEMPT">GST Exempt</option>
-              <option value="NON_TAXABLE">Non-Taxable</option>
+              <option value="EXEMPT">GST exempt</option>
+              <option value="NON_TAXABLE">Non-taxable</option>
             </Select>
           </Field>
 
           {(taxCategory === 'GST' || taxCategory === 'FUEL_VAT') && (
             <div className="flex flex-col border-t border-border-soft pt-3">
-              <Field label={taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}>
+              <Field label={taxCategory === 'GST' ? 'GST rate (%)' : 'VAT rate (%)'}>
                 <NumberInput
                   step="1"
                   value={taxCategory === 'GST' ? gstRate : vatRate}
@@ -592,7 +592,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
                 />
               </Field>
 
-              <Field label={taxCategory === 'GST' ? 'HSN / SAC Code' : 'HSN Code'}>
+              <Field label={taxCategory === 'GST' ? 'HSN / SAC code' : 'HSN code'}>
                 <TextInput
                   type="text"
                   value={hsnCode}
@@ -626,7 +626,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               Cancel
             </Button>
             <Button type="submit" variant="primary">
-              {editingProduct ? 'Save Changes' : 'Create Item'}
+              {editingProduct ? 'Save changes' : 'Create item'}
             </Button>
           </div>
         </Form>

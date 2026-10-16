@@ -174,9 +174,9 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
         />
       </DataSection>
 
-      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add Storage Tank">
+      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add storage tank">
         <Form onSubmit={handleCreate} className="flex flex-col">
-          <Field label="Tank Identifier" required>
+          <Field label="Tank identifier" required>
             <TextInput
               placeholder="e.g. Tank 1"
               value={name}
@@ -184,7 +184,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
               required
             />
           </Field>
-          <Field label="Linked Fuel Product" required>
+          <Field label="Linked fuel product" required>
             <Select value={productId} onChange={(e) => setProductId(e.target.value)}>
               {fuelProducts.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -206,7 +206,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({
           </Field>
           <div className="flex gap-3 pt-2">
             <Button type="submit" variant="primary" className="flex-1">
-              Create Tank
+              Create tank
             </Button>
             <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
               Cancel

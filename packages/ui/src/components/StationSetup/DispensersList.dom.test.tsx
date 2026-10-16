@@ -208,13 +208,13 @@ describe('DispensersList — the Station page Add menu', () => {
     renderWithProviders(
       <DispensersList stationId="st-1" createRequest={1} onCreateHandled={onCreateHandled} />,
     );
-    expect(screen.getByText('Add Dispenser Island')).toBeDefined();
+    expect(screen.getByText('Add dispenser')).toBeDefined();
     expect(onCreateHandled).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the drawer closed without a request', () => {
     renderWithProviders(<DispensersList stationId="st-1" />);
-    expect(screen.queryByText('Add Dispenser Island')).toBeNull();
+    expect(screen.queryByText('Add dispenser')).toBeNull();
   });
 });
 
@@ -250,7 +250,7 @@ describe('DispensersList — adding a dispenser with its nozzles (#591)', () => 
     renderWithProviders(<DispensersList stationId="st-1" createRequest={1} />);
     fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
   };
-  const save = () => fireEvent.click(screen.getByRole('button', { name: 'Create Dispenser' }));
+  const save = () => fireEvent.click(screen.getByRole('button', { name: 'Create dispenser' }));
 
   it('sends the dispenser and every nozzle as one keyed request', async () => {
     createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });

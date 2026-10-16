@@ -77,10 +77,10 @@ here become the opening baseline for all future reconciliation.
 Sidebar → **Station** → **Products** tab. Fuels already exist
 from onboarding; add merchandise (engine oil, coolant, accessories…).
 
-**One at a time**: **New Catalog Item** → name, code, product type (Lubricant,
+**One at a time**: **Add ▾ → Product** opens **New catalogue item** → name, code, product type (Lubricant,
 Additive, Accessory, Consumable…), unit, tax category ("GST (lubricants /
 merchandise)" for most merchandise), GST rate, HSN code, selling price, stock
-type **Item (packaged stock)** → **Create Item**.
+type **Item (packaged stock)** → **Create item**.
 
 **Bulk (recommended for a real catalog)**: **Import Products (CSV)** drawer →
 **Download sample CSV** → fill columns

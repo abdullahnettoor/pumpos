@@ -41,20 +41,20 @@ describe('TanksGrid — the Station page Add menu', () => {
     renderWithProviders(
       <TanksGrid stationId="st-1" createRequest={1} onCreateHandled={onCreateHandled} />,
     );
-    expect(screen.getByText('Add Storage Tank')).toBeDefined();
+    expect(screen.getByText('Add storage tank')).toBeDefined();
     expect(onCreateHandled).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the drawer closed without a request, and offers no header Add button', () => {
     renderWithProviders(<TanksGrid stationId="st-1" />);
-    expect(screen.queryByText('Add Storage Tank')).toBeNull();
+    expect(screen.queryByText('Add storage tank')).toBeNull();
     expect(screen.queryByRole('button', { name: /add tank/i })).toBeNull();
   });
 
   it('sends the create under an Idempotency-Key', async () => {
     createTank.mockResolvedValue({ id: 't-1' });
     renderWithProviders(<TanksGrid stationId="st-1" createRequest={1} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Create Tank' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create tank' }));
     await waitFor(() =>
       expect(createTank).toHaveBeenCalledWith(
         { stationId: 'st-1', name: 'Tank 1', productId: 'p-ms', capacity: 20000 },

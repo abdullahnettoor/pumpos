@@ -323,7 +323,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                           <span className="font-medium">
                             {n.name} →{' '}
                             <span className="text-ink-muted">
-                              {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
+                              {tank?.name || 'No tank'} ({prod?.name || 'No fuel'})
                             </span>
                           </span>
                           <span className="font-mono font-semibold text-ink-strong">
@@ -372,9 +372,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({
         </div>
       </DataSection>
 
-      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add Dispenser Island">
+      <Drawer isOpen={isFormOpen} onClose={closeForm} title="Add dispenser">
         <Form onSubmit={handleCreate} className="flex flex-col">
-          <Field label="Dispenser Name" required>
+          <Field label="Dispenser name" required>
             <TextInput
               placeholder="e.g. Dispenser 01"
               value={name}
@@ -382,7 +382,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               required
             />
           </Field>
-          <Field label="Code / Reference ID" required>
+          <Field label="Code / reference ID" required>
             <TextInput
               placeholder="e.g. DU-01"
               value={code}
@@ -396,7 +396,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
 
           <div className="flex flex-col gap-3 border-t border-border-soft pt-4">
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-strong">Map Nozzles</span>
+              <span className="text-[13px] font-semibold text-ink-strong">Map nozzles</span>
               <Button
                 type="button"
                 variant="secondary"
@@ -404,7 +404,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                 leftIcon={<Icon name="plus" size="xs" />}
                 onClick={addNozzleRow}
               >
-                Add Nozzle
+                Add nozzle
               </Button>
             </div>
             {/* Auto-fill fills the rows below; nothing is saved until Create. */}
@@ -487,7 +487,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                           value={nozzle.tankId}
                           onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
                         >
-                          <option value="">-- Select Tank --</option>
+                          <option value="">Select a tank</option>
                           {filteredTanks.map((t) => (
                             <option key={t.id} value={t.id}>
                               {t.name}
@@ -501,7 +501,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               })
             ) : (
               <p className="p-3 text-center text-[12px] text-ink-muted">
-                No nozzles mapped yet. Click "Add Nozzle" to connect fuel lines to this dispenser.
+                No nozzles mapped yet. Click "Add nozzle" to connect fuel lines to this dispenser.
               </p>
             )}
           </div>
@@ -514,7 +514,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
               loading={submitting}
               disabled={submitting}
             >
-              {submitting ? 'Creating...' : 'Create Dispenser'}
+              {submitting ? 'Creating…' : 'Create dispenser'}
             </Button>
             <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
               Cancel
