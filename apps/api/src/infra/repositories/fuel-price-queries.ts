@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, lte, or } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 
 /**
@@ -19,6 +19,12 @@ export const fuelPricesNewestFirst = () => [
  * (0 / null before the first): the latest price in effect at `now`. A price
  * scheduled for later is stored but not current until its time (#619); the
  * history lists it.
+ *
+ * Also every product sold on a nozzle of a dispenser in service here, even
+ * archived (#633 review): `OpenShift` prices those nozzles whatever the
+ * product's status, and the Open shift form checks the same set from this
+ * list. Leaving an archived fuel out made the form block an open the server
+ * accepts.
  */
 export async function listCurrentFuelPrices(
   db: DbClient,
@@ -32,8 +38,23 @@ export async function listCurrentFuelPrices(
     .where(
       and(
         eq(schema.products.organizationId, organizationId),
-        eq(schema.products.productType, 'FUEL'),
-        eq(schema.products.isActive, true),
+        or(
+          and(eq(schema.products.productType, 'FUEL'), eq(schema.products.isActive, true)),
+          exists(
+            db
+              .select({ id: schema.nozzles.id })
+              .from(schema.nozzles)
+              .innerJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
+              .where(
+                and(
+                  eq(schema.nozzles.productId, schema.products.id),
+                  eq(schema.nozzles.organizationId, organizationId),
+                  eq(schema.nozzles.stationId, stationId),
+                  eq(schema.dispenserUnits.status, 'ACTIVE'),
+                ),
+              ),
+          ),
+        ),
       ),
     );
 

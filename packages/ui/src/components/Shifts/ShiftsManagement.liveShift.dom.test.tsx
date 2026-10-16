@@ -317,6 +317,29 @@ describe('opening a shift (#533 review)', () => {
     expect(await screen.findByLabelText('Loading the new shift')).toBeDefined();
     expect(screen.queryByText('Shift details')).toBeNull();
   });
+
+  it("shows the server's no-rate refusal beside Open shift, and keeps the form (#630)", async () => {
+    const message = 'Diesel has no rate in effect. Set a rate before opening.';
+    openShift.mockRejectedValueOnce(
+      Object.assign(new Error(message), {
+        code: 'VALIDATION_ERROR',
+        status: 400,
+        details: { productIds: ['p-hsd'] },
+      }),
+    );
+    mount('Manager', null);
+    fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
+    const start = () => screen.getByRole('button', { name: /Start Shift Operations/ });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
+    const alert = await screen.findByTestId('open-shift-rate-block');
+    expect(alert.getAttribute('role')).toBe('alert');
+    expect(alert.textContent).toBe(message);
+    // Said once, where the operator is looking: not also as a toast.
+    expect(screen.queryByText('Shift not opened')).toBeNull();
+    expect(screen.getByText('Shift details')).toBeDefined();
+  });
 });
 
 describe('the last shift summary link', () => {

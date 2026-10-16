@@ -63,6 +63,8 @@ describe('statusPresentation: one word and one tone per state', () => {
     ['saving', 'Saving…', 'neutral'],
     // A fuel price waiting for its effective time (#619): information only
     ['price-scheduled', 'Scheduled', 'info'],
+    // A fuel without a price in effect blocks a shift open (#630): action needed
+    ['price-no-rate', 'No rate in effect', 'danger'],
   ];
 
   it.each(cases)('%s reads "%s" in %s', (state, label, tone) => {

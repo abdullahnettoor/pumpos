@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FuelPriceRow } from '../StationSetup/fuelPriceRows.js';
 import {
+  fuelsBlockingOpen,
+  noRateRefusal,
   plannedShiftWindow,
   rateChangeWarning,
   scheduledChangesDuringShift,
@@ -96,5 +98,77 @@ describe('scheduledChangesDuringShift (#619)', () => {
       'Petrol changes to ₹103.00 at 10:00\u00a0am, during this shift. This shift keeps ₹102.50. ' +
         'Close and reopen the shift at 10:00\u00a0am to use the new rate.',
     );
+  });
+});
+
+describe('fuelsBlockingOpen (#630)', () => {
+  const diesel = row({
+    productId: 'hsd',
+    productName: 'Diesel',
+    price: null,
+    effectiveFrom: null,
+    scheduled: null,
+  });
+
+  it('names each fuel on a nozzle with no rate in effect, as the server does', () => {
+    expect(
+      fuelsBlockingOpen(
+        [
+          { productId: 'ms', productName: 'Petrol' },
+          { productId: 'hsd', productName: 'Diesel' },
+          { productId: 'hsd', productName: 'Diesel' },
+        ],
+        [row(), diesel],
+      ),
+    ).toEqual({
+      productIds: ['hsd'],
+      reason: 'Diesel has no rate in effect. Set a rate before opening.',
+    });
+  });
+
+  it('counts a fuel priced only for later, and one Pricing does not list', () => {
+    const scheduledOnly = row({ price: null, effectiveFrom: null });
+    expect(
+      fuelsBlockingOpen(
+        [
+          { productId: 'ms', productName: 'Petrol' },
+          { productId: 'cng', productName: 'CNG' },
+        ],
+        [scheduledOnly],
+      ),
+    ).toEqual({
+      productIds: ['cng', 'ms'],
+      reason: 'CNG and Petrol have no rate in effect. Set a rate before opening.',
+    });
+  });
+
+  it('ignores a fuel no nozzle sells, and is null when every nozzle has a rate', () => {
+    expect(fuelsBlockingOpen([{ productId: 'ms', productName: 'Petrol' }], [row(), diesel])).toBe(
+      null,
+    );
+    expect(fuelsBlockingOpen([], [diesel])).toBe(null);
+  });
+});
+
+describe('noRateRefusal (#630)', () => {
+  it("reads the server's no-rate refusal", () => {
+    expect(
+      noRateRefusal({
+        code: 'VALIDATION_ERROR',
+        message: 'Diesel has no rate in effect. Set a rate before opening.',
+        details: { productIds: ['hsd'] },
+      }),
+    ).toBe('Diesel has no rate in effect. Set a rate before opening.');
+  });
+
+  it('is null for any other failure', () => {
+    expect(noRateRefusal({ code: 'VALIDATION_ERROR', message: 'x', details: { duIds: [] } })).toBe(
+      null,
+    );
+    expect(noRateRefusal({ code: 'CONFLICT', message: 'x', details: { productIds: [] } })).toBe(
+      null,
+    );
+    expect(noRateRefusal(new Error('Network error'))).toBe(null);
+    expect(noRateRefusal(null)).toBe(null);
   });
 });

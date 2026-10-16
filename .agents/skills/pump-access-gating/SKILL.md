@@ -56,10 +56,14 @@ Organization is behind on payment.
 4. Validate any body-supplied id at the edge with `validateJson`, so a missing
    id answers `VALIDATION_ERROR` rather than reaching the driver.
 
-The per-family coverage tests in `apps/api/src/routes/*-write-policy.test.ts`
-fail on a mutation with no declaration **and** on a declaration whose route lost
-its guard. There is deliberately no default: "allow" lets an unpaid
-Organization keep growing, "block" strands a station mid-shift.
+`apps/api/src/infra/write-policy-coverage.test.ts` reads the whole mounted
+app's route table, inline routes in `index.ts` included. It fails on a mutation
+with no declaration, on a declared route whose first handler is not its own
+guard, on a mutation outside `/api` other than platform administration, and on
+any `ALL` registration (`.all()`, `.mount()`, extra `.use()`) missing from its
+reviewed list. The per-family tests in `apps/api/src/routes/*-write-policy.test.ts`
+prove each family's answers. There is deliberately no default: "allow" lets an
+unpaid Organization keep growing, "block" strands a station mid-shift.
 
 The test that matters most when classifying: an Organization that cannot close
 its open Business Day is left with stock and cash that never reconcile. Keep

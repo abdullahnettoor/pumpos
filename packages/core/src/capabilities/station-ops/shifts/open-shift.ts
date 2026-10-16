@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { currentFuelPriceByProduct, isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
+import {
+  currentFuelPriceByProduct,
+  fuelsWithoutRate,
+  isValidBusinessDate,
+  noRateInEffectMessage,
+  resolveBusinessDate,
+} from '@pump/shared';
 import {
   BusinessEvents,
   conflictError,
@@ -87,6 +93,14 @@ export interface StaffDirectory {
   ): Promise<Set<string>>;
 }
 
+/**
+ * The names of fuels, to say which ones block the open (#630). Returns the
+ * names it knows; an id it does not know is named by the caller's fallback.
+ */
+export interface FuelNameReader {
+  findNames(organizationId: string, productIds: string[]): Promise<Map<string, string>>;
+}
+
 export interface OpenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
@@ -95,6 +109,7 @@ export interface OpenShiftDeps {
   fuelPrices: FuelPriceRepository;
   dispensers: InServiceDispenserReader;
   staff: StaffDirectory;
+  fuels: FuelNameReader;
   events: EventPublisher;
 }
 
@@ -181,9 +196,44 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     );
     if (assignmentError) return err(assignmentError);
 
-    const events: DomainEvent[] = [];
     const now = ctx.clock.now();
     const nowIso = now.toISOString();
+
+    // The nozzles this shift reads: those of the dispensers in service.
+    const allNozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
+    const nozzles = allNozzles.filter((n) => inServiceDuIds.has(n.duId));
+
+    // The rate each nozzle sells at for the whole shift: its fuel's price in
+    // effect now. A scheduled price, effective later, is not used (#619); the
+    // shift keeps its opening rate until it is closed.
+    const prices = await this.deps.fuelPrices.listByStation(
+      ctx.organizationId,
+      cmd.stationId,
+      nowIso,
+    );
+    const currentPrice = currentFuelPriceByProduct(prices, now);
+
+    /*
+     * A fuel with no rate in effect would sell at ₹0 for the whole shift, and
+     * every litre of it would read as the Attendant's surplus. Refused, before
+     * anything is written (#630). Only fuels on the nozzles above count: a
+     * fuel no running pump sells does not block the open.
+     */
+    const unrated = fuelsWithoutRate(nozzles, (productId) => currentPrice.has(productId));
+    if (unrated.length > 0) {
+      const names = await this.deps.fuels.findNames(ctx.organizationId, unrated);
+      // By name: the nozzle order is the database's, and the message should not vary.
+      const fuels = unrated
+        .map((id) => ({ id, name: names.get(id) ?? 'A fuel' }))
+        .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+      return err(
+        validationError(noRateInEffectMessage(fuels.map((f) => f.name)), {
+          productIds: fuels.map((f) => f.id),
+        }),
+      );
+    }
+
+    const events: DomainEvent[] = [];
 
     // Anchor to TODAY's business day (calendar-date model): find it for this
     // date, or lazily open it. Business days are per (station, date); several
@@ -279,21 +329,10 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     }
 
     // Seed nozzle opening readings, for the dispensers actually in service.
-    const allNozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
-    const nozzles = allNozzles.filter((n) => inServiceDuIds.has(n.duId));
     if (nozzles.length > 0) {
       const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(
         nozzles.map((n) => n.id),
       );
-      // The rate each nozzle sells at for the whole shift: its fuel's price in
-      // effect now. A scheduled price, effective later, is not used (#619);
-      // the shift keeps its opening rate until it is closed.
-      const prices = await this.deps.fuelPrices.listByStation(
-        ctx.organizationId,
-        cmd.stationId,
-        nowIso,
-      );
-      const currentPrice = currentFuelPriceByProduct(prices, now);
       const initialByNozzle = new Map<string, number>();
       for (const ir of cmd.initialReadings ?? [])
         initialByNozzle.set(ir.nozzleId, ir.openingReading);
@@ -309,7 +348,8 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
           closingReading: String(opening),
           volumeSold: '0',
           testingVolume: '0',
-          unitPrice: currentPrice.get(n.productId)?.price ?? '0',
+          // Every fuel here has a rate in effect: checked above.
+          unitPrice: currentPrice.get(n.productId)!.price,
           createdAt: nowIso,
         };
       });

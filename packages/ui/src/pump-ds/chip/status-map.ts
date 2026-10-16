@@ -133,6 +133,8 @@ export const STATUS_MAP: Record<PumpStatus, StatusMeta> = {
   saving: vocab('saving', CloudUpload, { pulse: true }),
   // A fuel price waiting for its effective time (#619).
   'price-scheduled': vocab('price-scheduled', Clock),
+  // A fuel with no price in effect: a shift cannot open (#630).
+  'price-no-rate': vocab('price-no-rate', AlertCircle),
 
   // Financial
   paid: { label: 'Paid', tone: 'success', icon: CheckCircle },

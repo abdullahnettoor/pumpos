@@ -56,6 +56,7 @@ import {
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
 } from '../infra/repositories/station-ops-repositories.js';
 import { assignableStaffWhere } from '../infra/repositories/assignable-staff.js';
 import {
@@ -1510,6 +1511,7 @@ shiftsRouter.post(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     });
