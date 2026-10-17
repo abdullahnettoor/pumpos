@@ -7,6 +7,8 @@ interface Props { title: string; description?: string; path?: string; green?: bo
 const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
 const ogImage = new URL('/og-default.png', Astro.site).toString();
+// Preview builds set PUBLIC_NOINDEX so the preview domain never competes with pumpos.app in search.
+const robotsNoindex = noindex || import.meta.env.PUBLIC_NOINDEX === 'true';
 ---
 <!doctype html>
 <html lang="en-IN">
@@ -14,7 +16,7 @@ const ogImage = new URL('/og-default.png', Astro.site).toString();
     <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title><meta name="description" content={description} />
     <meta name="theme-color" content="#1f6a53" />
-    {noindex && <meta name="robots" content="noindex, follow" />}
+    {robotsNoindex && <meta name="robots" content="noindex, follow" />}
     <link rel="icon" type="image/svg+xml" href="/brand/pumpos-mark.svg" />
     <link rel="canonical" href={canonical} />
     <link rel="preload" href="/fonts/brand/plus-jakarta-sans-variable.woff2" as="font" type="font/woff2" crossorigin />
