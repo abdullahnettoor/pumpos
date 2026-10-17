@@ -18,6 +18,8 @@ interface WriteConfig<I, T> {
 }
 
 const refreshUsers = (qc: QueryClient) => qc.invalidateQueries({ queryKey: queryKeys.users() });
+// A login added, freed or re-taken moves `login_count` usage on the Access Document.
+const refreshAccess = (qc: QueryClient) => qc.invalidateQueries({ queryKey: queryKeys.access() });
 const patchUsers = (qc: QueryClient, fn: (list: TeamMember[] | undefined) => unknown) =>
   qc.setQueriesData<TeamMember[]>({ queryKey: queryKeys.users() }, (list) => fn(list) as never);
 
@@ -58,11 +60,15 @@ function useTeamWrite<I, T>({ action, run, apply }: WriteConfig<I, T>) {
           key.current = null;
           apply?.(qc, data, input);
           void refreshUsers(qc);
+          if (action !== 'reset') void refreshAccess(qc);
           return { ok: true, data };
         } catch (error) {
           const failure = teamFailure(error, action);
           if (!failure.unknownOutcome) key.current = null;
-          if (failure.earlierAttemptReceived) void refreshUsers(qc);
+          if (failure.earlierAttemptReceived) {
+            void refreshUsers(qc);
+            void refreshAccess(qc);
+          }
           return { ok: false, failure };
         } finally {
           inFlight.current = null;

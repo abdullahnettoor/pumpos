@@ -29,6 +29,7 @@ import { validateJson } from '../utils/validator.js';
 import {
   CreateStation,
   ensureLoginCapacity,
+  claimLoginSeatForActivation,
   err,
   validationError,
   UpdateStation,
@@ -729,9 +730,12 @@ stationSetupRouter.post(
       }
     }
 
-    // A login consumes `login_count`: the seat is claimed under the same
-    // Organization lock, in the same transaction, as the auth account and the
-    // user row, so concurrent invites cannot both take the last seat.
+    // A login consumes `login_count`: the seat is claimed under the
+    // Organization lock inside the database transaction that inserts the user
+    // row, so concurrent invites cannot both take the last seat. The auth
+    // account (admin.createUser) and ban/unban are external HTTP calls and are
+    // NOT part of that transaction; a failed insert after createUser leaves an
+    // orphan auth account, and no compensation exists for these paths.
     let provisionFailure: Response | null = null;
     const result = await runInTransaction(db, async (tx, events) => {
       let authUserId: string | null = null;
@@ -813,19 +817,17 @@ stationSetupRouter.put(
         403,
       );
     }
-    // Setting a member with a login back to ACTIVE takes a login seat.
-    const takesSeat =
-      body.status === 'ACTIVE' && target.status !== 'ACTIVE' && target.authUserId !== null;
     // The update, the Permission-change reset on a Role change, and their
-    // events commit together.
+    // events commit together. Setting a member with a login back to ACTIVE
+    // takes a login seat, decided on a re-read taken after the Organization lock.
     const result = await runInTransaction(c.var.db, async (tx, events) => {
-      if (takesSeat) {
-        const capacity = await ensureLoginCapacity(
-          new DrizzleStationCapacityPort(tx),
-          user.organizationId,
-        );
-        if (!capacity.success) return capacity;
-      }
+      const seat = await claimLoginSeatForActivation(
+        new DrizzleStationCapacityPort(tx),
+        user.organizationId,
+        () => new DrizzleUserRepository(tx).findById(id),
+        body.status === 'ACTIVE',
+      );
+      if (!seat.success) return seat;
       return new UpdateUser({
         repository: new DrizzleUserRepository(tx),
         events,
@@ -1042,18 +1044,17 @@ async function setUserActive(c: any, active: boolean) {
       403,
     );
   }
-  // Reactivating a member with a login takes a login seat; the seat is claimed
-  // under the Organization lock before the auth account is unbanned.
-  const takesSeat = active && target.status !== 'ACTIVE' && target.authUserId !== null;
+  // Reactivating a member with a login takes a login seat, decided on a
+  // re-read taken after the Organization lock and before the auth unban.
   let banFailure: Response | null = null;
   const result = await runInTransaction(db, async (tx, events) => {
-    if (takesSeat) {
-      const capacity = await ensureLoginCapacity(
-        new DrizzleStationCapacityPort(tx),
-        user.organizationId,
-      );
-      if (!capacity.success) return capacity;
-    }
+    const seat = await claimLoginSeatForActivation(
+      new DrizzleStationCapacityPort(tx),
+      user.organizationId,
+      () => new DrizzleUserRepository(tx).findById(id),
+      active,
+    );
+    if (!seat.success) return seat;
     if (target.authUserId) {
       const admin = getSupabaseAdmin(c);
       if (admin) {

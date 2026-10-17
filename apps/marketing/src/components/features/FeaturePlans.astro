@@ -3,10 +3,7 @@ import Card from '../ds/Card.astro';
 import CheckIcon from './CheckIcon.astro';
 import ComingNextTag from './ComingNextTag.astro';
 
-export interface PlanFeatureItem {
-  name: string;
-  note?: string;
-}
+import type { PlanFeatureItem } from '../../data/feature-plans';
 
 interface Props {
   coreFeatures: (PlanFeatureItem | string)[];
