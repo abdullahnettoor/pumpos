@@ -73,8 +73,9 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
 
     // `logins` is the login_count usage: active users with an auth account
     // (Attendants with phone access included). Users without a login never
-    // count, and pending invitations are not counted: only Owner invites exist
-    // and they are not team logins. Read in the same query as the Station count.
+    // count. A pending Owner invite already has an ACTIVE row with an auth
+    // account (see the invite triggers), so it takes a login before it is
+    // accepted. Read in the same query as the Station count.
     const [stations] = await this.db
       .select({
         value: count(),

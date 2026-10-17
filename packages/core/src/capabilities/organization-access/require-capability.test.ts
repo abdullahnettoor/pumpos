@@ -67,7 +67,11 @@ describe('requireCapability', () => {
     const planRegistry: AccessRegistry = {
       ...registry,
       plans: {
-        CORE: { key: 'CORE', capabilities: ['exports.tally'], limits: { station_count: 1, login_count: 3 } },
+        CORE: {
+          key: 'CORE',
+          capabilities: ['exports.tally'],
+          limits: { station_count: 1, login_count: 3 },
+        },
       },
     };
     const access = reader(inputs());

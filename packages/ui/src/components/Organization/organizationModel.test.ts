@@ -273,7 +273,9 @@ describe('loginPlanLine (#648)', () => {
 
   it('shows nothing without a plan or a login limit', () => {
     expect(loginPlanLine(undefined)).toBeNull();
-    expect(loginPlanLine({ limits: { login_count: { used: 1, value: 3, reached: false } } })).toBeNull();
+    expect(
+      loginPlanLine({ limits: { login_count: { used: 1, value: 3, reached: false } } }),
+    ).toBeNull();
     expect(loginPlanLine({ plan: 'CORE', limits: {} })).toBeNull();
   });
 });

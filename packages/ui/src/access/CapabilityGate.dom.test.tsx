@@ -24,7 +24,10 @@ import { CapabilityGate, CapabilityRoute } from './CapabilityGate.js';
 const baseDocument = (capabilities: AccessDocument['capabilities']): AccessDocument => ({
   plan: 'CORE',
   capabilities,
-  limits: { station_count: { value: 1, used: 1, reached: true }, login_count: { value: 3, used: 0, reached: false } },
+  limits: {
+    station_count: { value: 1, used: 1, reached: true },
+    login_count: { value: 3, used: 0, reached: false },
+  },
   subscription: {
     status: 'ACTIVE',
     mode: 'NORMAL',
