@@ -11,7 +11,7 @@
  */
 
 /** Commercial package assigned to an Organization. `CORE` is the baseline. */
-export type ProductPlanKey = 'CORE';
+export type ProductPlanKey = 'CORE' | 'PRO' | 'PRO_PLUS';
 
 /**
  * Capability keys the client gates on. The *definition* (title, message,
@@ -24,10 +24,11 @@ export const ATTENDANT_REPORT_CAPABILITY = 'reports.attendant';
 export const CUSTOM_PERMISSIONS_CAPABILITY = 'permissions.custom';
 
 /**
- * A numeric allowance supplied by a Product Plan. `station_count` is the only
- * Limit in E1: every Station row an Organization owns consumes one.
+ * A numeric allowance supplied by a Product Plan. `station_count`: every
+ * Station row an Organization owns consumes one. `login_count`: every active
+ * user with a login consumes one (#648).
  */
-export type LimitKey = 'station_count';
+export type LimitKey = 'station_count' | 'login_count';
 
 /** The Organization's commercial access state. */
 export type SubscriptionStatus =
@@ -198,6 +199,14 @@ export function stationLimitMessage(value: number): string {
   return value === 1
     ? 'This plan includes one Station. Contact PumpOS to add another.'
     : `This plan includes ${value} Stations. Contact PumpOS to add another.`;
+}
+
+/**
+ * The sentence shown when the login allowance is used up. Defined once: the
+ * API puts it in the LIMIT_REACHED error and the invite screens show it.
+ */
+export function loginLimitMessage(value: number): string {
+  return `Your plan's login limit is reached (${value}). Contact PumpOS to add more logins.`;
 }
 
 /** Error code the API returns when the Organization lacks a capability. */

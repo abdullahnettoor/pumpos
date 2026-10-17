@@ -27,6 +27,7 @@ import {
   stationCounts,
   stationFacts,
   stationPlanLine,
+  loginPlanLine,
   type StationFilter,
   type StationRow,
 } from './organizationModel.js';
@@ -161,6 +162,7 @@ export const StationsTab: React.FC<StationsTabProps> = ({
   // whatever is rendered here.
   const { data: access } = useAccess();
   const planLine = stationPlanLine(access);
+  const loginLine = loginPlanLine(access);
   // The list arrives as a prop from the same stations cache; the query is
   // read here for its loading and error state.
   const stationsQ = useStations();
@@ -226,10 +228,13 @@ export const StationsTab: React.FC<StationsTabProps> = ({
           // The plan line is about the plan, not the filter: it stays put
           // whatever is chosen (the chips carry the counts). Without one, the
           // count says how many are shown.
-          subtitle={
+          subtitle={[
             planLine ??
-            (filter !== 'all' ? `${rows.length} of ${all.length}` : stationsWord(all.length))
-          }
+              (filter !== 'all' ? `${rows.length} of ${all.length}` : stationsWord(all.length)),
+            loginLine,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
           controls={{
             filters: all.length > 1 && (
               <FilterChips

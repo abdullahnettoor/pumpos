@@ -1,4 +1,5 @@
 import { ATTENDANT_REPORT_CAPABILITY, CUSTOM_PERMISSIONS_CAPABILITY } from '@pump/shared';
+import { UNLIMITED_LIMIT } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, ResolutionCode } from '@pump/shared';
 
 /**
@@ -35,7 +36,8 @@ export interface ProductPlanDefinition {
 }
 
 export interface AccessRegistry {
-  plans: Record<ProductPlanKey, ProductPlanDefinition>;
+  /** `CORE` is required: it is the fallback for an unknown plan. */
+  plans: { CORE: ProductPlanDefinition } & Partial<Record<ProductPlanKey, ProductPlanDefinition>>;
   capabilities: Record<string, ProductCapabilityDefinition>;
 }
 
@@ -49,16 +51,26 @@ export { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
  * Production registry. `CORE` is the ungated baseline: all existing PumpOS
  * behaviour, one Station.
  *
- * `reports.attendant` is registered but belongs to no plan: until the
- * second-tier Product Plan exists, an Organization obtains it only through an
- * explicit platform capability grant.
+ * `PRO` adds several Stations; `PRO_PLUS` adds Custom permissions and the
+ * Attendant Handover Report on top (#645). A platform grant or Limit override
+ * still wins over any plan.
  */
 export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
   plans: {
     CORE: {
       key: 'CORE',
       capabilities: [],
-      limits: { station_count: 1 },
+      limits: { station_count: 1, login_count: 3 },
+    },
+    PRO: {
+      key: 'PRO',
+      capabilities: [],
+      limits: { station_count: UNLIMITED_LIMIT, login_count: 10 },
+    },
+    PRO_PLUS: {
+      key: 'PRO_PLUS',
+      capabilities: [CUSTOM_PERMISSIONS_CAPABILITY, ATTENDANT_REPORT_CAPABILITY],
+      limits: { station_count: UNLIMITED_LIMIT, login_count: UNLIMITED_LIMIT },
     },
   },
   capabilities: {
@@ -91,7 +103,7 @@ export function isProductCapabilityKey(
 
 /** True when `key` names a Limit this build enforces. */
 export function isLimitKey(key: string): key is LimitKey {
-  return key === 'station_count';
+  return key === 'station_count' || key === 'login_count';
 }
 
 /**
@@ -104,5 +116,5 @@ export function resolveProductPlan(
   registry: AccessRegistry = PRODUCT_ACCESS_REGISTRY,
 ): ProductPlanDefinition {
   const known = plan ? registry.plans[plan as ProductPlanKey] : undefined;
-  return known ?? registry.plans[DEFAULT_PRODUCT_PLAN];
+  return known ?? registry.plans.CORE;
 }

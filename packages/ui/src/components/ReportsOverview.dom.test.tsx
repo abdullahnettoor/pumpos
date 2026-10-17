@@ -51,7 +51,10 @@ const { ReportsOverview } = await import('./ReportsOverview.js');
 const accessDoc = (capabilities: Record<string, unknown>, plan: 'CORE' | null = 'CORE') => ({
   ...(plan ? { plan } : {}),
   capabilities,
-  limits: { station_count: { value: 1, used: 1, reached: true } },
+  limits: {
+    station_count: { value: 1, used: 1, reached: true },
+    login_count: { value: 3, used: 0, reached: false },
+  },
   subscription: { status: 'ACTIVE', mode: 'NORMAL' },
 });
 const ENTITLED = accessDoc({

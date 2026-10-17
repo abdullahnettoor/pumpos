@@ -12,7 +12,7 @@ import { requireCapabilityGuard } from './capability-guard.js';
  */
 
 const registry: AccessRegistry = {
-  plans: { CORE: { key: 'CORE', capabilities: [], limits: { station_count: 1 } } },
+  plans: { CORE: { key: 'CORE', capabilities: [], limits: { station_count: 1, login_count: 3 } } },
   capabilities: {
     'exports.tally': {
       key: 'exports.tally',

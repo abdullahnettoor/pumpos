@@ -28,6 +28,10 @@ import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
 import {
   CreateStation,
+  ensureLoginCapacity,
+  claimLoginSeatForActivation,
+  err,
+  validationError,
   UpdateStation,
   CreateUser,
   UpdateUser,
@@ -695,7 +699,6 @@ stationSetupRouter.post(
     // The request schema already refused an invalid mobile (#300), so this is
     // the single stored spelling, +91XXXXXXXXXX, or null when blank.
     const normalizedPhone = normalizeIndianMobile(body.phone);
-    let authUserId: string | null = null;
 
     if (wantsLogin) {
       const admin = getSupabaseAdmin(c);
@@ -725,44 +728,65 @@ stationSetupRouter.post(
           400,
         );
       }
-      try {
-        const created = await admin.createUser({
-          email: authEmail,
-          password: String(body.password),
-        });
-        authUserId = created.id;
-      } catch (e: any) {
-        const status = e?.status === 422 ? 409 : 400;
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'AUTH_PROVISION_FAILED',
-              message: e?.message ?? 'Could not create login account',
-            },
-          },
-          status,
-        );
-      }
     }
 
-    const useCase = new CreateUser({
-      repository: new DrizzleUserRepository(db),
-      events: createDispatcher(db),
+    // A login consumes `login_count`: the seat is claimed under the
+    // Organization lock inside the database transaction that inserts the user
+    // row, so concurrent invites cannot both take the last seat. The auth
+    // account (admin.createUser) and ban/unban are external HTTP calls and are
+    // NOT part of that transaction; a failed insert after createUser leaves an
+    // orphan auth account, and no compensation exists for these paths.
+    let provisionFailure: Response | null = null;
+    const result = await runInTransaction(db, async (tx, events) => {
+      let authUserId: string | null = null;
+      if (wantsLogin) {
+        // An INACTIVE member does not count yet; reactivating takes the seat.
+        if ((body.status ?? 'ACTIVE') === 'ACTIVE') {
+          const capacity = await ensureLoginCapacity(
+            new DrizzleStationCapacityPort(tx),
+            user.organizationId,
+          );
+          if (!capacity.success) return capacity;
+        }
+        const admin = getSupabaseAdmin(c)!;
+        try {
+          const created = await admin.createUser({
+            email: (rawEmail ?? phoneToAuthEmail(normalizedPhone))!,
+            password: String(body.password),
+          });
+          authUserId = created.id;
+        } catch (e: any) {
+          provisionFailure = c.json(
+            {
+              success: false,
+              error: {
+                code: 'AUTH_PROVISION_FAILED',
+                message: e?.message ?? 'Could not create login account',
+              },
+            },
+            e?.status === 422 ? 409 : 400,
+          );
+          return err(validationError('Could not create login account'));
+        }
+      }
+      return new CreateUser({
+        repository: new DrizzleUserRepository(tx),
+        events,
+      }).execute(
+        {
+          fullName: body.fullName,
+          // Phone-identity accounts keep users.email null (handle is synthetic).
+          email: rawEmail,
+          phone: normalizedPhone,
+          role: targetRole,
+          status: body.status ?? 'ACTIVE',
+          stationIds: body.stationIds,
+          authUserId,
+        },
+        buildContext(user),
+      );
     });
-    const result = await useCase.execute(
-      {
-        fullName: body.fullName,
-        // Phone-identity accounts keep users.email null (handle is synthetic).
-        email: rawEmail,
-        phone: normalizedPhone,
-        role: targetRole,
-        status: body.status ?? 'ACTIVE',
-        stationIds: body.stationIds,
-        authUserId,
-      },
-      buildContext(user),
-    );
+    if (provisionFailure) return provisionFailure;
     return sendResult(c, result);
   },
 );
@@ -794,14 +818,22 @@ stationSetupRouter.put(
       );
     }
     // The update, the Permission-change reset on a Role change, and their
-    // events commit together.
-    const result = await runInTransaction(c.var.db, (tx, events) =>
-      new UpdateUser({
+    // events commit together. Setting a member with a login back to ACTIVE
+    // takes a login seat, decided on a re-read taken after the Organization lock.
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      const seat = await claimLoginSeatForActivation(
+        new DrizzleStationCapacityPort(tx),
+        user.organizationId,
+        () => new DrizzleUserRepository(tx).findById(id),
+        body.status === 'ACTIVE',
+      );
+      if (!seat.success) return seat;
+      return new UpdateUser({
         repository: new DrizzleUserRepository(tx),
         events,
         permissionChanges: new DrizzleUserPermissionChangesRepository(tx),
-      }).execute({ ...body, id }, buildContext(user)),
-    );
+      }).execute({ ...body, id }, buildContext(user));
+    });
     // Role, status and stations feed the cached principal: next request re-reads.
     if (result.success) evictCachedAuthUser(target.authUserId);
     return sendResult(c, result);
@@ -1012,31 +1044,44 @@ async function setUserActive(c: any, active: boolean) {
       403,
     );
   }
-  if (target.authUserId) {
-    const admin = getSupabaseAdmin(c);
-    if (admin) {
-      try {
-        if (active) await admin.unbanUser(target.authUserId);
-        else await admin.banUser(target.authUserId);
-      } catch (e: any) {
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'AUTH_BAN_FAILED',
-              message: e?.message ?? 'Could not update login account',
+  // Reactivating a member with a login takes a login seat, decided on a
+  // re-read taken after the Organization lock and before the auth unban.
+  let banFailure: Response | null = null;
+  const result = await runInTransaction(db, async (tx, events) => {
+    const seat = await claimLoginSeatForActivation(
+      new DrizzleStationCapacityPort(tx),
+      user.organizationId,
+      () => new DrizzleUserRepository(tx).findById(id),
+      active,
+    );
+    if (!seat.success) return seat;
+    if (target.authUserId) {
+      const admin = getSupabaseAdmin(c);
+      if (admin) {
+        try {
+          if (active) await admin.unbanUser(target.authUserId);
+          else await admin.banUser(target.authUserId);
+        } catch (e: any) {
+          banFailure = c.json(
+            {
+              success: false,
+              error: {
+                code: 'AUTH_BAN_FAILED',
+                message: e?.message ?? 'Could not update login account',
+              },
             },
-          },
-          400,
-        );
+            400,
+          );
+          return err(validationError('Could not update login account'));
+        }
       }
     }
-  }
-  const useCase = new SetUserStatus({ repository: repo, events: createDispatcher(db) });
-  const result = await useCase.execute(
-    { id, status: active ? 'ACTIVE' : 'INACTIVE' },
-    buildContext(user),
-  );
+    return new SetUserStatus({ repository: new DrizzleUserRepository(tx), events }).execute(
+      { id, status: active ? 'ACTIVE' : 'INACTIVE' },
+      buildContext(user),
+    );
+  });
+  if (banFailure) return banFailure;
   return sendResult(c, result);
 }
 

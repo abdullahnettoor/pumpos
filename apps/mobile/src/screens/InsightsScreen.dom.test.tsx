@@ -101,7 +101,10 @@ const access = (attendant: boolean): AccessDocument => ({
           resolution: 'CONTACT_PUMPOS',
         },
   },
-  limits: { station_count: { value: 1, used: 1, reached: false } },
+  limits: {
+    station_count: { value: 1, used: 1, reached: false },
+    login_count: { value: 3, used: 0, reached: false },
+  },
   subscription: {
     status: 'ACTIVE',
     mode: 'NORMAL',

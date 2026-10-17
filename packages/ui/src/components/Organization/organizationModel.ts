@@ -69,7 +69,10 @@ export const filterStations = (rows: readonly StationRow[], filter: StationFilte
 type AccessLike =
   | {
       plan?: string | null;
-      limits?: { station_count?: { used: number; value: number; reached: boolean } };
+      limits?: {
+        station_count?: { used: number; value: number; reached: boolean };
+        login_count?: { used: number; value: number; reached: boolean };
+      };
     }
   | null
   | undefined;
@@ -87,6 +90,19 @@ export function stationPlanLine(access: AccessLike): string | null {
   if (isUnlimitedLimit(limit.value) || limit.value <= 1) return null;
   const line = `${limit.used} of ${limit.value} stations on your plan`;
   return limit.reached ? `${line} · Contact PumpOS to add another` : line;
+}
+
+/**
+ * Logins used against the plan, beside Stations (#648): "4 of 10 logins".
+ * Only for a Role the server sent the plan to. The "no limit" sentinel is
+ * never printed as a number (#603).
+ */
+export function loginPlanLine(access: AccessLike): string | null {
+  const limit = access?.limits?.login_count;
+  if (!access?.plan || !limit) return null;
+  if (isUnlimitedLimit(limit.value)) return `${limit.used} logins · no limit`;
+  const line = `${limit.used} of ${limit.value} logins`;
+  return limit.reached ? `${line} · Contact PumpOS to add more` : line;
 }
 
 // --- Station cards (#605) ----------------------------------------------------

@@ -13,6 +13,7 @@ import {
   stationCounts,
   stationFacts,
   stationPlanLine,
+  loginPlanLine,
 } from './organizationModel.js';
 import { UNLIMITED_LIMIT } from '@pump/shared';
 
@@ -249,5 +250,32 @@ describe('groupActivityByDay', () => {
 
   it('keeps an unreadable time apart', () => {
     expect(groupActivityByDay(['nope'], (i) => i, { timeZone: tz, now })[0].label).toBe('Undated');
+  });
+});
+
+describe('loginPlanLine (#648)', () => {
+  const logins = (used: number, value: number, reached = used >= value) => ({
+    plan: 'CORE',
+    limits: { login_count: { used, value, reached } },
+  });
+
+  it('shows logins used against the limit', () => {
+    expect(loginPlanLine(logins(4, 10))).toBe('4 of 10 logins');
+  });
+
+  it('says when the limit is reached', () => {
+    expect(loginPlanLine(logins(3, 3))).toBe('3 of 3 logins · Contact PumpOS to add more');
+  });
+
+  it('never prints the unlimited sentinel as a number', () => {
+    expect(loginPlanLine(logins(12, UNLIMITED_LIMIT, false))).toBe('12 logins · no limit');
+  });
+
+  it('shows nothing without a plan or a login limit', () => {
+    expect(loginPlanLine(undefined)).toBeNull();
+    expect(
+      loginPlanLine({ limits: { login_count: { used: 1, value: 3, reached: false } } }),
+    ).toBeNull();
+    expect(loginPlanLine({ plan: 'CORE', limits: {} })).toBeNull();
   });
 });
