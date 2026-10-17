@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { schema, type DbClient } from '@pump/db';
-import { ensureStationCapacity } from '@pump/core';
+import { ensureLoginCapacity, ensureStationCapacity } from '@pump/core';
 import { UNLIMITED_LIMIT } from '@pump/shared';
 import {
   DrizzleOrganizationAccessAdminRepository,
@@ -155,6 +155,7 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
   beforeEach(async () => {
     await sql`delete from organization_capability_grants`;
     await sql`delete from organization_limit_overrides`;
+    await sql`delete from users`;
     await sql`delete from stations`;
     await sql`delete from organizations`;
     await sql`insert into organizations (id, name) values (${ORG}, 'Org A'), (${OTHER_ORG}, 'Org B')`;
@@ -345,6 +346,46 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
         );
         expect(write, 'writing a grant as a tenant must be denied').toBe('42501');
       });
+    });
+  });
+
+  describe('login_count usage (#648)', () => {
+    const addUser = (name: string, status: string, auth: string | null, org = ORG) =>
+      sql`insert into users (organization_id, full_name, status, auth_user_id)
+          values (${org}, ${name}, ${status}, ${auth})`;
+
+    it('counts active users with a login and nothing else', async () => {
+      await addUser('Owner', 'ACTIVE', '00000000-0000-0000-0000-0000000000c1');
+      await addUser('Phone attendant', 'ACTIVE', '00000000-0000-0000-0000-0000000000c2');
+      await addUser('No login', 'ACTIVE', null);
+      await addUser('Deactivated', 'INACTIVE', '00000000-0000-0000-0000-0000000000c3');
+      await addUser('Other org', 'ACTIVE', '00000000-0000-0000-0000-0000000000c4', OTHER_ORG);
+
+      const inputs = await new DrizzleOrganizationAccessReader(db).load(ORG);
+
+      expect(inputs.usage.login_count).toBe(2);
+    });
+
+    it('refuses at the Core limit and lets an override or a demo through', async () => {
+      for (const n of [1, 2, 3]) {
+        await addUser(`U${n}`, 'ACTIVE', `00000000-0000-0000-0000-00000000010${n}`);
+      }
+      const port = new DrizzleStationCapacityPort(db);
+      const refused = await ensureLoginCapacity(port, ORG);
+      expect(refused.success).toBe(false);
+
+      await repository().insertOverride({
+        organizationId: ORG,
+        limitKey: 'login_count',
+        value: 4,
+        actor,
+        reason: 'contracted',
+      });
+      expect((await ensureLoginCapacity(port, ORG)).success).toBe(true);
+
+      await sql`update organizations set is_demo = true where id = ${ORG}`;
+      const access = await new DrizzleOrganizationAccessReader(db).load(ORG);
+      expect(access.limitOverrides.login_count).toBe(UNLIMITED_LIMIT);
     });
   });
 

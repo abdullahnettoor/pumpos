@@ -5,6 +5,7 @@ export * from './resolve-access.js';
 export * from './get-access-document.js';
 export * from './administer-access.js';
 export * from './station-capacity.js';
+export * from './login-capacity.js';
 export * from './require-capability.js';
 export * from './subscription-lifecycle.js';
 export * from './write-policy.js';

@@ -82,7 +82,7 @@ platformAccessRouter.get('/:orgId/access', async (c) => {
       registry: {
         plans: Object.keys(PRODUCT_ACCESS_REGISTRY.plans),
         capabilities: Object.keys(PRODUCT_ACCESS_REGISTRY.capabilities),
-        limits: ['station_count'],
+        limits: ['station_count', 'login_count'],
       },
       grants,
       limitOverrides: overrides,

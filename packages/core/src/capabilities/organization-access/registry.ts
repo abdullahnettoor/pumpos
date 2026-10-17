@@ -60,17 +60,17 @@ export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
     CORE: {
       key: 'CORE',
       capabilities: [],
-      limits: { station_count: 1 },
+      limits: { station_count: 1, login_count: 3 },
     },
     PRO: {
       key: 'PRO',
       capabilities: [],
-      limits: { station_count: UNLIMITED_LIMIT },
+      limits: { station_count: UNLIMITED_LIMIT, login_count: 10 },
     },
     PRO_PLUS: {
       key: 'PRO_PLUS',
       capabilities: [CUSTOM_PERMISSIONS_CAPABILITY, ATTENDANT_REPORT_CAPABILITY],
-      limits: { station_count: UNLIMITED_LIMIT },
+      limits: { station_count: UNLIMITED_LIMIT, login_count: UNLIMITED_LIMIT },
     },
   },
   capabilities: {
@@ -103,7 +103,7 @@ export function isProductCapabilityKey(
 
 /** True when `key` names a Limit this build enforces. */
 export function isLimitKey(key: string): key is LimitKey {
-  return key === 'station_count';
+  return key === 'station_count' || key === 'login_count';
 }
 
 /**

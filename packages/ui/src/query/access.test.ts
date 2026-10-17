@@ -14,7 +14,7 @@ const document = (over: Partial<AccessDocument> = {}): AccessDocument => ({
   capabilities: {
     'exports.tally': { enabled: true, title: 'Tally export' },
   },
-  limits: { station_count: { value: 1, used: 1, reached: true } },
+  limits: { station_count: { value: 1, used: 1, reached: true }, login_count: { value: 3, used: 0, reached: false } },
   subscription: {
     status: 'ACTIVE',
     mode: 'NORMAL',

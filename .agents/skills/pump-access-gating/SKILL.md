@@ -91,6 +91,14 @@ seam a real feature uses when it lands.
 `station_count` is the only Limit. Every Station row consumes it, inactive and
 partially onboarded included — deactivation frees nothing.
 
+`login_count` (#648) counts active users with a login (an auth account),
+Attendants with phone access included; users without a login and deactivated
+users never count. Every path that creates or restores a login takes a seat
+through `ensureLoginCapacity` under the same Organization lock: adding a member
+with app access (`POST /setup/users`), and reactivating a member who has a login
+(`POST /setup/users/:id/reactivate`, or `PUT` with `status: ACTIVE`). A new path
+that creates a login must do the same.
+
 Capacity is resolved under a lock on the Organization, inside the transaction
 that provisions, via `ensureStationCapacity`. Both Station-creating paths take
 it as a **required** dependency, so a third path cannot be added without one.
