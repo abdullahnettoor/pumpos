@@ -8,6 +8,7 @@ import Button from '../../components/ds/Button.astro';
 import StatementTable from '../../components/ds/StatementTable.astro';
 import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
 import FeatureCta from '../../components/features/FeatureCta.astro';
+import { CORE_PLAN_BASE, PRO_PLAN_BASE, PRO_PLUS_PLAN_FEATURES } from '../../data/feature-plans';
 import FeaturePlans from '../../components/features/FeaturePlans.astro';
 import CheckIcon from '../../components/features/CheckIcon.astro';
 import { DEMO_PATH, WA_URL } from '../../components/home/links';
@@ -39,28 +40,21 @@ const faqs = [
 ];
 
 const corePlanFeatures = [
-  'Logins: 3 on Core',
-  'Attendants without a login, unlimited',
+  ...CORE_PLAN_BASE,
   'Credit, collections and khata',
   'Office books and P&L',
   'Saved DSR, VAT and GST',
 ];
 
 const proPlanFeatures = [
-  'Logins: 10 on Pro',
-  'Several stations under one login',
-  { name: 'Reports across stations', note: 'Coming next' },
+  ...PRO_PLAN_BASE,
   { name: 'Customer statement link', note: 'Coming next' },
   { name: 'Credit limit at sale, aging, statement PDF', note: 'Coming next' },
   { name: 'WhatsApp reminders', note: 'Coming next' },
   { name: 'Owner alerts on your phone', note: 'Coming next' },
 ];
 
-const proPlusPlanFeatures = [
-  'Unlimited logins',
-  'Custom permissions',
-  'Attendant Handover Report',
-];
+const proPlusPlanFeatures = PRO_PLUS_PLAN_FEATURES;
 ---
 <BaseLayout
   title="Credit & Khata | Fleet & customer credit ledger | PumpOS"

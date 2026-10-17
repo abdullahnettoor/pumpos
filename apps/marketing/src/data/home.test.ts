@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { faqs, planFeatures, plans, SCALE_DISCOUNT_LINE } from './home';
+import { billingQuestions } from './billing-faq';
+import { CORE_PLAN_BASE, PRO_PLAN_BASE, PRO_PLUS_PLAN_FEATURES } from './feature-plans';
 
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN');
 
@@ -37,5 +39,24 @@ describe('pricing table data', () => {
       expect(answer).toContain(inr(p.price.yearly));
     }
     expect(answer).not.toMatch(/Scale/);
+  });
+});
+
+describe('logins in the FAQs (#645)', () => {
+  const costFaq = () => faqs.find(([q]) => q.startsWith('What does it cost'))?.[1] ?? '';
+  const billing = () => billingQuestions.map((b) => b.answer).join(' ');
+  for (const [name, text] of [['cost FAQ', costFaq], ['billing FAQ', billing]] as const) {
+    it(`${name} states the login counts`, () => {
+      expect(text()).toContain('3 on Core, 10 on Pro and unlimited on Pro+');
+      expect(text()).toMatch(/attendants[^.]*(phone|without a login)/);
+    });
+  }
+});
+
+describe('feature page plan rows', () => {
+  it('share one packaging definition', () => {
+    expect(CORE_PLAN_BASE).toContain('Logins: 3 on Core');
+    expect(PRO_PLAN_BASE).toContain('Logins: 10 on Pro');
+    expect(PRO_PLUS_PLAN_FEATURES).toContain('Unlimited logins');
   });
 });

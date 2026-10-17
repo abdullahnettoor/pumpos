@@ -121,9 +121,13 @@ export function defaultNewMemberStationIds(
 export function useTeamCache() {
   const qc = useQueryClient();
   const runTask = useRunTask();
+  // Adding, reactivating or deactivating a login moves `login_count` usage.
   const refresh = (refetchType?: 'none') =>
     runTask(
-      qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType }),
+        qc.invalidateQueries({ queryKey: queryKeys.access() }),
+      ]),
       'Saved, but the team list could not be refreshed.',
     );
   return {
@@ -372,7 +376,6 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
     if (editingUser) {
       void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(editingUser.id) });
       void qc.invalidateQueries({ queryKey: ['user-role-change-preview', editingUser.id] });
-      void qc.invalidateQueries({ queryKey: queryKeys.access() });
     }
     if (dropped) {
       toast.success(

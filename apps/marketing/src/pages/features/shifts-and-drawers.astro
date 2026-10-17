@@ -7,6 +7,7 @@ import Card from '../../components/ds/Card.astro';
 import Button from '../../components/ds/Button.astro';
 import SampleDataBadge from '../../components/ds/SampleDataBadge.astro';
 import FeatureCta from '../../components/features/FeatureCta.astro';
+import { CORE_PLAN_BASE, PRO_PLAN_BASE, PRO_PLUS_PLAN_FEATURES } from '../../data/feature-plans';
 import FeaturePlans from '../../components/features/FeaturePlans.astro';
 import CheckIcon from '../../components/features/CheckIcon.astro';
 import { DEMO_PATH, WA_URL } from '../../components/home/links';
@@ -44,28 +45,21 @@ const faqs = [
 ];
 
 const corePlanFeatures = [
-  'Logins: 3 on Core',
-  'Attendants without a login, unlimited',
+  ...CORE_PLAN_BASE,
   'Shifts, nozzle readings and handovers',
   'Fuel and product sales by cash, card or UPI',
   'Saved DSR, VAT and GST',
 ];
 
 const proPlanFeatures = [
-  'Logins: 10 on Pro',
-  'Several stations under one login',
-  { name: 'Reports across stations', note: 'Coming next' },
+  ...PRO_PLAN_BASE,
   'Attendant handover on the phone',
   { name: 'Attendance, advances and shortage recovery', note: 'Coming next' },
   { name: 'Owner alerts on your phone', note: 'Coming next' },
   { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
 ];
 
-const proPlusPlanFeatures = [
-  'Unlimited logins',
-  'Custom permissions',
-  'Attendant Handover Report',
-];
+const proPlusPlanFeatures = PRO_PLUS_PLAN_FEATURES;
 ---
 <BaseLayout
   title="Shifts & Drawers | Fuel station attendant accountability | PumpOS"

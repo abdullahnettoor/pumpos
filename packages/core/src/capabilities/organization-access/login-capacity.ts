@@ -1,9 +1,8 @@
-import { isUnlimitedLimit, loginLimitMessage } from '@pump/shared';
-import { err, limitReachedError, ok } from '../../kernel/index.js';
+import { loginLimitMessage } from '@pump/shared';
+import { ok } from '../../kernel/index.js';
 import type { Result } from '../../kernel/index.js';
-import { resolveEffectiveLimit } from './resolve-access.js';
+import { ensureCapacity, type Capacity, type CapacityPort } from './capacity.js';
 import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';
-import type { StationCapacity, StationCapacityPort } from './station-capacity.js';
 
 /**
  * Login capacity enforcement (`login_count`, #648).
@@ -14,29 +13,40 @@ import type { StationCapacity, StationCapacityPort } from './station-capacity.js
  * here, under the same Organization lock as Station capacity. Lowering the
  * Limit never disables existing users; it only refuses a new seat.
  */
-export type LoginCapacityPort = StationCapacityPort;
-export type LoginCapacity = StationCapacity;
+export type LoginCapacityPort = CapacityPort;
+export type LoginCapacity = Capacity;
 
-export async function ensureLoginCapacity(
+export function ensureLoginCapacity(
   port: LoginCapacityPort,
   organizationId: string,
   registry: AccessRegistry = PRODUCT_ACCESS_REGISTRY,
 ): Promise<Result<LoginCapacity>> {
-  await port.lockOrganization(organizationId);
-  const inputs = await port.load(organizationId);
-  const value = resolveEffectiveLimit('login_count', inputs, registry);
-  const used = inputs.usage.login_count ?? 0;
+  return ensureCapacity(port, organizationId, 'login_count', loginLimitMessage, registry);
+}
 
-  if (!isUnlimitedLimit(value) && used >= value) {
-    return err(
-      limitReachedError(loginLimitMessage(value), {
-        limit: 'login_count',
-        value,
-        used,
-        resolution: 'CONTACT_PUMPOS',
-        actionLabel: 'Contact PumpOS',
-      }),
-    );
+export interface LoginHolder {
+  status: string;
+  authUserId: string | null;
+}
+
+/**
+ * Take a login seat for a member being set ACTIVE, when that transition
+ * consumes one. The Organization lock is taken BEFORE the member is read, so
+ * a concurrent reactivation cannot leave this one deciding on a stale status.
+ * Returns the locked read (null when the member is gone).
+ */
+export async function claimLoginSeatForActivation(
+  port: LoginCapacityPort,
+  organizationId: string,
+  readTarget: () => Promise<LoginHolder | null>,
+  activating: boolean,
+  registry: AccessRegistry = PRODUCT_ACCESS_REGISTRY,
+): Promise<Result<LoginHolder | null>> {
+  await port.lockOrganization(organizationId);
+  const target = await readTarget();
+  if (activating && target && target.status !== 'ACTIVE' && target.authUserId !== null) {
+    const capacity = await ensureLoginCapacity(port, organizationId, registry);
+    if (!capacity.success) return capacity;
   }
-  return ok({ value, used });
+  return ok(target);
 }
