@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { canOnboardStation, type Role } from '@pump/shared';
+import { can, type Role } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { Globe, ExternalLink, Copy, Check, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { openExternal } from '../../utils/platform.js';
@@ -41,7 +42,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
 }) => {
   const runTask = useRunTask();
   const [copied, setCopied] = useState(false);
-  const canOnboard = canOnboardStation(role);
+  const canOnboard = can(principalFor(role), 'station.onboard');
 
   const copyLink = async () => {
     try {
@@ -54,105 +55,35 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        padding: '24px',
-        backgroundColor: 'var(--bg-canvas)',
-      }}
-    >
-      <div
-        className="animate-fade-in"
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          padding: '28px',
-          textAlign: 'center',
-          boxShadow: '0 8px 24px rgba(24,32,26,0.08)',
-        }}
-      >
-        <div
-          style={{
-            width: '48px',
-            height: '48px',
-            margin: '0 auto 16px',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'var(--info-bg, #EAF2FF)',
-            color: 'var(--info-fg, #1F6A53)',
-          }}
-        >
+    <div className="flex min-h-[100vh] items-center justify-center bg-canvas p-6">
+      <div className="w-full max-w-[480px] animate-fade-in rounded-card border border-border-soft bg-surface p-7 text-center shadow-lg">
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-info-bg text-info-fg">
           <Globe size={24} />
         </div>
 
-        <h2
-          style={{
-            fontSize: '17px',
-            fontWeight: 700,
-            color: 'var(--text-strong)',
-            letterSpacing: '-0.01em',
-          }}
-        >
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink-strong">
           {canOnboard ? "Let's finish setting up on the web" : 'Station setup isn’t finished yet'}
         </h2>
 
-        <p
-          style={{
-            color: 'var(--text-muted)',
-            fontSize: '13px',
-            lineHeight: 1.5,
-            marginTop: '10px',
-          }}
-        >
+        <p className="mt-2.5 text-[13px] leading-normal text-ink-muted">
           {canOnboard ? (
             <>
               First-time station setup — tanks, dispensers, products and staff — is done once in the
-              PumpOS <strong style={{ color: 'var(--text-default)' }}>web console</strong>. As soon
-              as it’s complete, this desktop app unlocks for daily operations.
+              PumpOS <strong className="text-ink-default">web console</strong>. As soon as it’s
+              complete, this desktop app unlocks for daily operations.
             </>
           ) : (
             <>
               Your Owner or Manager needs to finish the station’s setup in the PumpOS
-              <strong style={{ color: 'var(--text-default)' }}> web console</strong>. This desktop
-              app will unlock automatically once that’s done.
+              <strong className="text-ink-default"> web console</strong>. This desktop app will
+              unlock automatically once that’s done.
             </>
           )}
         </p>
 
         {/* Selectable console URL + copy (works even if in-app open is blocked) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginTop: '18px',
-            padding: '8px 10px 8px 12px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            backgroundColor: 'var(--bg-canvas)',
-          }}
-        >
-          <span
-            style={{
-              flex: 1,
-              textAlign: 'left',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12.5px',
-              color: 'var(--text-default)',
-              userSelect: 'all',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
+        <div className="mt-[18px] flex items-center gap-2 rounded-input border border-border-soft bg-canvas py-2 pl-3 pr-2.5">
+          <span className="flex-1 select-all truncate text-left font-mono text-[12.5px] text-ink-default">
             {webUrl.replace(/^https?:\/\//, '')}
           </span>
           <Button
@@ -166,14 +97,14 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: '8px', marginTop: '18px' }}>
+        <div className="mt-[18px] flex gap-2">
           {canOnboard && (
             <Button
               variant="primary"
               size="sm"
               leftIcon={<ExternalLink size={13} />}
               onClick={() => openExternal(webUrl)}
-              style={{ flex: 1 }}
+              className="flex-1"
             >
               Open web console
             </Button>
@@ -184,45 +115,26 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
             leftIcon={<RefreshCw size={13} />}
             onClick={onRecheck}
             loading={rechecking}
-            style={{ flex: canOnboard ? undefined : 1 }}
+            className={canOnboard ? undefined : 'flex-1'}
           >
             {rechecking ? 'Checking…' : 'I’ve finished — check again'}
           </Button>
         </div>
 
         {/* Footer: identity + sign out */}
-        <div
-          style={{
-            marginTop: '20px',
-            paddingTop: '14px',
-            borderTop: '1px solid var(--border-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-          }}
-        >
+        <div className="mt-5 flex items-center justify-center gap-2 border-t border-border-soft pt-3.5 text-[12px] text-ink-muted">
           {userName && <span>Signed in as {userName}</span>}
           {userName && onSignOut && <span aria-hidden>·</span>}
           {onSignOut && (
-            <button
+            <Button
+              variant="ghost"
+              size="xs"
+              leftIcon={<LogOut size={12} />}
+              className="text-ink-muted"
               onClick={() => runTask(onSignOut?.(), 'Could not sign out.')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                color: 'var(--text-muted)',
-                fontSize: '12px',
-              }}
             >
-              <LogOut size={12} /> Sign out
-            </button>
+              Sign out
+            </Button>
           )}
         </div>
       </div>

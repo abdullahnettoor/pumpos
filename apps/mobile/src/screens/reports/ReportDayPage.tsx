@@ -1,12 +1,19 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { generateDssrPdf, useBusinessDayList, useToast } from '@pump/ui';
-import type { BusinessDayListItem, Station } from '@pump/shared';
+import React, { useContext, useMemo, useRef, useState } from 'react';
+import {
+  generateDssrPdf,
+  principalFor,
+  useBusinessDayList,
+  useToast,
+  withNextStep,
+} from '@pump/ui';
+import { DSR_LABEL, type BusinessDayListItem, type Station } from '@pump/shared';
 import { DayTiles } from '../../components/DayTiles.js';
 import { SalesByProduct } from '../../components/SalesByProduct.js';
 import { plural, rupees } from '../../lib/format.js';
 import { businessDateLabel } from '../../lib/dates.js';
 import { liveTabFor, liveTabLabel } from '../../lib/reports/days.js';
 import { stepTargets, type StepTarget } from '../../lib/reports/dssr.js';
+import { ShellContext } from '../../shell/context.js';
 import { useNav } from '../../shell/nav.js';
 import { DetailPage, ListGroup, ListRow, Note, SectionLabel } from '../../ui/index.js';
 import { ShiftSummaryPage } from '../ShiftSummaryPage.js';
@@ -32,6 +39,7 @@ interface Props {
  */
 export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
   const nav = useNav();
+  const role = useContext(ShellContext)?.role;
   const toast = useToast();
   const [date, setDate] = useState(businessDate);
   const [stepping, setStepping] = useState(false);
@@ -71,7 +79,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
       }
       goTo(t);
     } catch {
-      toast.error('Could not load older days.');
+      toast.error(withNextStep("Couldn't load older days", 'Scroll down to try again.'));
     } finally {
       setStepping(false);
     }
@@ -97,7 +105,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
     if (status === 'LIVE')
       return (
         <div className="px-4 py-10 text-center text-sm text-text-muted">
-          <p>This day is still live, so it has no DSSR yet.</p>
+          <p>This day is still live, so it has no DSR yet.</p>
           {liveTab && (
             <button
               type="button"
@@ -109,18 +117,18 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
           )}
         </div>
       );
-    if (status === 'REPORT_MISSING') return <Note>No DSSR for this day.</Note>;
-    if (loading) return <Note>Loading DSSR…</Note>;
+    if (status === 'REPORT_MISSING') return <Note>No DSR for this day.</Note>;
+    if (loading) return <Note>Loading DSR…</Note>;
     if (error)
       return (
         <div role="alert" className="px-4 py-10 text-center text-sm text-bad-fg">
-          Couldn’t load this DSSR.{' '}
+          Couldn’t load this DSR.{' '}
           <button type="button" onClick={refetch} className="font-bold text-accent">
             Retry
           </button>
         </div>
       );
-    if (!model) return <Note>This DSSR is not available.</Note>;
+    if (!model) return <Note>This DSR is not available.</Note>;
 
     return (
       <>
@@ -128,7 +136,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
         <SectionLabel right={model.draft ? undefined : 'Sealed'}>Summary</SectionLabel>
         <div className="grid grid-cols-2 gap-2 px-3">
-          <DayTiles tiles={model.tiles} />
+          <DayTiles tiles={model.tiles} principal={principalFor(role)} />
         </div>
         {model.omcCard && (
           <div className="pt-2">
@@ -156,7 +164,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
         {model.shifts.length > 0 && (
           <>
-            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included Shifts</SectionLabel>
+            <SectionLabel right={plural(shiftCount, 'closed Shift')}>Included shifts</SectionLabel>
             <IncludedShifts shifts={model.shifts} onOpen={openShift} />
           </>
         )}
@@ -177,7 +185,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
 
   return (
     <DetailPage
-      title={`DSSR · ${businessDateLabel(date)}`}
+      title={`${DSR_LABEL} · ${businessDateLabel(date)}`}
       subtitle={[model ? plural(shiftCount, 'Shift') : '', station.name]
         .filter(Boolean)
         .join(' · ')}
@@ -194,7 +202,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
       download={
         model ? { onPress: () => pdf(model, 'download'), label: 'Download PDF' } : undefined
       }
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <div ref={top} />
       {body}

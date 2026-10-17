@@ -5,7 +5,13 @@
  * rule and the wording of a refusal are one set of rules, with no React and no
  * fetching. `collection.ts` and `supplierPayment.ts` add only what differs.
  */
-import { isValidBusinessDate, resolveEntryDate, type AccessMode } from '@pump/shared';
+import {
+  IDEMPOTENCY_KEY_REUSED,
+  isIdempotencyInProgress,
+  isValidBusinessDate,
+  resolveEntryDate,
+  type AccessMode,
+} from '@pump/shared';
 import { reusesIdempotencyKey } from './creditLimit.js';
 
 /**
@@ -65,25 +71,19 @@ const codeOf = (e: unknown): string | undefined =>
  * key is replaced.
  */
 export function keepsIdempotencyKey(error: unknown): boolean {
-  if (reusesIdempotencyKey(error)) return true;
-  return (
-    codeOf(error) === 'CONFLICT' &&
-    error instanceof Error &&
-    /already in progress/i.test(error.message)
-  );
+  return reusesIdempotencyKey(error) || isIdempotencyInProgress(error);
 }
 
 /**
  * A retry that changed the entries reached the API under the key of an attempt
- * that did arrive: the API refuses "same key, different content" with a CONFLICT
- * (`infra/idempotency.ts`). Only that answer means the earlier payment is on file
- * (so the caller should read the balance again); every other CONFLICT (another
- * request, another user, a business conflict) says nothing about it.
+ * that did arrive: the API refuses "same key, different content" with
+ * IDEMPOTENCY_KEY_REUSED (`infra/idempotency.ts`). Only that answer means the
+ * earlier payment is on file (so the caller should read the balance again); a
+ * CONFLICT (another request, another user, a business conflict) says nothing
+ * about it.
  */
 export const isEarlierAttemptReceived = (error: unknown): boolean =>
-  codeOf(error) === 'CONFLICT' &&
-  error instanceof Error &&
-  /different request content/i.test(error.message);
+  codeOf(error) === IDEMPOTENCY_KEY_REUSED;
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 
@@ -182,12 +182,15 @@ export function officePaymentFailure(
       };
     case 'FORBIDDEN':
       return { message: wording.forbidden };
+    case IDEMPOTENCY_KEY_REUSED:
+      return {
+        message:
+          'Your earlier attempt was received, so the balance has been refreshed. Check it before recording this payment again.',
+      };
     case 'CONFLICT':
       return {
-        message: isEarlierAttemptReceived(error)
-          ? 'Your earlier attempt was received, so the balance has been refreshed. Check it before recording this payment again.'
-          : (serverMessage ??
-            'Still saving the earlier attempt. Wait a moment and check the balance.'),
+        message:
+          serverMessage ?? 'Still saving the earlier attempt. Wait a moment and check the balance.',
       };
     case 'NOT_FOUND':
       return { message: wording.notFound };

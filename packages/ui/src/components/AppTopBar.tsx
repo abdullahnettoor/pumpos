@@ -1,26 +1,17 @@
 import React, { useMemo } from 'react';
+import { LogOut, TriangleAlert, Clock } from 'lucide-react';
 import {
-  Receipt,
-  Wallet,
-  ShoppingCart,
-  ShoppingBag,
-  CreditCard,
-  Users,
-  Truck,
-  Package,
-  FileText,
-  Banknote,
-  ArrowUpRight,
-  LogOut,
-  TriangleAlert,
-  Clock,
-  LayoutDashboard,
-  Fuel,
-} from 'lucide-react';
-import { type Station } from '@pump/shared';
+  can,
+  type OperatorRole,
+  reachableStations,
+  showStationDropdown,
+  type Station,
+} from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
 import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
-import type { NavIntent } from './AppShell.js';
+import type { NavIntent, NavItem } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
+import { canRecordOfficeRecord, isOfficeRecordKind } from '../office-records/kinds.js';
 import { initialsOf } from '../utils/initials.js';
 import {
   TopBar,
@@ -33,12 +24,15 @@ import {
   type UserMenuAction,
   type SyncStatus,
   PumpOSLockup,
+  ConceptIcon,
+  Icon,
 } from '../pump-ds/index.js';
-import { useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
+import { useCustomers, useStationSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
 import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
+import { ROUTES } from '../nav-intent/routes.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -57,14 +51,20 @@ import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
-  navItems: { label: string; path: string; roles?: string[] }[];
-  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  navItems: NavItem[];
+  userRole: OperatorRole;
   userName: string;
   syncStatus: SyncStatus;
   pendingSyncCount?: number;
   onNavigate: (path: string, intent?: NavIntent) => void;
   onLogout: () => void | Promise<unknown>;
-  onToggleSidebar?: () => void;
+  /** Organization stations (already scoped server-side for non-owners). */
+  stations?: Station[];
+  /** The user's assigned station ids; defaults to `stations` (the API filters). */
+  assignedStationIds?: string[];
+  onStationChange?: (station: Station) => void;
+  /** Current page label, the breadcrumb's second segment. */
+  pageLabel?: string;
   /** When false the active station isn't operational yet (pre-onboarding hub):
    *  hide station alerts and operational quick-create; scope the
    *  “+ New” menu to getting-started actions. */
@@ -82,7 +82,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   pendingSyncCount = 0,
   onNavigate,
   onLogout,
-  onToggleSidebar,
+  stations = [],
+  assignedStationIds,
+  onStationChange,
+  pageLabel,
   stationReady = true,
   userMenuExtras,
 }) => {
@@ -91,13 +94,36 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // Desktop only: makes this bar double as the OS window title bar (#117).
   // `null` in the browser, where the top bar renders exactly as before.
   const titleBar = useDesktopTitleBar();
-  const canSeeFinancials = userRole !== 'Staff';
+  const canSeeFinancials = can(principalFor(userRole), 'reports.view');
   const stationId = selectedStation?.id;
 
-  const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);
-  const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
+  const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
+  // The selected Station's suppliers (#575): the "due" beside each is what this
+  // Station owes, and every result is one its Suppliers page lists, so the deep
+  // link always finds it.
+  const { data: suppliers } = useStationSuppliers(stationId, true, {
+    enabled: canSeeFinancials,
+  });
   const { data: products } = useProducts();
   const stationAlerts = useStationAlerts(stationId, stationReady && canSeeFinancials);
+
+  // --- station breadcrumb: a dropdown only when more than one station is reachable ---
+  const stationSwitcher = useMemo(() => {
+    if (!onStationChange) return null;
+    const reachable = reachableStations(
+      { role: userRole, assignedStationIds: assignedStationIds ?? stations.map((s) => s.id) },
+      stations,
+    );
+    if (!showStationDropdown(reachable)) return null;
+    return {
+      stations: reachable.map((s) => ({ id: s.id, name: s.name })),
+      selectedId: selectedStation?.id,
+      onSelect: (id: string) => {
+        const next = reachable.find((s) => s.id === id);
+        if (next) onStationChange(next);
+      },
+    };
+  }, [stations, assignedStationIds, userRole, selectedStation?.id, onStationChange]);
 
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
@@ -110,13 +136,13 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         'onboard-station': {
           id: 'onboard-station',
           label: 'Onboard station',
-          icon: <Fuel />,
+          icon: <ConceptIcon concept="stations" />,
           onSelect: () => onNavigate('/onboarding'),
         },
         'team-member': {
           id: 'team-member',
           label: 'Team member',
-          icon: <Users />,
+          icon: <ConceptIcon concept="team" />,
           onSelect: () => onNavigate('/organization'),
         },
       };
@@ -126,61 +152,60 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       {
         id: 'expense',
         label: 'Expense',
-        icon: <Receipt />,
-        onSelect: () => openQuickEntry('expense'),
+        icon: <ConceptIcon concept="expenses" />,
+        onSelect: () => openQuickEntry('expense', { origin: 'new' }),
       },
       {
         id: 'income',
         label: 'Income',
-        icon: <Banknote />,
-        onSelect: () => openQuickEntry('income'),
+        icon: <ConceptIcon concept="income" />,
+        onSelect: () => openQuickEntry('income', { origin: 'new' }),
       },
       {
         id: 'collection',
         label: 'Collection',
-        icon: <Wallet />,
-        onSelect: () => openQuickEntry('collection'),
+        icon: <ConceptIcon concept="collections" />,
+        onSelect: () => openQuickEntry('collection', { origin: 'new' }),
       },
       {
         id: 'merchandise-sale',
-        label: 'Merchandise sale',
-        icon: <ShoppingBag />,
+        label: 'Product sale',
+        icon: <ConceptIcon concept="product-sales" />,
         onSelect: () => openQuickEntry('merchandise-sale'),
       },
       {
         id: 'purchase',
         label: 'Purchase',
-        icon: <ShoppingCart />,
-        onSelect: () => openQuickEntry('purchase'),
+        icon: <ConceptIcon concept="purchases" />,
+        onSelect: () => openQuickEntry('purchase', { origin: 'new' }),
       },
       {
         id: 'supplier-payment',
         label: 'Supplier payment',
-        icon: <Wallet />,
-        onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }),
+        icon: <ConceptIcon concept="payments" />,
+        onSelect: () => openQuickEntry('supplier-payment', { origin: 'new' }),
       },
       {
         id: 'credit',
         label: 'Credit sale',
-        icon: <CreditCard />,
+        icon: <ConceptIcon concept="credit-sales" />,
         onSelect: () => onNavigate('/shifts'),
       },
       {
         id: 'customer',
         label: 'Customer',
-        icon: <Users />,
+        icon: <ConceptIcon concept="customers" />,
         onSelect: () => onNavigate('/customers', { open: 'new-customer' }),
       },
     ];
-    return userRole === 'Staff'
-      ? items.filter(
-          (i) =>
-            i.id === 'expense' ||
-            i.id === 'collection' ||
-            i.id === 'merchandise-sale' ||
-            i.id === 'credit',
-        )
-      : items;
+    // One rule per item: an Office Record by the role that may record it.
+    return items.filter((i) =>
+      isOfficeRecordKind(i.id)
+        ? canRecordOfficeRecord(i.id, userRole)
+        : i.id === 'customer'
+          ? can(principalFor(userRole), 'customers.manage')
+          : true,
+    );
   }, [onNavigate, userRole, stationReady]);
 
   // --- user menu ---
@@ -270,7 +295,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           return {
             id: `cust-${c.id}`,
             label: c.name,
-            icon: <Users />,
+            icon: <ConceptIcon concept="customers" />,
             meta,
             keywords: [c.phone, c.fleetCode, c.metadata?.gstin, c.metadata?.tradeName].filter(
               Boolean,
@@ -295,11 +320,11 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           return {
             id: `sup-${s.id}`,
             label: s.name,
-            icon: <Truck />,
+            icon: <ConceptIcon concept="suppliers" />,
             meta: bal > 0 ? `${inr(bal)} due` : '',
             keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
             onSelect: () =>
-              onNavigate('/purchases', { focusSupplierId: s.id, open: 'supplier-statement' }),
+              onNavigate(ROUTES.suppliers, { focusSupplierId: s.id, open: 'supplier-statement' }),
           };
         }),
       });
@@ -313,7 +338,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         items: rows.map<CommandItem>((p) => ({
           id: `prod-${p.id}`,
           label: p.name,
-          icon: <Package />,
+          icon: <ConceptIcon concept="products" />,
           meta: p.productType ?? '',
           keywords: [p.hsnCode, p.productType].filter(Boolean),
           onSelect: () => onNavigate('/pricing'),
@@ -325,11 +350,11 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     groups.push({
       heading: 'Go to',
       items: navItems
-        .filter((n) => !n.roles || n.roles.includes(userRole))
+        .filter((n) => !n.permission || can(principalFor(userRole), n.permission))
         .map<CommandItem>((n) => ({
           id: `nav-${n.path}`,
           label: n.label,
-          icon: n.label === 'Dashboard' ? <LayoutDashboard /> : <ArrowUpRight />,
+          icon: <Icon name={n.icon} />,
           keywords: ['open', 'go'],
           onSelect: () => onNavigate(n.path),
         })),
@@ -351,9 +376,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     <>
       <TopBar
         titleBar={titleBar}
-        onToggleSidebar={onToggleSidebar}
         brand={<PumpOSLockup />}
         stationName={selectedStation?.name}
+        stationSwitcher={stationSwitcher}
+        pageLabel={pageLabel}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
         notifications={notifications}

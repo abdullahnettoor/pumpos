@@ -1,3 +1,5 @@
+import { IDEMPOTENCY_KEY_REUSED, isIdempotencyInProgress } from '@pump/shared';
+
 /**
  * When a write fails, must its next try carry the SAME Idempotency-Key?
  *
@@ -9,7 +11,16 @@
 export function keepsIdempotencyKey(error: unknown): boolean {
   const e = error && typeof error === 'object' ? (error as { status?: number; code?: string }) : {};
   if (e.status === undefined || e.status >= 500) return true;
-  return (
-    e.code === 'CONFLICT' && error instanceof Error && /already in progress/i.test(error.message)
-  );
+  return isIdempotencyInProgress(error);
+}
+
+/**
+ * The API refused this key because it was already used with a different body:
+ * an earlier send under it reached the server. After an unknown outcome and an
+ * edit, that earlier save may have landed, so the outcome is still unknown and
+ * the key must be kept (a fresh one could record the same thing twice).
+ */
+export function isIdempotencyKeyConflict(error: unknown): boolean {
+  const e = error && typeof error === 'object' ? (error as { code?: string }) : {};
+  return e.code === IDEMPOTENCY_KEY_REUSED;
 }

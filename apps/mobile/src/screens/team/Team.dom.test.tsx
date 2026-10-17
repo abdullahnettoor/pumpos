@@ -63,6 +63,7 @@ const reset = vi.spyOn(proto, 'resetUserPassword');
 const deactivate = vi.spyOn(proto, 'deactivateUser');
 const reactivate = vi.spyOn(proto, 'reactivateUser');
 const listUsers = vi.spyOn(proto, 'listUsers');
+const previewRole = vi.spyOn(proto, 'previewUserRoleChange');
 
 const refusal = (code: string | undefined, message: string, status: number | undefined = 403) =>
   Object.assign(new Error(message), { code, status });
@@ -124,6 +125,11 @@ beforeEach(() => {
     async () => ({ subscription: { mode: accessMode } }) as any,
   );
   for (const m of [create, update, reset, deactivate, reactivate]) m.mockReset();
+  previewRole.mockReset();
+  previewRole.mockImplementation(
+    async (id, role) =>
+      ({ userId: id, fromRole: 'Staff', toRole: role, droppedChanges: null }) as never,
+  );
   // The fake server keeps what it was given, so the refetch after a save agrees with it.
   create.mockImplementation(async (body: any) => {
     const row = { id: 'new-1', fullName: body.fullName, role: body.role, status: 'ACTIVE' };
@@ -256,6 +262,45 @@ describe('an Owner', () => {
     );
     expect(within(dialog).queryByRole('radio', { name: 'Staff' })).toBeNull();
     expect(within(dialog).getByText('You cannot change your own role.')).toBeTruthy();
+  });
+});
+
+describe("changing a member's Role (#555)", () => {
+  const preview = previewRole;
+  const openEditAsOwner = async () => {
+    mount();
+    await openMember('Sajid Staff');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
+    return screen.findByRole('dialog', { name: 'Edit member' });
+  };
+  beforeEach(() => {
+    preview.mockReset();
+    update.mockResolvedValue({ id: 'st1' } as any);
+  });
+
+  it('shows what is dropped and saves only after confirming', async () => {
+    preview.mockResolvedValue({
+      userId: 'st1',
+      fromRole: 'Staff',
+      toRole: 'Manager',
+      droppedChanges: { granted: ['purchases.viewCosts'], revoked: [] },
+    });
+    const dialog = await openEditAsOwner();
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Manager' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    await within(dialog).findByText(/will be dropped/);
+    expect(update).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change role' }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not save when the preview cannot be read', async () => {
+    preview.mockRejectedValue(new Error('offline'));
+    const dialog = await openEditAsOwner();
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Manager' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    await within(dialog).findByText(/Nothing was saved/);
+    expect(update).not.toHaveBeenCalled();
   });
 });
 
@@ -439,7 +484,7 @@ describe('adding a member', () => {
     create.mockRejectedValueOnce(Object.assign(new Error('Network error'), { code: 'NETWORK' }));
     create.mockRejectedValueOnce(
       refusal(
-        'CONFLICT',
+        'IDEMPOTENCY_KEY_REUSED',
         'This Idempotency-Key was already used with different request content',
         409,
       ),

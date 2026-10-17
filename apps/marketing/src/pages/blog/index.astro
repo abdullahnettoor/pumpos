@@ -4,14 +4,10 @@ import Section from '../../components/ds/Section.astro';
 import Card from '../../components/ds/Card.astro';
 import Button from '../../components/ds/Button.astro';
 import BrandMark from '../../components/marketing-preview/BrandMark.astro';
-import { getCollection } from 'astro:content';
+import { formatPostDate as fmt, getLivePosts } from '../../blog';
 import '../../styles/content-pages.css';
 
-const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
-);
-const fmt = (date: Date) =>
-  date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const posts = await getLivePosts();
 ---
 <BaseLayout title="Journal | Notes on building PumpOS" description="Product notes and practical explanations of fuel station operations from PumpOS." path="/blog">
   <Section class="journal-section" aria-label="The PumpOS journal">

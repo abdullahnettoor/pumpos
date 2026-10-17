@@ -1,5 +1,5 @@
 import React from 'react';
-import { generateShiftSummaryPdf, useToast } from '@pump/ui';
+import { generateShiftSummaryPdf, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { CashVarianceCard } from '../components/CashVarianceCard.js';
 import { SalesByProduct } from '../components/SalesByProduct.js';
@@ -62,10 +62,10 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       subtitle={[row.businessDate ? businessDateLabel(String(row.businessDate)) : '', model.window]
         .filter(Boolean)
         .join(' · ')}
-      right={<StatusBadge tone="good">Closed</StatusBadge>}
+      right={<StatusBadge state="shift-closed" />}
       share={{ onPress: () => pdf('save') }}
       download={{ onPress: () => pdf('download'), label: 'Download PDF' }}
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <div className="grid grid-cols-2 gap-2 px-3">
         <StatTile

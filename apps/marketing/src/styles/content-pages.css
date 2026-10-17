@@ -227,7 +227,7 @@
 
 .pricing-seat-rules {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-top: 34px;
 }
@@ -766,3 +766,20 @@
 .docs-index-card b { font-size: 18px; letter-spacing: -.01em; }
 .docs-index-card span { font-size: 14px; line-height: 1.5; color: var(--ds-muted); flex: 1; }
 .docs-index-card i { font-style: normal; font-weight: 700; font-size: 14px; color: var(--ds-primary); margin-top: 6px; }
+
+/* Legal pages read as fine print: smaller headings, tighter rhythm. */
+.prose-page--legal { width: min(100%, 720px); }
+.prose-page--legal .prose-header { padding-bottom: 22px; }
+.prose-page--legal .prose-header h1 { font-size: clamp(28px, 3.4vw, 34px); letter-spacing: -.03em; }
+.prose-page--legal .prose-description { margin-top: 10px; font-size: 15px; }
+.prose-page--legal .prose-pump { margin-top: 8px; font-size: 15px; line-height: 1.7; }
+.prose-page--legal .prose-pump > * + * { margin-top: 12px; }
+.prose-page--legal .prose-pump h2 { margin-top: 30px; font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.prose-page--legal .prose-pump li + li { margin-top: 6px; }
+
+.legal-updated {
+  margin: 12px 0 0;
+  color: var(--ds-muted);
+  font-size: var(--ds-text-small);
+  font-weight: 600;
+}

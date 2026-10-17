@@ -1,7 +1,15 @@
-import type { BusinessDayListItem, BusinessDayListStatus, BusinessDayListWeek } from '@pump/shared';
+import {
+  statusPresentation,
+  type BusinessDayListItem,
+  type BusinessDayListStatus,
+  type BusinessDayListWeek,
+  type DayStatusState,
+} from '@pump/shared';
+import { badgeTone, type BadgeTone } from '../../ui/tones.js';
+import { varianceBadge } from '../variance.js';
 import { dateParts, MONTH_NAMES, shortDate, weekdayOf } from '../dates.js';
 import { wholeQuantityLabel } from '../money/quantity.js';
-import { compactRupees, plural, signedRupees } from '../format.js';
+import { compactRupees, plural, rupees } from '../format.js';
 
 /** Weekday and day of month from a `YYYY-MM-DD` Business Date (calendar label, no timezone). */
 export function dayParts(businessDate: string): { weekday: string; day: number } {
@@ -53,16 +61,23 @@ export function liveTabFor(tabs: readonly string[]): LiveTab | null {
 
 interface StatusPresentation {
   label: string;
-  tone: 'good' | 'warn' | 'bad' | 'muted';
+  tone: BadgeTone;
   /** What tapping the row does (`live`: open the Role's live-day tab, see `liveTabFor`). */
   action: 'live' | 'report' | 'none';
 }
 
+/** A day state's word and tone from the shared vocabulary (#518), in mobile tones. */
+const vocab = (state: DayStatusState, action: StatusPresentation['action']): StatusPresentation => {
+  const p = statusPresentation(state);
+  return { label: p.label, tone: badgeTone(p.tone), action };
+};
+
 /** The one status -> presentation map for the day list. */
 export const DAY_STATUS: Record<BusinessDayListStatus, StatusPresentation> = {
-  LIVE: { label: 'Live', tone: 'good', action: 'live' },
-  DRAFT: { label: 'Draft', tone: 'warn', action: 'report' },
-  SEALED: { label: 'Sealed', tone: 'muted', action: 'report' },
+  LIVE: vocab('day-open', 'live'),
+  DRAFT: vocab('day-draft', 'report'),
+  SEALED: vocab('day-sealed', 'report'),
+  // Mobile-only: a closed day with no DSSR snapshot (not a vocabulary state).
   REPORT_MISSING: { label: 'Report missing', tone: 'bad', action: 'none' },
 };
 
@@ -112,14 +127,15 @@ export function dayView(day: BusinessDayListItem, liveTab: LiveTab | null): DayV
     bar = 'hatched';
   } else if (day.status === 'REPORT_MISSING') {
     headline = 'Closed';
-    note = 'No DSSR for this day';
+    note = 'No DSR for this day';
     bar = 'none';
   } else {
-    headline = compactRupees(day.totalSales);
-    if (day.cashVariance === 0) note = 'Cash balanced';
+    headline = rupees(day.totalSales);
+    const v = varianceBadge(day.cashVariance);
+    if (v.balanced) note = 'Cash balanced';
     else {
-      note = `Cash ${day.cashVariance > 0 ? '+' : ''}${signedRupees(day.cashVariance)}`;
-      noteTone = day.cashVariance < 0 ? 'bad' : 'warn';
+      note = `Cash ${v.text}`;
+      noteTone = v.tone === 'bad' ? 'bad' : 'warn';
     }
   }
 

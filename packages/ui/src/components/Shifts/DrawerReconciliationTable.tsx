@@ -1,8 +1,50 @@
-import React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '../primitives/DataTable.js';
+import React, { useMemo } from 'react';
+import {
+  Button,
+  InteractiveTable,
+  StatusChip,
+  VarianceChip,
+  type TableColumn,
+  type TotalRow,
+} from '../../pump-ds/index.js';
+import { notSavedMessage, type HandoverWrites } from './handoverWrites.js';
 import { formatMoney } from '../../utils/format.js';
-import { isBalancedVariance } from '@pump/shared';
+import { formatVariance } from '../../utils/variance.js';
+import {
+  closeDrawerRows,
+  closeDrawerTotal,
+  type CloseDrawerInput,
+  type CloseDrawerRow,
+  type CloseDrawerTotal,
+} from './closeShiftModel.js';
+import type { StaffAssignmentInput } from './liveShiftModel.js';
+
+/**
+ * The Drawers table (#534): one definition for every place it shows, the Shift
+ * summary screen, the Close shift page's Handovers step and the Shift Summary
+ * PDF (#595).
+ *
+ * - Row model: `drawerRows` (or `closeDrawerRows` with staff assignments, for
+ *   Record / View links) and `closeDrawerTotal`, pure, summed in paise.
+ * - Columns: `drawerColumns()`; pass `onOpenHandover` for the close page.
+ * - Total row: `drawerTotalRow(rows, total)`; the variance total is a
+ *   `VarianceChip` on screen (`cells`) and its word or signed figure in print
+ *   (`texts`).
+ * - Plain text for a PDF: the Table module's `cellText(col, row)` and
+ *   `totalTexts(columns, rows, totalRow)` read every cell as the screen shows
+ *   it (no ₹0.00 for a blank, "Pending" / "Recorded", "Balanced").
+ */
+export {
+  closeDrawerRows,
+  closeDrawerTotal,
+  type CloseDrawerInput,
+  type CloseDrawerRow,
+  type CloseDrawerTotal,
+};
+
+/** The Drawers table's rows from the server's reconciled Drawers (no links). */
+export const drawerRows = (drawers: CloseDrawerInput[]): CloseDrawerRow[] =>
+  closeDrawerRows({ drawers, assignments: [], handovers: [] });
 
 /** One Attendant's Drawer, as reconciled by the server (ADR 0005, #278). */
 export interface DrawerRow {
@@ -21,162 +63,135 @@ export interface DrawerRow {
   variance: number | null;
 }
 
-// Cells drop the ₹ symbol and use tabular sans figures so all seven columns
-// fit the close wizard without sideways scroll (#306); the table caption
-// states the currency.
-const money = (v: number | null) => (v == null ? '—' : formatMoney(v, { symbol: false }));
-const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
-const Num: React.FC<{ v: number | null }> = ({ v }) => <span style={num}>{money(v)}</span>;
+type Figure = keyof CloseDrawerTotal['values'];
 
-const varianceWord = (v: number) =>
-  isBalancedVariance(v) ? 'balanced' : v > 0 ? 'surplus' : 'short';
+/** A blank figure (a Drawer not handed over) reads "—", on screen and in print. */
+const figure = (v: number | null) => (v == null ? '—' : formatMoney(v));
 
-/** Signed variance, coloured by sign (#306). `label` adds surplus/short. */
-export const VarianceFigure: React.FC<{ value: number; label?: boolean }> = ({ value, label }) => {
-  const balanced = isBalancedVariance(value);
-  const color = balanced
-    ? 'var(--text-muted)'
-    : value < 0
-      ? 'var(--brand-danger)'
-      : 'var(--state-success-fg)';
-  return (
-    <span style={{ ...num, color }}>
-      {value > 0 ? '+' : ''}
-      {formatMoney(value, { symbol: false })}
-      {label && ` ${varianceWord(value)}`}
-    </span>
-  );
-};
+const money = (id: Figure, header: string): TableColumn<CloseDrawerRow> => ({
+  id,
+  header,
+  kind: 'money',
+  value: (r) => r[id],
+  cell: (r) => figure(r[id]),
+  text: (r) => figure(r[id]),
+});
 
-/** Σ of a column, or null ("—") while any Drawer has not handed over: a
- *  partial total would read as the shift's figure. */
-const sumAll = (rows: DrawerRow[], pick: (r: DrawerRow) => number | null): number | null => {
-  let total = 0;
-  for (const r of rows) {
-    const v = pick(r);
-    if (v == null) return null;
-    total += v;
-  }
-  return Math.round(total * 100) / 100;
-};
-
-const drops = (r: DrawerRow) => Number(r.cashDrops ?? 0) + Number(r.closeCashDrops ?? 0);
-
-const buildColumns = (
-  rows: DrawerRow[],
-  totals: boolean,
-  totalVariance?: number,
-): ColumnDef<DrawerRow, any>[] => {
-  const pending = rows.some((r) => r.cashHandedOver === null);
-  const foot = (pick: (r: DrawerRow) => number | null) =>
-    totals ? () => <Num v={sumAll(rows, pick)} /> : undefined;
+/**
+ * The Drawers table's columns (#534), on the Table module: mono figures, the
+ * handover status from the vocabulary, the variance as a `VarianceChip`.
+ * With `onOpenHandover` the status cell carries Record / View (the close page).
+ */
+export function drawerColumns(
+  onOpenHandover?: (assignment: StaffAssignmentInput) => void,
+  writes?: HandoverWrites,
+): TableColumn<CloseDrawerRow>[] {
   return [
     {
-      id: 'attendant',
-      header: 'Attendant',
-      accessorFn: (d) => d.attendantName ?? 'Attendant',
-      cell: ({ row }) => (
-        <div style={{ lineHeight: 1.3 }}>
-          <div style={{ color: 'var(--text-strong)' }}>
-            {row.original.attendantName ?? 'Attendant'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {row.original.duName ?? ''}
-            {row.original.cashHandedOver === null && (
-              <span
-                className="badge badge-warning"
-                title="Not handed over"
-                style={{ marginLeft: row.original.duName ? 6 : 0 }}
+      id: 'drawer',
+      header: 'Drawer',
+      kind: 'text',
+      value: (r) => r.label,
+      emphasis: true,
+      width: '19%',
+    },
+    {
+      id: 'status',
+      header: 'Handover',
+      kind: 'status',
+      value: (r) => (r.pending ? 'handover-pending' : 'handover-recorded'),
+      sortable: false,
+      width: onOpenHandover ? '22%' : '14%',
+      cell: (r) => {
+        const write = writes?.get(r.key);
+        const failed = notSavedMessage(write);
+        return (
+          <div className="flex flex-wrap items-center gap-2">
+            {write?.state === 'saving' ? (
+              <StatusChip status="saving" size="md" />
+            ) : (
+              <StatusChip
+                status={r.pending ? 'handover-pending' : 'handover-recorded'}
+                size="md"
+                showIcon={!r.pending}
+              />
+            )}
+            {onOpenHandover && r.assignment && (
+              <Button
+                variant={r.pending ? 'secondary' : 'ghost'}
+                size="xs"
+                onClick={() => onOpenHandover(r.assignment!)}
               >
-                Pending
+                {r.pending ? 'Record' : 'View'}
+                <span className="sr-only"> {r.label} handover</span>
+              </Button>
+            )}
+            {failed && (
+              <span role="alert" className="basis-full text-[12px] text-danger-fg">
+                {failed}
               </span>
             )}
           </div>
-        </div>
-      ),
-      footer: totals ? () => 'Total' : undefined,
+        );
+      },
     },
-    {
-      id: 'float',
-      header: 'Float',
-      accessorKey: 'openingFloat',
-      cell: (c) => <Num v={c.getValue()} />,
-      footer: foot((r) => Number(r.openingFloat ?? 0)),
-    },
-    {
-      id: 'sales',
-      header: 'Cash sales',
-      accessorKey: 'cashSales',
-      cell: (c) => <Num v={c.getValue()} />,
-      footer: foot((r) => r.cashSales),
-    },
-    {
-      id: 'drops',
-      header: 'Drops',
-      accessorFn: drops,
-      cell: (c) => <Num v={c.getValue()} />,
-      footer: foot(drops),
-    },
-    {
-      id: 'expected',
-      header: 'Expected',
-      accessorKey: 'expectedCash',
-      cell: (c) => <Num v={c.getValue()} />,
-      footer: foot((r) => r.expectedCash),
-    },
-    {
-      id: 'handed',
-      header: 'Handed',
-      accessorKey: 'cashHandedOver',
-      cell: (c) => <Num v={c.getValue()} />,
-      footer: foot((r) => r.cashHandedOver),
-    },
+    money('openingFloat', 'Float'),
+    money('cashSales', 'Cash sales'),
+    money('drops', 'Drops'),
+    money('expected', 'Expected'),
+    money('declared', 'Declared'),
     {
       id: 'variance',
       header: 'Variance',
-      accessorKey: 'variance',
-      cell: (c) => {
-        const v = c.getValue() as number | null;
-        return v == null ? <Num v={null} /> : <VarianceFigure value={v} />;
-      },
-      footer: totals
-        ? () =>
-            pending || totalVariance === undefined ? (
-              <Num v={null} />
-            ) : (
-              <div style={{ lineHeight: 1.3 }}>
-                <VarianceFigure value={totalVariance} />
-                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
-                  {varianceWord(totalVariance)}
-                </div>
-              </div>
-            )
-        : undefined,
+      kind: 'money',
+      value: (r) => r.variance,
+      cell: (r) => (r.variance == null ? '—' : <VarianceChip amount={r.variance} size="md" />),
+      text: (r) => (r.variance == null ? '—' : formatVariance(r.variance, 'cash').text),
     },
   ];
+}
+
+/**
+ * The total row: the handed-over Drawers, labelled with what it leaves out.
+ * The variance total reads as the rows do: a `VarianceChip` with the one
+ * balanced rule on screen, its text ("Balanced", "−₹220.00") in print.
+ */
+export const drawerTotalRow = (
+  rows: CloseDrawerRow[],
+  total: CloseDrawerTotal = closeDrawerTotal(rows),
+): TotalRow => {
+  const none = rows.length === 0 || rows.every((r) => r.pending);
+  return {
+    label: total.label,
+    derive: false,
+    values: { ...total.values, variance: none ? null : total.variance },
+    cells: none ? undefined : { variance: <VarianceChip amount={total.variance} size="md" /> },
+    texts: none ? undefined : { variance: formatVariance(total.variance, 'cash').text },
+  };
 };
 
 /**
  * Per-Drawer reconciliation: Opening Float + DU cash sales − Cash Drops,
- * against the cash handed over. The Shift's figure is the sum of these rows.
- * Display only; every figure comes from the server.
+ * against the cash handed over (Shift summary, #535). Display only; every
+ * figure comes from the server. `showTotals` adds the total row.
  */
 export const DrawerReconciliationTable: React.FC<{
   drawers: DrawerRow[];
-  /** Show a totals row (#306). Figures read "—" until every Drawer hands over. */
   showTotals?: boolean;
-  /** Σ attendant variance from the server, shown in the totals row. */
-  totalVariance?: number;
-}> = ({ drawers, showTotals = false, totalVariance }) => (
-  <>
-    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Amounts in ₹</div>
-    <DataTable
-      bare
-      dense
-      columns={buildColumns(drawers, showTotals, totalVariance)}
-      data={drawers}
-      getRowId={(d, i) => `${d.attendantId}:${d.duId ?? d.duName ?? i}`}
-      emptyMessage="No attendant Drawers on this shift."
-    />
-  </>
-);
+}> = ({ drawers, showTotals = false }) => {
+  const rows = useMemo(() => drawerRows(drawers), [drawers]);
+  const columns = useMemo(() => drawerColumns(), []);
+  return (
+    <div className="overflow-hidden rounded-card border border-border-soft bg-surface">
+      <InteractiveTable
+        bare
+        dense
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.key}
+        emptyMessage="No attendant drawers on this shift."
+        totalRow={showTotals ? drawerTotalRow(rows) : undefined}
+      />
+    </div>
+  );
+};

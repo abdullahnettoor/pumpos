@@ -15,19 +15,12 @@ import {
   resolveSections,
 } from './reportConfig.js';
 import { showLogoFromStation } from './letterhead.js';
+import { DSR_LABEL } from '@pump/shared';
 
 /** The key each report's section list is saved under in `report_config`. */
 export type ReportTemplateId = 'shiftSummary' | 'dssr' | 'attendantReport';
 export type PresetId = 'full' | 'compact' | 'cashDesk';
 export type Paper = 'A4' | 'LETTER';
-
-/** How the preview draws a section's representative content. */
-export type SectionKind =
-  | { kind: 'meta'; lines: string[] }
-  | { kind: 'kpis'; tiles: [string, string][] }
-  | { kind: 'table'; columns: string[] }
-  | { kind: 'note'; text: string }
-  | { kind: 'signatures'; roles: string[] };
 
 export interface SectionState {
   key: string;
@@ -39,13 +32,10 @@ export interface ReportTemplate {
   name: string;
   /** When the report prints, shown on the card and in the drawer. */
   when: string;
-  /** The title printed in the letterhead band. */
-  docTitle: string;
   defaults: readonly string[];
   labels: Record<string, string>;
   /** One line of what the section prints. */
   descriptions: Record<string, string>;
-  preview: Record<string, SectionKind>;
   presets: Record<Exclude<PresetId, 'full'>, readonly string[]>;
 }
 
@@ -60,7 +50,6 @@ const SHIFT_SUMMARY: ReportTemplate = {
   id: 'shiftSummary',
   name: 'Shift Summary',
   when: 'Printed when a shift is closed',
-  docTitle: 'Shift Summary Record',
   defaults: DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
   labels: SHIFT_SUMMARY_SECTION_LABELS,
   descriptions: {
@@ -75,24 +64,6 @@ const SHIFT_SUMMARY: ReportTemplate = {
     drawers: 'Float, sales, drops and declared cash per drawer',
     signatures: 'Manager and attendant sign-off lines',
   },
-  preview: {
-    meta: { kind: 'meta', lines: ['Shift 2 · 29 Sep 2026', 'Opened 06:00 by Ravi · Closed 14:05'] },
-    warnings: { kind: 'note', text: '1 nozzle reading needs review' },
-    nozzles: { kind: 'table', columns: ['Nozzle', 'Opening', 'Closing', 'Litres', 'Amount'] },
-    handovers: { kind: 'table', columns: ['Attendant', 'Declared', 'Expected', 'Variance'] },
-    terminals: { kind: 'table', columns: ['Terminal', 'Card', 'UPI', 'Total'] },
-    creditSales: { kind: 'table', columns: ['Customer', 'Vehicle', 'Litres', 'Amount'] },
-    cashRecon: {
-      kind: 'kpis',
-      tiles: [
-        ['Expected', '48,250'],
-        ['Counted', '48,200'],
-        ['Variance', '−50'],
-      ],
-    },
-    drawers: { kind: 'table', columns: ['Drawer', 'Float', 'Sales', 'Drops', 'Declared'] },
-    signatures: { kind: 'signatures', roles: ['Manager', 'Attendant'] },
-  },
   presets: {
     compact: ['header', 'meta', 'nozzles', 'cashRecon', 'signatures'],
     cashDesk: ['header', 'meta', 'handovers', 'cashRecon', 'drawers', 'signatures'],
@@ -101,9 +72,8 @@ const SHIFT_SUMMARY: ReportTemplate = {
 
 const DSSR: ReportTemplate = {
   id: 'dssr',
-  name: 'Daily DSSR',
+  name: DSR_LABEL,
   when: 'Printed when a business day is closed',
-  docTitle: 'Daily Sales Summary Record',
   defaults: DEFAULT_DSSR_CONFIG.sections,
   labels: DSSR_SECTION_LABELS,
   descriptions: {
@@ -117,27 +87,6 @@ const DSSR: ReportTemplate = {
     merchandiseStockVariance: 'Lubricant and accessory stock variance',
     shifts: "Each of the day's shifts with its totals",
   },
-  preview: {
-    meta: { kind: 'meta', lines: ['Business day 29 Sep 2026', '3 shifts · Closed by Anitha'] },
-    kpis: {
-      kind: 'kpis',
-      tiles: [
-        ['Litres', '8,420'],
-        ['Revenue', '8.6L'],
-        ['Credit', '72k'],
-        ['Variance', '−120'],
-      ],
-    },
-    financial: { kind: 'table', columns: ['Method', 'Amount'] },
-    fuelByProduct: { kind: 'table', columns: ['Product', 'Litres', 'Rate', 'Amount'] },
-    nozzles: { kind: 'table', columns: ['Nozzle', 'Product', 'Litres', 'Amount'] },
-    fuelStockVariance: { kind: 'table', columns: ['Tank', 'Book', 'Dip', 'Variance'] },
-    merchandiseStockVariance: {
-      kind: 'table',
-      columns: ['Product', 'Book', 'Counted', 'Variance'],
-    },
-    shifts: { kind: 'table', columns: ['Shift', 'Litres', 'Amount', 'Variance'] },
-  },
   presets: {
     compact: ['header', 'meta', 'kpis', 'financial', 'fuelByProduct'],
     cashDesk: ['header', 'meta', 'financial', 'shifts'],
@@ -148,7 +97,6 @@ const ATTENDANT_REPORT: ReportTemplate = {
   id: 'attendantReport',
   name: 'Attendant Handover Report',
   when: 'Printed per attendant for a period',
-  docTitle: 'Attendant Handover Report',
   defaults: DEFAULT_ATTENDANT_REPORT_CONFIG.sections,
   labels: ATTENDANT_REPORT_SECTION_LABELS,
   descriptions: {
@@ -160,23 +108,6 @@ const ATTENDANT_REPORT: ReportTemplate = {
     terminals: 'Card and UPI taken',
     variance: 'Shortage or excess per shift',
     signature: "The attendant's acknowledgement and sign-off",
-  },
-  preview: {
-    summary: {
-      kind: 'kpis',
-      tiles: [
-        ['Shifts', '12'],
-        ['Litres', '9,860'],
-        ['Cash', '3.1L'],
-        ['Variance', '−240'],
-      ],
-    },
-    fuelSales: { kind: 'table', columns: ['Shift', 'Product', 'Litres', 'Amount'] },
-    merchandise: { kind: 'table', columns: ['Product', 'Qty', 'Amount'] },
-    creditSales: { kind: 'table', columns: ['Customer', 'Vehicle', 'Amount'] },
-    terminals: { kind: 'table', columns: ['Terminal', 'Card', 'UPI'] },
-    variance: { kind: 'table', columns: ['Shift', 'Expected', 'Declared', 'Variance'] },
-    signature: { kind: 'signatures', roles: ['Attendant', 'Manager'] },
   },
   presets: {
     compact: ['header', 'summary', 'variance', 'signature'],

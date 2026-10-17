@@ -10,7 +10,12 @@ import {
   type InsightsStockLossReader,
   type InsightsStockLossRow,
 } from '@pump/core';
-import { CASH_VARIANCE_MODEL_TWO_LEVEL, num, VARIANCE_EPSILON } from '@pump/shared';
+import {
+  CASH_VARIANCE_MODEL_TWO_LEVEL,
+  num,
+  QUANTITY_EPSILON,
+  VARIANCE_EPSILON,
+} from '@pump/shared';
 import {
   dssrCreditTotal,
   dssrDaySales,
@@ -170,7 +175,8 @@ export class DrizzleInsightsStockLossReader implements InsightsStockLossReader {
         SELECT tank_id,
                SUM(variance) AS variance,
                COUNT(*)::int AS dips,
-               CASE WHEN COUNT(*) FILTER (WHERE variance <> 0 AND unit_cost IS NULL) > 0 THEN NULL
+               -- A balanced dip (isBalancedQuantity, #556) needs no cost to value it.
+               CASE WHEN COUNT(*) FILTER (WHERE ABS(variance) >= ${QUANTITY_EPSILON} AND unit_cost IS NULL) > 0 THEN NULL
                     ELSE SUM(variance * COALESCE(unit_cost, 0)) END AS worth
         FROM dip_rows
         WHERE tank_id IS NOT NULL

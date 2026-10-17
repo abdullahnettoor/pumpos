@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorBoundary, ToastProvider } from '@pump/ui';
+import { ErrorBoundary, ToastProvider, TooltipProvider } from '@pump/ui';
 import App from './App.js';
 import '@pump/ui/src/index.css';
 import '@pump/ui/src/pump-ds/tailwind.css';
@@ -22,7 +22,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
-          <App />
+          <TooltipProvider>
+            <App />
+          </TooltipProvider>
         </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>

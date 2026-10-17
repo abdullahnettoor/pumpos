@@ -91,6 +91,28 @@ describe('composeDssr document counts and per-shift fuel value (#391)', () => {
   });
 });
 
+describe('composeDssr cash sales (#516)', () => {
+  it("totals the cash the closed shifts' Drawers took, floats excluded", () => {
+    const d = composeDssr(
+      emptySource({
+        shiftSummaries: [
+          {
+            shiftId: 'sh-1',
+            snapshot: { reconciliation: { cashSales: 34800 }, payments: { cash: 34800 } },
+          },
+          // A summary written before the projected `payments` split.
+          { shiftId: 'sh-2', snapshot: { reconciliation: { cashSales: 9300.25 } } },
+        ],
+      }),
+    ) as any;
+    expect(d.cashSales).toBe(44100.25);
+  });
+
+  it('reports zero cash sales for a day with no closed shifts', () => {
+    expect((composeDssr(emptySource()) as any).cashSales).toBe(0);
+  });
+});
+
 describe('composeDssr tank stock movement (#395)', () => {
   const dip = {
     tankName: 'Tank 1',

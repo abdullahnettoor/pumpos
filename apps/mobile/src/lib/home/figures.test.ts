@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { deriveMoney, deriveTanks, deriveTiles, tankLevel } from './figures.js';
+import { DEFAULT_TANK_LEVEL_SETTINGS } from '@pump/shared';
+import { deriveMoney, deriveTanks as deriveTanksWith, deriveTiles } from './figures.js';
+
+const deriveTanks = (rows: readonly unknown[]) =>
+  deriveTanksWith(rows, DEFAULT_TANK_LEVEL_SETTINGS);
 import { compactRupees, rupees, signedRupees } from '../format.js';
 
 describe('rupee formatting', () => {
@@ -10,8 +14,8 @@ describe('rupee formatting', () => {
     expect(signedRupees(-340)).toBe('−₹340');
     expect(signedRupees(340)).toBe('₹340');
   });
-  it('abbreviates only from a lakh up', () => {
-    expect(compactRupees(27520)).toBe('₹27,520');
+  it('abbreviates from a thousand up', () => {
+    expect(compactRupees(27520)).toBe('₹27.5k');
     expect(compactRupees(682400)).toBe('₹6.82L');
     expect(compactRupees(1043200)).toBe('₹10.43L');
     expect(compactRupees(25000000)).toBe('₹2.5Cr');
@@ -64,16 +68,16 @@ describe('deriveTiles', () => {
 });
 
 describe('tank gauges', () => {
-  it('turns red below 25% and amber below 40%', () => {
-    expect(tankLevel(0)).toBe('red');
-    expect(tankLevel(24.9)).toBe('red');
-    expect(tankLevel(25)).toBe('amber');
-    expect(tankLevel(39.9)).toBe('amber');
-    expect(tankLevel(40)).toBe('ok');
-    expect(tankLevel(100)).toBe('ok');
+  it('colours by the station tank levels (#520), default 25 / 40', () => {
+    const row = { id: 't', name: 'T', productName: 'P', capacity: 1000, currentVolume: 300 };
+    expect(deriveTanks([row])[0]?.level).toBe('low');
+    expect(deriveTanksWith([row], { criticalBelowPct: 35, lowBelowPct: 50 })[0]?.level).toBe(
+      'critical',
+    );
+    expect(deriveTanksWith([row], { criticalBelowPct: 10, lowBelowPct: 20 })[0]?.level).toBe('ok');
   });
 
-  it('derives fill, level and a KL label per tank', () => {
+  it('derives fill, level and the stock of capacity per tank (#609)', () => {
     const [ms, hsd] = deriveTanks([
       {
         id: 't1',
@@ -94,8 +98,21 @@ describe('tank gauges', () => {
         productUnit: 'Litre',
       },
     ]);
-    expect(ms).toMatchObject({ title: 'MS', pct: 62, fill: 62, level: 'ok', volume: '12.4 KL' });
-    expect(hsd).toMatchObject({ title: 'HSD', pct: 18, level: 'red', volume: '3.6 KL' });
+    expect(ms).toMatchObject({
+      title: 'MS',
+      pct: 62,
+      fill: 62,
+      level: 'ok',
+      stock: '12,400 L',
+      detail: 'of 20,000 L · 62%',
+    });
+    expect(hsd).toMatchObject({
+      title: 'HSD',
+      pct: 18,
+      level: 'critical',
+      stock: '3,600 L',
+      detail: 'of 20,000 L · 18%',
+    });
   });
 
   it('keeps the tube within bounds when book stock is over capacity', () => {
@@ -111,7 +128,7 @@ describe('tank gauges', () => {
       { id: 'b', name: 'B', productName: 'P', capacity: 1000, currentVolume: -50 },
     ]);
     expect(a).toMatchObject({ pct: null, fill: 0, level: 'unknown' });
-    expect(b).toMatchObject({ pct: 0, fill: 0, level: 'red' });
+    expect(b).toMatchObject({ pct: 0, fill: 0, level: 'critical' });
   });
 
   it('words days of cover from the server figure, and hides it without history', () => {
@@ -152,7 +169,7 @@ describe('tank gauges', () => {
         productUnit: 'kg',
       },
     ]);
-    expect(t.volume).toBe('250 kg');
+    expect(t).toMatchObject({ stock: '250 kg', detail: 'of 500 kg · 50%' });
   });
 });
 

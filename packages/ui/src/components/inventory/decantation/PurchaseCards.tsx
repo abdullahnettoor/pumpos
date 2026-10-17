@@ -1,7 +1,8 @@
 import React from 'react';
-import { Chip } from '../../../pump-ds/index.js';
+import { Chip, Icon, StatusChip } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
 import type { LinkablePurchase } from '@pump/shared';
-import { fmtLitres } from './format.js';
+import { formatDate, formatDensity, formatQuantity } from '../../../utils/format.js';
 
 /**
  * Fuel Purchase cards of one product. One invoice per product per tanker visit:
@@ -13,11 +14,10 @@ export const PurchaseCards: React.FC<{
   onSelect: (purchaseId: string) => void;
   loading?: boolean;
 }> = ({ purchases, selectedId, onSelect, loading }) => {
-  if (loading)
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading purchases…</div>;
+  if (loading) return <div className="text-[12px] text-ink-muted">Loading purchases…</div>;
   if (purchases.length === 0)
     return (
-      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+      <div className="text-[12px] text-ink-muted">
         No Fuel Purchase recorded for this product yet. You can link it later.
       </div>
     );
@@ -25,57 +25,46 @@ export const PurchaseCards: React.FC<{
     (a, b) => Number(b.awaitingDecantation) - Number(a.awaitingDecantation),
   );
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+    <div className="grid grid-cols-2 gap-1.5">
       {ordered.map((p) => {
         const on = p.purchaseId === selectedId;
         return (
+          // A toggle card (pick / clear), not an action: stays a native pressed button.
           <button
             key={p.purchaseId}
             type="button"
             aria-pressed={on}
             onClick={() => onSelect(on ? '' : p.purchaseId)}
-            style={{
-              textAlign: 'left',
-              padding: '8px 10px',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12,
-              color: 'var(--text-strong)',
-              border: `1px solid ${on ? 'var(--brand-primary)' : 'var(--border-soft)'}`,
-              background: on
-                ? 'color-mix(in oklab, var(--brand-primary) 8%, transparent)'
-                : 'var(--bg-surface)',
-            }}
+            className={cn(
+              'cursor-pointer rounded-input border px-2.5 py-2 text-left text-[12px] text-ink',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+              on
+                ? 'border-brand bg-brand/10'
+                : 'border-border-soft bg-surface hover:bg-surface-alt',
+            )}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-              <span>
-                {on ? '✓ ' : ''}
+            <div className="flex justify-between gap-2 font-semibold">
+              <span className="inline-flex items-center gap-1">
+                {on && <Icon name="check" size="xs" className="text-brand" aria-hidden="true" />}
                 {p.invoiceNumber || p.documentNumber}
               </span>
-              <span>{fmtLitres(p.invoiceQty)}</span>
+              <span className="tabular-nums">{formatQuantity(p.invoiceQty, 'L')}</span>
             </div>
-            <div
-              style={{
-                color: 'var(--text-muted)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
+            <div className="flex justify-between gap-2 text-ink-muted">
               <span>
-                {p.supplierName ?? '—'} · {p.entryDate}
+                {p.supplierName ?? '—'} · {formatDate(p.entryDate)}
               </span>
-              <span>{p.invoiceDensity != null ? `${p.invoiceDensity} kg/m³` : 'no density'}</span>
+              <span className="tabular-nums">
+                {p.invoiceDensity != null
+                  ? `${formatDensity(p.invoiceDensity)} kg/m³`
+                  : 'no density'}
+              </span>
             </div>
             {(p.awaitingDecantation || p.linkedDecantationCount > 0) && (
-              <div style={{ marginTop: 4, display: 'flex', gap: 4 }}>
-                {p.awaitingDecantation && (
-                  <Chip tone="warning" size="xs" variant="soft">
-                    Awaiting decantation
-                  </Chip>
-                )}
+              <div className="mt-1 flex gap-1">
+                {p.awaitingDecantation && <StatusChip status="awaiting-decantation" size="md" />}
                 {p.linkedDecantationCount > 0 && (
-                  <Chip tone="neutral" size="xs" variant="soft">
+                  <Chip tone="neutral" size="md" variant="soft">
                     Linked to {p.linkedDecantationCount}
                   </Chip>
                 )}

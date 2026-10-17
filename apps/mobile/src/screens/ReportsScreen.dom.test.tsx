@@ -30,7 +30,7 @@ vi.mock('@pump/ui', async (importOriginal) => {
   };
 });
 vi.mock('./reports/ReportDayPage.js', () => ({
-  ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSSR for {businessDate}</p>,
+  ReportDayPage: ({ businessDate }: { businessDate: string }) => <p>DSR for {businessDate}</p>,
 }));
 
 vi.mock('./decantation/DecantationsListPage.js', () => ({
@@ -127,8 +127,8 @@ describe('ReportsScreen', () => {
       },
     ];
     mount();
-    const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
-    expect(row.getAttribute('aria-label')).toBe('Fri 9 Oct, Live, In progress, See Home');
+    const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
+    expect(row.getAttribute('aria-label')).toBe('Fri 9 Oct, Open, In progress, See Home');
     expect(within(row).getByText('In progress')).toBeTruthy();
     expect(within(row).getByText('See Home')).toBeTruthy();
     expect(row.textContent).not.toContain('21,500');
@@ -144,7 +144,7 @@ describe('ReportsScreen', () => {
     it('opens Home for a Manager, as for an Owner', () => {
       liveOnly();
       mount(tabsForRole('Manager', false));
-      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('See Home')).toBeTruthy();
       fireEvent.click(row);
       expect(screen.getByTestId('tab').textContent).toBe('home');
@@ -153,7 +153,7 @@ describe('ReportsScreen', () => {
     it('opens Shifts for a dock that has Shifts but no Home', () => {
       liveOnly();
       mount(['shifts', 'reports', 'money', 'insights']);
-      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Live/ });
+      const row = screen.getByRole('button', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('See Shifts')).toBeTruthy();
       fireEvent.click(row);
       expect(screen.getByTestId('tab').textContent).toBe('shifts');
@@ -162,11 +162,21 @@ describe('ReportsScreen', () => {
     it('is not tappable for an Accountant (no Home or Shifts), and says the day is in progress', () => {
       liveOnly();
       mount(['reports', 'money']);
-      expect(screen.queryByRole('button', { name: /^Fri 9 Oct, Live/ })).toBeNull();
-      const row = screen.getByRole('group', { name: /^Fri 9 Oct, Live/ });
+      expect(screen.queryByRole('button', { name: /^Fri 9 Oct, Open/ })).toBeNull();
+      const row = screen.getByRole('group', { name: /^Fri 9 Oct, Open/ });
       expect(within(row).getByText('Day in progress')).toBeTruthy();
       expect(screen.getByTestId('tab').textContent).toBe('reports');
     });
+  });
+
+  it('compacts the tile figure only; a day row shows and speaks the exact amount', () => {
+    seed();
+    mount();
+    const tile = screen.getByText('Last 7 days').parentElement!;
+    expect(within(tile).getByText('₹31.96L')).toBeTruthy();
+    const row = screen.getByRole('button', { name: /^Wed 7 Oct, Draft/ });
+    expect(within(row).getByText('₹51,800')).toBeTruthy();
+    expect(row.getAttribute('aria-label')).not.toMatch(/₹[\d.]+(k|L|Cr)\b/);
   });
 
   it('gives each row a label that carries its figures, with the decoration hidden', () => {
@@ -189,26 +199,26 @@ describe('ReportsScreen', () => {
   it('routes Live to Home', () => {
     seed();
     mount();
-    fireEvent.click(screen.getByRole('button', { name: /^Fri 9 Oct, Live/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Fri 9 Oct, Open/ }));
     expect(screen.getByTestId('tab').textContent).toBe('home');
   });
 
-  it('opens the DSSR for a Draft day', () => {
+  it('opens the DSR for a Draft day', () => {
     seed();
     mount();
     fireEvent.click(screen.getByRole('button', { name: /^Thu 8 Oct, Draft/ }));
-    expect(screen.getByText('DSSR for 2026-10-08')).toBeTruthy();
+    expect(screen.getByText('DSR for 2026-10-08')).toBeTruthy();
     expect(screen.getByTestId('tab').textContent).toBe('reports');
   });
 
-  it('opens the DSSR for a Sealed day', () => {
+  it('opens the DSR for a Sealed day', () => {
     seed();
     mount();
     fireEvent.click(screen.getByRole('button', { name: /^Tue 6 Oct, Sealed/ }));
-    expect(screen.getByText('DSSR for 2026-10-06')).toBeTruthy();
+    expect(screen.getByText('DSR for 2026-10-06')).toBeTruthy();
   });
 
-  it('shows a closed day without a DSSR snapshot as Report missing and does not open it', () => {
+  it('shows a closed day without a DSR snapshot as Report missing and does not open it', () => {
     seed();
     feed.pages = [
       {
@@ -220,10 +230,10 @@ describe('ReportsScreen', () => {
     expect(screen.queryByText('Sealed')).toBeNull();
     const row = screen.getByRole('group', { name: /^Mon 5 Oct, Report missing/ });
     expect(within(row).getByText('Report missing')).toBeTruthy();
-    expect(within(row).getByText('No DSSR for this day')).toBeTruthy();
+    expect(within(row).getByText('No DSR for this day')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Mon 5 Oct/ })).toBeNull();
     fireEvent.click(row);
-    expect(screen.queryByText(/^DSSR for \d/)).toBeNull();
+    expect(screen.queryByText(/^DSR for \d/)).toBeNull();
     expect(screen.getByTestId('tab').textContent).toBe('reports');
   });
 
@@ -278,9 +288,17 @@ describe('ReportsScreen', () => {
     },
   );
 
-  it.each(['Staff', 'Attendant'] as const)('hides both entries from %s', (role) => {
+  it('gives Staff the Density entry but not Decantations', () => {
     seed();
-    mount(['reports'], role);
+    mount(['reports'], 'Staff');
+    expect(screen.queryByRole('button', { name: /Decantations/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Density/ }));
+    expect(screen.getByText('Density page')).toBeTruthy();
+  });
+
+  it('hides both entries from Attendant', () => {
+    seed();
+    mount(['reports'], 'Attendant');
     expect(screen.queryByRole('button', { name: /Decantations/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Density/ })).toBeNull();
   });

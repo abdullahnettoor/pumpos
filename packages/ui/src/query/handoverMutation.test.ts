@@ -125,6 +125,7 @@ describe('Handover mutation state', () => {
       const options = recordHandoverMutationOptions(
         { invalidateQueries: async () => {} },
         runBackgroundTask,
+        () => {},
       );
 
       options.onSuccess(accepted, { stationId: 'station-1', payload, idempotencyKey: 'key-1' });
@@ -149,6 +150,7 @@ describe('Handover mutation state', () => {
         (task) => {
           handed = task as Promise<unknown>;
         },
+        () => {},
       );
 
       options.onSuccess(accepted, { stationId: 'station-1', payload, idempotencyKey: 'key-1' });
@@ -176,6 +178,7 @@ describe('Handover mutation state', () => {
       (task) => {
         void task;
       },
+      () => {},
     );
 
     const returned = options.onSuccess(accepted, {
@@ -188,6 +191,32 @@ describe('Handover mutation state', () => {
     expect(invalidated).toBe(handoverInvalidationKeys('station-1').length);
     released();
     await blocked;
+  });
+});
+
+describe('patch from the answer, then revalidate (#606)', () => {
+  it('writes the answer into the cache before it starts the refresh', () => {
+    const order: string[] = [];
+    const options = recordHandoverMutationOptions(
+      {
+        invalidateQueries: async () => {
+          order.push('invalidate');
+        },
+      },
+      (task) => {
+        void task;
+      },
+      (stationId, result) => {
+        expect(stationId).toBe('station-1');
+        expect(result).toBe(accepted);
+        order.push('patch');
+      },
+    );
+
+    options.onSuccess(accepted, { stationId: 'station-1', payload, idempotencyKey: 'key-1' });
+
+    expect(order[0]).toBe('patch');
+    expect(order.slice(1).every((step) => step === 'invalidate')).toBe(true);
   });
 });
 

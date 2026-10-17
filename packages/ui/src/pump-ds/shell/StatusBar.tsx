@@ -85,6 +85,12 @@ export interface StatusBarProps {
   /** A manual check is running: the version reads "Checking…". */
   checkingUpdates?: boolean;
 
+  /**
+   * Non-production build badge ("Local", "Dev", "Preview"), shown at the far
+   * right next to the version (#603). Production passes nothing.
+   */
+  environmentTag?: string | null;
+
   className?: string;
 }
 
@@ -121,7 +127,7 @@ const Segment: React.FC<React.HTMLAttributes<HTMLDivElement> & { as?: 'div' }> =
 }) => (
   <div
     className={cn(
-      'inline-flex h-full items-center gap-1.5 px-2.5 text-[11.5px] text-ink-muted',
+      'inline-flex h-full items-center gap-1.5 px-2.5 text-[12px] text-ink-muted',
       className,
     )}
     {...rest}
@@ -150,6 +156,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onUpdate,
   onCheckUpdates,
   checkingUpdates = false,
+  environmentTag,
   className,
 }) => {
   const sync = SYNC_META[syncStatus];
@@ -191,7 +198,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               <button
                 type="button"
                 data-testid="statusbar-business-day"
-                className="inline-flex h-full items-center gap-1.5 rounded-none px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong focus:outline-none focus-visible:outline-none"
+                className="inline-flex h-full items-center gap-1.5 rounded-none px-2.5 text-[12px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong focus:outline-none focus-visible:outline-none"
               >
                 <Dot tone={businessDayStatus === 'open' ? 'success' : 'neutral'} size="sm" />
                 <span>
@@ -202,13 +209,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </MenuTrigger>
             {/* Opens upward out of the bottom bar. */}
             <MenuContent side="top" align="start">
-              <MenuLabel>Business Day</MenuLabel>
+              <MenuLabel>Business day</MenuLabel>
               <MenuItem onSelect={onBusinessDay}>
                 <span className="flex flex-1 items-center justify-between gap-3">
-                  <span>Current Business Date · {businessDate}</span>
+                  <span>Current business date · {businessDate}</span>
                   <span
                     className={cn(
-                      'text-[11px] font-medium',
+                      'text-[12px] font-medium',
                       businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted',
                     )}
                   >
@@ -219,22 +226,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               {businessDaysState === 'ready' && businessDays.length > 0 && (
                 <>
                   <MenuSeparator />
-                  <MenuLabel>Past Open Business Days</MenuLabel>
+                  <MenuLabel>Past open business days</MenuLabel>
                 </>
               )}
               {businessDaysState === 'loading' && (
-                <div className="px-2 py-1.5 text-[11px] text-ink-faint">
-                  Checking Past Open Business Days
+                <div className="px-2 py-1.5 text-[12px] text-ink-faint">
+                  Checking past open business days…
                 </div>
               )}
               {businessDaysState === 'unavailable' && (
-                <div className="px-2 py-1.5 text-[11px] text-danger-fg">
-                  Past Open Business Days unavailable
+                <div className="px-2 py-1.5 text-[12px] text-danger-fg">
+                  Past open business days unavailable
                 </div>
               )}
               {businessDays.length === 0 && businessDaysState === 'ready' && (
-                <div className="px-2 py-1.5 text-[11px] text-ink-faint">
-                  No Past Open Business Days
+                <div className="px-2 py-1.5 text-[12px] text-ink-faint">
+                  No past open business days
                 </div>
               )}
               {businessDaysState === 'ready' &&
@@ -243,11 +250,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     <span className="flex flex-1 items-center justify-between gap-4">
                       <span className="flex flex-col">
                         <span>{d.label}</span>
-                        <span className="text-[10px] text-ink-faint">
+                        <span className="text-[12px] text-ink-faint">
                           {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
                         </span>
                       </span>
-                      <span className="text-[11px] text-brand">Open</span>
+                      <span className="text-[12px] text-brand">Open</span>
                     </span>
                   </MenuItem>
                 ))}
@@ -287,7 +294,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               onClick={onUpdate}
               disabled={!onUpdate}
               className={cn(
-                'inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[11px] font-medium text-info-fg transition-colors',
+                'inline-flex h-[18px] items-center gap-1 rounded-chip bg-info-bg px-2 text-[12px] font-medium text-info-fg transition-colors',
                 onUpdate ? 'hover:brightness-95' : 'cursor-default opacity-80',
               )}
             >
@@ -301,7 +308,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               title="Check for updates"
               onClick={onCheckUpdates}
               disabled={checkingUpdates}
-              className="inline-flex h-full items-center px-2.5 text-[11.5px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong disabled:cursor-default"
+              className="inline-flex h-full items-center px-2.5 text-[12px] text-ink-muted transition-colors hover:bg-surface hover:text-ink-strong disabled:cursor-default"
             >
               <span>{checkingUpdates ? 'Checking\u2026' : `v${appVersion}`}</span>
             </button>
@@ -311,6 +318,18 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             </Segment>
           )}
         </>
+      )}
+
+      {/* Build badge, last: never over page content or its actions. */}
+      {environmentTag && (
+        <Segment className="pr-2 pl-1">
+          <span
+            data-testid="statusbar-environment"
+            className="inline-flex h-[18px] items-center rounded-chip border border-warning-fg/40 bg-warning-bg px-1.5 text-[12px] font-bold uppercase leading-none tracking-[0.08em] text-warning-fg"
+          >
+            {environmentTag}
+          </span>
+        </Segment>
       )}
     </div>
   );

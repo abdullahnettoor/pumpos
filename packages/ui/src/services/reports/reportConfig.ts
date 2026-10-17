@@ -2,7 +2,7 @@
 // import. The heavy PDF document modules (shiftSummaryDoc / dssrDoc) and the
 // settings/section-config UI all read from here, so importing config does not
 // pull the PDF engine into the main bundle.
-import type { Letterhead } from './letterhead.js';
+import { letterheadFromStation, showLogoFromStation, type Letterhead } from './letterhead.js';
 
 export type ShiftSummarySection =
   | 'header'
@@ -111,39 +111,39 @@ export const DEFAULT_ATTENDANT_REPORT_CONFIG: AttendantReportConfig = {
 
 /** Human labels for the section-config UI (R2). `header` is always rendered. */
 export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
-  header: 'Header / Letterhead',
-  meta: 'Shift Meta',
+  header: 'Header / letterhead',
+  meta: 'Shift meta',
   warnings: 'Warnings',
-  nozzles: 'Nozzle Reconciliation',
-  handovers: 'Attendant Handovers',
-  terminals: 'POS Terminals',
-  creditSales: 'Fuel-on-Credit Sales',
-  cashRecon: 'Cash Reconciliation',
+  nozzles: 'Nozzle reconciliation',
+  handovers: 'Attendant handovers',
+  terminals: 'POS terminals',
+  creditSales: 'Fuel-on-credit sales',
+  cashRecon: 'Cash reconciliation',
   drawers: 'Drawers (per attendant)',
   signatures: 'Signatures',
 };
 
 export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
-  header: 'Header / Letterhead',
-  meta: 'Day Meta',
+  header: 'Header / letterhead',
+  meta: 'Day meta',
   kpis: 'KPIs',
-  financial: 'Financial Summary',
-  fuelByProduct: 'Fuel Sales by Product',
-  nozzles: 'Nozzle Aggregation',
-  fuelStockVariance: 'Tank Dip & Fuel Variance',
-  merchandiseStockVariance: 'Merchandise Variance',
-  shifts: 'Included Shifts',
+  financial: 'Financial summary',
+  fuelByProduct: 'Fuel sales by product',
+  nozzles: 'Nozzle aggregation',
+  fuelStockVariance: 'Tank dip & fuel variance',
+  merchandiseStockVariance: 'Product stock variance',
+  shifts: 'Included shifts',
 };
 
 export const ATTENDANT_REPORT_SECTION_LABELS: Record<AttendantReportSection, string> = {
-  header: 'Header / Letterhead',
-  summary: 'Period Summary',
-  fuelSales: 'Fuel Sales by Shift',
-  merchandise: 'Merchandise (Billed + Handover)',
-  creditSales: 'Fuel-on-Credit Sales',
-  terminals: 'Payment Terminals',
-  variance: 'Variance by Shift',
-  signature: 'Acknowledgement & Signatures',
+  header: 'Header / letterhead',
+  summary: 'Period summary',
+  fuelSales: 'Fuel sales by shift',
+  merchandise: 'Product sales (billed + handover)',
+  creditSales: 'Fuel-on-credit sales',
+  terminals: 'Payment terminals',
+  variance: 'Variance by shift',
+  signature: 'Acknowledgement & signatures',
 };
 
 /**
@@ -162,4 +162,94 @@ export function resolveSections<S extends string>(
 /** Resolve the configured paper size from a station's settings (default A4). */
 export function paperFromStation(station: any): 'A4' | 'LETTER' {
   return station?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4';
+}
+
+/**
+ * What a document prints with, overriding the station's saved layout: the
+ * template preview (#605) prints the layout being edited, not the saved one.
+ */
+export interface DocConfigOverrides {
+  /** The enabled section keys, in print order. */
+  sections?: readonly string[];
+  paper?: 'A4' | 'LETTER';
+  showLogo?: boolean;
+  /**
+   * The letterhead, already built by `letterheadFromStation`: a preview hands
+   * over just that, not the whole station.
+   */
+  letterhead?: Letterhead;
+}
+
+interface StationForReports {
+  name?: string;
+  settings?: Record<string, any> | null;
+}
+
+/** The letterhead, with the logo choice the document prints with. */
+function docLetterhead(station: StationForReports | null | undefined, over: DocConfigOverrides) {
+  const letterhead = over.letterhead ?? letterheadFromStation(station);
+  return letterhead && over.showLogo !== undefined
+    ? { ...letterhead, showLogo: over.showLogo }
+    : letterhead;
+}
+
+const savedSections = (station: StationForReports | null | undefined, key: string) =>
+  station?.settings?.report_config?.[key] as readonly unknown[] | undefined;
+
+/**
+ * The Shift Summary's document config from a station: its saved sections,
+ * letterhead and paper. The PDF export and the template preview build it here,
+ * so the preview prints what the export prints.
+ */
+export function shiftSummaryDocConfig(
+  station: StationForReports | null | undefined,
+  over: DocConfigOverrides = {},
+  fallbackName?: string,
+): ReportConfig {
+  return {
+    ...DEFAULT_SHIFT_SUMMARY_CONFIG,
+    sections: resolveSections(
+      over.sections ?? savedSections(station, 'shiftSummary'),
+      DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
+    ),
+    stationName: station?.name || fallbackName,
+    letterhead: docLetterhead(station, over),
+    paper: over.paper ?? paperFromStation(station),
+  };
+}
+
+/** The DSR's document config from a station (see `shiftSummaryDocConfig`). */
+export function dssrDocConfig(
+  station: StationForReports | null | undefined,
+  over: DocConfigOverrides = {},
+): DssrReportConfig {
+  return {
+    ...DEFAULT_DSSR_CONFIG,
+    sections: resolveSections(
+      over.sections ?? savedSections(station, 'dssr'),
+      DEFAULT_DSSR_CONFIG.sections,
+    ),
+    stationName: station?.name,
+    letterhead: docLetterhead(station, over),
+    paper: over.paper ?? paperFromStation(station),
+  };
+}
+
+/** The Attendant Handover Report's document config from a station. */
+export function attendantReportDocConfig(
+  station: StationForReports | null | undefined,
+  over: DocConfigOverrides = {},
+): AttendantReportConfig {
+  return {
+    ...DEFAULT_ATTENDANT_REPORT_CONFIG,
+    sections: resolveSections(
+      over.sections ?? savedSections(station, 'attendantReport'),
+      DEFAULT_ATTENDANT_REPORT_CONFIG.sections,
+    ),
+    stationName: station?.name,
+    letterhead: docLetterhead(station, over),
+    paper: over.paper ?? paperFromStation(station),
+    // A station that turned its logo off must not get one back.
+    showLogo: over.showLogo ?? showLogoFromStation(station),
+  };
 }

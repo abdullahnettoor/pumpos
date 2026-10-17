@@ -5,17 +5,14 @@ import {
   attendantHandoverSchema,
   businessDateSettings,
   byNaturalField,
-  canOpenShift,
-  canCloseShift,
-  canReopenShift,
-  canRecordHandover,
+  can,
   compareByDispenserThenNozzle,
   dispenserLabel,
-  isAuthorizedForStation,
   isAttendant,
+  isAuthorizedForStation,
   isHandoverSelfScoped,
+  productCashDrawer,
   resolveBusinessDate,
-  type Role,
 } from '@pump/shared';
 import {
   OpenShift,
@@ -55,6 +52,7 @@ import {
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
 } from '../infra/repositories/station-ops-repositories.js';
 import { assignableStaffWhere } from '../infra/repositories/assignable-staff.js';
 import {
@@ -112,10 +110,6 @@ const shiftIdBody = z
 const stationIdBody = z
   .object({ stationId: z.string().trim().min(1, 'stationId is required') })
   .passthrough();
-
-function canManageDay(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
 
 // GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
 // A lightweight lifecycle read for desktop/console. Missing is explicit rather
@@ -231,6 +225,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         s.id,
         s.status,
         COALESCE(t.name, 'Custom') AS "templateName",
+        ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
         ${sql.raw(isoTs('s.closed_at'))} AS "closedAt",
         bd.business_date AS "businessDate",
         ${shiftSequenceSql('s')} AS "shiftSequence",
@@ -239,6 +234,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         COALESCE((ss.snapshot_data ->> 'totalVolumeSold')::numeric,
                  (ss.snapshot_data ->> 'totalVolume')::numeric, 0) AS "totalVolumeSold",
         COALESCE((ss.snapshot_data ->> 'closingCash')::numeric, 0) AS "closingCash",
+        COALESCE((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric, 0) AS "totalFuelSalesValue",
+        COALESCE((ss.snapshot_data ->> 'cashVariance')::numeric, 0) AS "cashVariance",
         COALESCE(ss.snapshot_data -> 'fuelByProduct', '[]'::jsonb) AS "fuelByProduct"
       FROM shifts s
       LEFT JOIN shift_templates t ON t.id = s.shift_template_id
@@ -259,11 +256,28 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       JOIN business_days bd ON bd.id = s.business_day_id
       WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
         AND bd.business_date = ${todayBusinessDate}
+    ),
+    today_shifts AS (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'id', s.id,
+        'shiftTemplateId', s.shift_template_id,
+        'openedAt', ${sql.raw(isoTs('s.opened_at'))},
+        'closedAt', ${sql.raw(isoTs('s.closed_at'))},
+        -- From the immutable Shift Summary snapshot; null until the shift closes.
+        'totalFuelSalesValue', (ss.snapshot_data ->> 'totalFuelSalesValue')::numeric,
+        'cashVariance', (ss.snapshot_data ->> 'cashVariance')::numeric
+      ) ORDER BY s.opened_at), '[]'::jsonb) AS j
+      FROM shifts s
+      JOIN business_days bd ON bd.id = s.business_day_id
+      LEFT JOIN shift_summaries ss ON ss.shift_id = s.id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+        AND bd.business_date = ${todayBusinessDate}
     )
     SELECT
       (SELECT row_to_json(open_shift) FROM open_shift) AS open_shift,
       (SELECT row_to_json(last_shift) FROM last_shift) AS last_shift,
-      (SELECT row_to_json(today) FROM today) AS today
+      (SELECT row_to_json(today) FROM today) AS today,
+      (SELECT j FROM today_shifts) AS today_shifts
   `);
 
   const openRaw = (row as any)?.open_shift as Record<string, any> | null;
@@ -295,7 +309,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
     if (
       lastRaw.status === 'CLOSED' &&
       lastRaw.dayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !openRaw
     )
       canReopenLastShift = true;
@@ -303,6 +317,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       id: lastRaw.id,
       status: lastRaw.status,
       templateName: lastRaw.templateName,
+      openedAt: lastRaw.openedAt,
       closedAt: lastRaw.closedAt,
       businessDate: lastRaw.businessDate ?? null,
       shiftSequence: lastRaw.shiftSequence ?? null,
@@ -311,6 +326,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       ? {
           totalVolumeSold: Number(lastRaw.totalVolumeSold),
           closingCash: Number(lastRaw.closingCash),
+          totalFuelSalesValue: Number(lastRaw.totalFuelSalesValue ?? 0),
+          cashVariance: Number(lastRaw.cashVariance ?? 0),
           fuelUnits: Array.from(
             new Set(
               ((lastRaw.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
@@ -334,6 +351,14 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         fuelSalesValue: Number(todayRaw?.fuelSalesValue ?? 0),
         volume: Number(todayRaw?.volume ?? 0),
         cashVariance: Number(todayRaw?.cashVariance ?? 0),
+        /** Every shift of the current Business Day (feeds the dashboard timeline). */
+        /** Closed shifts carry `totalFuelSalesValue` / `cashVariance` from their snapshot (null while open). */
+        shifts: (((row as any)?.today_shifts as Record<string, any>[] | null) ?? []).map((sh) => ({
+          ...sh,
+          totalFuelSalesValue:
+            sh.totalFuelSalesValue == null ? null : Number(sh.totalFuelSalesValue),
+          cashVariance: sh.cashVariance == null ? null : Number(sh.cashVariance),
+        })),
       },
     },
   });
@@ -800,7 +825,8 @@ shiftsRouter.get('/status', async (c) => {
       else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
       else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
     }
-    // Only the cash the attendant actually holds folds into their handover expected.
+    // Only the cash the attendant actually holds folds into a handover expected
+    // (on one Drawer: see drawerAttributedFor).
     for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseCash;
     const emptyAttr = {
       merchandiseCash: 0,
@@ -812,6 +838,23 @@ shiftsRouter.get('/status', async (c) => {
     };
     const attributedFor = (userId: string | null | undefined) =>
       (userId && attributedMap.get(userId)) || emptyAttr;
+    // A product sale carries no DU: the attendant's product cash folds into ONE
+    // Drawer's expected, their first DU by code (#419), so expectedExtra is the
+    // cash on that Drawer and 0 on the attendant's others.
+    const productCashDuFor = (userId: string | null | undefined) =>
+      productCashDrawer(
+        assignmentRows
+          .filter((r) => r.sa.userId === userId)
+          .map((r) => ({ duId: r.sa.duId, duCode: r.du?.code, duName: r.du?.name })),
+      );
+    const drawerAttributedFor = (
+      userId: string | null | undefined,
+      duId: string | null | undefined,
+    ) => {
+      const a = attributedFor(userId);
+      const owns = duId != null && productCashDuFor(userId) === duId;
+      return { ...a, expectedExtra: owns ? a.merchandiseCash : 0 };
+    };
 
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
@@ -821,7 +864,7 @@ shiftsRouter.get('/status', async (c) => {
         userName: staffUser?.fullName ?? 'Unknown',
         duName: du?.name ?? 'Unknown',
         duCode: du?.code ?? 'Unknown',
-        attributed: attributedFor(sa.userId),
+        attributed: drawerAttributedFor(sa.userId, sa.duId),
         creditSales,
         creditTotal: creditSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
         omcSales,
@@ -835,7 +878,7 @@ shiftsRouter.get('/status', async (c) => {
         assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
       duName: assignmentRows.find((a) => a.du?.id === h.duId)?.du?.name ?? null,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
-      attributed: attributedFor(h.userId),
+      attributed: drawerAttributedFor(h.userId, h.duId),
       creditSales: creditSalesFor(h.userId, h.duId),
       creditTotal: creditSalesFor(h.userId, h.duId).reduce(
         (s: number, l: any) => s + Number(l.amount),
@@ -916,7 +959,7 @@ shiftsRouter.get('/status', async (c) => {
     if (
       currentStatus === 'CLOSED' &&
       lastShiftRow.parentDayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !dbActiveShift
     )
       canReopenLastShift = true;
@@ -1314,7 +1357,7 @@ shiftsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canRecordHandover(user.role)) {
+    if (!can(user, 'handover.record')) {
       return c.json(
         {
           success: false,
@@ -1426,7 +1469,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canOpenShift(user.role)) {
+    if (!can(user, 'shifts.open')) {
       return c.json(
         {
           success: false,
@@ -1460,6 +1503,7 @@ shiftsRouter.post(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     });
@@ -1535,7 +1579,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canCloseShift(user.role)) {
+    if (!can(user, 'shifts.close')) {
       return c.json(
         {
           success: false,
@@ -1622,7 +1666,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canReopenShift(user.role)) {
+    if (!can(user, 'shifts.reopen')) {
       return c.json(
         {
           success: false,
@@ -1687,7 +1731,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1743,7 +1787,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1785,7 +1829,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,

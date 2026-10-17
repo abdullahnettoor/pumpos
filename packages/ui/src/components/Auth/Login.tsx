@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { looksLikePhone, phoneToAuthEmail } from '@pump/shared';
 import { supabase } from '../../services/supabase.js';
-import { Form, Icon, PumpOSLockup } from '../../pump-ds/index.js';
-import { authBrandHeaderStyle } from './brandHeader.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
+import { Banner } from '../primitives/Banner.js';
+import { Field, TextInput } from '../primitives/Field.js';
+import { AuthScreen } from './AuthScreen.js';
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -37,187 +39,50 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--bg-canvas)',
-        fontFamily: 'var(--font-sans)',
-        padding: '20px',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '380px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          padding: '32px 24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-          boxShadow: 'var(--shadow-1)',
-        }}
-        className="animate-fade-in"
-      >
-        {/* Brand header */}
-        <div style={{ textAlign: 'center' }}>
-          <PumpOSLockup orientation="stacked" style={authBrandHeaderStyle} />
-          <h1
-            style={{
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginTop: '8px',
-            }}
-          >
-            Sign in to operational console
-          </h1>
-        </div>
+    <AuthScreen title="Sign in to operational console">
+      {errorMsg && <Banner severity="danger">{errorMsg}</Banner>}
 
-        {/* Error message */}
-        {errorMsg && (
-          <div
-            style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              border: '1px solid var(--border-soft)',
-              color: 'var(--state-danger-fg)',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            ⚠️ {errorMsg}
-          </div>
-        )}
-
-        {/* Login Form */}
-        <Form
-          onSubmit={handleLogin}
-          style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
-        >
-          <div className="form-group">
-            <label
-              className="form-label"
-              style={{
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-              }}
-            >
-              Email or phone
-            </label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="email@pump.com or 98765 43210"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              required
-              disabled={loading}
-              autoCapitalize="none"
-              autoCorrect="off"
-              style={{
-                width: '100%',
-                height: '36px',
-                padding: '0 12px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-strong)',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div className="form-group">
-            <label
-              className="form-label"
-              style={{
-                fontSize: '11px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-              style={{
-                width: '100%',
-                height: '36px',
-                padding: '0 12px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-strong)',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <button
-            type="submit"
+      <Form onSubmit={handleLogin} className="flex flex-col gap-3.5">
+        <Field label="Email or phone" htmlFor="login-identifier">
+          <TextInput
+            id="login-identifier"
+            type="text"
+            placeholder="email@pump.com or 98765 43210"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            required
             disabled={loading}
-            style={{
-              height: '36px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: '8px',
-              transition: 'background-color 0.15s ease',
-              width: '100%',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            {loading ? (
-              'Authenticating...'
-            ) : (
-              <>
-                Sign In
-                <Icon name="arrow-right" size="xs" aria-hidden />
-              </>
-            )}
-          </button>
-        </Form>
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
+        </Field>
 
-        <div
-          style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            textAlign: 'center',
-            fontSize: '11px',
-            color: 'var(--text-muted)',
-          }}
+        <Field label="Password" htmlFor="login-password">
+          <TextInput
+            id="login-password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={loading}
+          />
+        </Field>
+
+        <Button
+          type="submit"
+          fullWidth
+          disabled={loading}
+          className="mt-2"
+          rightIcon={loading ? undefined : <Icon name="arrow-right" size="xs" />}
         >
-          Contact system administrator for credential changes.
-        </div>
+          {loading ? 'Authenticating…' : 'Sign in'}
+        </Button>
+      </Form>
+
+      <div className="border-t border-border-soft pt-3 text-center text-[12px] text-ink-muted">
+        Contact system administrator for credential changes.
       </div>
-    </div>
+    </AuthScreen>
   );
 };

@@ -1,18 +1,80 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CloudShiftTemplateService } from '../../services/cloud.js';
+import React, { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CloudShiftTemplateService, type ShiftTemplateBody } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
-import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
+import {
+  Button,
+  ConceptIcon,
+  DataSection,
+  EmptyState,
+  Form,
+  InteractiveTable,
+  SectionHeader,
+  type TableColumn,
+} from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { Field, TextInput } from '../primitives/Field.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { queryKeys, useInvalidateOperational, useShiftTemplates } from '../../query/hooks.js';
+import { countOf } from '../../utils/ledgerWindow.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
+import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const templateService = new CloudShiftTemplateService();
 
-export const ShiftTemplates: React.FC = () => {
+const columns: TableColumn<ShiftTemplate>[] = [
+  {
+    id: 'name',
+    header: 'Shift',
+    kind: 'text',
+    value: (t) => t.name,
+    cell: (t) => <span className="font-medium text-ink-strong">{t.name}</span>,
+  },
+  {
+    id: 'hours',
+    header: 'Operating hours',
+    kind: 'text',
+    value: (t) => `${t.startTime} - ${t.endTime}`,
+    cell: (t) => (
+      <span className="font-mono tabular-nums">
+        {t.startTime} - {t.endTime}
+      </span>
+    ),
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    kind: 'status',
+    value: (t) => (t.isActive ? 'active' : 'inactive'),
+  },
+];
+
+const DEFAULT_SHIFTS: ShiftTemplateBody[] = [
+  { name: 'Morning Shift', startTime: '06:00', endTime: '14:00', isActive: true },
+  { name: 'Evening Shift', startTime: '14:00', endTime: '22:00', isActive: true },
+  { name: 'Night Shift', startTime: '22:00', endTime: '06:00', isActive: true },
+];
+
+export type ShiftTemplatesProps = CreateRequestProps;
+
+export const ShiftTemplates: React.FC<ShiftTemplatesProps> = ({
+  createRequest,
+  onCreateHandled,
+}) => {
   const toast = useToast();
   const runTask = useRunTask();
-  const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  // One session per opened edit (#537): a new edit never inherits an unsettled key.
+  const sessionRef = useRef<SubmitKeySession | null>(null);
+  const qc = useQueryClient();
+  const invalidateOperational = useInvalidateOperational();
+  const templatesQ = useShiftTemplates();
+  const templates: ShiftTemplate[] = templatesQ.data ?? [];
+  const [prefilling, setPrefilling] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Form states
@@ -20,82 +82,54 @@ export const ShiftTemplates: React.FC = () => {
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('14:00');
 
-  // useCallback so the effect below can list it honestly: its identity only
-  // changes if something it closes over does, and it closes over nothing.
-  const loadTemplates = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await templateService.listTemplates();
-      setTemplates(data);
-
-      // Default name for next shift
-      setName(`Shift ${data.length + 1}`);
-      if (data.length === 0) {
-        setStartTime('06:00');
-        setEndTime('14:00');
-      } else if (data.length === 1) {
-        setStartTime('14:00');
-        setEndTime('22:00');
-      } else if (data.length === 2) {
-        setStartTime('22:00');
-        setEndTime('06:00');
-      } else {
-        setStartTime('08:00');
-        setEndTime('16:00');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    runTask(loadTemplates(), 'Could not load shift templates.');
-  }, [runTask, loadTemplates]);
+  const loadTemplates = () => qc.invalidateQueries({ queryKey: queryKeys.shiftTemplates() });
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await templateService.createTemplate({
-        name,
-        startTime,
-        endTime,
-        isActive: true,
-      });
+      const body = { name, startTime, endTime, isActive: true };
+      await sendKeyed(
+        sessionRef.current ?? officeSubmitKeys.session('setup:shift-templates:new'),
+        body,
+        (idempotencyKey) => templateService.createTemplate(body, { idempotencyKey }),
+      );
       setIsFormOpen(false);
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Shift template created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create shift template');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't create the shift template",
+          'Check the times and save again.',
+        ),
+      );
     }
   };
 
   const prefillDefaultShifts = async () => {
     try {
-      setLoading(true);
-      await templateService.createTemplate({
-        name: 'Morning Shift',
-        startTime: '06:00',
-        endTime: '14:00',
-        isActive: true,
-      });
-      await templateService.createTemplate({
-        name: 'Evening Shift',
-        startTime: '14:00',
-        endTime: '22:00',
-        isActive: true,
-      });
-      await templateService.createTemplate({
-        name: 'Night Shift',
-        startTime: '22:00',
-        endTime: '06:00',
-        isActive: true,
-      });
+      setPrefilling(true);
+      // All three in one request (#591): a retry under the same key answers
+      // with the first result, so a failure cannot leave one or two shifts
+      // behind for the next click to duplicate.
+      await sendKeyed(
+        officeSubmitKeys.session('setup:shift-templates:prefill'),
+        DEFAULT_SHIFTS,
+        (idempotencyKey) => templateService.createTemplates(DEFAULT_SHIFTS, { idempotencyKey }),
+      );
       runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
+      // Shift open offers templates through shift status (operational tier).
+      runTask(invalidateOperational(), 'Saved, but the shifts screen may be out of date.');
       toast.success('Default shifts created.');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to pre-fill default shifts');
+      toast.error(
+        withNextStep(
+          err.message || "Couldn't add the default shifts",
+          'Try again, or add the shifts one by one.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      setPrefilling(false);
     }
   };
 
@@ -116,270 +150,112 @@ export const ShiftTemplates: React.FC = () => {
     }
   };
 
-  if (loading)
-    return (
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-        Loading shift templates...
-      </div>
-    );
+  const openCreate = () => {
+    resetForm();
+    sessionRef.current = officeSubmitKeys.session('setup:shift-templates:new');
+    setIsFormOpen(true);
+  };
+  // The Station page's Add ▾ menu opens this drawer.
+  useCreateRequest(createRequest, openCreate, onCreateHandled);
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      className="animate-fade-in"
-    >
-      {/* Header & Add Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Shift Schedules
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Configure standard timing templates for station operators.
-          </p>
-        </div>
-        {!isFormOpen && (
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Icon name="plus" size="sm" />}
-            onClick={() => {
-              resetForm();
-              setIsFormOpen(true);
-            }}
-          >
-            Add Shift
-          </Button>
-        )}
-      </div>
-
-      {templates.length === 0 && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface-alt)',
-            padding: '16px 20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--border-soft)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '16px',
-          }}
-        >
-          <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-              Recommended Shifts Setup
-            </span>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Create standard 8-hour operational shifts with a single click: Morning (06:00 -
-              14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00).
-            </p>
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Shift schedules"
+        subtitle={templatesQ.data ? countOf(templates.length, 'shift', 'shifts') : undefined}
+      />
+      <p className="px-0.5 text-[12px] text-ink-muted">
+        Configure standard timing templates for station operators.
+      </p>
+      <DataSection
+        title="shift templates"
+        query={templatesQ}
+        placeholderHeight={160}
+        flush
+        isEmpty={templates.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="shift-templates" size="md" />}
+              title="No shift timing templates configured"
+              description="Create standard 8-hour operational shifts with a single click: Morning (06:00 - 14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00)."
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={prefilling}
+                  onClick={() =>
+                    runTask(prefillDefaultShifts(), 'Could not add the default shifts.')
+                  }
+                >
+                  Pre-fill default shifts
+                </Button>
+              }
+            />
           </div>
-          <button
-            onClick={() => runTask(prefillDefaultShifts(), 'Could not add the default shifts.')}
-            style={{
-              height: '30px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '12px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Pre-fill Default Shifts
-          </button>
-        </div>
-      )}
+        }
+      >
+        <InteractiveTable
+          bare
+          columns={columns}
+          rows={templates}
+          rowKey={(r) => r.id}
+          title="shift templates"
+        />
+      </DataSection>
 
-      {/* Shift timing Creation Drawer */}
       <Drawer
         isOpen={isFormOpen}
         onClose={() => {
           resetForm();
           setIsFormOpen(false);
         }}
-        title="Add Shift Template"
+        title="Add shift template"
       >
-        <Form
-          onSubmit={handleCreate}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Shift Name *
-            </label>
-            <input
+        <Form onSubmit={handleCreate} className="flex flex-col">
+          <Field label="Shift name" required>
+            <TextInput
               type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
               placeholder="e.g. Morning Shift"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Start Time *
-            </label>
-            <input
+          </Field>
+          <Field label="Start time" required>
+            <TextInput
               type="time"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-              End Time *
-            </label>
-            <input
+          </Field>
+          <Field label="End time" required>
+            <TextInput
               type="time"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               required
             />
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
-              type="submit"
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Create Shift
-            </button>
-            <button
+          </Field>
+          <div className="flex justify-end gap-2 border-t border-border-soft pt-4">
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 resetForm();
                 setIsFormOpen(false);
               }}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
             >
               Cancel
-            </button>
+            </Button>
+            <Button type="submit" variant="primary">
+              Create shift
+            </Button>
           </div>
         </Form>
       </Drawer>
-
-      {/* Shifts Grid View */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: '16px',
-        }}
-      >
-        {templates.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              backgroundColor: 'var(--bg-surface)',
-              padding: '18px',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-soft)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
-                {t.name}
-              </span>
-              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">
-                {t.isActive ? 'ACTIVE' : 'INACTIVE'}
-              </Chip>
-            </div>
-            <div>
-              <span
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                OPERATING HOURS
-              </span>
-              <p
-                style={{
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  color: 'var(--text-strong)',
-                  fontFamily: 'var(--font-mono)',
-                  marginTop: '2px',
-                }}
-              >
-                {t.startTime} - {t.endTime}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {templates.length === 0 && (
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: '32px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-              backgroundColor: 'var(--bg-surface)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-soft)',
-            }}
-          >
-            No shift timing templates configured.
-          </div>
-        )}
-      </div>
-    </div>
+    </section>
   );
 };

@@ -1,4 +1,4 @@
-export { TopBar } from './TopBar.js';
+export { TopBar, IconBtn as TopBarIconButton } from './TopBar.js';
 export type {
   TopBarProps,
   QuickCreateAction,

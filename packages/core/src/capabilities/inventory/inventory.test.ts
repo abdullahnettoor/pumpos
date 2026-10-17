@@ -280,6 +280,41 @@ describe('RecordStockCount', () => {
     expect(types).not.toContain(BusinessEvents.VARIANCE_RECORDED);
   });
 
+  it('a variance under half the recorded step is balanced: stored as 0, no movement (#556)', async () => {
+    // Float noise in the ledger sum: book reads 4999.9996 for a 5000 L dip.
+    const { deps, movements, variances, store } = stockCountDeps(
+      new MovementRepo({ 'tank-A': 4999.9996 }),
+    );
+    const result = await new RecordStockCount(deps).execute(
+      { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000 },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.varianceQuantity).toBe(0);
+    expect(variances.rows[0].varianceQuantity).toBe('0');
+    expect(movements.rows.some((m) => m.movementType === 'Variance')).toBe(false);
+    const types = store.events.map((e) => e.eventType);
+    expect(types).toContain(BusinessEvents.TANK_DIP_RECORDED);
+    expect(types).not.toContain(BusinessEvents.VARIANCE_RECORDED);
+  });
+
+  it('the smallest recorded step (1 ml) is a real variance: row and movement agree (#556)', async () => {
+    const { deps, movements, variances, store } = stockCountDeps(
+      new MovementRepo({}, { oil: 20 }),
+      new TankRepo([]),
+    );
+    const result = await new RecordStockCount(deps).execute(
+      { stationId: 'st-1', productId: 'oil', actualQuantity: 19.999 },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    const row = Number(variances.rows[0].varianceQuantity);
+    expect(row).toBeCloseTo(-0.001, 9);
+    const varMove = movements.rows.find((m) => m.movementType === 'Variance');
+    expect(Number(varMove?.quantity)).toBe(row);
+    expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.VARIANCE_RECORDED);
+  });
+
   it.each([
     null,
     tank({ organizationId: 'other-org' }),

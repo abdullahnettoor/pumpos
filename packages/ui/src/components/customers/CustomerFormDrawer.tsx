@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { canChangeCreditLimit, customerCreateSchema } from '@pump/shared';
+import { can, customerCreateSchema, resolveEntryDate } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, DatePickerButton, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
-import { useInvalidateOperational } from '../../query/hooks.js';
+import { useInvalidateOperational, useStationTimeZone } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const transactionService = new CloudTransactionService();
@@ -21,7 +22,7 @@ interface CustomerFormDrawerProps {
   onClose: () => void;
   /**
    * The signed-in user's Role. Editing a customer's credit limit is an Owner /
-   * Manager right (`canChangeCreditLimit`; the API refuses anyone else), so for
+   * Manager right (`customers.changeCreditLimit`; the API refuses anyone else), so for
    * other Roles the limit field is shown but locked when editing. Unknown = not
    * locked (the API still decides).
    */
@@ -52,7 +53,9 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   userRole,
 }) => {
   const limitLocked =
-    Boolean(editingCustomer) && userRole !== undefined && !canChangeCreditLimit(userRole as Role);
+    Boolean(editingCustomer) &&
+    userRole !== undefined &&
+    !can(principalFor(userRole), 'customers.changeCreditLimit');
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);
@@ -60,6 +63,10 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   // schema). Only offered on create for non-prepaid Credit/Fleet customers.
   const [openingDue, setOpeningDue] = useState('');
   const [openingAsOf, setOpeningAsOf] = useState('');
+  // An opening balance is dated by the station's calendar (Entry Date, ADR
+  // 0005), never this device's.
+  const timeZone = useStationTimeZone(stationId);
+  const today = resolveEntryDate({ timeZone });
 
   const {
     register,
@@ -159,28 +166,19 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
     <Drawer
       isOpen
       onClose={onClose}
-      title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
+      title={editingCustomer ? 'Edit customer profile' : 'Register new customer'}
     >
-      <Form
-        onSubmit={handleSubmit(onSubmit)}
-        style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      >
+      <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         {drawerError && (
           <div
-            style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              color: 'var(--state-danger-fg)',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              border: '1px solid var(--border-soft)',
-            }}
+            role="alert"
+            className="rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
           >
             {drawerError}
           </div>
         )}
 
-        <Field label="Customer Name" required error={errors.name?.message}>
+        <Field label="Customer name" required error={errors.name?.message}>
           <TextInput
             placeholder="e.g. KSRTC Depot, John Doe"
             {...register('name')}
@@ -189,7 +187,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           />
         </Field>
 
-        <Field label="Phone Number" error={errors.phone?.message}>
+        <Field label="Phone number" error={errors.phone?.message}>
           <TextInput
             placeholder="e.g. +91 9900…"
             {...register('phone')}
@@ -198,7 +196,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           />
         </Field>
 
-        <Field label="Account Type" required error={errors.customerType?.message}>
+        <Field label="Account type" required error={errors.customerType?.message}>
           <Select
             {...register('customerType')}
             disabled={isSubmitting}
@@ -211,7 +209,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
         </Field>
 
         <Field
-          label="Settlement Cycle"
+          label="Settlement cycle"
           error={errors.settlementCycle?.message}
           hint="How on-account (Customer Sales) receivables are expected to clear."
         >
@@ -227,7 +225,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
 
         {(custType === 'Credit' || custType === 'Fleet') && (
           <Field
-            label="Credit Limit"
+            label="Credit limit"
             error={errors.creditLimit?.message}
             hint={limitLocked ? 'Only an Owner or Manager can change the credit limit.' : undefined}
           >
@@ -241,7 +239,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
         )}
 
         {custType === 'Fleet' && (
-          <Field label="Fleet Code / Card Reference" error={errors.fleetCode?.message}>
+          <Field label="Fleet code / card reference" error={errors.fleetCode?.message}>
             <TextInput
               placeholder="e.g. FL-9923"
               {...register('fleetCode')}
@@ -253,38 +251,25 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
 
         {custType === 'Fleet' && (
           <Checkbox
-            label="Enable Prepaid Wallet Mode"
+            label="Enable prepaid wallet mode"
             {...register('isPrepaid')}
             disabled={isSubmitting}
           />
         )}
 
         {!editingCustomer && (custType === 'Credit' || custType === 'Fleet') && !isPrepaid && (
-          <div
-            style={{
-              borderTop: '1px solid var(--border-soft)',
-              paddingTop: '12px',
-              marginTop: '4px',
-            }}
-          >
-            <h4
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-strong)',
-                margin: '0 0 4px',
-              }}
-            >
-              Opening Balance (Optional)
+          <div className="mt-1 border-t border-border-soft pt-3">
+            <h4 className="mb-1 text-[12px] font-semibold text-ink-strong">
+              Opening balance (optional)
             </h4>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+            <p className="mb-3 text-[12px] text-ink-muted">
               Amount this customer already owed before PumpOS. Recorded as an opening receivable
               (not a sale), so it counts toward their balance but stays out of sales &amp; P&amp;L.{' '}
               <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger
               adjustment instead).
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-              <Field label="Opening Due (₹)">
+            <div className="grid grid-cols-2 gap-x-3">
+              <Field label="Opening due (₹)">
                 <TextInput
                   type="number"
                   min="0"
@@ -296,11 +281,12 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
                 />
               </Field>
               <Field label="As of Date" hint="Defaults to today">
-                <TextInput
-                  type="date"
-                  max={new Date().toLocaleDateString('en-CA')}
+                <DatePickerButton
+                  variant="field"
+                  aria-label="Opening due as of"
                   value={openingAsOf}
-                  onChange={(e) => setOpeningAsOf(e.target.value)}
+                  onChange={setOpeningAsOf}
+                  max={today}
                   disabled={isSubmitting}
                 />
               </Field>
@@ -308,25 +294,12 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           </div>
         )}
 
-        <div
-          style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            marginTop: '4px',
-          }}
-        >
-          <h4
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              margin: '0 0 12px',
-            }}
-          >
-            GST &amp; Tax Registration (Optional B2B)
+        <div className="mt-1 border-t border-border-soft pt-3">
+          <h4 className="mb-3 text-[12px] font-semibold text-ink-strong">
+            GST &amp; tax registration (optional B2B)
           </h4>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+          <div className="grid grid-cols-2 gap-x-3">
             <Field label="GSTIN" error={errors.metadata?.gstin?.message}>
               <TextInput
                 placeholder="15-digit GSTIN"
@@ -337,7 +310,7 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
                 invalid={!!errors.metadata?.gstin}
               />
             </Field>
-            <Field label="State Code">
+            <Field label="State code">
               <TextInput
                 placeholder="e.g. 29"
                 maxLength={2}
@@ -357,18 +330,18 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
             </Field>
           </div>
 
-          <Field label="Trade Name" error={errors.metadata?.tradeName?.message}>
+          <Field label="Trade name" error={errors.metadata?.tradeName?.message}>
             <TextInput
-              placeholder="Business Trade Name"
+              placeholder="Business trade name"
               {...register('metadata.tradeName')}
               disabled={isSubmitting}
               invalid={!!errors.metadata?.tradeName}
             />
           </Field>
 
-          <Field label="Billing Address" error={errors.metadata?.billingAddress?.message}>
+          <Field label="Billing address" error={errors.metadata?.billingAddress?.message}>
             <Textarea
-              placeholder="Full Billing Address"
+              placeholder="Full billing address"
               rows={2}
               {...register('metadata.billingAddress')}
               disabled={isSubmitting}
@@ -377,17 +350,17 @@ const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
           </Field>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+        <div className="mt-1 flex flex-col gap-2.5">
           <Checkbox
-            label="Account Active (Clear for operational logging)"
+            label="Account active (clear for operational logging)"
             {...register('isActive')}
             disabled={isSubmitting}
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+        <div className="mt-2 flex gap-2.5">
           <Button type="submit" variant="primary" fullWidth loading={isSubmitting}>
-            Save Customer
+            Save customer
           </Button>
           <Button
             type="button"

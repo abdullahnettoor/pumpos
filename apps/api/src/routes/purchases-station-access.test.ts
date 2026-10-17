@@ -130,6 +130,52 @@ describe('purchase reads: station access', () => {
     );
     expect(res.status).toBe(200);
   });
+
+  it('GET /supplier-payments refuses a station the user is not assigned to', async () => {
+    const res = await app('Manager', ['st-1'], makeDb([]).db).request(
+      '/transactions/supplier-payments?stationId=st-2',
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /supplier-payments is refused to Staff, who record no supplier payments', async () => {
+    const { db, wheres } = makeDb([[]]);
+    const res = await app('Staff', ['st-1'], db).request(
+      '/transactions/supplier-payments?stationId=st-1',
+    );
+    expect(res.status).toBe(403);
+    expect(wheres).toHaveLength(0);
+  });
+
+  it('GET /supplier-payments reads Payments of the organization, the station and the Entry Date range', async () => {
+    const { db, wheres } = makeDb([
+      [{ id: 'y1', supplierName: null, amount: '10.00', entryDate: '2026-10-01' }],
+    ]);
+    const res = await app('Accountant', ['st-1'], db).request(
+      '/transactions/supplier-payments?stationId=st-1&from=2026-10-01&to=2026-10-14',
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data[0].supplierName).toBe('Unknown Supplier');
+    const q = render(wheres[wheres.length - 1]);
+    expect(q.params).toEqual(
+      expect.arrayContaining(['org-1', 'Payment', 'st-1', '2026-10-01', '2026-10-14']),
+    );
+    expect(q.sql).toMatch(
+      /"entry_date" >= \$\d+ and "supplier_transactions"."entry_date" <= \$\d+/,
+    );
+  });
+
+  it('GET /supplier-payments without stationId narrows a non-owner to their stations', async () => {
+    const { db, wheres } = makeDb([[]]);
+    const res = await app('Manager', ['st-1', 'st-3'], db).request(
+      '/transactions/supplier-payments',
+    );
+    expect(res.status).toBe(200);
+    expect(render(wheres[wheres.length - 1]).params).toEqual(
+      expect.arrayContaining(['st-1', 'st-3']),
+    );
+  });
 });
 
 describe('POST /transactions/purchases clock', () => {

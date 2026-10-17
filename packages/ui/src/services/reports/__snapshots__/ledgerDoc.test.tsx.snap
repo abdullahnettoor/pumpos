@@ -199,7 +199,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000",
+                "children": "−₹3,000",
                 "props": {
                   "style": [
                     {
@@ -569,15 +569,13 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                     {
                       "textAlign": "right",
                     },
-                    {
-                      "color": "#1E6A4E",
-                    },
+                    {},
                   ],
                 },
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000.00",
+                "children": "−₹3,000.00",
                 "props": {
                   "style": [
                     {
@@ -616,7 +614,7 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
           {
             "children": [
               {
-                "children": "TOTALS",
+                "children": "Closing balance",
                 "props": {
                   "style": [
                     {
@@ -703,14 +701,14 @@ exports[`LedgerDoc as the desktop Unified Ledger uses it > lays out exactly the 
                       "textAlign": "right",
                     },
                     {
-                      "color": "#1E6A4E",
+                      "color": "#18201A",
                     },
                   ],
                 },
                 "type": "TEXT",
               },
               {
-                "children": "₹-3,000.00",
+                "children": "−₹3,000.00",
                 "props": {
                   "style": [
                     {

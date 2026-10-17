@@ -50,7 +50,7 @@ describe('deriveAlerts', () => {
     expect(a.action).toBeUndefined();
   });
 
-  it('raises actionable Decantation and density alerts only for back-office roles', () => {
+  it('raises Decantation alerts for back-office roles and density alerts for Staff too', () => {
     const decantation = {
       id: 'dec-1',
       documentNumber: 'DEC-12',
@@ -120,16 +120,23 @@ describe('deriveAlerts', () => {
       expect(forRole.map((alert) => alert.category)).toContain('decantation');
       expect(forRole.map((alert) => alert.category)).toContain('density');
     }
-    for (const role of ['Staff', 'Attendant'] as const) {
-      expect(
-        deriveAlerts({
-          ...none,
-          role,
-          decantations: [decantation, pending, flagged],
-          densityToday: density,
-        }),
-      ).toEqual([]);
-    }
+    // Staff record density (shared guard) but have no Decantation work.
+    expect(
+      deriveAlerts({
+        ...none,
+        role: 'Staff',
+        decantations: [decantation, pending, flagged],
+        densityToday: density,
+      }).map((alert) => alert.id),
+    ).toEqual(['density-missing']);
+    expect(
+      deriveAlerts({
+        ...none,
+        role: 'Attendant',
+        decantations: [decantation, pending, flagged],
+        densityToday: density,
+      }),
+    ).toEqual([]);
   });
 
   it('raises one day alert per past open day, newest first, opening that day', () => {

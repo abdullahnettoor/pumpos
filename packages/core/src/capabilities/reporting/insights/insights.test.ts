@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INSIGHTS_RANGE_DAYS } from '@pump/shared';
+import { DASHBOARD_TREND_DAYS, INSIGHTS_RANGE_DAYS } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { composeInsightsSales, eachDate, percentChange, periodChange } from './compose.js';
@@ -29,6 +29,10 @@ function source(over: Partial<InsightsSalesSource> = {}): InsightsSalesSource {
       { date: '2026-03-04', sales: 1000, volume: 100 },
       { date: '2026-03-05', sales: 3000, volume: 300 },
       { date: '2026-03-07', sales: 2000, volume: 200 },
+    ],
+    previousDays: [
+      { date: '2026-02-25', sales: 1500, volume: 150 },
+      { date: '2026-02-27', sales: 4500, volume: 450 },
     ],
     previous: { sales: 6000, closedDays: 4, otherSales: 400 },
     fuelVolumes: [
@@ -217,6 +221,19 @@ describe('composeInsightsSales', () => {
     ]);
   });
 
+  it('draws the previous period day by day, one entry per calendar date', () => {
+    const r = composeInsightsSales(source());
+    expect(r.previousTrend).toHaveLength(7);
+    expect(r.previousTrend[0]).toEqual({
+      date: '2026-02-25',
+      sales: 1500,
+      volume: 150,
+      closed: true,
+    });
+    expect(r.previousTrend[1]).toEqual({ date: '2026-02-26', sales: 0, volume: 0, closed: false });
+    expect(r.previousTrend[6].date).toBe('2026-03-03');
+  });
+
   it('hides the change when the previous period has no closed days', () => {
     const r = composeInsightsSales(
       source({ previous: { sales: 0, closedDays: 0, otherSales: 0 } }),
@@ -232,6 +249,7 @@ describe('composeInsightsSales', () => {
         range: null,
         previousRange: null,
         days: [],
+        previousDays: [],
         previous: { sales: 0, closedDays: 0, otherSales: 0 },
         fuelVolumes: [],
         other: { total: 0, top: null },
@@ -275,11 +293,19 @@ describe('GetInsightsSales', () => {
 
   it('rejects a range length the tab does not offer', async () => {
     const res = await new GetInsightsSales({ reader: readerFor([]) }).execute(
-      { stationId: STATION, days: 14 as never },
+      { stationId: STATION, days: 12 as never },
       ctx(),
     );
     expect(res.success).toBe(false);
     if (!res.success) expect(res.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it("also accepts the dashboard's trend window", async () => {
+    const res = await new GetInsightsSales({ reader: readerFor([]) }).execute(
+      { stationId: STATION, days: DASHBOARD_TREND_DAYS },
+      ctx(),
+    );
+    expect(res.success).toBe(true);
   });
 
   it('accepts every range length the tab offers', async () => {

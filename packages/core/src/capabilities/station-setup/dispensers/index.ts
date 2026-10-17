@@ -8,6 +8,7 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type {
+  DomainEvent,
   EventPublisher,
   ExecutionContext,
   Repository,
@@ -48,7 +49,7 @@ export interface UpdateDispenserCommand {
 }
 
 const statusEnum = z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']);
-const createSchema = z.object({
+export const dispenserCreateSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   name: z.string().trim().min(1, 'name is required').max(100),
   code: z.string().trim().min(1, 'code is required').max(50),
@@ -66,37 +67,45 @@ export interface DispenserDeps {
   events: EventPublisher;
 }
 
+/** The Dispenser row and its DISPENSER_CREATED event for a parsed command. */
+export function newDispenser(
+  data: z.infer<typeof dispenserCreateSchema>,
+  ctx: ExecutionContext,
+): { dispenser: DispenserUnit; event: DomainEvent } {
+  const now = ctx.clock.now().toISOString();
+  const dispenser: DispenserUnit = {
+    id: ctx.ids.newId(),
+    organizationId: ctx.organizationId,
+    stationId: data.stationId,
+    name: data.name,
+    code: data.code,
+    status: data.status ?? 'ACTIVE',
+    createdAt: now,
+    updatedAt: now,
+  };
+  const event = eventFromContext(ctx, {
+    eventType: BusinessEvents.DISPENSER_CREATED,
+    aggregateType: 'DispenserUnit',
+    aggregateId: dispenser.id,
+    stationId: dispenser.stationId,
+    payload: { dispenserId: dispenser.id, code: dispenser.code },
+  });
+  return { dispenser, event };
+}
+
 export class CreateDispenser implements UseCase<CreateDispenserCommand, DispenserUnit> {
   constructor(private readonly deps: DispenserDeps) {}
   async execute(
     input: CreateDispenserCommand,
     ctx: ExecutionContext,
   ): Promise<Result<DispenserUnit>> {
-    const p = createSchema.safeParse(input);
+    const p = dispenserCreateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid CreateDispenser command', { issues: p.error.flatten() }));
-    const now = ctx.clock.now().toISOString();
-    const du: DispenserUnit = {
-      id: ctx.ids.newId(),
-      organizationId: ctx.organizationId,
-      stationId: p.data.stationId,
-      name: p.data.name,
-      code: p.data.code,
-      status: p.data.status ?? 'ACTIVE',
-      createdAt: now,
-      updatedAt: now,
-    };
-    await this.deps.repository.save(du);
-    await this.deps.events.publish([
-      eventFromContext(ctx, {
-        eventType: BusinessEvents.DISPENSER_CREATED,
-        aggregateType: 'DispenserUnit',
-        aggregateId: du.id,
-        stationId: du.stationId,
-        payload: { dispenserId: du.id, code: du.code },
-      }),
-    ]);
-    return ok(du);
+    const { dispenser, event } = newDispenser(p.data, ctx);
+    await this.deps.repository.save(dispenser);
+    await this.deps.events.publish([event]);
+    return ok(dispenser);
   }
 }
 

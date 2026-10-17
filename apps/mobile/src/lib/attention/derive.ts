@@ -15,6 +15,8 @@ import { standing, type MoneyCustomer } from '../money/parties.js';
 import { deriveShiftVariance } from '../shifts/variance.js';
 import { shiftHeadlineBadge } from '../cashVariance.js';
 import type { AlertCategory, AlertSeverity, MobileAlert } from './types.js';
+import { can } from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import type { DensityTodaySummary, DecantationView, Role } from '@pump/shared';
 
 /** A closed Shift's cash variance is raised only beyond this many rupees. */
@@ -29,7 +31,7 @@ const VARIANCE_SHIFTS_CHECKED = 5;
  */
 const ACCOUNTANT_CATEGORIES: readonly AlertCategory[] = ['decantation', 'density', 'handover'];
 export const alertVisibleToRole = (category: AlertCategory, role?: Role | null): boolean =>
-  role !== 'Accountant' || ACCOUNTANT_CATEGORIES.includes(category);
+  !role || can(principalFor(role), 'mobile.fullAlerts') || ACCOUNTANT_CATEGORIES.includes(category);
 
 const RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
 
@@ -68,8 +70,7 @@ const openedAt = (s: Snapshot) => {
 export function deriveAlerts(src: AlertSources): MobileAlert[] {
   const list: MobileAlert[] = [];
 
-  const canSeeInventoryWork =
-    src.role === 'Owner' || src.role === 'Manager' || src.role === 'Accountant';
+  const canSeeInventoryWork = can(principalFor(src.role), 'pages.inventory');
 
   for (const a of src.stock) {
     list.push({ id: a.id, severity: a.severity, category: 'stock', title: a.title, meta: a.meta });
@@ -81,7 +82,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
       severity: 'warning',
       category: 'day',
       title: `${businessDateLabel(date)} not closed`,
-      meta: 'DSSR is a draft until the day is closed',
+      meta: 'DSR is a draft until the day is closed',
       action: { kind: 'day', businessDate: date },
     });
   }
@@ -177,7 +178,7 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
           id: `dec-flagged-${decantation.id}`,
           severity: 'warning',
           category: 'decantation',
-          title: 'Flagged Decantation',
+          title: 'Flagged decantation',
           meta: `${decantation.documentNumber} · ${decantation.flags.map((flag) => flag.message).join(', ')}`,
           action,
         });
@@ -186,7 +187,12 @@ export function deriveAlerts(src: AlertSources): MobileAlert[] {
   }
 
   const density = src.densityToday;
-  if (canSeeInventoryWork && density && density.missingCount > 0) {
+  if (
+    src.role != null &&
+    can(principalFor(src.role), 'inventory.density') &&
+    density &&
+    density.missingCount > 0
+  ) {
     list.push({
       id: 'density-missing',
       severity: 'warning',

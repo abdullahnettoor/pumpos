@@ -2,20 +2,13 @@ import { Hono, type Context } from 'hono';
 import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
-  isAuthorizedForStation,
-  canManageCustomers,
-  canManageSuppliers,
-  canArchiveParty,
-  canRecordPurchase,
-  canManageExpenseCategory,
-  canVoidExpense,
-  canCreateExpense,
-  canRecordCollection,
-  canRecordIncome,
-  canRecordStockCount,
-  canRecordHandover,
+  can,
+  hasOrganizationWideStationAccess,
   isAttendant,
+  isAuthorizedForStation,
   isHandoverSelfScoped,
+  redactPurchaseCosts,
+  redactSupplierBalances,
   type Role,
 } from '@pump/shared';
 import {
@@ -25,6 +18,7 @@ import {
   CreateSupplier,
   UpdateSupplier,
   SetSupplierOpeningBalance,
+  suppliersAtStation,
   err,
   validationError,
   AddVehicle,
@@ -285,13 +279,53 @@ const DEFAULT_INCOME_CATEGORIES = [
 // MASTER DATA — Suppliers
 // ====================================================
 
+/**
+ * The Station a supplier read is scoped to (#575) must be one of the caller's
+ * Organization and one the caller may access. Resolved under
+ * `organization_id` FIRST: `isAuthorizedForStation` waves Owners through
+ * without looking at the station, so it alone would let another
+ * Organization's Station id through (#235). Null when the read may go ahead.
+ */
+async function refuseSupplierStation(
+  c: Context<{ Variables: Variables }>,
+  stationId: string,
+): Promise<Response | null> {
+  const user = c.var.user;
+  if (!(await stationExistsInOrg(c.var.db, user.organizationId, stationId))) {
+    return stationNotFound(c);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  return null;
+}
+
+/**
+ * GET /transactions/suppliers?activeOnly=&stationId=
+ *
+ * The supplier list with each supplier's `currentBalance` (Σ purchases − Σ
+ * payments). With a `stationId` (the Suppliers page, Reports, the mobile Money
+ * tab) it is that Station's list (#575): its own and shared suppliers, plus any
+ * it has ledger entries with (`suppliersAtStation`), each balanced on the
+ * Station's own ledger only, as `/reports/payables` is. Without one it is the
+ * Organization's list and balances, for pickers and older clients.
+ */
 transactionsRouter.get('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
 
-  // Outstanding balance = Σ purchases − Σ payments, scoped to the organization.
   // Aggregated in SQL (one row per supplier) + run alongside the list query.
+  const balanceScope = [eq(schema.supplierTransactions.organizationId, user.organizationId)];
+  if (stationId) balanceScope.push(eq(schema.supplierTransactions.stationId, stationId));
   const [list, balanceRows] = await Promise.all([
     new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
     db
@@ -300,15 +334,19 @@ transactionsRouter.get('/suppliers', async (c) => {
         balance: sql<string>`COALESCE(SUM(${supplierSignedAmount('supplier_transactions')}), 0)`,
       })
       .from(schema.supplierTransactions)
-      .where(eq(schema.supplierTransactions.organizationId, user.organizationId))
+      .where(and(...balanceScope))
       .groupBy(schema.supplierTransactions.supplierId),
   ]);
 
-  const balances: Record<string, number> = {};
-  for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
+  const balances = new Map<string, number>();
+  for (const r of balanceRows) balances.set(r.supplierId, Number(r.balance));
+  const shown = stationId ? suppliersAtStation(list, stationId, new Set(balances.keys())) : list;
   return c.json({
     success: true,
-    data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })),
+    data: redactSupplierBalances(
+      shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+      user,
+    ),
   });
 });
 
@@ -317,7 +355,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/suppliers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -384,7 +422,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -406,7 +444,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'suppliers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -422,10 +460,32 @@ transactionsRouter.delete(
   },
 );
 
+/**
+ * GET /transactions/suppliers/:id/ledger?stationId=&from=&to=
+ *
+ * A supplier's statement. With a `stationId` only that Station's ledger with
+ * the supplier is read (#575): its opening balance, purchases, payments and
+ * adjustments, never another Station's. With `from`/`to` it is the ranged
+ * statement; without, the legacy all-time rows.
+ */
 transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const supplierId = c.req.param('id');
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
   const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
   if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json(
@@ -447,6 +507,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       user.organizationId,
       supplierId,
       parsedRange.range,
+      stationId,
     );
     return c.json({
       success: true,
@@ -481,6 +542,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       and(
         eq(schema.supplierTransactions.supplierId, supplierId),
         eq(schema.supplierTransactions.organizationId, user.organizationId),
+        stationId ? eq(schema.supplierTransactions.stationId, stationId) : undefined,
       ),
     )
     .orderBy(schema.supplierTransactions.createdAt);
@@ -532,7 +594,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -599,7 +661,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -621,7 +683,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -816,7 +878,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers/:id/vehicles'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -839,7 +901,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -862,7 +924,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -956,7 +1018,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1018,7 +1080,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1132,7 +1194,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1186,7 +1248,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1233,7 +1295,7 @@ transactionsRouter.put(
 // ---- Other income (indirect income; money IN to drawer/bank/owner) ----
 transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income'), async (c) => {
   const user = c.var.user;
-  if (!canRecordIncome(user.role)) {
+  if (!can(user, 'income.record')) {
     return c.json(
       {
         success: false,
@@ -1275,7 +1337,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/income/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1404,7 +1466,7 @@ transactionsRouter.get('/income/gst-register', async (c) => {
 
 transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expenses'), async (c) => {
   const user = c.var.user;
-  if (!canCreateExpense(user.role)) {
+  if (!can(user, 'expenses.create')) {
     return c.json(
       {
         success: false,
@@ -1433,7 +1495,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/expenses/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1471,7 +1533,7 @@ transactionsRouter.post(
     // DU handover — Attendants may record those. True payment collections are
     // desk operations and exclude the mobile-only Attendant.
     const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
-    if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
+    if (isHandoverCreditSale ? !can(user, 'handover.record') : !can(user, 'collections.record')) {
       return c.json(
         {
           success: false,
@@ -1567,7 +1629,7 @@ async function authorizeLedgerVoid(
   c: Context<{ Variables: Variables }>,
   id: string,
 ): Promise<{ ok: true; stationId: string } | { ok: false; response: Response }> {
-  if (!canRecordHandover(c.var.user.role)) {
+  if (!can(c.var.user, 'handover.record')) {
     return {
       ok: false,
       response: c.json(
@@ -1631,7 +1693,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/purchases'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1729,7 +1791,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/supplier-payments'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1912,11 +1974,11 @@ transactionsRouter.get('/expenses', async (c) => {
  * (none assigned → no rows). Owners see the organization.
  */
 export function purchaseStationScope(
-  user: { role: string; assignedStationIds: string[] },
+  user: { role: Role; assignedStationIds: string[] },
   stationId: string | undefined,
 ) {
   if (stationId) return eq(schema.purchases.stationId, stationId);
-  if (user.role === 'Owner') return undefined;
+  if (hasOrganizationWideStationAccess(user)) return undefined;
   return user.assignedStationIds.length
     ? inArray(schema.purchases.stationId, user.assignedStationIds)
     : sql`false`;
@@ -1972,14 +2034,19 @@ transactionsRouter.get('/purchases', async (c) => {
     .orderBy(desc(schema.purchases.createdAt));
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.purchase,
-      businessDate: r.businessDate,
-      awaitingDecantation: Boolean(r.awaitingDecantation),
-      supplierName: r.supplierName ?? 'Unknown Supplier',
-      itemsSummary: r.itemsSummary,
-      itemCount: Number(r.itemCount || 0),
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.purchase,
+          businessDate: r.businessDate,
+          awaitingDecantation: Boolean(r.awaitingDecantation),
+          supplierName: r.supplierName ?? 'Unknown Supplier',
+          itemsSummary: r.itemsSummary,
+          itemCount: Number(r.itemCount || 0),
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -2030,14 +2097,19 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .orderBy(schema.purchaseItems.createdAt);
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.item,
-      businessDate: r.businessDate,
-      entryDate: r.entryDate,
-      productName: r.productName ?? 'Product',
-      productCode: r.productCode ?? null,
-      unit: r.unit ?? null,
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.item,
+          businessDate: r.businessDate,
+          entryDate: r.entryDate,
+          productName: r.productName ?? 'Product',
+          productCode: r.productCode ?? null,
+          unit: r.unit ?? null,
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -2108,6 +2180,15 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const from = c.req.query('from');
   const to = c.req.query('to');
   const stationId = c.req.query('stationId');
@@ -2166,6 +2247,76 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
     productCode: r.productCode ?? null,
   }));
   return c.json({ success: true, data });
+});
+
+/**
+ * GET /transactions/supplier-payments?stationId=&from=&to= — the Supplier
+ * Payments, newest Entry Date first, each with its supplier and the Funding
+ * Account it came from. Backs the Suppliers → Payments tab (#528). Office
+ * Records (ADR 0005): dated by Entry Date, never a shift; `from`/`to` bound the
+ * Entry Date (inclusive). Read-only; open to the Roles that record them
+ * (`purchases.record`), scoped to stations like the purchases list.
+ */
+transactionsRouter.get('/supplier-payments', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!can(user, 'purchases.record'))
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view supplier payments' },
+      },
+      403,
+    );
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  const t = schema.supplierTransactions;
+  const stationScope = stationId
+    ? eq(t.stationId, stationId)
+    : hasOrganizationWideStationAccess(user)
+      ? undefined
+      : user.assignedStationIds.length
+        ? inArray(t.stationId, user.assignedStationIds)
+        : sql`false`;
+  const rows = await db
+    .select({
+      id: t.id,
+      stationId: t.stationId,
+      supplierId: t.supplierId,
+      entryDate: t.entryDate,
+      amount: t.amount,
+      notes: t.notes,
+      createdAt: t.createdAt,
+      supplierName: schema.suppliers.name,
+      accountName: schema.financialAccounts.name,
+      accountType: schema.financialAccounts.accountType,
+    })
+    .from(t)
+    .leftJoin(schema.suppliers, eq(schema.suppliers.id, t.supplierId))
+    .leftJoin(schema.financialAccounts, eq(schema.financialAccounts.id, t.fundingAccountId))
+    .where(
+      and(
+        eq(t.organizationId, user.organizationId),
+        eq(t.transactionType, 'Payment'),
+        stationScope,
+        from ? gte(t.entryDate, from) : undefined,
+        to ? lte(t.entryDate, to) : undefined,
+      ),
+    )
+    .orderBy(desc(t.entryDate), desc(t.createdAt));
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, supplierName: r.supplierName ?? 'Unknown Supplier' })),
+  });
 });
 
 transactionsRouter.get('/collections', async (c) => {
@@ -2437,8 +2588,6 @@ transactionsRouter.get('/money-movements', async (c) => {
 // INVOICING — GST tax invoices (Phase T4)
 // ====================================================
 
-const INVOICE_ROLES = new Set<Role>(['Owner', 'Manager', 'Accountant']);
-
 // POST /transactions/sales/:id/invoice — issue a GST tax invoice for a sale.
 // Idempotent: if the sale was already invoiced, the existing invoice is returned.
 transactionsRouter.post(
@@ -2447,7 +2596,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!INVOICE_ROLES.has(user.role)) {
+    if (!can(user, 'reports.invoice')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -3192,7 +3341,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/inventory/count'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordStockCount(user.role)) {
+    if (!can(user, 'inventory.stockCount')) {
       return c.json(
         {
           success: false,

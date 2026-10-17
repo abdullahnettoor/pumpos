@@ -3,10 +3,12 @@ import { cn } from '../lib/cn.js';
 import type { DotTone } from '../dot/Dot.js';
 
 /**
- * MeterRow — a labeled progress bar with a value readout. Built for tank
- * levels (fill vs capacity) but reusable for quotas, usage, or any
- * bounded-value display. `tone='auto'` derives danger/warning/brand from the
- * fill percentage against `lowThreshold` / `criticalThreshold`.
+ * MeterRow — a labeled progress bar with a value readout, for quotas, usage,
+ * or any bounded-value display. `tone='auto'` derives danger/warning/brand from
+ * the fill percentage against `lowThreshold` / `criticalThreshold`.
+ *
+ * Tanks never use the auto tone: they pass an explicit tone from the station's
+ * tank levels (`resolveTankLevelSettings`, #520), or render a `TankGauge`.
  */
 
 export type MeterTone = DotTone | 'auto';

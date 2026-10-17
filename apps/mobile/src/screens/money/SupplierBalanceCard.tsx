@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { inr } from '@pump/ui';
+import { inr, MONEY_TERMS } from '@pump/ui';
 import type { SupplierPayable } from '@pump/shared';
 import { oldestUnpaidLine } from '../../lib/money/payables.js';
 import { balanceOf, balanceState, type MoneySupplier } from '../../lib/money/parties.js';
@@ -7,7 +7,11 @@ import { SURFACE } from './BalanceCard.js';
 import { HeroCard } from './HeroCard.js';
 import { PaymentReason, RecordPaymentButton, type PaymentAction } from './RecordPaymentButton.js';
 
-const LABEL = { owes: 'You owe', advance: 'Advance', settled: 'Settled' } as const;
+const LABEL = {
+  owes: MONEY_TERMS.youOwe,
+  advance: MONEY_TERMS.advance,
+  settled: 'Settled',
+} as const;
 
 const NOTE = {
   owes: null,

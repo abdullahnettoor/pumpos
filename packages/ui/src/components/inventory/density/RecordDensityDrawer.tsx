@@ -1,10 +1,11 @@
 import React, { useId, useMemo, useState } from 'react';
 import { Drawer } from '../../Drawer.js';
-import { Button, Icon } from '../../../pump-ds/index.js';
+import { Button, Input, Select } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
 import { DensityCalculatorPopover } from '../../primitives/DensityCalculatorPopover.js';
+import { formatQuantity } from '../../../utils/format.js';
 import {
   DEFAULT_DENSITY_METHOD,
-  DEFAULT_DENSITY_TOLERANCE_KG_M3,
   density15FromObserved,
   roundDensity,
   type DensityMethod,
@@ -21,10 +22,16 @@ export interface RecordDensityDrawerProps {
   nozzles?: Array<{ id: string; name: string; productId: string }>;
   presetProductId?: string;
   defaultMethod?: DensityMethod;
-  /** Jump tolerance (kg/m³) for the live delta chip; not used by the 15 °C solver. */
-  tolerance?: number;
+  /**
+   * The station's jump tolerance (kg/m³, `resolveDecantationSettings`) for the
+   * live delta chip; no default here. Not used by the 15 °C solver.
+   */
+  tolerance: number;
   defaultEntryMethod?: 'HYDROMETER' | 'DIRECT_15';
 }
+
+const LABEL = 'mb-1 block text-[13px] font-medium text-ink';
+const LABEL_SM = 'mb-1 block text-[12px] font-medium text-ink';
 
 export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   isOpen,
@@ -36,7 +43,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   nozzles = [],
   presetProductId,
   defaultMethod = DEFAULT_DENSITY_METHOD,
-  tolerance = DEFAULT_DENSITY_TOLERANCE_KG_M3,
+  tolerance,
   defaultEntryMethod = 'HYDROMETER',
 }) => {
   const [productId, setProductId] = useState<string>(presetProductId || products[0]?.id || '');
@@ -49,6 +56,17 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   const [observedDensity, setObservedDensity] = useState<string>('');
   const [observedTempC, setObservedTempC] = useState<string>('');
   const [density15Direct, setDensity15Direct] = useState<string>('');
+
+  const uid = useId();
+  const ids = {
+    product: `${uid}-product`,
+    routine: `${uid}-routine`,
+    method: `${uid}-method`,
+    observed: `${uid}-observed`,
+    temp: `${uid}-temp`,
+    direct: `${uid}-direct`,
+    sampled: `${uid}-sampled`,
+  };
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +166,10 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
   };
 
   const selectedProduct = products.find((p) => p.id === productId);
+  const hasCalc = calc15 != null;
+
+  /** A choice button: the chosen one is filled. */
+  const toggle = (active: boolean): 'primary' | 'secondary' => (active ? 'primary' : 'secondary');
 
   return (
     <Drawer
@@ -155,11 +177,11 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
       onClose={onClose}
       title={
         selectedProduct
-          ? `Record Density · ${selectedProduct.name} (${selectedProduct.code})`
-          : 'Record Product Density'
+          ? `Record density · ${selectedProduct.name} (${selectedProduct.code})`
+          : 'Record product density'
       }
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, width: '100%' }}>
+        <div className="flex w-full justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
@@ -169,43 +191,33 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
             onClick={handleSubmit}
             disabled={saving || calc15 == null}
           >
-            {saving ? 'Saving...' : 'Save Reading'}
+            {saving ? 'Saving…' : 'Save reading'}
           </Button>
         </div>
       }
     >
-      <form
-        onSubmit={(e) => void handleSubmit(e)}
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-      >
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
         {error && (
           <div
-            style={{
-              padding: '8px 12px',
-              borderRadius: 6,
-              background: 'var(--color-danger-bg, #fef2f2)',
-              color: 'var(--color-danger-fg, #b91c1c)',
-              fontSize: 13,
-            }}
+            className="rounded-md bg-danger-bg px-3 py-2 text-[13px] text-danger-fg"
+            role="alert"
           >
             {error}
           </div>
         )}
 
-        {/* Product selection */}
         <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            Fuel Product
+          <label htmlFor={ids.product} className={LABEL}>
+            Fuel product
           </label>
-          <select
+          <Select
+            id={ids.product}
             value={productId}
             onChange={(e) => {
               setProductId(e.target.value);
               setTankId('');
               setNozzleId('');
             }}
-            className="input"
-            style={{ width: '100%', height: 34, fontSize: 13 }}
             disabled={saving}
           >
             {products.map((p) => (
@@ -213,86 +225,76 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
                 {p.name} ({p.code})
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
-        {/* Reading Kind */}
-        <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            Reading Routine
-          </label>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div role="group" aria-labelledby={ids.routine}>
+          <div id={ids.routine} className={LABEL}>
+            Reading routine
+          </div>
+          <div className="flex gap-2">
             <Button
               type="button"
               size="sm"
-              variant={kind === 'MORNING' ? 'primary' : 'secondary'}
+              variant={toggle(kind === 'MORNING')}
+              aria-pressed={kind === 'MORNING'}
               onClick={() => setKind('MORNING')}
             >
-              Morning Routine (Daily)
+              Morning routine (daily)
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={kind === 'ADHOC' ? 'primary' : 'secondary'}
+              variant={toggle(kind === 'ADHOC')}
+              aria-pressed={kind === 'ADHOC'}
               onClick={() => setKind('ADHOC')}
             >
-              Ad-hoc / Spot Check
+              Ad-hoc / spot check
             </Button>
           </div>
         </div>
 
-        {/* Entry Method */}
-        <div>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-            Entry Method
-          </label>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div role="group" aria-labelledby={ids.method}>
+          <div id={ids.method} className={LABEL}>
+            Entry method
+          </div>
+          <div className="flex gap-2">
             <Button
               type="button"
               size="sm"
-              variant={entryMethod === 'HYDROMETER' ? 'primary' : 'secondary'}
+              variant={toggle(entryMethod === 'HYDROMETER')}
+              aria-pressed={entryMethod === 'HYDROMETER'}
               onClick={() => setEntryMethod('HYDROMETER')}
             >
-              Hydrometer + Temperature
+              Hydrometer + temperature
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={entryMethod === 'DIRECT_15' ? 'primary' : 'secondary'}
+              variant={toggle(entryMethod === 'DIRECT_15')}
+              aria-pressed={entryMethod === 'DIRECT_15'}
               onClick={() => setEntryMethod('DIRECT_15')}
             >
-              Direct 15 °C Value
+              Direct 15 °C value
             </Button>
           </div>
         </div>
 
-        {/* Hydrometer Entry Fields */}
         {entryMethod === 'HYDROMETER' ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              padding: 12,
-              background: 'var(--color-bg-subtle, #f9fafb)',
-              borderRadius: 8,
-              border: '1px solid var(--color-border, #e5e7eb)',
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="flex flex-col gap-3 rounded-lg border border-border-soft bg-surface-alt p-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
-                  Observed Hydrometer (kg/m³)
+                <label htmlFor={ids.observed} className={LABEL_SM}>
+                  Observed hydrometer (kg/m³)
                 </label>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <input
+                <div className="flex items-center gap-1">
+                  <Input
+                    id={ids.observed}
                     type="number"
                     step="0.1"
                     placeholder="e.g. 745.0"
                     value={observedDensity}
                     onChange={(e) => setObservedDensity(e.target.value)}
-                    className="input"
-                    style={{ width: '100%', height: 34, fontSize: 13 }}
                   />
                   <DensityCalculatorPopover
                     method={defaultMethod}
@@ -309,74 +311,67 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
-                  Observed Temperature (°C)
+                <label htmlFor={ids.temp} className={LABEL_SM}>
+                  Observed temperature (°C)
                 </label>
-                <input
+                <Input
+                  id={ids.temp}
                   type="number"
                   step="0.1"
                   placeholder="e.g. 28.5"
                   value={observedTempC}
                   onChange={(e) => setObservedTempC(e.target.value)}
-                  className="input"
-                  style={{ width: '100%', height: 34, fontSize: 13 }}
                 />
               </div>
             </div>
 
-            {/* Computed 15 °C banner */}
             <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 12px',
-                borderRadius: 6,
-                background: calc15 ? 'var(--color-brand-subtle, #eff6ff)' : '#f3f4f6',
-                border: '1px solid var(--color-border, #e5e7eb)',
-              }}
+              className={cn(
+                'flex items-center justify-between rounded-md border border-border-soft px-3 py-2',
+                hasCalc ? 'bg-info-bg' : 'bg-surface',
+              )}
             >
-              <span style={{ fontSize: 12, color: 'var(--color-text-muted, #4b5563)' }}>
-                Computed density at 15 °C:
-              </span>
+              <span className="text-[12px] text-ink-muted">Computed density at 15 °C:</span>
               <strong
-                style={{
-                  fontSize: 18,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: calc15 ? 'var(--color-brand, #1e40af)' : '#9ca3af',
-                }}
+                className={cn(
+                  'font-mono text-[18px] tabular-nums',
+                  hasCalc ? 'text-info-fg' : 'text-ink-faint',
+                )}
               >
-                {calc15 != null ? `${calc15.toFixed(2)} kg/m³` : '— — —'}
+                {calc15 != null ? formatQuantity(calc15, 'kg/m³', { decimals: 2 }) : '— — —'}
               </strong>
             </div>
           </div>
         ) : (
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+            <label htmlFor={ids.direct} className={LABEL}>
               Density at 15 °C (kg/m³)
             </label>
-            <input
+            <Input
+              id={ids.direct}
               type="number"
               step="0.1"
               placeholder="e.g. 753.5"
               value={density15Direct}
               onChange={(e) => setDensity15Direct(e.target.value)}
-              className="input"
-              style={{ width: '100%', height: 34, fontSize: 13 }}
             />
           </div>
         )}
 
-        {/* Optional sampled from */}
-        <div style={{ borderTop: '1px solid var(--color-border, #e5e7eb)', paddingTop: 12 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6 }}>
-            Sampled From (Optional)
-          </label>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <div
+          role="group"
+          aria-labelledby={ids.sampled}
+          className="border-t border-border-soft pt-3"
+        >
+          <div id={ids.sampled} className={cn(LABEL_SM, 'mb-1.5')}>
+            Sampled from (optional)
+          </div>
+          <div className="mb-2 flex gap-2">
             <Button
               type="button"
               size="sm"
-              variant={sampledFrom === 'NONE' ? 'primary' : 'secondary'}
+              variant={toggle(sampledFrom === 'NONE')}
+              aria-pressed={sampledFrom === 'NONE'}
               onClick={() => setSampledFrom('NONE')}
             >
               Unspecified
@@ -384,7 +379,8 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
             <Button
               type="button"
               size="sm"
-              variant={sampledFrom === 'TANK' ? 'primary' : 'secondary'}
+              variant={toggle(sampledFrom === 'TANK')}
+              aria-pressed={sampledFrom === 'TANK'}
               onClick={() => setSampledFrom('TANK')}
               disabled={relevantTanks.length === 0}
             >
@@ -393,7 +389,8 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
             <Button
               type="button"
               size="sm"
-              variant={sampledFrom === 'NOZZLE' ? 'primary' : 'secondary'}
+              variant={toggle(sampledFrom === 'NOZZLE')}
+              aria-pressed={sampledFrom === 'NOZZLE'}
               onClick={() => setSampledFrom('NOZZLE')}
               disabled={relevantNozzles.length === 0}
             >
@@ -402,35 +399,35 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
           </div>
 
           {sampledFrom === 'TANK' && relevantTanks.length > 0 && (
-            <select
+            <Select
+              inputSize="sm"
+              aria-label="Sampled tank"
               value={tankId}
               onChange={(e) => setTankId(e.target.value)}
-              className="input"
-              style={{ width: '100%', height: 32, fontSize: 12 }}
             >
-              <option value="">Select tank...</option>
+              <option value="">Select tank…</option>
               {relevantTanks.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
 
           {sampledFrom === 'NOZZLE' && relevantNozzles.length > 0 && (
-            <select
+            <Select
+              inputSize="sm"
+              aria-label="Sampled nozzle"
               value={nozzleId}
               onChange={(e) => setNozzleId(e.target.value)}
-              className="input"
-              style={{ width: '100%', height: 32, fontSize: 12 }}
             >
-              <option value="">Select nozzle...</option>
+              <option value="">Select nozzle…</option>
               {relevantNozzles.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.name}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
       </form>

@@ -35,6 +35,10 @@ describe('Business Date labels', () => {
     expect(businessDateLabel('2026-10-09')).toBe('Fri, 9 Oct');
     expect(businessWeekday('2026-10-09')).toBe('Fri');
   });
+  it('spell September "Sep", never "Sept" (#609)', () => {
+    expect(businessDateLabel('2026-09-09')).toBe('Wed, 9 Sep');
+    expect(stationDayMonth(Date.parse('2026-09-09T06:00:00Z'), tz)).toBe('9 Sep');
+  });
 });
 
 describe('plain calendar labels', () => {

@@ -1,191 +1,211 @@
-import React, { useMemo, useState } from 'react';
-import { Chip, EmptyState, Panel } from '../../../pump-ds/index.js';
+import React, { useMemo } from 'react';
+import {
+  Chip,
+  FilterChips,
+  InteractiveTable,
+  Select,
+  type FilterChipOption,
+  type TableColumn,
+} from '../../../pump-ds/index.js';
+import {
+  formatClockInZone,
+  formatDayMonth,
+  formatDensity,
+  formatTemperature,
+} from '../../../utils/format.js';
 import { DeltaChip } from './DeltaChip.js';
-import type { DensityReadingWithContext } from '@pump/shared';
+import {
+  DENSITY_KIND_LABEL,
+  DENSITY_KINDS,
+  routineCounts,
+  type DensityRegisterFilter,
+} from './densityKind.js';
+import type { DensityReadingKind, DensityReadingWithContext } from '@pump/shared';
 
-export interface RegisterViewProps {
-  readings: DensityReadingWithContext[];
+export interface RegisterFiltersProps {
   products: Array<{ id: string; name: string; code: string }>;
-  tolerance?: number;
+  /** Every reading, unfiltered: the routine chips count from it. */
+  readings: readonly DensityReadingWithContext[];
+  value: DensityRegisterFilter;
+  onChange: (value: DensityRegisterFilter) => void;
 }
 
-export const RegisterView: React.FC<RegisterViewProps> = ({
-  readings,
+type RoutineChip = DensityReadingKind | 'ALL';
+
+/**
+ * The Register's row filters, for the section header's control bar. Apply
+ * instantly: products in a select (any number of fuels), the three routines as
+ * counted filter chips.
+ */
+export const RegisterFilters: React.FC<RegisterFiltersProps> = ({
   products,
-  tolerance = 3,
+  readings,
+  value,
+  onChange,
 }) => {
-  const [selectedProduct, setSelectedProduct] = useState<string>('');
-  const [selectedKind, setSelectedKind] = useState<string>('');
+  const counts = useMemo(
+    () => routineCounts(readings, value.productId),
+    [readings, value.productId],
+  );
+  const options = useMemo<FilterChipOption<RoutineChip>[]>(
+    () => [
+      { value: 'ALL', label: 'All', count: counts.ALL },
+      ...DENSITY_KINDS.map((kind) => ({
+        value: kind,
+        label: DENSITY_KIND_LABEL[kind],
+        count: counts[kind],
+      })),
+    ],
+    [counts],
+  );
+  return (
+    <>
+      <Select
+        inputSize="sm"
+        className="min-w-[150px]"
+        value={value.productId}
+        onChange={(e) => onChange({ ...value, productId: e.target.value })}
+        aria-label="Filter by product"
+      >
+        <option value="">All products</option>
+        {products.map((product) => (
+          <option key={product.id} value={product.id}>
+            {product.name} ({product.code})
+          </option>
+        ))}
+      </Select>
+      <FilterChips<RoutineChip>
+        aria-label="Routine"
+        options={options}
+        value={value.kind || 'ALL'}
+        onChange={(kind) => onChange({ ...value, kind: kind === 'ALL' ? '' : kind })}
+      />
+    </>
+  );
+};
 
-  const filtered = useMemo(() => {
-    return readings.filter((r) => {
-      if (selectedProduct && r.productId !== selectedProduct) return false;
-      if (selectedKind && r.kind !== selectedKind) return false;
-      return true;
-    });
-  }, [readings, selectedProduct, selectedKind]);
+export interface RegisterViewProps {
+  /** The rows to show, already filtered and ordered (`filterDensityReadings`). */
+  readings: DensityReadingWithContext[];
+  /** The station's jump tolerance (`resolveDecantationSettings`). */
+  tolerance: number;
+  /** The station's IANA timezone; times never use the device clock. */
+  timeZone: string;
+}
 
-  const thStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    textAlign: 'left',
-    fontSize: 12,
-    fontWeight: 600,
-    color: 'var(--color-text-muted, #4b5563)',
-    borderBottom: '1px solid var(--color-border, #e5e7eb)',
-    background: 'var(--color-bg-subtle, #f9fafb)',
-  };
+const sampledLabel = (r: DensityReadingWithContext): string =>
+  r.tankName || r.nozzleName || r.sampledFrom || '';
 
-  const tdStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    fontSize: 13,
-    color: 'var(--color-text, #111827)',
-    borderBottom: '1px solid var(--color-border, #f3f4f6)',
-  };
-
-  const numStyle: React.CSSProperties = {
-    ...tdStyle,
-    textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums',
-  };
+/** The density register: every reading, newest first. Densities never total. */
+export const RegisterView: React.FC<RegisterViewProps> = ({ readings, tolerance, timeZone }) => {
+  const columns = useMemo<TableColumn<DensityReadingWithContext>[]>(
+    () => [
+      {
+        id: 'date',
+        header: 'Date',
+        kind: 'date',
+        value: (r) => r.businessDate,
+        cell: (r) => formatDayMonth(r.businessDate),
+      },
+      {
+        id: 'time',
+        header: 'Time',
+        kind: 'text',
+        value: (r) => r.recordedAt,
+        cell: (r) => (
+          <span className="text-ink-muted">{formatClockInZone(r.recordedAt, timeZone)}</span>
+        ),
+      },
+      {
+        id: 'product',
+        header: 'Product',
+        kind: 'text',
+        value: (r) => r.productName || r.productId,
+        cell: (r) => (
+          <>
+            <span className="font-semibold">{r.productName || r.productId}</span>{' '}
+            <span className="text-ink-muted">· {r.productCode}</span>
+          </>
+        ),
+      },
+      {
+        id: 'routine',
+        header: 'Routine',
+        kind: 'text',
+        value: (r) => DENSITY_KIND_LABEL[r.kind],
+        cell: (r) => (
+          <Chip size="md" tone="neutral">
+            {DENSITY_KIND_LABEL[r.kind]}
+          </Chip>
+        ),
+      },
+      {
+        id: 'sampled',
+        header: 'Sampled from',
+        kind: 'text',
+        value: sampledLabel,
+        cell: (r) => <span className="text-ink-muted">{sampledLabel(r) || '—'}</span>,
+      },
+      {
+        id: 'observed',
+        header: 'Hydrometer',
+        kind: 'qty',
+        total: false,
+        value: (r) => r.observedDensity,
+        cell: (r) => formatDensity(r.observedDensity),
+      },
+      {
+        id: 'temp',
+        header: 'Temp',
+        kind: 'qty',
+        total: false,
+        value: (r) => r.observedTempC,
+        cell: (r) => formatTemperature(r.observedTempC),
+      },
+      {
+        id: 'density15',
+        header: 'At 15 °C',
+        kind: 'qty',
+        total: false,
+        emphasis: true,
+        value: (r) => r.density15,
+        cell: (r) => formatDensity(r.density15),
+      },
+      {
+        id: 'delta',
+        header: 'Δ previous',
+        kind: 'qty',
+        total: false,
+        value: (r) => r.delta,
+        // The chip carries a word (`Unexplained jump`), so it reads in the sans face.
+        cell: (r) => (
+          <span className="font-sans">
+            <DeltaChip delta={r.delta} kind={r.kind} flags={r.flags} tolerance={tolerance} />
+          </span>
+        ),
+      },
+      {
+        id: 'recordedBy',
+        header: 'Recorded by',
+        kind: 'text',
+        value: (r) => r.recordedByName || r.recordedBy,
+        cell: (r) => (
+          <span className="text-[12px] text-ink-muted">
+            {r.recordedByName || r.recordedBy || '—'}
+          </span>
+        ),
+      },
+    ],
+    [timeZone, tolerance],
+  );
 
   return (
-    <Panel
-      flush
-      title="Density Register Log"
-      action={
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select
-            value={selectedProduct}
-            onChange={(e) => setSelectedProduct(e.target.value)}
-            className="input"
-            style={{ height: 30, fontSize: 12, minWidth: 130 }}
-            aria-label="Filter by product"
-          >
-            <option value="">All products</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code})
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedKind}
-            onChange={(e) => setSelectedKind(e.target.value)}
-            className="input"
-            style={{ height: 30, fontSize: 12, minWidth: 120 }}
-            aria-label="Filter by kind"
-          >
-            <option value="">All routines</option>
-            <option value="MORNING">Morning (Daily)</option>
-            <option value="ADHOC">Ad-hoc check</option>
-            <option value="DECANTATION">Decantation</option>
-          </select>
-        </div>
-      }
-    >
-      {filtered.length === 0 ? (
-        <div style={{ padding: 32 }}>
-          <EmptyState
-            title="No density readings"
-            description="No density readings match the selected filters."
-          />
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Time</th>
-                <th style={thStyle}>Product</th>
-                <th style={thStyle}>Routine</th>
-                <th style={thStyle}>Sampled from</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Hydrometer</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Temp</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>At 15 °C</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Δ previous</th>
-                <th style={thStyle}>Recorded by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r, index) => {
-                const showDate = r.businessDate !== filtered[index - 1]?.businessDate;
-
-                const time = new Date(r.recordedAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-
-                const sampledLabel =
-                  r.tankName || r.nozzleName || (r.sampledFrom ? r.sampledFrom : '—');
-
-                const kindTone =
-                  r.kind === 'DECANTATION' ? 'info' : r.kind === 'MORNING' ? 'brand' : 'neutral';
-
-                return (
-                  <tr
-                    key={r.id}
-                    style={
-                      showDate ? { borderTop: '2px solid var(--color-border, #e5e7eb)' } : undefined
-                    }
-                  >
-                    <td style={{ ...tdStyle, fontWeight: showDate ? 600 : 400 }}>
-                      {showDate ? r.businessDate : ''}
-                    </td>
-                    <td style={{ ...tdStyle, color: 'var(--color-text-muted, #6b7280)' }}>
-                      {time}
-                    </td>
-                    <td style={tdStyle}>
-                      <strong>{r.productName || r.productId}</strong>{' '}
-                      <span style={{ opacity: 0.6 }}>· {r.productCode}</span>
-                    </td>
-                    <td style={tdStyle}>
-                      <Chip size="sm" tone={kindTone}>
-                        {r.kind}
-                      </Chip>
-                    </td>
-                    <td style={{ ...tdStyle, color: 'var(--color-text-muted, #4b5563)' }}>
-                      {sampledLabel}
-                    </td>
-                    <td style={numStyle}>
-                      {r.observedDensity != null ? r.observedDensity.toFixed(1) : '—'}
-                    </td>
-                    <td style={numStyle}>
-                      {r.observedTempC != null ? `${r.observedTempC.toFixed(1)} °C` : '—'}
-                    </td>
-                    <td
-                      style={{
-                        ...numStyle,
-                        fontWeight: 700,
-                        color: 'var(--color-text, #111827)',
-                      }}
-                    >
-                      {r.density15.toFixed(2)}
-                    </td>
-                    <td style={numStyle}>
-                      <DeltaChip
-                        delta={r.delta}
-                        kind={r.kind}
-                        flags={r.flags}
-                        tolerance={tolerance}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        color: 'var(--color-text-muted, #6b7280)',
-                        fontSize: 12,
-                      }}
-                    >
-                      {r.recordedByName || r.recordedBy || '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Panel>
+    <InteractiveTable
+      bare
+      columns={columns}
+      rows={readings}
+      rowKey={(r) => r.id}
+      title="density readings"
+    />
   );
 };

@@ -3,22 +3,18 @@ import { OnboardingDraft, OnboardingPaymentTerminalDraft } from '@pump/shared';
 import { createPaymentTerminalDraft } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
 import { ProviderField } from '../../primitives/ProviderField.js';
-import { Button } from '../../../pump-ds/index.js';
+import { Button, EmptyState, SectionHeader } from '../../../pump-ds/index.js';
+import { Field, NumberInput, TextInput } from '../../primitives/Field.js';
+import { OnboardingStep, STEP_PANEL } from './stepLayout.js';
 
 interface Step8PaymentTerminalsProps {
   draft: OnboardingDraft;
   updateDraft: (updater: (prev: OnboardingDraft) => OnboardingDraft) => void;
-  panelStyle: React.CSSProperties;
-  fieldLabelStyle: React.CSSProperties;
-  inputStyle: React.CSSProperties;
 }
 
 export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
   draft,
   updateDraft,
-  panelStyle,
-  fieldLabelStyle,
-  inputStyle,
 }) => {
   const terminals = draft.paymentTerminals ?? [];
   const [quickProvider, setQuickProvider] = React.useState('');
@@ -74,178 +70,128 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
     }));
   };
 
+  const quickN = Math.max(1, Math.min(50, Math.floor(quickCount) || 1));
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div
-        style={{
-          ...panelStyle,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Payment Terminals
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Add the card/UPI machines (POS devices) at this station. These are linked to dispensers
-            when a shift is opened. Optional — you can run cash-only and add terminals later from
-            Station Setup.
-          </p>
-        </div>
-        <Button type="button" variant="primary" size="sm" onClick={addTerminal}>
-          Add Terminal
+    <OnboardingStep
+      title="Payment terminals"
+      subtitle="Add the card/UPI machines (POS devices) at this station. These are linked to dispensers when a shift is opened. Optional — you can run cash-only and add terminals later from Station → Payment terminals."
+      actions={
+        <Button type="button" variant="secondary" size="sm" onClick={addTerminal}>
+          Add terminal
         </Button>
-      </div>
-
+      }
+    >
       {/* Quick fill: create N identical machines from one provider at once. */}
-      <div style={{ ...panelStyle, gap: '12px' }}>
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Quick add
-        </span>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              minWidth: '220px',
-              flex: 1,
-            }}
-          >
-            <label style={fieldLabelStyle}>Provider / Acquirer</label>
-            <ProviderField value={quickProvider} onChange={setQuickProvider} style={inputStyle} />
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Quick add" />
+        <div className={STEP_PANEL}>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Provider / acquirer" className="min-w-[220px] flex-1">
+              <ProviderField value={quickProvider} onChange={setQuickProvider} />
+            </Field>
+            <Field label="No. of machines" htmlFor="onb-quick-count" className="w-[120px]">
+              <NumberInput
+                id="onb-quick-count"
+                min={1}
+                max={50}
+                value={quickCount}
+                onChange={(e) => setQuickCount(Number(e.target.value))}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={quickAdd}
+              disabled={!quickProvider.trim() || quickCount < 1}
+              className="mb-4"
+            >
+              Add {quickN} machine
+              {quickN > 1 ? 's' : ''}
+            </Button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
-            <label style={fieldLabelStyle}>No. of machines</label>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              style={inputStyle}
-              value={quickCount}
-              onChange={(e) => setQuickCount(Number(e.target.value))}
-            />
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={quickAdd}
-            disabled={!quickProvider.trim() || quickCount < 1}
-            style={{ height: '32px' }}
-          >
-            Add {Math.max(1, Math.min(50, Math.floor(quickCount) || 1))} machine
-            {Math.max(1, Math.min(50, Math.floor(quickCount) || 1)) > 1 ? 's' : ''}
-          </Button>
+          <span className="text-[12px] text-ink-faint">
+            Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you
+            can rename or set each TID below.
+          </span>
         </div>
-        <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-          Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you can
-          rename or set each TID below.
-        </span>
-      </div>
+      </section>
 
-      {terminals.length === 0 ? (
-        <div
-          style={{
-            ...panelStyle,
-            padding: '40px',
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            fontSize: '13px',
-          }}
-        >
-          No payment terminals configured. You can still finish onboarding and add them later.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {terminals.map((terminal, idx) => (
-            <div key={terminal.draftId} style={{ ...panelStyle, gap: '12px' }}>
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <span
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  Terminal {idx + 1}
-                </span>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="xs"
-                  onClick={() => removeTerminal(terminal.draftId)}
-                >
-                  Remove
-                </Button>
-              </div>
+      <section className="flex flex-col gap-2">
+        <SectionHeader title="Terminals" subtitle={terminals.length || undefined} />
+        {terminals.length === 0 ? (
+          <EmptyState
+            title="No payment terminals configured"
+            description="You can still finish onboarding and add them later."
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {terminals.map((terminal, idx) => (
+              <div key={terminal.draftId} className={STEP_PANEL}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+                    Terminal {idx + 1}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="xs"
+                    onClick={() => removeTerminal(terminal.draftId)}
+                  >
+                    Remove
+                  </Button>
+                </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={fieldLabelStyle}>Label *</label>
-                  <input
-                    style={inputStyle}
-                    value={terminal.label}
-                    onChange={(e) => updateTerminal(terminal.draftId, { label: e.target.value })}
-                    placeholder="e.g. Counter HDFC POS"
-                  />
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Label" htmlFor={`onb-term-label-${terminal.draftId}`} required>
+                    <TextInput
+                      id={`onb-term-label-${terminal.draftId}`}
+                      value={terminal.label}
+                      onChange={(e) => updateTerminal(terminal.draftId, { label: e.target.value })}
+                      placeholder="e.g. Counter HDFC POS"
+                    />
+                  </Field>
+                  <Field label="Provider / acquirer">
+                    <ProviderField
+                      key={terminal.draftId}
+                      value={terminal.provider}
+                      onChange={(v) => updateTerminal(terminal.draftId, { provider: v })}
+                    />
+                  </Field>
+                  <Field label="Terminal ID (TID)" htmlFor={`onb-term-tid-${terminal.draftId}`}>
+                    <TextInput
+                      id={`onb-term-tid-${terminal.draftId}`}
+                      value={terminal.terminalCode}
+                      onChange={(e) =>
+                        updateTerminal(terminal.draftId, { terminalCode: e.target.value })
+                      }
+                      placeholder="Device TID"
+                    />
+                  </Field>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={fieldLabelStyle}>Provider / Acquirer</label>
-                  <ProviderField
-                    key={terminal.draftId}
-                    value={terminal.provider}
-                    onChange={(v) => updateTerminal(terminal.draftId, { provider: v })}
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={fieldLabelStyle}>Terminal ID (TID)</label>
-                  <input
-                    style={inputStyle}
-                    value={terminal.terminalCode}
+
+                <div className="flex items-center gap-5">
+                  <Checkbox
+                    label="Accepts card"
+                    checked={terminal.supportsCard}
                     onChange={(e) =>
-                      updateTerminal(terminal.draftId, { terminalCode: e.target.value })
+                      updateTerminal(terminal.draftId, { supportsCard: e.target.checked })
                     }
-                    placeholder="Device TID"
+                  />
+                  <Checkbox
+                    label="Accepts UPI"
+                    checked={terminal.supportsUpi}
+                    onChange={(e) =>
+                      updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })
+                    }
                   />
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                <Checkbox
-                  label="Accepts Card"
-                  checked={terminal.supportsCard}
-                  onChange={(e) =>
-                    updateTerminal(terminal.draftId, { supportsCard: e.target.checked })
-                  }
-                />
-                <Checkbox
-                  label="Accepts UPI"
-                  checked={terminal.supportsUpi}
-                  onChange={(e) =>
-                    updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })
-                  }
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </OnboardingStep>
   );
 };

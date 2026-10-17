@@ -66,7 +66,7 @@ describe('barWidths', () => {
 
 describe('DAY_STATUS', () => {
   it('has one presentation per status, and only Report missing does not open', () => {
-    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Live', tone: 'good', action: 'live' });
+    expect(DAY_STATUS.LIVE).toMatchObject({ label: 'Open', tone: 'good', action: 'live' });
     expect(DAY_STATUS.DRAFT).toMatchObject({ label: 'Draft', tone: 'warn', action: 'report' });
     expect(DAY_STATUS.SEALED).toMatchObject({ label: 'Sealed', tone: 'muted', action: 'report' });
     expect(DAY_STATUS.REPORT_MISSING).toMatchObject({
@@ -83,13 +83,13 @@ describe('dayView', () => {
       weekday: 'Thu',
       dayOfMonth: 8,
       statusLabel: 'Sealed',
-      headline: '₹4.66L',
+      headline: '₹4,66,000',
       bar: 'scaled',
       volume: '4,752 L',
       note: 'Cash balanced',
       noteTone: 'plain',
       action: 'report',
-      label: 'Thu 8 Oct, Sealed, ₹4.66L, 4,752 L, Cash balanced',
+      label: 'Thu 8 Oct, Sealed, ₹4,66,000, 4,752 L, Cash balanced',
     });
   });
   it('flags a short or over cash variance with its sign and tone', () => {
@@ -101,6 +101,9 @@ describe('dayView', () => {
       note: 'Cash +₹120',
       noteTone: 'warn',
     });
+  });
+  it('reads a variance under half a paisa as balanced: the one balanced rule (#518)', () => {
+    expect(dayView(item({ cashVariance: 0.004 }), 'home').note).toBe('Cash balanced');
   });
   it('shows a dash for litres when no Shift has closed', () => {
     expect(dayView(item({ status: 'DRAFT', shiftCount: 0, volume: 0 }), 'home').volume).toBe('—');
@@ -114,7 +117,7 @@ describe('dayView', () => {
       bar: 'hatched',
       action: 'live',
       liveTab: 'home',
-      label: 'Thu 8 Oct, Live, In progress, See Home',
+      label: 'Thu 8 Oct, Open, In progress, See Home',
     });
     expect(v.label).not.toContain('21');
   });
@@ -131,17 +134,17 @@ describe('dayView', () => {
       note: 'No report until it closes',
     });
   });
-  it('shows a closed day without a DSSR snapshot honestly and does not open it', () => {
+  it('shows a closed day without a DSR snapshot honestly and does not open it', () => {
     const v = dayView(item({ status: 'REPORT_MISSING', totalSales: 0, shiftCount: 0 }), null);
     expect(v).toMatchObject({
       statusLabel: 'Report missing',
       tone: 'bad',
       headline: 'Closed',
-      note: 'No DSSR for this day',
+      note: 'No DSR for this day',
       bar: 'none',
       volume: '—',
       action: 'none',
-      label: 'Thu 8 Oct, Report missing, Closed, No DSSR for this day',
+      label: 'Thu 8 Oct, Report missing, Closed, No DSR for this day',
     });
   });
 });

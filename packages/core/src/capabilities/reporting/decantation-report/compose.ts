@@ -1,3 +1,4 @@
+import { isBalancedQuantity } from '@pump/shared';
 import type {
   DecantationReport,
   DecantationReportChamber,
@@ -28,7 +29,9 @@ const VARIANCE_LABEL: Record<VarianceType, string> = {
 /** Settled = variance computed at invoice level (all linked visits measured). */
 const isSettled = (l: LinkRow) => l.varianceComputedAt !== null && l.varianceQty !== null;
 
-const varianceTypeOf = (v: number): VarianceType => (v > 0 ? 'EXCESS' : v < 0 ? 'SHORT' : 'EXACT');
+/** Exact by the shared quantity rule (#556), else the variance's sign. */
+const varianceTypeOf = (v: number): VarianceType =>
+  isBalancedQuantity(v) ? 'EXACT' : v > 0 ? 'EXCESS' : 'SHORT';
 
 /** Settled links of a visit, one per (purchase, product). */
 function dedupeSettled(links: Map<string, LinkRow>): LinkRow[] {
@@ -396,8 +399,9 @@ export function composeDecantationReport(
       p.totalInvoiceQty = round3(p.totalInvoiceQty + (inv.invoiceQty ?? 0));
       const variance = inv.varianceQty ?? 0;
       p.totalVarianceQty = round3(p.totalVarianceQty + variance);
-      if (variance < 0) p.shortVarianceQty = round3(p.shortVarianceQty + Math.abs(variance));
-      else if (variance > 0) p.excessVarianceQty = round3(p.excessVarianceQty + variance);
+      const type = varianceTypeOf(variance);
+      if (type === 'SHORT') p.shortVarianceQty = round3(p.shortVarianceQty + Math.abs(variance));
+      else if (type === 'EXCESS') p.excessVarianceQty = round3(p.excessVarianceQty + variance);
     } else {
       p.pendingInvoiceQty = round3(p.pendingInvoiceQty + (inv.invoiceQty ?? 0));
     }

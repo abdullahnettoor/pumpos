@@ -50,6 +50,8 @@ export interface DemoCreateResult {
   ownerEmail: string | null;
   authUserId: string;
   password?: string;
+  attendantEmail?: string;
+  attendantName?: string;
   demoExpiresAt: string;
 }
 

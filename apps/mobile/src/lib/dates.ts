@@ -2,10 +2,17 @@
  * Date and time labels for Home. Two kinds of input, kept apart:
  *  - an instant (`Date.parse(openedAt)`) shown in the STATION's timezone;
  *  - a Business Date (`YYYY-MM-DD`), a calendar label with no instant behind it,
- *    always formatted in UTC so the device's zone cannot shift the day.
- * Every Intl call for Home lives here.
+ *    read from its parts so the device's zone cannot shift the day.
+ * Day and month come from the shared `@pump/shared` display-date formatter
+ * (`9 Oct`, `Sep`), as on desktop (#609).
  */
-import { resolveEntryDate } from '@pump/shared';
+import {
+  formatCalendarDate,
+  formatInstantDate,
+  resolveEntryDate,
+  SHORT_MONTH_NAMES,
+  stationMinuteOfDay,
+} from '@pump/shared';
 
 const LOCALE = 'en-IN';
 
@@ -19,41 +26,18 @@ export const stationTime = (ms: number, timeZone: string): string =>
     .format(new Date(ms))
     .toLowerCase();
 
-/** Minutes after local midnight of an instant in the station's timezone. */
-export function stationMinuteOfDay(ms: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date(ms));
-  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return at('hour') * 60 + at('minute');
-}
+export { stationMinuteOfDay };
 
-/** `9 Oct` in the station's timezone. */
+/** `9 Oct` in the station's timezone (the shared display-date months: `Sep`, never `Sept`). */
 export const stationDayMonth = (ms: number, timeZone: string): string =>
-  new Intl.DateTimeFormat(LOCALE, { timeZone, day: 'numeric', month: 'short' }).format(
-    new Date(ms),
-  );
+  formatInstantDate(new Date(ms), timeZone, { year: 'none' }) ?? '';
 
-const businessDateInstant = (businessDate: string) => new Date(`${businessDate}T00:00:00Z`);
-
-/** `Fri, 9 Oct` for a Business Date. */
+/** `Fri, 9 Oct` for a Business Date (the shared display-date months). */
 export const businessDateLabel = (businessDate: string): string =>
-  businessDateInstant(businessDate).toLocaleDateString(LOCALE, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
+  `${businessWeekday(businessDate)}, ${formatCalendarDate(businessDate, { year: 'none' })}`;
 
-/** `Fri` for a Business Date. */
-export const businessWeekday = (businessDate: string): string =>
-  businessDateInstant(businessDate).toLocaleDateString(LOCALE, {
-    weekday: 'short',
-    timeZone: 'UTC',
-  });
+/** `Fri` for a Business Date (a calendar weekday: no timezone can shift it). */
+export const businessWeekday = (businessDate: string): string => weekdayOf(businessDate);
 
 // Plain-calendar labels for a `YYYY-MM-DD` date, read by hand from fixed tables
 // (Node's ICU spells September "Sept", the app's does not, and `Date` locale
@@ -88,11 +72,16 @@ export function weekdayOf(date: string): (typeof WEEKDAYS)[number] {
   return WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 }
 
-/** `Oct`. */
-export const monthShort = (m: number): string => MONTH_NAMES[m - 1].slice(0, 3);
+/** `Oct` (`Sep`, never `Sept`). */
+export const monthShort = (m: number): string => SHORT_MONTH_NAMES[m - 1] ?? String(m);
+
+/**
+ * `Thu 15 Oct 2026`: a picked date as desktop's `DatePickerButton` reads it,
+ * shown beside a native date input, whose own "15/10/2026" reads either way
+ * round (#609). '' for no date.
+ */
+export const pickedDateLabel = (date: string): string =>
+  /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${weekdayOf(date)} ${formatCalendarDate(date)}` : '';
 
 /** `2026-10-08` -> `8 Oct`. */
-export function shortDate(date: string): string {
-  const { m, d } = dateParts(date);
-  return `${d} ${monthShort(m)}`;
-}
+export const shortDate = (date: string): string => formatCalendarDate(date, { year: 'none' });

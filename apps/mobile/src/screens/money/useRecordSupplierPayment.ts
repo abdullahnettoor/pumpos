@@ -25,7 +25,7 @@ export function useRecordSupplierPayment(stationId: string, supplierId: string) 
     partyId: supplierId,
     partyListKey: 'suppliers',
     refreshKeys: [
-      queryKeys.supplierLedger(supplierId),
+      queryKeys.supplierLedgers(supplierId),
       queryKeys.supplierStatements(supplierId),
       queryKeys.payables(stationId),
       queryKeys.supplierPayable(stationId, supplierId),

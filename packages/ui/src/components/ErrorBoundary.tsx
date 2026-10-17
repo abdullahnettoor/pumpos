@@ -73,7 +73,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           </p>
           <pre
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontFamily: 'var(--font-mono)',
               color: 'var(--state-danger-fg)',
               backgroundColor: 'var(--state-danger-bg)',

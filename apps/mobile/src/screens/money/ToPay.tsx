@@ -1,6 +1,6 @@
 import React from 'react';
 import { inr } from '@pump/ui';
-import { compactRupees } from '../../lib/format.js';
+import { rupees } from '../../lib/format.js';
 import { monthCaption, sinceLabel, supplierRowMeta } from '../../lib/money/payables.js';
 import {
   balanceOf,
@@ -35,14 +35,15 @@ interface Props {
 const metaOf = (s: MoneySupplier): string => s.metadata?.tradeName || s.phone || '';
 
 /**
- * To pay: what you owe suppliers (Σ purchases − Σ payments), largest first. The
+ * Payable: what the selected Station owes its suppliers (Σ purchases − Σ
+ * payments on its own ledger, #575), largest first. The
  * hero carries paid vs purchased this month and each row how many Purchases are
  * unpaid and since when; both come from the payables summary and are simply left
  * out until it arrives (or fails). No due dates: suppliers have no payment terms
  * in the data, so a row only says how long the oldest unpaid Purchase has waited.
  */
 export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => {
-  const { suppliers, isLoading } = useSuppliersData();
+  const { suppliers, isLoading } = useSuppliersData(stationId);
   const payables = usePayablesData(stationId);
   const caption = monthCaption(payables.summary?.month);
   const searching = query.trim() !== '';
@@ -62,13 +63,13 @@ export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => 
             <div>
               <dt>Paid this month</dt>
               <dd className="num text-[12.5px] font-semibold text-text-high">
-                {compactRupees(payables.summary.month.paid)}
+                {rupees(payables.summary.month.paid)}
               </dd>
             </div>
             <div>
               <dt>Purchased this month</dt>
               <dd className="num text-[12.5px] font-semibold text-text-high">
-                {compactRupees(payables.summary.month.purchased)}
+                {rupees(payables.summary.month.purchased)}
               </dd>
             </div>
           </dl>

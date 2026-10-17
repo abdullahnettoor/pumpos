@@ -38,14 +38,14 @@ const chipVariants = cva(
   {
     variants: {
       size: {
-        xs: 'h-5 px-1.5 gap-1 text-[10px] [&_svg]:size-2.5',
-        sm: 'h-[22px] px-2 gap-1.5 text-[11px] [&_svg]:size-3',
+        xs: 'h-5 px-1.5 gap-1 text-[12px] [&_svg]:size-2.5',
+        sm: 'h-[22px] px-2 gap-1.5 text-[12px] [&_svg]:size-3',
         md: 'h-6 px-2.5 gap-1.5 text-[12px] [&_svg]:size-3.5',
       },
       variant: {
         soft: '',
         outline: 'bg-transparent border',
-        solid: 'text-white',
+        solid: '',
       },
       tone: {
         brand: '',
@@ -73,13 +73,15 @@ const chipVariants = cva(
       { variant: 'outline', tone: 'danger', className: 'border-danger-fg text-danger-fg' },
       { variant: 'outline', tone: 'neutral', className: 'border-border-strong text-ink-default' },
 
-      // --- solid: full-saturation background + white text ---------------
-      { variant: 'solid', tone: 'brand', className: 'bg-brand' },
-      { variant: 'solid', tone: 'info', className: 'bg-info-fg' },
-      { variant: 'solid', tone: 'success', className: 'bg-success-fg' },
-      { variant: 'solid', tone: 'warning', className: 'bg-warning-fg' },
-      { variant: 'solid', tone: 'danger', className: 'bg-danger-fg' },
-      { variant: 'solid', tone: 'neutral', className: 'bg-ink-strong' },
+      // --- solid: full-saturation fill + its paired on-fill text colour ----
+      // Each fill names its own text colour (white in light, near-black in
+      // dark), so contrast holds in both themes (#518).
+      { variant: 'solid', tone: 'brand', className: 'bg-brand text-on-brand' },
+      { variant: 'solid', tone: 'info', className: 'bg-info-fg text-on-info' },
+      { variant: 'solid', tone: 'success', className: 'bg-success-fg text-on-success' },
+      { variant: 'solid', tone: 'warning', className: 'bg-warning-fg text-on-warning' },
+      { variant: 'solid', tone: 'danger', className: 'bg-danger-fg text-on-danger' },
+      { variant: 'solid', tone: 'neutral', className: 'bg-ink-strong text-on-neutral' },
     ],
     defaultVariants: {
       size: 'sm',

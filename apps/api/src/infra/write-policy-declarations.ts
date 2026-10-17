@@ -215,6 +215,17 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
   },
 
   // ---------------------------------------------------------------------
+  // Organization profile (#626)
+  // ---------------------------------------------------------------------
+  {
+    operation: 'PUT /organization',
+    restricted: 'BLOCKED',
+    rationale:
+      'Editing the Organization profile is a setup change, like PUT /setup/stations/:id; ' +
+      'ADR 0004 blocks setup under Restricted Access (owner decision on #626).',
+  },
+
+  // ---------------------------------------------------------------------
   // Setup and administration (#168)
   // ---------------------------------------------------------------------
   {
@@ -236,12 +247,14 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
       ['PUT /setup/tanks/:id', 'Infrastructure setup.'],
       ['DELETE /setup/tanks/:id', 'Infrastructure setup.'],
       ['POST /setup/dispensers', 'Infrastructure setup.'],
+      ['POST /setup/dispensers/with-nozzles', 'Infrastructure setup.'],
       ['PUT /setup/dispensers/:id', 'Infrastructure setup.'],
       ['DELETE /setup/dispensers/:id', 'Infrastructure setup.'],
       ['POST /setup/nozzles', 'Infrastructure setup.'],
       ['PUT /setup/nozzles/:id', 'Infrastructure setup.'],
       ['DELETE /setup/nozzles/:id', 'Infrastructure setup.'],
       ['POST /setup/shift-templates', 'Shift structure is setup.'],
+      ['POST /setup/shift-templates/batch', 'Shift structure is setup.'],
       ['PUT /setup/shift-templates/:id', 'Shift structure is setup.'],
       ['DELETE /setup/shift-templates/:id', 'Shift structure is setup.'],
       ['POST /setup/payment-terminals', 'Terminal registration is setup.'],
@@ -252,6 +265,10 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
         'Inviting a team member is explicitly blocked under Restricted Access.',
       ],
       ['PUT /setup/users/:id', 'Team administration is blocked.'],
+      [
+        'PUT /setup/users/:id/permissions',
+        'Changing what a team member may do is team administration, blocked like the rest.',
+      ],
       ['POST /setup/users/:id/reset-password', 'Team administration is blocked.'],
       ['POST /setup/users/:id/deactivate', 'Team administration is blocked.'],
       ['POST /setup/users/:id/reactivate', 'Team administration is blocked.'],

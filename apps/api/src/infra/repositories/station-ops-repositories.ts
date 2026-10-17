@@ -27,6 +27,7 @@ import type {
   CloseShiftContext,
   CloseShiftContextReader,
   StaffDirectory,
+  FuelNameReader,
 } from '@pump/core';
 import { rowJson, tsIso } from '../sql-json.js';
 import {
@@ -552,7 +553,19 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
           JOIN shifts sh ON sh.id = s.shift_id
             AND sh.organization_id = ${organizationId} AND sh.station_id = ${stationId}
           WHERE s.shift_id = ${shiftId} AND s.attendant_id = ${attendantId}
-            AND s.sale_type <> 'Fuel' AND s.payment_method = 'Cash') AS merchandise_cash
+            AND s.sale_type <> 'Fuel' AND s.payment_method = 'Cash') AS merchandise_cash,
+        -- Every DU the Attendant holds this Shift: one of them counts the
+        -- product cash above (productCashDrawer, #419).
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'duId', d.id,
+            'duCode', d.code,
+            'duName', d.name))
+          FROM shift_staff_assignments sa
+          JOIN shifts sh ON sh.id = sa.shift_id
+            AND sh.organization_id = ${organizationId} AND sh.station_id = ${stationId}
+          JOIN dispenser_units d ON d.id = sa.du_id
+            AND d.organization_id = ${organizationId}
+          WHERE sa.shift_id = ${shiftId} AND sa.user_id = ${attendantId}), '[]'::jsonb) AS attendant_dus
     `)) as unknown as [Record<string, any>];
 
     const readingRows: Array<{
@@ -583,6 +596,7 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
       creditSales: Number(row.credit_sales ?? 0),
       omcCardSales: Number(row.omc_card_sales ?? 0),
       merchandiseCash: Number(row.merchandise_cash ?? 0),
+      attendantDus: (row.attendant_dus as HandoverContext['attendantDus']) ?? [],
     };
   }
 }
@@ -843,5 +857,26 @@ export class DrizzleStaffDirectory implements StaffDirectory {
         )})
     `)) as unknown as { id: string }[];
     return new Set(rows.map((r) => r.id));
+  }
+}
+
+// ---------------- Fuel names (which fuels block a shift open, #630) ----------------
+
+/** The names of this organization's products, by id. */
+export class DrizzleFuelNameReader implements FuelNameReader {
+  constructor(private readonly db: DbClient) {}
+
+  async findNames(organizationId: string, productIds: string[]): Promise<Map<string, string>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: schema.products.id, name: schema.products.name })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.organizationId, organizationId),
+          inArray(schema.products.id, productIds),
+        ),
+      );
+    return new Map(rows.map((r) => [r.id, r.name]));
   }
 }

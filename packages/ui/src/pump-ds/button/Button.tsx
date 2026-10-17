@@ -6,12 +6,12 @@ import React, {
 } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
+import { Spinner } from '../spinner/Spinner.js';
 import { useAsyncAction } from '../../utils/useAsyncAction.js';
 
 /**
- * Button — the single canonical action control for pump-ds. Replaces the
- * scattered `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-ghost`
- * classes with one CVA source of truth.
+ * Button — the single canonical action control, one CVA source of truth for
+ * every variant (the legacy `.btn-*` classes were deleted in #539).
  *
  * Contract (every pump-ds interactive primitive honors this):
  *   default · hover · active · focus-visible · disabled · loading.
@@ -45,7 +45,7 @@ const buttonVariants = cva(
       },
       variant: {
         primary:
-          'bg-brand text-white border border-transparent hover:bg-[color-mix(in_oklab,var(--color-brand)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-brand)_78%,black)]',
+          'bg-brand text-on-brand border border-transparent hover:bg-[color-mix(in_oklab,var(--color-brand)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-brand)_78%,black)]',
         secondary:
           'bg-surface text-ink-strong border border-border-strong hover:bg-surface-alt active:bg-surface-alt',
         outline:
@@ -53,7 +53,7 @@ const buttonVariants = cva(
         ghost:
           'bg-transparent text-ink-default border border-transparent hover:bg-surface-alt active:bg-surface-alt',
         danger:
-          'bg-danger-fg text-white border border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger-fg)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-danger-fg)_78%,black)]',
+          'bg-danger-fg text-on-danger border border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger-fg)_88%,black)] active:bg-[color-mix(in_oklab,var(--color-danger-fg)_78%,black)]',
       },
       iconOnly: {
         true: 'px-0 aspect-square',
@@ -78,18 +78,6 @@ const buttonVariants = cva(
       fullWidth: false,
     },
   },
-);
-
-const Spinner = ({ className }: { className?: string }) => (
-  <svg
-    className={cn('motion-safe:animate-spin', className)}
-    viewBox="0 0 24 24"
-    fill="none"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-  </svg>
 );
 
 export interface ButtonProps

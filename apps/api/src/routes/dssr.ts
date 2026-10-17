@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports, canViewReports } from '@pump/shared';
+import { can, isAuthorizedForStation, redactSensitiveDssr } from '@pump/shared';
 import {
   GenerateDssr,
   ListBusinessDays,
@@ -93,11 +93,11 @@ async function loadPersistedDssr(
 dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  if (!canExportReports(user.role)) {
+  if (!can(user, 'reports.export')) {
     return c.json(
       {
         success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSSR' },
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSR' },
       },
       403,
     );
@@ -187,7 +187,10 @@ dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate')
   }
 
   if (businessDay.status === 'OPEN') {
-    return c.json({ success: true, data: await buildLiveDssrPreview(db, user, businessDay) });
+    return c.json({
+      success: true,
+      data: redactSensitiveDssr(await buildLiveDssrPreview(db, user, businessDay), user),
+    });
   }
 
   const result = await runInTransaction(db, (tx, events) =>
@@ -201,7 +204,10 @@ dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate')
       buildContext(user, { stationId, businessDayId }),
     ),
   );
-  return sendResult(c, result);
+  return sendResult(
+    c,
+    result.success ? { ...result, data: redactSensitiveDssr(result.data, user) } : result,
+  );
 });
 
 // GET /api/dssr/daily?stationId=&date=
@@ -224,7 +230,10 @@ dssrRouter.get('/daily', async (c) => {
   }
   return c.json({
     success: true,
-    data: await loadPersistedDssr(db, user.organizationId, stationId, date),
+    data: redactSensitiveDssr(
+      await loadPersistedDssr(db, user.organizationId, stationId, date),
+      user,
+    ),
   });
 });
 
@@ -273,15 +282,18 @@ dssrRouter.get('/daily/preview', async (c) => {
           success: false,
           error: {
             code: 'CONFLICT',
-            message: 'Closed business day has no persisted DSSR snapshot',
+            message: 'Closed business day has no persisted DSR snapshot',
           },
         },
         409,
       );
     }
-    return c.json({ success: true, data: snapshot });
+    return c.json({ success: true, data: redactSensitiveDssr(snapshot, user) });
   }
-  return c.json({ success: true, data: await buildLiveDssrPreview(db, user, bd) });
+  return c.json({
+    success: true,
+    data: redactSensitiveDssr(await buildLiveDssrPreview(db, user, bd), user),
+  });
 });
 
 // GET /api/dssr/days?stationId=&month=YYYY-MM — the Reports tab's Business Day
@@ -293,7 +305,7 @@ dssrRouter.get('/days', async (c) => {
   const user = c.var.user;
   const scope = requireStationRead(
     c,
-    canViewReports,
+    'reports.view',
     'Insufficient permissions to view Daily Station Sales Reports',
   );
   if (scope instanceof Response) return scope;
@@ -344,7 +356,7 @@ dssrRouter.get('/daily/range', async (c) => {
       ),
     )
     .orderBy(desc(schema.dssrSnapshots.businessDate));
-  return c.json({ success: true, data: list });
+  return c.json({ success: true, data: list.map((row) => redactSensitiveDssr(row, user)) });
 });
 
 // GET /api/dssr/profit-loss?stationId=&from=&to= — period P&L (ADR 0005).
@@ -356,6 +368,15 @@ dssrRouter.get('/profit-loss', async (c) => {
   const stationId = c.req.query('stationId');
   const from = c.req.query('from');
   const to = c.req.query('to');
+  if (!can(user, 'finance.viewProfitLoss')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view profit & loss' },
+      },
+      403,
+    );
+  }
   if (!stationId || !from || !to) {
     return c.json(
       {

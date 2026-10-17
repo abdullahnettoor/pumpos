@@ -1,254 +1,158 @@
 import React, { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { CloudUserAssignmentService } from '../../services/cloud.js';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, useStations, useUsers } from '../../query/hooks.js';
-import { INDIAN_MOBILE_MESSAGE, normalizeIndianMobile, Station } from '@pump/shared';
-import { Drawer } from '../Drawer.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { Checkbox, Switch } from '../primitives/Toggle.js';
-import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
-import type { ColumnDef } from '@tanstack/react-table';
-import { Edit, KeyRound } from 'lucide-react';
+import type { Station } from '@pump/shared';
+import { useStations, useUsers } from '../../query/hooks.js';
+import { Switch } from '../primitives/Toggle.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { Button, Form, Icon } from '../../pump-ds/index.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import {
+  Button,
+  Chip,
+  DataSection,
+  EmptyState,
+  FilterChips,
+  Icon,
+  InteractiveTable,
+  SearchInput,
+  SectionHeader,
+  type FilterChipOption,
+  type TableColumn,
+} from '../../pump-ds/index.js';
+import { countOf } from '../../utils/ledgerWindow.js';
+import {
+  filterMembers,
+  loginIdentity,
+  memberCounts,
+  memberState,
+  memberStations,
+  type MemberFilter,
+} from '../Organization/organizationModel.js';
+import { PermissionsDrawer } from './PermissionsDrawer.js';
+import { RoleMatrixDrawer } from './RoleMatrixDrawer.js';
+import {
+  MemberDrawer,
+  ResetPasswordDrawer,
+  useTeamCache,
+  userService,
+  type Credentials,
+  type TeamMember,
+} from './TeamMemberDrawers.js';
 
-const userService = new CloudUserAssignmentService();
+export { defaultNewMemberStationIds } from './TeamMemberDrawers.js';
 
-const userFormSchema = z.object({
-  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
-  // Blank, or a valid Indian mobile (#300); required only for phone login,
-  // which handleCreateOrUpdate checks against the chosen identity.
-  phone: z
-    .string()
-    .refine((v) => v.trim() === '' || normalizeIndianMobile(v) !== null, INDIAN_MOBILE_MESSAGE)
-    .optional()
-    .nullable(),
-  password: z.string().optional().nullable(),
-  status: z.enum(['ACTIVE', 'INACTIVE']),
-  role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']),
-  enableAppAccess: z.boolean(),
-});
-
-type UserFormValues = z.infer<typeof userFormSchema>;
-
-// --- helpers ---------------------------------------------------------------
-function generatePassword(): string {
-  // Readable, strong: avoids ambiguous chars (0/O, 1/l/I).
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const all = upper + lower + digits;
-  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
-  let out = pick(upper) + pick(lower) + pick(digits);
-  for (let i = 0; i < 7; i++) out += pick(all);
-  return out
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('');
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Copy + tell the operator whether it worked, in one place.
- *
- * Clipboard access is blocked often enough (insecure origin, permission denied)
- * that "did it copy?" is a real question, and these credentials are the one
- * thing the operator cannot re-read later. The trailing `.catch` is the
- * rejection path for a `copy` that rejects rather than resolving false.
- */
-function copyWithFeedback(
-  copy: (text: string) => Promise<boolean>,
-  text: string,
-  label: string,
-  toast: ToastApi,
-): void {
-  copy(text)
-    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error('Copy failed.')))
-    .catch(() => toast.error('Copy failed.'));
-}
-
-const inputStyle: React.CSSProperties = {
-  height: '32px',
-  padding: '0 8px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  fontSize: '13px',
-};
-
-type StatusKind = 'active' | 'inactive' | 'nologin';
-function statusOf(u: any): StatusKind {
-  if (u.status === 'INACTIVE') return 'inactive';
-  if (!u.hasLogin) return 'nologin';
-  return 'active';
-}
-const STATUS_META: Record<StatusKind, { label: string; bg: string; fg: string }> = {
-  active: { label: 'Active', bg: 'rgba(16, 185, 129, 0.15)', fg: 'rgb(5, 150, 105)' },
-  inactive: { label: 'Inactive', bg: 'rgba(239, 68, 68, 0.15)', fg: 'rgb(220, 38, 38)' },
-  nologin: { label: 'No login', bg: 'rgba(148, 163, 184, 0.18)', fg: 'var(--text-muted)' },
-};
-
-function loginIdentity(u: any): string {
-  if (u.email) return u.email;
-  if (u.phone) return u.phone;
-  return '—';
-}
+/** A member's Role as one neutral chip: a Role is not a state, so it carries no tone. */
+const RoleChip: React.FC<{ role?: string | null }> = ({ role }) =>
+  role ? (
+    <Chip tone="neutral" size="md">
+      {role}
+    </Chip>
+  ) : null;
 
 const buildUserColumns = (
-  stations: any[],
-  startEdit: (u: any) => void,
-  onReset: (u: any) => void,
-  onToggleActive: (u: any) => void,
-): ColumnDef<any, any>[] => [
+  stations: Station[],
+  startEdit: (u: TeamMember) => void,
+  onReset: (u: TeamMember) => void,
+  onToggleActive: (u: TeamMember) => void,
+  onPermissions: (u: TeamMember) => void,
+): TableColumn<TeamMember>[] => [
   {
-    accessorKey: 'fullName',
-    header: 'Name',
-    cell: ({ getValue }) => (
-      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span>
-    ),
-  },
-  {
-    id: 'identity',
-    header: 'Login',
-    cell: ({ row }) => {
-      const u = row.original;
-      const id = loginIdentity(u);
+    id: 'name',
+    header: 'Member',
+    kind: 'text',
+    emphasis: true,
+    value: (u) => u.fullName,
+    width: '28%',
+    cell: (u) => {
+      const login = loginIdentity(u);
       return (
-        <span
-          style={{
-            fontSize: '12px',
-            color: u.hasLogin ? 'var(--text-default)' : 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {id}
+        <span className="inline-flex min-w-0 flex-col items-start leading-tight">
+          <span className="font-medium text-ink-strong">{u.fullName}</span>
+          <span className="mt-0.5 truncate font-mono text-[12px] text-ink-muted">
+            {login ?? 'No login'}
+          </span>
         </span>
       );
     },
   },
   {
-    accessorKey: 'role',
+    id: 'role',
     header: 'Role',
-    cell: ({ row }) => {
-      const u = row.original;
-      const bg =
-        u.role === 'Owner'
-          ? 'rgba(99, 102, 241, 0.15)'
-          : u.role === 'Manager'
-            ? 'rgba(16, 185, 129, 0.15)'
-            : 'rgba(46, 94, 136, 0.15)';
-      const fg =
-        u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
-      return (
-        <span
-          style={{
-            fontSize: '11px',
-            fontWeight: 650,
-            padding: '2px 6px',
-            borderRadius: '4px',
-            backgroundColor: bg,
-            color: fg,
-          }}
-        >
-          {u.role}
-        </span>
-      );
-    },
+    kind: 'text',
+    value: (u) => u.role,
+    width: '13%',
+    cell: (u) => (
+      <span className="inline-flex items-center gap-1">
+        <RoleChip role={u.hasLogin ? u.role : null} />
+        {u.hasLogin && u.hasCustomPermissions && (
+          <Chip tone="info" size="md">
+            Custom
+          </Chip>
+        )}
+      </span>
+    ),
   },
   {
     id: 'status',
     header: 'Status',
-    cell: ({ row }) => {
-      const meta = STATUS_META[statusOf(row.original)];
-      return (
-        <span
-          style={{
-            fontSize: '11px',
-            fontWeight: 650,
-            padding: '2px 6px',
-            borderRadius: '4px',
-            backgroundColor: meta.bg,
-            color: meta.fg,
-          }}
-        >
-          {meta.label}
-        </span>
-      );
-    },
+    kind: 'status',
+    value: (u) => memberState(u),
+    width: '13%',
   },
   {
     id: 'stations',
-    header: 'Assigned Stations',
-    cell: ({ row }) => {
-      const u = row.original;
-      const assignedNames = u.stationIds
-        ? u.stationIds
-            .map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown')
-            .join(', ')
-        : 'None';
-      return (
-        <span style={{ color: 'var(--text-muted)' }}>
-          {u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}
-        </span>
-      );
-    },
+    header: 'Stations',
+    kind: 'text',
+    value: (u) => memberStations(u, stations),
+    cell: (u) => <span className="text-ink-muted">{memberStations(u, stations)}</span>,
   },
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => {
-      const u = row.original;
-      const iconBtn: React.CSSProperties = {
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '26px',
-        width: '26px',
-        background: 'none',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        color: 'var(--text-muted)',
-        padding: 0,
-      };
+    kind: 'text',
+    value: () => null,
+    width: '16%',
+    cell: (u) => {
       const isActive = u.status !== 'INACTIVE';
       return (
-        <div
-          style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}
-        >
-          <button
-            onClick={() => startEdit(u)}
+        <span className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
             title="Edit member"
             aria-label="Edit member"
-            style={iconBtn}
+            onClick={() => startEdit(u)}
           >
-            <Edit size={14} />
-          </button>
+            <Icon name="edit" size="xs" />
+          </Button>
           {u.hasLogin && (
-            <button
-              onClick={() => onReset(u)}
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              title="Permissions"
+              aria-label="Permissions"
+              onClick={() => onPermissions(u)}
+            >
+              <Icon name="shield" size="xs" />
+            </Button>
+          )}
+          {u.hasLogin && (
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
               title="Reset password"
               aria-label="Reset password"
-              style={iconBtn}
+              onClick={() => onReset(u)}
             >
-              <KeyRound size={14} />
-            </button>
+              <Icon name="key" size="xs" />
+            </Button>
           )}
           {u.hasLogin && (
             <span
               title={isActive ? 'Deactivate login' : 'Activate login'}
-              style={{ display: 'inline-flex', alignItems: 'center' }}
+              className="ml-1 inline-flex items-center"
             >
               <Switch
                 checked={isActive}
@@ -257,7 +161,7 @@ const buildUserColumns = (
               />
             </span>
           )}
-        </div>
+        </span>
       );
     },
   },
@@ -268,792 +172,226 @@ export interface UserRolesAssignmentProps {
   currentStationId?: string | null;
 }
 
-/**
- * The stations a new member starts assigned to (#299): the station the operator
- * is working in, or the only station when the organization has just one. The
- * operator can still uncheck it and save with none.
- */
-export function defaultNewMemberStationIds(
-  stations: { id: string }[],
-  currentStationId?: string | null,
-): string[] {
-  if (currentStationId && stations.some((s) => s.id === currentStationId)) {
-    return [currentStationId];
+const EXPLAINER_KEY = 'pump.team.permissionsExplainer.dismissed';
+const explainerDismissed = (): boolean => {
+  try {
+    return localStorage.getItem(EXPLAINER_KEY) === '1';
+  } catch {
+    return false;
   }
-  return stations.length === 1 ? [stations[0].id] : [];
-}
+};
+const dismissExplainer = () => {
+  try {
+    localStorage.setItem(EXPLAINER_KEY, '1');
+  } catch {
+    /* persistence is best effort */
+  }
+};
 
+const members = (n: number) => countOf(n, 'member', 'members');
+
+/** The open drawer: edit a member (or hand over a reset login), or reset a password. */
+type TeamDrawer =
+  | { kind: 'member'; user: TeamMember | null; credentials?: Credentials }
+  | { kind: 'reset'; user: TeamMember }
+  | { kind: 'permissions'; user: TeamMember };
+
+/**
+ * Organization › Team (#538): the org-wide team list (Table module, status
+ * vocabulary, neutral Role chips) with its filters in the section header, and
+ * the edit and reset-password drawers. A new member is added from the page's
+ * actions (`OrganizationOverview`). Every save sends an Idempotency-Key; the
+ * list refreshes in the background.
+ */
 export const UserRolesAssignment: React.FC<UserRolesAssignmentProps> = ({
   currentStationId = null,
 }) => {
-  const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
+  const team = useTeamCache();
   // Read through the shared static-tier hooks rather than fetching into local
-  // state: the team list is already cached, and `mergeUser` below writes the
-  // cache directly, so a local mirror would only be a second source of truth.
+  // state: the team list is already cached, and saves write the cache directly,
+  // so a local mirror would only be a second source of truth.
   const usersQ = useUsers();
   const stationsQ = useStations();
-  const users = useMemo(() => usersQ.data ?? [], [usersQ.data]);
+  const users = useMemo<any[]>(() => usersQ.data ?? [], [usersQ.data]);
   const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
-  const loading = usersQ.isLoading || stationsQ.isLoading;
-  const loadError = usersQ.error ?? stationsQ.error;
 
-  // Drawer visibility state
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [filter, setFilter] = useState<MemberFilter>('all');
+  const [search, setSearch] = useState('');
+  const counts = memberCounts(users);
+  const rows = useMemo(() => filterMembers(users, filter, search), [users, filter, search]);
+  const filtered = filter !== 'all' || !!search.trim();
 
-  // Credentials card shown after provisioning a login account.
-  const [credentials, setCredentials] = useState<{ login: string; password: string } | null>(null);
-
-  // Reset-password dialog state.
-  const [resetTarget, setResetTarget] = useState<any | null>(null);
-  const [resetPassword, setResetPassword] = useState('');
-  const [resetBusy, setResetBusy] = useState(false);
-
-  // Station assignments + identity type are managed outside react-hook-form: an
-  // unregistered RHF field (set only via setValue) can be dropped from the
-  // submitted payload, which previously left new members with no station
-  // assignments and could mis-detect the identity type.
-  const [stationIds, setStationIds] = useState<string[]>([]);
-  const [identityType, setIdentityType] = useState<'Email' | 'Phone'>('Phone');
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<UserFormValues>({
-    resolver: zodResolver(userFormSchema),
-    defaultValues: {
-      fullName: '',
-      email: '',
-      phone: '',
-      password: '',
-      status: 'ACTIVE' as const,
-      role: 'Staff',
-      enableAppAccess: true,
-    },
-  });
-
-  const watchEnableAppAccess = watch('enableAppAccess');
-  const watchRole = watch('role');
-  const watchPassword = watch('password') || '';
-
-  /** Force a refetch of both lists (used when a save could not be merged locally). */
-  const reloadData = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: queryKeys.users() }),
-      qc.invalidateQueries({ queryKey: queryKeys.stations() }),
-    ]);
+  // Each drawer mounts fresh per open (keyed), so its form and its submit key
+  // start new. The last drawer is kept while it closes, so it does not change
+  // under the closing animation.
+  const [drawer, setDrawer] = useState<TeamDrawer | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [drawerKey, setDrawerKey] = useState(0);
+  const open = (next: TeamDrawer) => {
+    setDrawerKey((k) => k + 1);
+    setDrawer(next);
+    setIsOpen(true);
   };
+  const close = () => setIsOpen(false);
 
-  // The row is written straight into the cache, so this only marks the key stale
-  // for the next mount — `refetchType: 'none'` means nothing is refetched here.
-  const mergeUser = async (row: any) => {
-    const merge = (list: any[] = []) =>
-      list.some((u) => u.id === row.id)
-        ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
-        : [...list, row];
-    qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
-    await qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
-  };
-
-  const handleCreateOrUpdate = async (values: UserFormValues) => {
-    const wantsLogin = !!values.enableAppAccess;
-    const isPhone = identityType === 'Phone';
-
-    if (!editingUser && wantsLogin) {
-      // Provisioning a new login account requires an identity + password.
-      if (isPhone && (!values.phone || values.phone.trim() === '')) {
-        setError('phone', { message: 'A phone number is required for phone login.' });
-        return;
-      }
-      if (!isPhone && (!values.email || values.email.trim() === '')) {
-        toast.error('An email address is required for email login.');
-        return;
-      }
-      if (!values.password || values.password.length < 8) {
-        toast.error('Set a password of at least 8 characters (use Generate).');
-        return;
-      }
-    }
-
+  // One click is one logical submit; a retry of the same switch after an
+  // unknown outcome recovers its key from the shared store.
+  const toggleActive = async (u: TeamMember) => {
+    const reactivate = u.status === 'INACTIVE';
+    let updated: Partial<TeamMember>;
     try {
-      const payload: any = {
-        fullName: values.fullName,
-        // For a phone identity we deliberately clear email so the server uses
-        // the synthetic phone handle as the login identity.
-        email: wantsLogin && !isPhone ? values.email : editingUser ? values.email || null : null,
-        // One stored spelling, +91XXXXXXXXXX; the server normalizes too (#300).
-        phone: normalizeIndianMobile(values.phone) ?? null,
-        status: values.status,
-        role: wantsLogin ? values.role : 'Staff',
-        stationIds,
-      };
-      if (!editingUser && wantsLogin) {
-        payload.enableAppAccess = true;
-        payload.password = values.password;
-      }
-
-      const saved = editingUser
-        ? await userService.updateUser(editingUser.id, payload)
-        : await userService.createUser(payload);
-
-      // Show credentials to hand over when a fresh login was provisioned.
-      if (!editingUser && wantsLogin) {
-        const login = isPhone
-          ? (normalizeIndianMobile(values.phone) ?? '')
-          : (values.email || '').trim();
-        setCredentials({ login, password: values.password || '' });
-      } else {
-        setIsFormOpen(false);
-      }
-
-      const rowId = editingUser?.id ?? (saved as any)?.id;
-      if (!editingUser) {
-        // The list response supplies server-derived fields such as `hasLogin`.
-        // Refetch after provisioning instead of constructing a stale local row.
-        await qc.invalidateQueries({ queryKey: queryKeys.users() });
-      } else if (rowId) {
-        await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
-      } else {
-        runTask(reloadData(), 'Saved, but the team list could not be refreshed.');
-      }
-      resetForm();
-      toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save team member');
+      updated = await sendKeyed(
+        officeSubmitKeys.session(`team:${reactivate ? 'reactivate' : 'deactivate'}:${u.id}`),
+        null,
+        (idempotencyKey) =>
+          reactivate
+            ? userService.reactivateUser(u.id, { idempotencyKey })
+            : userService.deactivateUser(u.id, { idempotencyKey }),
+      );
+    } catch (err) {
+      toast.error(
+        withNextStep(
+          (err instanceof Error && err.message) || "Couldn't update the member",
+          'Try again from their row.',
+        ),
+      );
+      return;
     }
+    team.merge({ ...u, ...updated });
+    toast.success(reactivate ? 'Member reactivated.' : 'Member deactivated.');
   };
 
-  const startEdit = (u: any) => {
-    setCredentials(null);
-    setEditingUser(u);
-    setStationIds(u.stationIds || []);
-    setIdentityType(u.email ? 'Email' : 'Phone');
-    reset({
-      fullName: u.fullName,
-      enableAppAccess: !!u.hasLogin,
-      email: u.email || '',
-      phone: u.phone || '',
-      password: '',
-      status: u.status || 'ACTIVE',
-      role: u.role || 'Staff',
-    });
-    setIsFormOpen(true);
-  };
-
-  const resetForm = () => {
-    setEditingUser(null);
-    setStationIds(defaultNewMemberStationIds(stations, currentStationId));
-    setIdentityType('Phone');
-    reset({
-      fullName: '',
-      enableAppAccess: true,
-      email: '',
-      phone: '',
-      password: '',
-      status: 'ACTIVE',
-      role: 'Staff',
-    });
-  };
-
-  const closeForm = () => {
-    resetForm();
-    setCredentials(null);
-    setIsFormOpen(false);
-  };
-
-  const handleStationCheckbox = (stationId: string, checked: boolean) => {
-    setStationIds((prev) =>
-      checked ? [...prev, stationId] : prev.filter((id) => id !== stationId),
-    );
-  };
-
-  const openReset = (u: any) => {
-    setResetTarget(u);
-    setResetPassword(generatePassword());
-  };
-
-  const confirmReset = async () => {
-    if (!resetTarget || resetPassword.length < 8) return;
-    setResetBusy(true);
-    try {
-      await userService.resetUserPassword(resetTarget.id, resetPassword);
-      setCredentials({ login: loginIdentity(resetTarget), password: resetPassword });
-      toast.success('Password reset. Share the new credentials.');
-      setResetTarget(null);
-      setIsFormOpen(true);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to reset password');
-    } finally {
-      setResetBusy(false);
-    }
-  };
-
-  const toggleActive = async (u: any) => {
-    try {
-      const updated =
-        u.status === 'INACTIVE'
-          ? await userService.reactivateUser(u.id)
-          : await userService.deactivateUser(u.id);
-      await mergeUser({ ...u, ...(updated as any) });
-      toast.success(u.status === 'INACTIVE' ? 'Member reactivated.' : 'Member deactivated.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update member');
-    }
-  };
-
-  if (loading)
-    return (
-      <div style={{ color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>
-        Loading team assignments...
-      </div>
-    );
-
-  // Without this the fetch failing would fall through to an empty team table,
-  // which reads as "this station has no members" rather than "we could not ask".
-  if (loadError)
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          padding: '12px 14px',
-          borderRadius: 'var(--radius-input)',
-          fontSize: '13px',
-        }}
-      >
-        <span>{loadError.message || 'Could not load team members.'}</span>
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={() => runTask(reloadData(), 'Could not reload team members.')}
-        >
-          Retry
-        </Button>
-      </div>
-    );
-
-  const radioLabel = (value: 'Email' | 'Phone', label: string) => (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        fontSize: '13px',
-        cursor: 'pointer',
-      }}
-    >
-      <input
-        type="radio"
-        value={value}
-        checked={identityType === value}
-        onChange={() => setIdentityType(value)}
-      />
-      {label}
-    </label>
+  const columns = buildUserColumns(
+    stations,
+    (user) => open({ kind: 'member', user }),
+    (user) => open({ kind: 'reset', user }),
+    (u) => runTask(toggleActive(u), 'Could not update the team member.'),
+    (user) => open({ kind: 'permissions', user }),
   );
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [explainer, setExplainer] = useState(() => !explainerDismissed());
+
+  const options: FilterChipOption<MemberFilter>[] = [
+    { value: 'all', label: 'All', count: counts.all },
+    { value: 'active', label: 'Active', count: counts.active },
+    ...(counts.inactive > 0
+      ? [{ value: 'inactive', label: 'Inactive', count: counts.inactive } as const]
+      : []),
+    ...(counts['no-login'] > 0
+      ? [{ value: 'no-login', label: 'No login', count: counts['no-login'] } as const]
+      : []),
+  ];
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      className="animate-fade-in"
-    >
-      {/* Header section with + Add Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Add members with an email or phone, set their password, and manage access.
-          </p>
-        </div>
-        {!isFormOpen && (
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Icon name="plus" size="sm" />}
-            onClick={() => {
-              resetForm();
-              setCredentials(null);
-              setIsFormOpen(true);
-            }}
-          >
-            Add Team Member
-          </Button>
-        )}
-      </div>
-
-      {/* List / Table */}
-      <DataTable
-        columns={buildUserColumns(stations, startEdit, openReset, (u) =>
-          runTask(toggleActive(u), 'Could not update the team member.'),
-        )}
-        data={users}
-        emptyMessage="No team members yet."
-        getRowId={(r: any) => r.id}
-      />
-
-      {/* Form Drawer */}
-      <Drawer
-        isOpen={isFormOpen}
-        onClose={closeForm}
-        title={editingUser ? 'Edit Team Member' : 'New Team Member'}
-      >
-        {credentials ? (
-          <CredentialsCard
-            credentials={credentials}
-            onDone={closeForm}
-            onCopy={copyText}
-            toast={toast}
-          />
-        ) : (
-          <Form
-            onSubmit={handleSubmit(handleCreateOrUpdate)}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Full Name *
-              </label>
-              <input
-                type="text"
-                style={inputStyle}
-                placeholder="e.g. John Doe"
-                {...register('fullName')}
-              />
-              {errors.fullName && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {errors.fullName.message}
-                </span>
-              )}
-            </div>
-
-            {!editingUser && (
-              <div style={{ margin: '4px 0' }}>
-                <Checkbox
-                  label="Enable app access (allows login)"
-                  {...register('enableAppAccess')}
-                />
-              </div>
-            )}
-
-            {/* Identity picker — only when provisioning a new login */}
-            {!editingUser && watchEnableAppAccess && (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  padding: '12px',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  backgroundColor: 'var(--bg-canvas)',
-                }}
-              >
-                <div style={{ display: 'flex', gap: '20px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Login with
-                  </span>
-                  {radioLabel('Phone', 'Phone')}
-                  {radioLabel('Email', 'Email')}
-                </div>
-
-                {identityType === 'Email' ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label
-                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}
-                    >
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      style={inputStyle}
-                      placeholder="e.g. john@station.com"
-                      {...register('email')}
-                    />
-                    {errors.email && (
-                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                        {errors.email.message}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label
-                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}
-                    >
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      style={inputStyle}
-                      placeholder="e.g. 98765 43210"
-                      aria-invalid={!!errors.phone}
-                      {...register('phone')}
-                    />
-                    {errors.phone && (
-                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                        {errors.phone.message}
-                      </span>
-                    )}
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      They sign in with this phone number + password. No SMS is sent.
-                    </span>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                    Password *
-                  </label>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <input
-                      type="text"
-                      style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
-                      placeholder="At least 8 characters"
-                      {...register('password')}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setValue('password', generatePassword())}
-                      style={{
-                        ...inputStyle,
-                        cursor: 'pointer',
-                        backgroundColor: 'var(--bg-surface)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Generate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => copyWithFeedback(copyText, watchPassword, 'Password', toast)}
-                      disabled={!watchPassword}
-                      style={{
-                        ...inputStyle,
-                        cursor: watchPassword ? 'pointer' : 'not-allowed',
-                        backgroundColor: 'var(--bg-surface)',
-                        fontWeight: 600,
-                        opacity: watchPassword ? 1 : 0.5,
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Profile phone for record-only / edit (non-login) */}
-            {(editingUser || !watchEnableAppAccess) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  style={inputStyle}
-                  placeholder="e.g. 98765 43210"
-                  aria-invalid={!!errors.phone}
-                  {...register('phone')}
-                />
-                {errors.phone && (
-                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                    {errors.phone.message}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {(editingUser ? !!editingUser.hasLogin : watchEnableAppAccess) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  System Role
-                </label>
-                <select
-                  style={{ ...inputStyle, color: 'var(--text-strong)' }}
-                  {...register('role')}
-                >
-                  <option value="Owner">Owner (Global Admin)</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Accountant">Accountant</option>
-                  <option value="Staff">Staff</option>
-                  <option value="Attendant">Attendant (Mobile handover)</option>
-                </select>
-              </div>
-            )}
-
-            {watchRole !== 'Owner' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Assign Stations
-                </label>
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}
-                >
-                  {stations.map((s) => (
-                    <Checkbox
-                      key={s.id}
-                      label={`${s.name} (${s.code})`}
-                      checked={stationIds.includes(s.id)}
-                      onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {editingUser && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Status
-                </label>
-                <select
-                  style={{ ...inputStyle, color: 'var(--text-strong)' }}
-                  {...register('status')}
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                height: '36px',
-                backgroundColor: 'var(--brand-primary)',
-                border: 'none',
-                color: '#ffffff',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginTop: '12px',
-                opacity: isSubmitting ? 0.6 : 1,
+    <section className="flex flex-col gap-2">
+      {explainer && (
+        <div
+          role="note"
+          className="flex items-start justify-between gap-3 rounded-card border border-border-soft bg-surface-alt p-3 text-[12px] text-ink-default"
+        >
+          <span>
+            <strong className="text-ink-strong">Permissions are now per member.</strong> Each Role
+            starts with default Permissions; an Owner can switch individual ones on or off from a
+            member&apos;s <em>Permissions</em> button. See what each role can do first.
+          </span>
+          <span className="flex shrink-0 gap-1">
+            <Button variant="secondary" size="xs" onClick={() => setMatrixOpen(true)}>
+              What each role can do
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                dismissExplainer();
+                setExplainer(false);
               }}
             >
-              {isSubmitting ? 'Saving...' : editingUser ? 'Save Changes' : 'Add Member'}
-            </button>
-          </Form>
-        )}
-      </Drawer>
-
-      {/* Reset password dialog */}
-      <Drawer isOpen={!!resetTarget} onClose={() => setResetTarget(null)} title="Reset password">
-        {resetTarget && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-              Set a new password for <strong>{resetTarget.fullName}</strong> (
-              {loginIdentity(resetTarget)}). The old password stops working immediately.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                New Password *
-              </label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <input
-                  type="text"
-                  style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setResetPassword(generatePassword())}
-                  style={{
-                    ...inputStyle,
-                    cursor: 'pointer',
-                    backgroundColor: 'var(--bg-surface)',
-                    fontWeight: 600,
-                  }}
-                >
-                  Generate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyWithFeedback(copyText, resetPassword, 'Password', toast)}
-                  style={{
-                    ...inputStyle,
-                    cursor: 'pointer',
-                    backgroundColor: 'var(--bg-surface)',
-                    fontWeight: 600,
-                  }}
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => runTask(confirmReset(), 'Could not reset the password.')}
-              disabled={resetBusy || resetPassword.length < 8}
-              style={{
-                height: '36px',
-                backgroundColor: 'var(--brand-primary)',
-                border: 'none',
-                color: '#fff',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                opacity: resetBusy || resetPassword.length < 8 ? 0.6 : 1,
-              }}
-            >
-              {resetBusy ? 'Resetting...' : 'Set New Password'}
-            </button>
-          </div>
-        )}
-      </Drawer>
-    </div>
-  );
-};
-
-const CredentialsCard: React.FC<{
-  credentials: { login: string; password: string };
-  onDone: () => void;
-  onCopy: (text: string) => Promise<boolean>;
-  toast: ReturnType<typeof useToast>;
-}> = ({ credentials, onDone, onCopy, toast }) => {
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 10px',
-    borderRadius: 'var(--radius-input)',
-    backgroundColor: 'var(--bg-canvas)',
-    border: '1px solid var(--border-soft)',
-  };
-  const copyBtn: React.CSSProperties = {
-    height: '26px',
-    padding: '0 8px',
-    fontSize: '11px',
-    backgroundColor: 'var(--bg-surface)',
-    border: '1px solid var(--border-strong)',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  };
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <div
-        style={{
-          padding: '10px 12px',
-          borderRadius: 'var(--radius-input)',
-          backgroundColor: 'rgba(16, 185, 129, 0.12)',
-          color: 'rgb(5, 150, 105)',
-          fontSize: '12px',
-          fontWeight: 600,
-        }}
-      >
-        ✓ Login ready. Copy and hand these over — the password is shown only once.
-      </div>
-      <div style={rowStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span
-            style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--text-muted)',
-            }}
-          >
-            Login
-          </span>
-          <span
-            style={{
-              fontSize: '13px',
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--text-strong)',
-            }}
-          >
-            {credentials.login}
+              Got it
+            </Button>
           </span>
         </div>
-        <button
-          type="button"
-          style={copyBtn}
-          onClick={() => copyWithFeedback(onCopy, credentials.login, 'Login', toast)}
-        >
-          Copy
-        </button>
-      </div>
-      <div style={rowStyle}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span
-            style={{
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--text-muted)',
-            }}
-          >
-            Password
-          </span>
-          <span
-            style={{
-              fontSize: '13px',
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--text-strong)',
-            }}
-          >
-            {credentials.password}
-          </span>
-        </div>
-        <button
-          type="button"
-          style={copyBtn}
-          onClick={() => copyWithFeedback(onCopy, credentials.password, 'Password', toast)}
-        >
-          Copy
-        </button>
-      </div>
-      <button
-        type="button"
-        onClick={() =>
-          copyWithFeedback(
-            onCopy,
-            `Login: ${credentials.login}\nPassword: ${credentials.password}`,
-            'Credentials',
-            toast,
-          )
+      )}
+      <SectionHeader
+        title="Team"
+        action={{ label: 'What each role can do', onClick: () => setMatrixOpen(true) }}
+        subtitle={
+          usersQ.data
+            ? filtered
+              ? `${rows.length} of ${users.length}`
+              : members(users.length)
+            : undefined
         }
-        style={{
-          height: '32px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-strong)',
-          color: 'var(--text-default)',
-          borderRadius: 'var(--radius-button)',
-          fontWeight: 600,
-          cursor: 'pointer',
-          fontSize: '12px',
+        controls={{
+          filters: usersQ.data && users.length > 0 && (
+            <FilterChips
+              aria-label="Show members"
+              options={options}
+              value={filter}
+              onChange={setFilter}
+            />
+          ),
+          search: (
+            <div className="w-[200px]">
+              <SearchInput
+                inputSize="sm"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search name / phone / email…"
+              />
+            </div>
+          ),
         }}
+      />
+      <DataSection
+        title="team members"
+        query={[usersQ, stationsQ]}
+        placeholderHeight={280}
+        flush
+        isEmpty={rows.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<Icon name="users" size="md" />}
+              title={users.length === 0 ? 'No team members yet' : 'No matching members'}
+              description={
+                users.length === 0
+                  ? 'Add members with an email or phone, set their password, and manage access.'
+                  : 'Choose another filter or clear the search.'
+              }
+            />
+          </div>
+        }
       >
-        Copy both
-      </button>
-      <button
-        type="button"
-        onClick={onDone}
-        style={{
-          height: '36px',
-          backgroundColor: 'var(--brand-primary)',
-          border: 'none',
-          color: '#fff',
-          borderRadius: 'var(--radius-button)',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Done
-      </button>
-    </div>
+        <InteractiveTable bare columns={columns} rows={rows} rowKey={(u) => u.id} title="team" />
+      </DataSection>
+
+      <MemberDrawer
+        key={`member-${drawerKey}`}
+        isOpen={isOpen && drawer?.kind === 'member'}
+        editingUser={drawer?.kind === 'member' ? drawer.user : null}
+        credentials={drawer?.kind === 'member' ? drawer.credentials : null}
+        currentStationId={currentStationId}
+        onClose={close}
+      />
+      <PermissionsDrawer
+        key={`permissions-${drawerKey}`}
+        isOpen={isOpen && drawer?.kind === 'permissions'}
+        user={drawer?.kind === 'permissions' ? drawer.user : null}
+        onClose={close}
+      />
+      <RoleMatrixDrawer isOpen={matrixOpen} onClose={() => setMatrixOpen(false)} />
+      <ResetPasswordDrawer
+        key={`reset-${drawerKey}`}
+        isOpen={isOpen && drawer?.kind === 'reset'}
+        user={drawer?.kind === 'reset' ? drawer.user : null}
+        onClose={close}
+        onReset={(credentials) =>
+          drawer && open({ kind: 'member', user: drawer.user, credentials })
+        }
+      />
+    </section>
   );
 };

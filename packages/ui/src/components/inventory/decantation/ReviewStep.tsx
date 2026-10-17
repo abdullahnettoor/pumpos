@@ -1,33 +1,39 @@
 import React from 'react';
-import { Chip } from '../../../pump-ds/index.js';
+import { Chip, StatusChip, VarianceChip } from '../../../pump-ds/index.js';
 import { KV, LineTag, Notice } from './StepSection.js';
-import { fmtLitres, fmtSignedLitres } from './format.js';
+import { formatQuantity } from '../../../utils/format.js';
 import { lineLabel, type StepProps } from './stepShared.js';
 
 export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+  <div className="flex flex-col gap-3">
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Per invoice</div>
+      <div className="mb-1.5 text-[12px] font-semibold">Per invoice</div>
       {review.invoices.length === 0 && review.unlinkedProductIds.length === 0 && (
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No invoices linked.</span>
+        <span className="text-[12px] text-ink-muted">No invoices linked.</span>
       )}
       {review.invoices.map((inv) => (
-        <div key={inv.productId} style={{ marginBottom: 6 }}>
+        <div key={inv.productId} className="mb-1.5">
           <KV
             items={[
               ['Product', tanks.find((t) => t.productId === inv.productId)?.productName ?? '—'],
-              ['Invoice', fmtLitres(inv.invoiceQty)],
-              ['Received', inv.received != null ? fmtLitres(inv.received) : 'Pending measurement'],
+              ['Invoice', formatQuantity(inv.invoiceQty, 'L')],
+              [
+                'Received',
+                inv.received != null ? formatQuantity(inv.received, 'L') : 'Pending measurement',
+              ],
               [
                 'Variance',
                 inv.variance == null ? (
                   '—'
                 ) : (
-                  <Chip size="sm" tone={inv.outOfTolerance ? 'danger' : 'success'}>
-                    {inv.variance === 0
-                      ? 'Matches'
-                      : `${inv.variance > 0 ? 'Excess' : 'Short'} ${fmtSignedLitres(inv.variance)}`}
-                  </Chip>
+                  <span className="inline-flex items-center gap-1.5">
+                    <VarianceChip size="md" kind="stock" amount={inv.variance} />
+                    {inv.outOfTolerance && (
+                      <Chip size="md" tone="danger">
+                        Out of tolerance
+                      </Chip>
+                    )}
+                  </span>
                 ),
               ],
             ]}
@@ -35,25 +41,31 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
         </div>
       ))}
       {review.unlinkedProductIds.map((p) => (
-        <Chip key={p} size="sm" tone="warning">
-          {tanks.find((t) => t.productId === p)?.productName}: purchase not linked
-        </Chip>
+        <StatusChip
+          key={p}
+          status="purchase-not-linked"
+          size="md"
+          label={`${tanks.find((t) => t.productId === p)?.productName}: purchase not linked`}
+        />
       ))}
     </div>
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Per tank</div>
+      <div className="mb-1.5 text-[12px] font-semibold">Per tank</div>
       {values.lines.map((l, i) => {
         const r = review.lines[i];
         return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-            <span style={{ width: 140 }}>
+          <div key={i} className="mb-1.5 flex items-center gap-3">
+            <span className="w-[140px] shrink-0">
               <LineTag i={i} label={lineLabel(tanks, l.tankId, i)} />
             </span>
             <KV
               items={[
-                ['Before', fmtLitres(r?.beforeDip)],
-                ['Received', r?.received != null ? fmtLitres(r.received) : 'Pending'],
-                ['Stock after', r?.afterDip != null ? fmtLitres(r.afterDip) : 'Next Tank Dip'],
+                ['Before', formatQuantity(r?.beforeDip, 'L')],
+                ['Received', r?.received != null ? formatQuantity(r.received, 'L') : 'Pending'],
+                [
+                  'Stock after',
+                  r?.afterDip != null ? formatQuantity(r.afterDip, 'L') : 'Next Tank Dip',
+                ],
               ]}
             />
           </div>
@@ -61,9 +73,9 @@ export const ReviewStep: React.FC<StepProps> = ({ values, tanks, flags, review }
       })}
     </div>
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Flags</div>
+      <div className="mb-1.5 text-[12px] font-semibold">Flags</div>
       {flags.flags.length === 0 ? (
-        <Chip size="sm" tone="success">
+        <Chip size="md" tone="success">
           Nothing flagged
         </Chip>
       ) : (

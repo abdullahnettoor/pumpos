@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calculator } from 'lucide-react';
+import { Button } from '../../pump-ds/button/index.js';
 import { inr } from '../../utils/format.js';
 
 /** Counts keyed by denomination value as a string, e.g. `{ "500": 12, "100": 8 }`. */
@@ -24,6 +25,13 @@ export interface CashCountPopoverProps {
   disabled?: boolean;
   /** Accessible label + tooltip for the trigger. */
   title?: string;
+  /**
+   * Checks a count as typed; returns the message to show, or null when it is
+   * a valid count. With it, a refused count (a fraction, a negative) shows an
+   * inline error, is not counted and holds Apply, instead of being silently
+   * floored. Without it, counts are floored to whole notes as before.
+   */
+  validateCount?: (raw: string) => string | null;
 }
 
 const DEFAULT_DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
@@ -48,7 +56,11 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
   denominations = DEFAULT_DENOMS,
   disabled = false,
   title = 'Count cash by denomination',
+  validateCount,
 }) => {
+  // What was typed in a row whose count was refused (kept so it can be fixed).
+  const [refused, setRefused] = useState<Record<string, { raw: string; message: string }>>({});
+  const hasRefused = Object.keys(refused).length > 0;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; placement: 'top' | 'bottom' } | null>(
     null,
@@ -103,6 +115,13 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
   }, [open]);
 
   const setCount = (d: number, raw: string) => {
+    if (validateCount) {
+      const message = validateCount(raw);
+      setRefused(({ [String(d)]: _gone, ...rest }) =>
+        message ? { ...rest, [String(d)]: { raw, message } } : rest,
+      );
+      if (message) return;
+    }
     const n = Math.max(0, Math.floor(Number(raw) || 0));
     const next = { ...breakdown };
     if (n > 0) next[String(d)] = n;
@@ -114,7 +133,10 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
     onApply(total);
     setOpen(false);
   };
-  const clear = () => onBreakdownChange({});
+  const clear = () => {
+    setRefused({});
+    onBreakdownChange({});
+  };
 
   const numInputStyle: React.CSSProperties = {
     width: '64px',
@@ -143,7 +165,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         background: 'var(--bg-surface)',
         border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-card)',
-        boxShadow: '0 8px 24px rgba(24,32,26,0.16)',
+        boxShadow: 'var(--shadow-popover)',
         zIndex: 1100,
         padding: '10px',
         display: 'flex',
@@ -154,7 +176,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
@@ -163,7 +185,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         >
           Count cash
         </span>
-        <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+        <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
           {countedCount} note{countedCount === 1 ? '' : 's'}/coins
         </span>
       </div>
@@ -171,6 +193,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {denominations.map((d, i) => {
           const count = Number(breakdown[String(d)]) || 0;
+          const bad = refused[String(d)];
           return (
             <div
               key={d}
@@ -189,12 +212,16 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
                 inputMode="numeric"
                 min={0}
                 step={1}
-                value={count > 0 ? count : ''}
+                value={bad ? bad.raw : count > 0 ? count : ''}
                 placeholder="0"
                 autoFocus={i === 0}
                 onChange={(e) => setCount(d, e.target.value)}
                 aria-label={`Count of ₹${d}`}
-                style={numInputStyle}
+                aria-invalid={bad ? true : undefined}
+                aria-describedby={bad ? `count-error-${d}` : undefined}
+                style={
+                  bad ? { ...numInputStyle, borderColor: 'var(--state-danger-fg)' } : numInputStyle
+                }
               />
               <span
                 style={{
@@ -206,6 +233,15 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
               >
                 {inr(d * count)}
               </span>
+              {bad && (
+                <span
+                  id={`count-error-${d}`}
+                  role="alert"
+                  className="col-span-3 text-right text-[12px] text-danger-fg"
+                >
+                  {bad.message}
+                </span>
+              )}
             </div>
           );
         })}
@@ -234,28 +270,18 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '10px', color: 'var(--state-warning-fg)' }}>
+        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
           Field shows {inr(currentValue)} — Apply to replace with the counted total.
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-        <button
-          type="button"
-          onClick={clear}
-          className="btn btn-secondary btn-sm"
-          style={{ flex: '0 0 auto' }}
-        >
+        <Button variant="secondary" size="sm" onClick={clear} className="flex-none">
           Clear
-        </button>
-        <button
-          type="button"
-          onClick={apply}
-          className="btn btn-primary btn-sm"
-          style={{ flex: 1 }}
-        >
+        </Button>
+        <Button size="sm" onClick={apply} disabled={hasRefused} className="flex-1">
           Apply {inr(total)}
-        </button>
+        </Button>
       </div>
     </div>
   );

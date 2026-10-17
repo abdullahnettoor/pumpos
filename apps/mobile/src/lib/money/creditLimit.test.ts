@@ -139,3 +139,17 @@ describe('reusesIdempotencyKey', () => {
     expect(reusesIdempotencyKey(Object.assign(new Error('r'), { status: 403 }))).toBe(false);
   });
 });
+
+describe('creditLimitAccess with effective Permissions', () => {
+  it('follows the effective set, not the Role defaults', () => {
+    const base = { customerType: 'Credit' };
+    expect(creditLimitAccess({ ...base, role: 'Manager', permissions: [] }).status).toBe('hidden');
+    expect(
+      creditLimitAccess({
+        ...base,
+        role: 'Accountant',
+        permissions: ['customers.changeCreditLimit'],
+      }).status,
+    ).toBe('enabled');
+  });
+});

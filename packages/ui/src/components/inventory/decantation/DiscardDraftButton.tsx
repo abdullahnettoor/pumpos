@@ -17,9 +17,9 @@ export const DiscardDraftButton: React.FC<{ busy?: boolean; onConfirm: () => voi
     <span
       role="group"
       aria-label="Confirm discard draft"
-      style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}
+      className="inline-flex items-center gap-1.5 text-[12px]"
     >
-      <span style={{ color: 'var(--text-muted)' }}>Discard this draft?</span>
+      <span className="text-ink-muted">Discard this draft?</span>
       <Button
         variant="danger"
         size="sm"

@@ -1,12 +1,16 @@
 /** Display model of one list row: one tanker visit with its tank lines grouped (ADR 0007). */
-import { densityDeviation, roundDensity, type DecantationView } from '@pump/shared';
+import {
+  decantationVarianceState,
+  densityDeviation,
+  roundDensity,
+  type DecantationVarianceState,
+  type DecantationView,
+} from '@pump/shared';
 
 export interface DecantationNames {
   tanks: Record<string, string>;
   products: Record<string, string>;
 }
-
-type VarianceKind = 'EXCESS' | 'SHORT' | 'OK';
 
 export interface DecantationRow {
   decantation: DecantationView;
@@ -22,11 +26,12 @@ export interface DecantationRow {
   invoiceQty: number | null;
   /** Σ received, only once every line is measured. */
   receivedQty: number | null;
+  /** Received − invoiced per linked product, read against the station tolerance. */
   variances: {
     productName: string;
-    kind: VarianceKind;
+    state: DecantationVarianceState;
+    /** Signed litres: − short, + excess. */
     qty: number;
-    outOfTolerance: boolean;
   }[];
   density: {
     productName: string;
@@ -54,17 +59,11 @@ export function toDecantationRow(
 
   const variances = links
     .filter((l) => l.varianceQty != null)
-    .map((l) => {
-      const v = l.varianceQty as number;
-      const kind: VarianceKind = v > 0 ? 'EXCESS' : v < 0 ? 'SHORT' : 'OK';
-      const limit = ((l.invoiceQty ?? 0) * quantityTolerancePct) / 100;
-      return {
-        productName: productName(l.productId),
-        kind,
-        qty: Math.abs(v),
-        outOfTolerance: Math.abs(v) > limit,
-      };
-    });
+    .map((l) => ({
+      productName: productName(l.productId),
+      state: decantationVarianceState(l.varianceQty as number, l.invoiceQty, quantityTolerancePct),
+      qty: l.varianceQty as number,
+    }));
 
   const flaggedLineIds = new Set(
     d.flags.filter((f) => f.code === 'DENSITY_OUT_OF_TOLERANCE').map((f) => f.tankLineId),
@@ -100,5 +99,41 @@ export function toDecantationRow(
     variances,
     density,
     unlinked: unlinkedIds.map(productName),
+  };
+}
+
+/** The Decantations ledger's closing row: what it sums and what it leaves out. */
+export interface DecantationTotal {
+  label: string;
+  invoiceQty: number;
+  receivedQty: number;
+}
+
+/**
+ * Invoice and received litres over the same thing: each product line that has
+ * both a linked invoice and a measured receipt (a link with both figures).
+ * Pending measurement and products with no linked purchase are left out of
+ * BOTH columns, and the label names whichever of them the rows hold.
+ */
+export function decantationTotal(rows: readonly DecantationRow[]): DecantationTotal {
+  let invoiceQty = 0;
+  let receivedQty = 0;
+  let pending = false;
+  let unlinked = false;
+  for (const r of rows) {
+    if (r.unlinked.length > 0) unlinked = true;
+    for (const l of r.decantation.links ?? []) {
+      if (l.invoiceQty != null && l.receivedQty != null) {
+        invoiceQty += l.invoiceQty;
+        receivedQty += l.receivedQty;
+      } else pending = true;
+    }
+    if (r.decantation.lines.some((l) => l.status !== 'MEASURED')) pending = true;
+  }
+  const out = [pending && 'pending', unlinked && 'unlinked'].filter(Boolean);
+  return {
+    label: out.length ? `Total excl. ${out.join(' and ')}` : 'Total',
+    invoiceQty,
+    receivedQty,
   };
 }

@@ -1,22 +1,9 @@
 import React, { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import {
-  Activity,
-  ClipboardList,
-  Receipt,
-  Users,
-  Warehouse,
-  FileText,
-  Building2,
-  Fuel,
-  Settings,
-  ShieldCheck,
-} from 'lucide-react';
-import { PageLayout } from './primitives/PageLayout.js';
-import { Tabs } from './primitives/Tabs.js';
-import { KpiStrip, KpiTile } from '../pump-ds/index.js';
+import { PageFrame } from './page-frame/index.js';
+import { Tabs } from '../pump-ds/tabs/index.js';
+import { KpiStrip, KpiTile, SegmentedControl } from '../pump-ds/index.js';
 import { DataTable } from './primitives/DataTable.js';
-import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import {
@@ -29,19 +16,30 @@ import {
   DateField,
 } from './primitives/Field.js';
 import { Checkbox, Switch } from './primitives/Toggle.js';
-import { Segmented } from './primitives/Segmented.js';
 import { Combobox } from './primitives/Combobox.js';
 import { Tooltip } from './primitives/Tooltip.js';
-import { Menu, Popover } from './primitives/Menu.js';
 import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
-import { Chip } from '../pump-ds/index.js';
-import { inr, formatMoney, formatQty } from '../utils/format.js';
+import { Button, Chip, SkeletonGrid } from '../pump-ds/index.js';
+import {
+  inr,
+  formatMoney,
+  formatQty,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatCompactMoney,
+  formatQuantity,
+} from '../utils/format.js';
+import { MONEY_TERMS } from '../utils/moneyTerms.js';
 import {
   PumpDsButtonsPanel,
   PumpDsComponentsPanel,
   PumpDsMetricsPanel,
+  PumpDsStatusPanel,
 } from './DesignSystemPumpDs.js';
+import { DataSectionShowcase } from './DesignSystemDataSection.js';
+import { TablesShowcase } from './DesignSystemTables.js';
+import { PageControlsShowcase } from './DesignSystemPageControls.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 import { useRunTask } from '../utils/runTask.js';
 
@@ -104,15 +102,23 @@ const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }>
 );
 
 const Mono: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}>
     {children}
   </code>
 );
 
-const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: string }> = ({
+/**
+ * A token's resolved value in the current theme, read from the document so the
+ * reference never drifts from `index.css` (and shows dark values in dark).
+ */
+const tokenValue = (token: string): string =>
+  typeof document === 'undefined'
+    ? ''
+    : getComputedStyle(document.documentElement).getPropertyValue(token).trim().toUpperCase();
+
+const ColorSwatch: React.FC<{ name: string; token: string; fg?: string }> = ({
   name,
   token,
-  value,
   fg,
 }) => (
   <div
@@ -130,8 +136,8 @@ const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: s
         display: 'flex',
         alignItems: 'flex-end',
         padding: '6px 8px',
-        color: fg ?? 'transparent',
-        fontSize: '11px',
+        color: fg ? `var(${fg})` : 'transparent',
+        fontSize: '12px',
         fontWeight: 600,
       }}
     >
@@ -140,8 +146,8 @@ const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: s
     <div style={{ padding: '6px 8px' }}>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>{name}</div>
       <Mono>{token}</Mono>
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-        {value}
+      <div style={{ fontSize: '12px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+        {tokenValue(token)}
       </div>
     </div>
   </div>
@@ -153,59 +159,36 @@ const grid = (min: number): React.CSSProperties => ({
   gap: 'var(--space-3)',
 });
 
-// ---- token data (mirrors packages/ui/src/index.css :root) ----
+// ---- token data (values are read live from packages/ui/src/index.css) ----
 
 const NEUTRALS = [
-  { name: 'Canvas', token: '--bg-canvas', value: '#F6F7F4' },
-  { name: 'Surface', token: '--bg-surface', value: '#FFFFFF' },
-  { name: 'Surface Alt', token: '--bg-surface-alt', value: '#F1F3EF' },
-  { name: 'Border Soft', token: '--border-soft', value: '#D9DED6' },
-  { name: 'Border Strong', token: '--border-strong', value: '#B9C1B7' },
+  { name: 'Canvas', token: '--bg-canvas' },
+  { name: 'Surface', token: '--bg-surface' },
+  { name: 'Surface Alt', token: '--bg-surface-alt' },
+  { name: 'Border Soft', token: '--border-soft' },
+  { name: 'Border Strong', token: '--border-strong' },
 ];
 
+/** `fg` is the token of the "Aa" sample drawn on the swatch. */
 const TEXT_COLORS = [
-  { name: 'Text Strong', token: '--text-strong', value: '#18201A', fg: '#FFFFFF' },
-  { name: 'Text Default', token: '--text-default', value: '#2B342D', fg: '#FFFFFF' },
-  { name: 'Text Muted', token: '--text-muted', value: '#5E6A61', fg: '#FFFFFF' },
-  { name: 'Text Faint', token: '--text-faint', value: '#7A857C', fg: '#FFFFFF' },
+  { name: 'Text Strong', token: '--text-strong', fg: '--text-on-neutral' },
+  { name: 'Text Default', token: '--text-default', fg: '--bg-surface' },
+  { name: 'Text Muted', token: '--text-muted', fg: '--bg-surface' },
+  { name: 'Text Faint', token: '--text-faint', fg: '--bg-surface' },
 ];
 
 const BRAND = [
-  { name: 'Petrol Green', token: '--brand-primary', value: '#1F6A53', fg: '#FFFFFF' },
-  { name: 'Diesel Blue', token: '--brand-secondary', value: '#2E5E88', fg: '#FFFFFF' },
-  { name: 'Signal Amber', token: '--brand-warning', value: '#B7811E', fg: '#FFFFFF' },
-  { name: 'Alert Red', token: '--brand-danger', value: '#B44A3F', fg: '#FFFFFF' },
+  { name: 'Petrol Green', token: '--brand-primary', fg: '--text-on-brand' },
+  { name: 'Diesel Blue', token: '--brand-secondary', fg: '--text-on-info' },
+  { name: 'Signal Amber', token: '--brand-warning', fg: '--text-on-warning' },
+  { name: 'Alert Red', token: '--brand-danger', fg: '--text-on-danger' },
 ];
 
-const STATES: { label: string; bg: string; fg: string; bgVal: string; fgVal: string }[] = [
-  {
-    label: 'Success',
-    bg: '--state-success-bg',
-    fg: '--state-success-fg',
-    bgVal: '#E8F4EE',
-    fgVal: '#1E6A4E',
-  },
-  {
-    label: 'Warning',
-    bg: '--state-warning-bg',
-    fg: '--state-warning-fg',
-    bgVal: '#F9F0DA',
-    fgVal: '#8A6116',
-  },
-  {
-    label: 'Danger',
-    bg: '--state-danger-bg',
-    fg: '--state-danger-fg',
-    bgVal: '#F8E3E0',
-    fgVal: '#9F3F36',
-  },
-  {
-    label: 'Info',
-    bg: '--state-info-bg',
-    fg: '--state-info-fg',
-    bgVal: '#E8F0F7',
-    fgVal: '#2E5E88',
-  },
+const STATES: { label: string; bg: string; fg: string }[] = [
+  { label: 'Success', bg: '--state-success-bg', fg: '--state-success-fg' },
+  { label: 'Warning', bg: '--state-warning-bg', fg: '--state-warning-fg' },
+  { label: 'Danger', bg: '--state-danger-bg', fg: '--state-danger-fg' },
+  { label: 'Info', bg: '--state-info-bg', fg: '--state-info-fg' },
 ];
 
 const SPACING = [
@@ -232,8 +215,8 @@ const TYPE_SCALE = [
   { size: 15, weight: 600, use: 'Section title' },
   { size: 14, weight: 400, use: 'Body (base)' },
   { size: 13, weight: 400, use: 'Dense body / inputs' },
-  { size: 12, weight: 500, use: 'Secondary / captions' },
-  { size: 11, weight: 600, use: 'Labels (uppercase)' },
+  { size: 12, weight: 500, use: 'Secondary, captions, field labels (the minimum)' },
+  { size: 10, weight: 600, use: 'Table headers only (uppercase)' },
 ];
 
 interface DemoRow {
@@ -336,11 +319,15 @@ const TokensPanel: React.FC = () => (
             <div style={{ padding: '6px 8px', backgroundColor: 'var(--bg-surface)' }}>
               <div>
                 <Mono>{s.bg}</Mono>{' '}
-                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.bgVal}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
+                  {tokenValue(s.bg)}
+                </span>
               </div>
               <div>
                 <Mono>{s.fg}</Mono>{' '}
-                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.fgVal}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
+                  {tokenValue(s.fg)}
+                </span>
               </div>
             </div>
           </div>
@@ -405,7 +392,7 @@ const TokensPanel: React.FC = () => (
                   width: 44,
                   flexShrink: 0,
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-faint)',
                 }}
               >
@@ -421,7 +408,7 @@ const TokensPanel: React.FC = () => (
               >
                 The quick brown fox
               </span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>
                 {t.use}
               </span>
             </div>
@@ -449,7 +436,7 @@ const TokensPanel: React.FC = () => (
                   width: 40,
                   flexShrink: 0,
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   color: 'var(--text-faint)',
                 }}
               >
@@ -587,11 +574,13 @@ const InputsPanel: React.FC = () => {
 
       <Section
         title="Segmented control"
-        description="A compact button group for a small fixed set of options (payment method, filters, view toggles). Replaces the hand-rolled inline button grids. Controlled; wire into RHF with a Controller."
+        description="pump-ds SegmentedControl: 2–4 views of the same data, or a short fixed choice in a form (payment method). Filtering rows uses FilterChips; 5+ options use a select. Controlled; wire into RHF with a Controller."
       >
         <Card style={{ maxWidth: 460 }}>
           <Field label={`Payment method — ${method}`}>
-            <Segmented
+            <SegmentedControl
+              stretch
+              activeStyle="brand"
               options={[
                 { value: 'Cash', label: 'Cash' },
                 { value: 'Card', label: 'Card' },
@@ -624,7 +613,7 @@ const InputsPanel: React.FC = () => {
               label="Tax-inclusive pricing"
               description="Fuel is recorded inclusive of GST."
             />
-            <Checkbox label="Send daily DSSR email" />
+            <Checkbox label="Send daily DSR email" />
             <Checkbox disabled label="Locked option (disabled)" />
             <div
               style={{
@@ -671,32 +660,13 @@ const InputsPanel: React.FC = () => {
           </div>
         </Card>
       </Section>
-
-      <Section
-        title="Legacy .form-input — now unified"
-        description="The old .form-input class and bare <select> elements are now aliased to the canonical .input look (36px · 13px · strong border), so existing setup screens match the primitives without a per-input rewrite. New forms should still use the Field + primitives above; .input-compact (28px) remains for filter bars."
-      >
-        <Card>
-          <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <div>
-              <Mono>.form-input (aliased)</Mono>
-              <input className="form-input" defaultValue="matches" style={{ maxWidth: 160 }} />
-            </div>
-            <div>
-              <Mono>&lt;TextInput /&gt;</Mono>
-              <TextInput defaultValue="matches" style={{ maxWidth: 160 }} />
-            </div>
-          </div>
-        </Card>
-      </Section>
     </div>
   );
 };
 
 const ComponentsPanel: React.FC = () => {
-  const [tab, setTab] = useState('overview');
-  const [underlineTab, setUnderlineTab] = useState('transactions');
-  const [cardTab, setCardTab] = useState('general');
+  const [tab, setTab] = useState('general');
+  const [plainTab, setPlainTab] = useState('summary');
   return (
     <div>
       <Section
@@ -726,185 +696,54 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="KPI strip"
-        description="Metric tiles in a gap-as-divider strip. Values use the mono font; the status dot and valueTone carry meaning."
+        description="Metric tiles in a gap-as-divider strip. Plain mono values; a tile is coloured only through alert, for a problem. See Page controls for period chips and layouts."
       >
         <KpiStrip columns="auto">
-          <KpiTile dot="success" valueTone="success" label="Total Sales" value={inr(482350.5)} />
-          <KpiTile
-            dot="danger"
-            valueTone="danger"
-            label="Cash Variance"
-            value={inr(-320)}
-            hint="Short by ₹320"
-          />
-          <KpiTile dot="warning" valueTone="warning" label="Credit Given" value={inr(15400)} />
-          <KpiTile
-            dot="info"
-            label="Volume Sold"
-            value={formatQty(3210.75)}
-            hint="Petrol + Diesel"
-          />
+          <KpiTile label="Total sales" value={inr(482350.5)} />
+          <KpiTile label="Cash variance" alert="danger" value={inr(-320)} hint="Short by ₹320" />
+          <KpiTile label="Credit given" value={inr(15400)} />
+          <KpiTile label="Volume sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
         </KpiStrip>
       </Section>
 
       <Section
         title="Tabs"
-        description="The shared Tabs primitive — keyboard accessible, roving focus. Three visual variants share the same a11y contract, plus icon / tag / count support on every tab."
+        description="pump-ds Tabs: page-level tab bars. Icon + label on every tab or none (a mixed bar logs a dev warning). Icons come only from the concept map (a tab names its concept; there is no free icon prop), 14px muted, brand on the active tab. A number badge is a count pill; text is a status chip in the tab tone. ←/→, Home and End move between tabs. Segmented switches inside a section use SegmentedControl instead."
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div>
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--text-faint)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                marginBottom: 6,
-              }}
-            >
-              variant: pill · default (historical PumpOS look, brand-tinted active label)
-            </div>
-            <Card>
-              <Tabs
-                tabs={[
-                  { id: 'overview', label: 'Overview', icon: <Activity /> },
-                  { id: 'details', label: 'Details', icon: <ClipboardList />, badge: 3 },
-                  {
-                    id: 'history',
-                    label: 'History',
-                    icon: <FileText />,
-                    tag: { label: 'NEW', tone: 'success' },
-                  },
-                  { id: 'locked', label: 'Locked', icon: <ShieldCheck />, disabled: true },
-                ]}
-                activeId={tab}
-                onChange={setTab}
-                aria-label="Design system demo tabs (pill)"
-              />
-              <div
-                style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}
-              >
-                Active panel: <strong>{tab}</strong>
-              </div>
-            </Card>
-          </div>
-
-          <div>
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--text-faint)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                marginBottom: 6,
-              }}
-            >
-              variant: underline · operator-panel look (Cloudflare / HPE dashboards, ink label, 3px
-              accent)
-            </div>
-            <Card>
-              <Tabs
-                variant="underline"
-                tabs={[
-                  { id: 'summary', label: 'Summary', icon: <Activity /> },
-                  {
-                    id: 'shifts',
-                    label: 'Shifts',
-                    icon: <ClipboardList />,
-                    badge: 4,
-                    tone: 'success',
-                  },
-                  { id: 'transactions', label: 'Transactions', icon: <Receipt />, badge: 128 },
-                  { id: 'credit', label: 'Credit', icon: <Users />, badge: 2, tone: 'warning' },
-                  { id: 'expenses', label: 'Expenses', badge: 12 },
-                  {
-                    id: 'inventory',
-                    label: 'Inventory',
-                    icon: <Warehouse />,
-                    tag: { label: 'BETA', tone: 'warning' },
-                  },
-                  { id: 'dssr', label: 'DSSR', icon: <FileText /> },
-                  { id: 'audit', label: 'Audit log' },
-                  { id: 'archived', label: 'Archived', disabled: true },
-                ]}
-                activeId={underlineTab}
-                onChange={setUnderlineTab}
-                aria-label="Design system demo tabs (underline)"
-              />
-              <div
-                style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}
-              >
-                Active panel: <strong>{underlineTab}</strong>
-              </div>
-            </Card>
-          </div>
-
-          <div>
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--text-faint)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                marginBottom: 6,
-              }}
-            >
-              variant: card · folder-tab look (settings / setup / wizards — the active tab is a
-              raised section)
-            </div>
-            <div
-              style={{
-                background: 'var(--bg-canvas)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-card)',
-                padding: 'var(--space-4)',
-              }}
-            >
-              <Tabs
-                variant="card"
-                tabs={[
-                  { id: 'general', label: 'General', icon: <Settings /> },
-                  { id: 'org', label: 'Organization', icon: <Building2 /> },
-                  {
-                    id: 'fuel',
-                    label: 'Fuel & Pricing',
-                    icon: <Fuel />,
-                    tag: { label: 'PRO', tone: 'brand' },
-                  },
-                  { id: 'users', label: 'Users', icon: <Users />, badge: 6 },
-                  { id: 'billing', label: 'Billing', icon: <Receipt />, badge: 2, tone: 'danger' },
-                  { id: 'audit', label: 'Audit', icon: <ShieldCheck />, disabled: true },
-                ]}
-                activeId={cardTab}
-                onChange={setCardTab}
-                aria-label="Design system demo tabs (card)"
-              />
-              <div
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-soft)',
-                  borderTop: 'none',
-                  borderRadius: '0 0 var(--radius-card) var(--radius-card)',
-                  padding: 'var(--space-5)',
-                  fontSize: 13,
-                  color: 'var(--text-muted)',
-                }}
-              >
-                Active section: <strong style={{ color: 'var(--text-strong)' }}>{cardTab}</strong>.
-                Card variant is for settings / setup wizards where each tab is a self-contained
-                section. The active tab visually merges with this panel.
-              </div>
-            </div>
-          </div>
+          <Tabs
+            aria-label="Design system demo tabs"
+            activeId={tab}
+            onChange={setTab}
+            tabs={[
+              { id: 'general', label: 'General', concept: 'general' },
+              { id: 'branding', label: 'Branding', concept: 'branding' },
+              { id: 'tanks', label: 'Tanks', concept: 'tanks', badge: 4 },
+              { id: 'rules', label: 'Rules', concept: 'rules' },
+              {
+                id: 'report-templates',
+                label: 'Report templates',
+                concept: 'report-templates',
+              },
+              { id: 'locked', label: 'Locked', concept: 'activity', disabled: true },
+            ]}
+          />
+          <Tabs
+            aria-label="Design system demo tabs without icons"
+            activeId={plainTab}
+            onChange={setPlainTab}
+            tabs={[
+              { id: 'summary', label: 'Summary' },
+              { id: 'shifts', label: 'Shifts', badge: 'open' },
+              { id: 'audit', label: 'Audit log', badge: 2, tone: 'warning' },
+            ]}
+          />
         </div>
       </Section>
 
       <Section
         title="Data table"
-        description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables."
+        description="Dense sortable table (TanStack Table) with built-in loading / empty / error / refusal states (see Data states). Click a header to sort. Use for all operational lists instead of hand-rolled tables."
       >
         <DataTable
           columns={DEMO_COLUMNS}
@@ -915,7 +754,7 @@ const ComponentsPanel: React.FC = () => {
 
       <Section
         title="Skeletons"
-        description="Shimmer placeholders for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
+        description="Pulsing placeholders (pump-ds Skeleton and SkeletonGrid) for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
       >
         <SkeletonGrid count={3} />
       </Section>
@@ -933,12 +772,12 @@ const OverlaysPanel: React.FC = () => {
       >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setOpen('default')}>
+            <Button size="sm" onClick={() => setOpen('default')}>
               Open drawer
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setOpen('wide')}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setOpen('wide')}>
               Open wide drawer
-            </button>
+            </Button>
           </div>
         </Card>
       </Section>
@@ -949,12 +788,10 @@ const OverlaysPanel: React.FC = () => {
         widthVariant={open === 'wide' ? 'wide' : 'default'}
         footer={
           <>
-            <button className="btn btn-secondary btn-md" onClick={() => setOpen(false)}>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button className="btn btn-primary btn-md" onClick={() => setOpen(false)}>
-              Save
-            </button>
+            </Button>
+            <Button onClick={() => setOpen(false)}>Save</Button>
           </>
         }
       >
@@ -981,50 +818,6 @@ const OverlaysPanel: React.FC = () => {
       </Drawer>
 
       <Section
-        title="Dropdown menu"
-        description="A trigger button plus a list of actions. Closes on select, outside click or Esc. Use for row / entity actions instead of crowding a row with buttons."
-      >
-        <Card>
-          <Menu
-            trigger={<>Actions ▾</>}
-            items={[
-              { label: 'View details', onSelect: () => {} },
-              { label: 'Edit', onSelect: () => {} },
-              { label: 'Archive', onSelect: () => {} },
-              { label: 'Delete', danger: true, onSelect: () => {} },
-            ]}
-          />
-        </Card>
-      </Section>
-
-      <Section
-        title="Popover"
-        description="A floating panel anchored to a trigger for richer content — filter forms, column pickers, quick summaries. Closes on outside click or Esc."
-      >
-        <Card>
-          <Popover trigger={<>Filters</>}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-3)',
-                minWidth: 200,
-                padding: 'var(--space-2)',
-              }}
-            >
-              <Field label="From" style={{ marginBottom: 0 }}>
-                <DateField defaultValue="2026-06-01" />
-              </Field>
-              <Field label="To" style={{ marginBottom: 0 }}>
-                <DateField defaultValue="2026-06-30" />
-              </Field>
-              <Checkbox label="Only with variance" />
-            </div>
-          </Popover>
-        </Card>
-      </Section>
-
-      <Section
         title="Tooltip"
         description="Hover / focus bubble for hints and truncated values. Wire meaningful hints through this instead of bare title attributes."
       >
@@ -1038,7 +831,9 @@ const OverlaysPanel: React.FC = () => {
             }}
           >
             <Tooltip content="Reconciles at shift close">
-              <button className="btn btn-secondary btn-sm">Hover me</button>
+              <Button variant="secondary" size="sm">
+                Hover me
+              </Button>
             </Tooltip>
             <Tooltip content="Expected − Actual drawer cash" placement="bottom">
               <span
@@ -1068,34 +863,49 @@ const FeedbackPanel: React.FC = () => {
     <div>
       <Section
         title="Toasts"
-        description="Non-blocking notifications (replaces alert). Auto-dismiss after a few seconds; errors linger longer. Success after a save, error on failure, info for neutral notices."
+        description="One stack, bottom centre above the status bar, at most three. Secondary to the row a save updates. Successes leave after 4 seconds and may carry an action; errors stay until dismissed and say what to do next."
       >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => toast.success('Shift closed successfully')}
-            >
+            <Button size="sm" onClick={() => toast.success('Shift closed successfully')}>
               Success
-            </button>
-            <button
-              className="btn btn-danger btn-sm"
-              onClick={() => toast.error('Failed to save expense')}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() =>
+                toast.error('Account is closed. Choose another account and save again.', {
+                  title: 'Expense not saved',
+                })
+              }
             >
               Error
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => toast.info('Sync in progress\u2026')}
             >
               Info
-            </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => toast.success('DSSR compiled for 01 Jul', { title: 'Report ready' })}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toast.success('DSR compiled for 01 Jul', { title: 'Report ready' })}
             >
               With title
-            </button>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                toast.success('Expense recorded.', {
+                  action: { label: 'View record', onClick: () => undefined },
+                })
+              }
+            >
+              With action
+            </Button>
           </div>
         </Card>
       </Section>
@@ -1113,8 +923,9 @@ const FeedbackPanel: React.FC = () => {
               alignItems: 'center',
             }}
           >
-            <button
-              className="btn btn-secondary btn-sm"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 runTask(
                   confirm({
@@ -1126,9 +937,10 @@ const FeedbackPanel: React.FC = () => {
               }
             >
               Standard confirm
-            </button>
-            <button
-              className="btn btn-danger btn-sm"
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() =>
                 runTask(
                   confirm({
@@ -1142,7 +954,7 @@ const FeedbackPanel: React.FC = () => {
               }
             >
               Danger confirm
-            </button>
+            </Button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Last result:{' '}
               <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
@@ -1167,7 +979,7 @@ const FeedbackPanel: React.FC = () => {
               Working from local cache — changes will sync when you reconnect.
             </Banner>
             <Banner severity="success" dismissible>
-              DSSR compiled for 01 Jul. This banner is dismissible.
+              DSR compiled for 01 Jul. This banner is dismissible.
             </Banner>
           </div>
         </Card>
@@ -1186,7 +998,7 @@ const DataMoneyPanel: React.FC = () => {
     <div>
       <Section
         title="Money formatter"
-        description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix. Never hand-roll toLocaleString for money."
+        description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix; a signed figure via formatSignedMoney (true minus, no negative zero); a quantity via formatQuantity; tiles via formatCompactMoney. Never hand-roll toLocaleString for money."
       >
         <Card>
           <table
@@ -1201,7 +1013,27 @@ const DataMoneyPanel: React.FC = () => {
                   call: 'formatMoney(1234.5, { symbol: false })',
                   out: formatMoney(1234.5, { symbol: false }),
                 },
-                { call: 'formatQty(3210.75)', out: formatQty(3210.75) },
+                {
+                  call: 'formatSignedMoney(-1200.5, { plus: true })',
+                  out: formatSignedMoney(-1200.5, { plus: true }),
+                },
+                {
+                  call: 'formatSignedMoney(85, { plus: true, symbol: false })',
+                  out: formatSignedMoney(85, { plus: true, symbol: false }),
+                },
+                {
+                  call: 'signedMoneyParts(-340, { decimals: 0 }).sign',
+                  out: signedMoneyParts(-340, { decimals: 0 }).sign,
+                },
+                { call: 'formatCompactMoney(287000)', out: formatCompactMoney(287000) },
+                { call: "formatQuantity(1240.5, 'L')", out: formatQuantity(1240.5, 'L') },
+                { call: "formatQuantity(18.46, 'KL')", out: formatQuantity(18.46, 'KL') },
+                {
+                  call: "formatQuantity(12345.678, 'L', { decimals: 3 })",
+                  out: formatQuantity(12345.678, 'L', { decimals: 3 }),
+                },
+                { call: 'MONEY_TERMS.receivable', out: MONEY_TERMS.receivable },
+                { call: 'MONEY_TERMS.owesYou', out: MONEY_TERMS.owesYou },
               ].map((r) => (
                 <tr key={r.call} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                   <td style={{ padding: '6px 8px' }}>
@@ -1236,7 +1068,7 @@ const DataMoneyPanel: React.FC = () => {
                 <th
                   style={{
                     padding: '8px 12px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1249,7 +1081,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1262,7 +1094,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1275,7 +1107,7 @@ const DataMoneyPanel: React.FC = () => {
                   style={{
                     padding: '8px 12px',
                     textAlign: 'right',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     textTransform: 'uppercase',
@@ -1336,19 +1168,23 @@ const TABS = [
   { id: 'buttons', label: 'Buttons' },
   { id: 'inputs', label: 'Inputs & Forms' },
   { id: 'components', label: 'Components' },
+  { id: 'status', label: 'Status vocabulary' },
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
+  { id: 'data-states', label: 'Data states' },
+  { id: 'tables', label: 'Tables' },
+  { id: 'page-controls', label: 'Page controls' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
 export const DesignSystem: React.FC = () => {
   const [active, setActive] = useState('tokens');
   return (
-    <PageLayout
+    <PageFrame
       title="Design System"
       subtitle="Local-only reference for tokens, primitives and patterns. Verify design choices here before applying them to product screens."
-      toolbar={
+      tabs={
         <Tabs
           tabs={TABS}
           activeId={active}
@@ -1366,6 +1202,7 @@ export const DesignSystem: React.FC = () => {
           <PumpDsComponentsPanel />
         </>
       )}
+      {active === 'status' && <PumpDsStatusPanel />}
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
       {active === 'data' && (
@@ -1374,7 +1211,24 @@ export const DesignSystem: React.FC = () => {
           <PumpDsMetricsPanel />
         </>
       )}
+      {active === 'data-states' && (
+        <Section
+          title="DataSection · states"
+          description="A region that loads its own data shows exactly one of these. Loading while a request is fetching or paused offline (a disabled query shows nothing); “Couldn't load … · Retry” for network/server faults; the server's message and no Retry for an access refusal (403 / access policy); the empty state only after success; otherwise the content. Fake queries — no network."
+        >
+          <DataSectionShowcase />
+        </Section>
+      )}
+      {active === 'tables' && (
+        <Section
+          title="Table module"
+          description="One set of typed columns (money, qty, date, text, status), two adapters. Money and qty read right-aligned in mono, header and total included, through the shared formats; status reads the status vocabulary; money and qty add up in the total row. The interactive table sorts and opens a row; the statement is read-only, compact and prints in light ink."
+        >
+          <TablesShowcase />
+        </Section>
+      )}
+      {active === 'page-controls' && <PageControlsShowcase />}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
-    </PageLayout>
+    </PageFrame>
   );
 };

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { DecantationReport } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
@@ -328,9 +328,37 @@ vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useDecantationReport: () => ({
     data: currentReport,
+    isPending: false,
     isLoading: false,
+    isError: false,
+    fetchStatus: 'idle',
     error: null,
+    refetch: vi.fn(),
   }),
+}));
+
+// Radix's menu popup loops forever in jsdom, so the Export menu renders open
+// and inline; its items and their callbacks are what is under test.
+vi.mock('../../pump-ds/menu/Menu.js', () => {
+  const Pass = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
+  return {
+    Menu: Pass,
+    MenuTrigger: Pass,
+    MenuContent: ({ children }: { children?: React.ReactNode }) => (
+      <div role="menu">{children}</div>
+    ),
+    MenuItem: ({ children, onSelect }: { children?: React.ReactNode; onSelect?: () => void }) => (
+      <div role="menuitem" tabIndex={-1} onClick={() => onSelect?.()}>
+        {children}
+      </div>
+    ),
+  };
+});
+
+const outputReactPdf = vi.fn(async (..._args: unknown[]) => {});
+vi.mock('../../services/exportPdf.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  outputReactPdf: (...args: unknown[]) => outputReactPdf(...args),
 }));
 
 const { DecantationReportPanel } = await import('./DecantationReportPanel.js');
@@ -339,6 +367,8 @@ describe('DecantationReportPanel DOM tests', () => {
   afterEach(() => {
     cleanup();
     currentReport = mockReport;
+    outputReactPdf.mockClear();
+    vi.restoreAllMocks();
   });
 
   it('renders the tanker visits table with operational records, transit loss chips, and invoice variance', () => {
@@ -355,8 +385,8 @@ describe('DecantationReportPanel DOM tests', () => {
     expect(screen.getByText('Ramesh Kumar')).toBeTruthy();
 
     // Transit discrepancy chip
-    expect(screen.getByText('Transit Discrepancy')).toBeTruthy();
-    expect(screen.getByText(/1 Short · 1 Seal broken · 1 Unemptied/)).toBeTruthy();
+    expect(screen.getByText('Transit discrepancy')).toBeTruthy();
+    expect(screen.getByText(/1 short · 1 seal broken · 1 unemptied/)).toBeTruthy();
 
     // Underground dip & density deviation
     expect(screen.getAllByText(/Tank 1/).length).toBeGreaterThan(0);
@@ -366,11 +396,17 @@ describe('DecantationReportPanel DOM tests', () => {
 
     // Linked invoice variance
     expect(screen.getByText(/INV-IOCL-9001:/)).toBeTruthy();
-    expect(screen.getByText(/-50.00 L \(Short\)/)).toBeTruthy();
+    // The variance chip: the shared stock format (true minus), in the short tone.
+    const shortChip = within(table).getByText('−50.00 L');
+    expect(shortChip.closest('[data-variance]')?.getAttribute('data-variance')).toBe('short');
 
-    // Check visit 2 (Pending)
+    // Visit statuses read in words, never the raw enum
+    expect(screen.getAllByText('Measured').length).toBe(2);
+    expect(screen.queryByText('MEASURED')).toBeNull();
+
+    // Check visit 2 (Pending): the visit and its invoice link both wait on measurement
     expect(screen.getByText('DEC-2026-002')).toBeTruthy();
-    expect(screen.getByText('Pending measurement')).toBeTruthy();
+    expect(screen.getAllByText('Pending measurement').length).toBe(2);
     expect(screen.getByText('Pending dip')).toBeTruthy();
 
     // Check visit 3 (Unlinked)
@@ -383,15 +419,21 @@ describe('DecantationReportPanel DOM tests', () => {
       <DecantationReportPanel selectedStation={{ id: 'st-1', name: 'Highway Fuels' }} />,
     );
 
-    // KPI Strip
-    expect(screen.getByText('Tanker Visits')).toBeTruthy();
-    expect(screen.getByText('Volume Received')).toBeTruthy();
-    expect(screen.getByText('Settled Invoice Volume')).toBeTruthy();
-    expect(screen.getByText('Settled Invoice Variance')).toBeTruthy();
-    expect(screen.getByText('Transit Discrepancies')).toBeTruthy();
+    // KPI strip: at most four tiles, each following the range
+    expect(screen.getByText('Tanker visits')).toBeTruthy();
+    expect(screen.getByText('Settled invoice volume')).toBeTruthy();
+    expect(screen.getByText('Settled invoice variance')).toBeTruthy();
+    expect(screen.getByText('Transit discrepancies')).toBeTruthy();
+    // The range control right above names the period (#604).
+    expect(screen.queryByText('In range')).toBeNull();
+    // Volume received is the visits table's total, not a tile
+    expect(screen.queryByText('Volume received')).toBeNull();
+    const visits = screen.getByTestId('decantation-report-table');
+    expect(within(visits).getByText('Total received')).toBeTruthy();
+    expect(within(visits).getByText('13,100.00 L')).toBeTruthy();
 
-    // Totals by Product
-    expect(screen.getByText('Totals by Product')).toBeTruthy();
+    // Totals by product
+    expect(screen.getByText('Totals by product')).toBeTruthy();
     expect(screen.getByText('Motor Spirit')).toBeTruthy();
     expect(screen.getByText('High Speed Diesel')).toBeTruthy();
   });
@@ -406,21 +448,24 @@ describe('DecantationReportPanel DOM tests', () => {
     fireEvent.click(docCell);
 
     // Drawer should open with header
-    expect(screen.getByText('Tanker Visit: KA-01-AA-1111')).toBeTruthy();
-    expect(screen.getByText('Chamber Inspection (Transit Integrity)')).toBeTruthy();
-    expect(screen.getByText('Underground Tank Dips & Decantation')).toBeTruthy();
-    expect(screen.getByText('Invoice Reconciliation & Station Loss / Excess')).toBeTruthy();
+    expect(screen.getByText('Tanker visit · KA-01-AA-1111')).toBeTruthy();
+    expect(screen.getByText('Chamber inspection (transit)')).toBeTruthy();
+    expect(screen.getByText('Underground tank dips')).toBeTruthy();
+    expect(screen.getByText('Invoice reconciliation')).toBeTruthy();
+    // The business date reads as a date, never the raw ISO form
+    expect(screen.getAllByText('5 Mar 2026').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}(?!_)/);
 
     // Chambers details
     expect(screen.getByText('Chamber 1')).toBeTruthy();
     expect(screen.getByText('Chamber 2')).toBeTruthy();
     expect(screen.getByText('Chamber 3')).toBeTruthy();
     expect(screen.getByText('Broken')).toBeTruthy();
-    expect(screen.getByText('Not Emptied')).toBeTruthy();
+    expect(screen.getByText('Not emptied')).toBeTruthy();
 
     // Invoice details
     expect(screen.getByText('INV-IOCL-9001')).toBeTruthy();
-    expect(screen.getAllByText(/-50.00 L/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('−50.00 L').length).toBeGreaterThan(1);
   });
 
   it('renders empty state when no visits exist', () => {
@@ -448,5 +493,33 @@ describe('DecantationReportPanel DOM tests', () => {
     );
 
     expect(screen.getByText('No decantation records found')).toBeTruthy();
+  });
+
+  it('prints through the PDF path, not window.print (a no-op on desktop)', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    renderWithProviders(
+      <DecantationReportPanel selectedStation={{ id: 'st-1', name: 'Highway Fuels' }} />,
+    );
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Print' }));
+
+    await waitFor(() => expect(outputReactPdf).toHaveBeenCalledTimes(1));
+    const [element, filename, output] = outputReactPdf.mock.calls[0] as [any, string, string];
+    expect(output).toBe('print');
+    expect(filename).toBe('Decantation_Report_2026-03-01_2026-03-10');
+    expect(element.props.report).toBe(mockReport);
+    expect(element.props.stationName).toBe('Highway Fuels');
+    expect(print).not.toHaveBeenCalled();
+  });
+
+  it('saves the same PDF from Export → PDF', async () => {
+    renderWithProviders(
+      <DecantationReportPanel selectedStation={{ id: 'st-1', name: 'Highway Fuels' }} />,
+    );
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'PDF' }));
+
+    await waitFor(() => expect(outputReactPdf).toHaveBeenCalledTimes(1));
+    expect(outputReactPdf.mock.calls[0][2]).toBe('save');
   });
 });

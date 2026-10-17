@@ -8,7 +8,13 @@
  * Role and Stations the actor may choose, and which identity a new login uses.
  */
 import { z } from 'zod';
-import { normalizeIndianMobile, userBaseSchema, userSchema, type Role } from '@pump/shared';
+import {
+  hasOrganizationWideStationAccess,
+  normalizeIndianMobile,
+  userBaseSchema,
+  userSchema,
+  type Role,
+} from '@pump/shared';
 
 export type MemberFormMode = 'create' | 'edit';
 export type LoginIdentity = 'Phone' | 'Email';
@@ -55,7 +61,7 @@ export function memberRequest(
   const phone = normalizeIndianMobile(values.phone) ?? null;
   const email = values.email.trim() ? values.email.trim().toLowerCase() : null;
   // An Owner reaches every station, so stations are not part of their record.
-  const stations = values.role === 'Owner' ? [] : values.stationIds;
+  const stations = hasOrganizationWideStationAccess(values) ? [] : values.stationIds;
 
   if (mode === 'edit') {
     return {
@@ -64,7 +70,7 @@ export function memberRequest(
       email,
       role: values.role,
       // Leave an Owner's assignments as they are: they only matter if demoted.
-      ...(values.role === 'Owner' ? {} : { stationIds: stations }),
+      ...(hasOrganizationWideStationAccess(values) ? {} : { stationIds: stations }),
     };
   }
   if (!values.enableAppAccess) {
@@ -105,7 +111,7 @@ export function memberFormSchema(rules: MemberFormRules) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
 
       if (!roles.has(v.role)) add('role', 'You cannot give this role.');
-      if (v.role !== 'Owner') {
+      if (!hasOrganizationWideStationAccess(v)) {
         if (v.stationIds.some((id) => !stations.has(id)))
           add('stationIds', 'Choose from your own stations.');
         else if (rules.requireStation && v.stationIds.length === 0)

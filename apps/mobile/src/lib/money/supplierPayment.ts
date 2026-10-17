@@ -12,10 +12,11 @@
  */
 import { z } from 'zod';
 import {
-  canRecordPurchase,
-  supplierPaymentEntryFormSchema,
   type AccessMode,
+  can,
+  type Principal,
   type Role,
+  supplierPaymentEntryFormSchema,
 } from '@pump/shared';
 import { supplierPaymentPayload } from '@pump/ui';
 import {
@@ -95,7 +96,7 @@ export function supplierPaymentRequest(
 /**
  * May this user record a Supplier Payment from here?
  *
- *  - Role: `canRecordPurchase` (Owner, Manager, Accountant), the guard
+ *  - Role: `purchases.record` (Owner, Manager, Accountant), the guard
  *    `POST /transactions/supplier-payments` applies.
  *  - Access mode: the route is declared FINISH_OPEN_WORK ("cash paid to a
  *    supplier has already gone"), so Restricted Access still permits it; only
@@ -103,10 +104,12 @@ export function supplierPaymentRequest(
  */
 export function supplierPaymentAccess(input: {
   role: Role;
+  /** The effective Permissions (an Owner's changes included); absent = the Role's defaults. */
+  permissions?: Principal['permissions'];
   accessMode?: AccessMode;
 }): OfficePaymentAccess {
   return officePaymentAccess({
-    allowed: canRecordPurchase(input.role),
+    allowed: can(input, 'purchases.record'),
     accessMode: input.accessMode,
   });
 }

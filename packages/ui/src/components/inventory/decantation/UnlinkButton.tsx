@@ -24,9 +24,9 @@ export const UnlinkButton: React.FC<{
     <span
       role="group"
       aria-label={`Confirm unlink ${label}`}
-      style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}
+      className="inline-flex items-center gap-1.5 text-[12px]"
     >
-      <span style={{ color: 'var(--text-muted)' }}>Remove this invoice link?</span>
+      <span className="text-ink-muted">Remove this invoice link?</span>
       <Button
         variant="danger"
         size="sm"

@@ -21,35 +21,35 @@ Captured on the preview console against a freshly onboarded station ("Hilltop Fu
 
 ## Catalog, CRM, purchasing setup, team
 
-- Station Overview → Products Catalog → **Import CSV**: choose file → validated preview →
+- Station → Products → **Import CSV**: choose file → validated preview →
   **Import N products** (price + opening stock in one file) `[16–18]`
-- Customers → Customer Registry → **Add Customer** (Regular / Credit / Fleet; credit limit,
+- Customers → Customers → **Add Customer** (Regular / Credit / Fleet; credit limit,
   fleet code, GST) `[19–21]`
-- Purchases → Supplier Registry → **Add Supplier** `[22–23]`
+- Suppliers → Suppliers → **Add Supplier** `[22–23]`
 - Organization → Team → **Add Team Member** (phone/email + password, role, station
   assignment) `[24–26]`
 
 ## Shift lifecycle
 
-- Shifts → Active Shift → open form: template, business date, opening cash float,
-  opening nozzle readings, attendant→DU + POS→DU assignment → **Start Shift Operations** `[27–29]`
-- Quick actions: Add Expense (E) `[31]` · Log Collection (C) `[37]` · Merchandise Sale (M) `[30]` ·
-  Add Purchase (P) — fuel drop with tank allocation `[32]`
+- Shifts → Live shift → open form: template, business date, opening cash float,
+  opening nozzle readings, attendant→DU + POS→DU assignment → **Start shift operations** `[27–29]`
+- **Record ▾**: Product sale (M) `[30]` · Office record: Expense (E) `[31]` · Collection (C) `[37]` ·
+  Purchase (P) — fuel drop with tank allocation `[32]` (screenshots predate #533)
 - **Record Handover** per DU: closing readings + testing, POS card/UPI batch,
   customer credit sale (chit) `[33]`, cash deposit; live variance preview `[34–36]`
   (DU-2 shows a small cash shortage `[36]`)
 - Workspace after 2/2 handovers: variances per attendant, nozzle reconciliation `[38]`
-- **Begin Close** → 4-step wizard: Cash Reconciliation `[39]` → Physical Dip Readings `[40]` →
-  Review Warnings `[41]` → Confirm `[42]` → **Close Shift** → success + immutable summary `[43–44]`
+- **Close shift** → the Close shift page (#534; screenshots `[39–44]` predate it): Readings
+  (+ tank dips) → Handovers → Cash count → Confirm → **Close shift** → closed state + immutable summary
 
 ## Business day & reporting
 
-- Shifts → Business Day → **Close business day** → confirm **Close day** → seals immutable DSSR `[45–47]`
-- Reports → Daily DSSR → Recent DSSRs → DSSR detail (P&L, fuel by product, dip variance) `[48–49]`
+- Shifts → Business Day → **Close business day** → confirm **Close day** → seals immutable DSR `[45–47]`
+- Reports → DSR → Recent DSRs → DSR detail (P&L, fuel by product, dip variance) `[48–49]`
 
 ## Everything else
 
-- Inventory (Tank Status / Merchandise Stock / Movements / Reconciliations) `[50]`
+- Inventory (Tanks / Product stock / Movements / Reconciliations) `[50]`
 - Accounts (cash, bank, clearing; transfers, settle to bank) `[51]`
 - Expenses ledger `[52]` · Pricing (fuel rates + merchandise MRP) `[53]`
 - Dashboard after a full day `[54]`
@@ -62,7 +62,7 @@ Navigation map only; steps are in `docs/USER-FLOW.md` §13.
   Accountant) · **Money** (Owner, Manager, Accountant) · **Insights** (Owner, Manager). Accountant or Staff assigned to a pump: also Home, with only their handover card.
 - Home header: station name or **avatar** → **Account sheet** (station switcher, Team, organization,
   Sign out); **bell** → **Needs attention** (stock, day close, credit, cash variance, handover).
-- Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSSR** (Share, Download PDF).
+- Shifts → live shift / history row → **Shift Summary**. Reports → day row → **DSR** (Share, Download PDF).
 - Money → To collect / To pay → customer or supplier page → **Statement** (range filter, PDF),
   **Record payment** (customer or supplier), credit limit (Owner, Manager).
 - **Attendant**: handover-only app (no dock), **Save handover**, Sign out in the account sheet.

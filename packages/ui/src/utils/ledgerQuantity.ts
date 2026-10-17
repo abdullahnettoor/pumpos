@@ -5,12 +5,8 @@
  */
 
 /** The unit as shown: `L` for any litre spelling, `kg` for kilograms; blank reads as litres. */
-export const unitLabel = (unit: unknown): string => {
-  const u = typeof unit === 'string' ? unit.trim() : '';
-  if (!u || /^(l|ltr|litre|liter)s?$/i.test(u)) return 'L';
-  if (/^(kg|kilogram)s?$/i.test(u)) return 'kg';
-  return u;
-};
+import { unitLabel } from '@pump/shared';
+export { unitLabel };
 
 /** The quantity fields of a ledger row. */
 export interface LedgerQuantity {

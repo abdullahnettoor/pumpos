@@ -1,14 +1,22 @@
 /**
  * Who may manage whom, decided exactly as the server does it.
  *
- * The rules come from `@pump/shared` guards (`canManageStaff`,
- * `isManageableByManager`) and from `canActOnTarget` in the API's
+ * The rules come from `@pump/shared` guards (`team.manage`,
+ * `canActOnTeamMember`) and from `canActOnTarget` in the API's
  * `station-setup` route: an Owner manages every Role; a Manager manages only
  * Staff and Attendants, and only when the member's stations are ALL among the
  * Manager's own (a member with no station is out of a Manager's reach). The
  * server re-checks every write; this decides what the pickers and buttons offer.
  */
-import { canManageStaff, isManageableByManager, type AccessMode, type Role } from '@pump/shared';
+import {
+  type AccessMode,
+  canActOnTeamMember,
+  canAssignStation,
+  canAssignTeamRole,
+  can,
+  type Role,
+} from '@pump/shared';
+import { principalFor } from '@pump/ui';
 import { ROLE_ORDER, type TeamMember } from './members.js';
 
 export interface TeamActor {
@@ -20,13 +28,11 @@ export interface TeamActor {
 }
 
 /** May this Role add or manage members at all? Owner and Manager. */
-export const canManageTeam = (role: Role): boolean => canManageStaff(role);
+export const canManageTeam = (role: Role): boolean => can(principalFor(role), 'team.manage');
 
 /** The Roles this actor may give: all five for an Owner, Staff and Attendant for a Manager. */
 export function assignableRoles(role: Role): Role[] {
-  if (role === 'Owner') return [...ROLE_ORDER];
-  if (role === 'Manager') return ROLE_ORDER.filter(isManageableByManager);
-  return [];
+  return ROLE_ORDER.filter((target) => canAssignTeamRole(role, target));
 }
 
 /** The stations this actor may assign. */
@@ -34,9 +40,7 @@ export function assignableStations<S extends { id: string }>(
   actor: Pick<TeamActor, 'role' | 'stationIds'>,
   stations: readonly S[],
 ): S[] {
-  if (actor.role === 'Owner') return [...stations];
-  if (actor.role === 'Manager') return stations.filter((s) => actor.stationIds.includes(s.id));
-  return [];
+  return stations.filter((s) => canAssignStation(actor, s.id));
 }
 
 /** Whether the actor may act on a target with this Role and these stations (the server's `canActOnTarget`). */
@@ -45,11 +49,7 @@ export function canActOn(
   targetRole: Role,
   targetStationIds: readonly string[],
 ): boolean {
-  if (actor.role === 'Owner') return true;
-  if (actor.role !== 'Manager') return false;
-  if (!isManageableByManager(targetRole)) return false;
-  if (targetStationIds.length === 0) return false;
-  return targetStationIds.every((id) => actor.stationIds.includes(id));
+  return canActOnTeamMember(actor, targetRole, targetStationIds);
 }
 
 const MANAGER_SCOPE_NOTE = 'Managers can manage only Staff and Attendants on their own stations.';

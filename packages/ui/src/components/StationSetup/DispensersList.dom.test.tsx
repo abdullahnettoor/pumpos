@@ -17,13 +17,19 @@ import { renderWithProviders } from '../../test/renderWithProviders.js';
  * use. Without a way to say so, a broken pump would wedge shift open entirely.
  */
 const updateDispenser = vi.fn();
+const createDispenserWithNozzles = vi.fn();
+const createNozzle = vi.fn();
 
 vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CloudDispenserService: class {
     updateDispenser = (...a: unknown[]) => updateDispenser(...a);
     createDispenser = vi.fn();
+    createDispenserWithNozzles = (...a: unknown[]) => createDispenserWithNozzles(...a);
     deleteDispenser = vi.fn();
+  },
+  CloudNozzleService: class {
+    createNozzle = (...a: unknown[]) => createNozzle(...a);
   },
 }));
 
@@ -32,6 +38,9 @@ const dispensers = [
   { id: 'du-2', stationId: 'st-1', name: 'Pump Two', code: 'DU-2', status: 'MAINTENANCE' },
   { id: 'du-3', stationId: 'st-1', name: 'Pump Three', code: 'DU-3', status: 'INACTIVE' },
 ];
+
+/** Tanks and fuels, empty unless a test needs the add-dispenser form filled in. */
+const fixtures: { tanks: unknown[]; products: unknown[] } = { tanks: [], products: [] };
 
 /**
  * Mocked at the QUERY layer, not just the service. Taking a pump out of
@@ -44,8 +53,8 @@ const invalidateOperational = vi.fn();
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useDispensers: () => ({ data: dispensers, isPending: false }),
-  useTanks: () => ({ data: [], isPending: false }),
-  useProducts: () => ({ data: [], isPending: false }),
+  useTanks: () => ({ data: fixtures.tanks, isPending: false }),
+  useProducts: () => ({ data: fixtures.products, isPending: false }),
   useNozzles: () => ({ data: [], isPending: false }),
   useInvalidateOperational: () => invalidateOperational,
 }));
@@ -79,14 +88,24 @@ describe('DispensersList — taking a pump out of service', () => {
     render();
     fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
     await waitFor(() =>
-      expect(updateDispenser).toHaveBeenCalledWith('du-1', { status: 'MAINTENANCE' }),
+      expect(updateDispenser).toHaveBeenCalledWith(
+        'du-1',
+        { status: 'MAINTENANCE' },
+        { idempotencyKey: expect.any(String) },
+      ),
     );
   });
 
   it('sends ACTIVE for a pump being returned', async () => {
     render();
     fireEvent.click(card('Pump Two').getByRole('button', { name: /return to service/i }));
-    await waitFor(() => expect(updateDispenser).toHaveBeenCalledWith('du-2', { status: 'ACTIVE' }));
+    await waitFor(() =>
+      expect(updateDispenser).toHaveBeenCalledWith(
+        'du-2',
+        { status: 'ACTIVE' },
+        { idempotencyKey: expect.any(String) },
+      ),
+    );
   });
 
   it('sends only the status, so a rename cannot ride along with it', async () => {
@@ -118,6 +137,31 @@ describe('DispensersList — taking a pump out of service', () => {
     fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
     await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
     expect(screen.queryByText(/is out of service\./i)).toBeNull();
+  });
+
+  it('a retry after a dropped connection sends the same Idempotency-Key; a new change after success gets a new one', async () => {
+    // A one-off action opens its own session; the shared store hands the
+    // unsettled key back for the same body, so the change cannot apply twice.
+    updateDispenser.mockRejectedValueOnce(new Error('Network down'));
+    render();
+    const toggle = () =>
+      fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
+    const keyOf = (n: number) =>
+      (updateDispenser.mock.calls[n]?.[2] as { idempotencyKey: string }).idempotencyKey;
+
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(2));
+    expect(keyOf(1)).toBe(keyOf(0));
+
+    await waitFor(() =>
+      expect(card('Pump One').getByRole('button', { name: /maintenance/i })).toBeDefined(),
+    );
+    toggle();
+    await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(3));
+    expect(keyOf(2)).not.toBe(keyOf(1));
   });
 
   describe('refreshing what the change reaches', () => {
@@ -153,5 +197,202 @@ describe('DispensersList — taking a pump out of service', () => {
       await waitFor(() => expect(screen.getByText(/is out of service\./i)).toBeDefined());
       expect(screen.queryByText(/Could not change the dispenser status/i)).toBeNull();
     });
+  });
+});
+
+describe('DispensersList — the Station page Add menu', () => {
+  afterEach(cleanup);
+
+  it('opens the add drawer once per request and reports it handled', () => {
+    const onCreateHandled = vi.fn();
+    renderWithProviders(
+      <DispensersList stationId="st-1" createRequest={1} onCreateHandled={onCreateHandled} />,
+    );
+    expect(screen.getByText('Add dispenser')).toBeDefined();
+    expect(onCreateHandled).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the drawer closed without a request', () => {
+    renderWithProviders(<DispensersList stationId="st-1" />);
+    expect(screen.queryByText('Add dispenser')).toBeNull();
+  });
+});
+
+describe('DispensersList — adding a dispenser with its nozzles (#591)', () => {
+  const fuel = (id: string, name: string, code: string) => ({
+    id,
+    code,
+    name,
+    productType: 'FUEL',
+    isActive: true,
+    unit: 'L',
+  });
+
+  afterEach(() => {
+    cleanup();
+    fixtures.tanks = [];
+    fixtures.products = [];
+    createDispenserWithNozzles.mockReset();
+    createNozzle.mockReset();
+    invalidateOperational.mockReset().mockResolvedValue(undefined);
+  });
+
+  // Codes as a demo station or an owner types them, not `MS` / `HSD` (#638).
+  const seedFuels = () => {
+    fixtures.products = [
+      fuel('p-ms', 'Petrol', 'DEMO-MS-a753c7'),
+      fuel('p-hsd', 'Diesel', 'diesel-1'),
+    ];
+    fixtures.tanks = [
+      { id: 't-ms', stationId: 'st-1', name: 'Tank MS', productId: 'p-ms' },
+      { id: 't-hsd', stationId: 'st-1', name: 'Tank HSD', productId: 'p-hsd' },
+    ];
+  };
+  const openDrawer = () =>
+    renderWithProviders(<DispensersList stationId="st-1" createRequest={1} />);
+  const readings = () => screen.getAllByPlaceholderText('Meter reading') as HTMLInputElement[];
+  /**
+   * Opens the add drawer (the Add ▾ menu), auto-fills a dual layout in it
+   * (#635) and types each nozzle's opening reading.
+   */
+  const openDual = () => {
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    readings().forEach((input, i) =>
+      fireEvent.change(input, { target: { value: String(1000 * (i + 1)) } }),
+    );
+  };
+  const save = () => fireEvent.click(screen.getByRole('button', { name: 'Create dispenser' }));
+
+  it('sends the dispenser and every nozzle as one keyed request', async () => {
+    createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });
+    openDual();
+    save();
+
+    await waitFor(() => expect(createDispenserWithNozzles).toHaveBeenCalledTimes(1));
+    expect(createDispenserWithNozzles).toHaveBeenCalledWith(
+      {
+        stationId: 'st-1',
+        name: 'Dispenser Unit 4',
+        code: 'DU-04',
+        status: 'ACTIVE',
+        nozzles: [
+          { name: 'N1', tankId: 't-hsd', productId: 'p-hsd', currentReading: 1000 },
+          { name: 'N2', tankId: 't-ms', productId: 'p-ms', currentReading: 2000 },
+        ],
+      },
+      { idempotencyKey: expect.any(String) },
+    );
+    expect(createNozzle).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('Dispenser unit created.')).toBeDefined());
+  });
+
+  it('refreshes the shifts screen, which reads nozzles from shift status', async () => {
+    createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });
+    openDual();
+    save();
+
+    await waitFor(() => expect(invalidateOperational).toHaveBeenCalledTimes(1));
+  });
+
+  it('refreshes nothing when the save failed', async () => {
+    createDispenserWithNozzles.mockRejectedValueOnce(new Error('Network down'));
+    openDual();
+    save();
+
+    await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+    expect(invalidateOperational).not.toHaveBeenCalled();
+  });
+
+  it('retries a dropped save under the same key, so it cannot add a second dispenser', async () => {
+    createDispenserWithNozzles
+      .mockRejectedValueOnce(new Error('Network down'))
+      .mockResolvedValueOnce({ dispenser: { id: 'du-new' }, nozzles: [] });
+    openDual();
+    save();
+    await waitFor(() => expect(screen.getByText(/Network down/i)).toBeDefined());
+    save();
+
+    await waitFor(() => expect(createDispenserWithNozzles).toHaveBeenCalledTimes(2));
+    const keyOf = (n: number) =>
+      (createDispenserWithNozzles.mock.calls[n][1] as { idempotencyKey: string }).idempotencyKey;
+    expect(keyOf(1)).toBe(keyOf(0));
+  });
+
+  it('auto-fill sits in the drawer, not on the page (#635)', () => {
+    seedFuels();
+    render();
+    expect(screen.queryByRole('button', { name: /dual \(2 nozzles\)/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /quad \(4 nozzles\)/i })).toBeNull();
+  });
+
+  it('auto-fill fills a row per fuel with a tank, whatever the product codes (#638)', () => {
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /quad \(4 nozzles\)/i }));
+
+    expect(screen.getAllByText(/^Nozzle #/)).toHaveLength(4);
+    // Opening readings are left for the operator, not invented.
+    expect(readings().map((r) => r.value)).toEqual(['', '', '', '']);
+  });
+
+  it('sends nothing until every nozzle has an opening reading (#638)', async () => {
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    save();
+
+    // The empty, required reading stops the submit (the save helper refuses
+    // it too, see dispenserWithNozzles.test.ts).
+    expect(readings().every((r) => r.validity.valueMissing)).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(createDispenserWithNozzles).not.toHaveBeenCalled();
+  });
+
+  it('accepts an opening reading of zero', async () => {
+    createDispenserWithNozzles.mockResolvedValue({ dispenser: { id: 'du-new' }, nozzles: [] });
+    seedFuels();
+    openDrawer();
+    fireEvent.click(screen.getByRole('button', { name: /dual \(2 nozzles\)/i }));
+    readings().forEach((input) => fireEvent.change(input, { target: { value: '0' } }));
+    expect(readings().map((r) => r.value)).toEqual(['0', '0']);
+    save();
+
+    await waitFor(() => expect(createDispenserWithNozzles).toHaveBeenCalledTimes(1));
+    const body = createDispenserWithNozzles.mock.calls[0][0] as {
+      nozzles: { currentReading: number }[];
+    };
+    expect(body.nozzles.map((n) => n.currentReading)).toEqual([0, 0]);
+  });
+
+  it('offers no auto-fill while no fuel has a tank (#638)', () => {
+    fixtures.products = [fuel('p-ms', 'Petrol', 'DEMO-MS-a753c7')];
+    fixtures.tanks = [{ id: 't-x', stationId: 'st-1', name: 'Tank X', productId: 'p-other' }];
+    openDrawer();
+    expect(screen.queryByRole('button', { name: /dual \(2 nozzles\)/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /quad \(4 nozzles\)/i })).toBeNull();
+  });
+
+  it('auto-fill only fills the form: nothing is sent until Create', () => {
+    openDual();
+    fireEvent.click(screen.getByRole('button', { name: /quad \(4 nozzles\)/i }));
+
+    expect(screen.getAllByText(/^Nozzle #/)).toHaveLength(4);
+    expect(createDispenserWithNozzles).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing while a nozzle has no tank', async () => {
+    openDual();
+    const tank = screen
+      .getAllByRole('combobox')
+      .find((el) => within(el).queryByRole('option', { name: /Tank MS/ }));
+    fireEvent.change(tank as HTMLElement, { target: { value: '' } });
+    save();
+
+    await waitFor(() =>
+      expect(screen.getByText(/all nozzles have a valid tank and product/i)).toBeDefined(),
+    );
+    expect(createDispenserWithNozzles).not.toHaveBeenCalled();
   });
 });

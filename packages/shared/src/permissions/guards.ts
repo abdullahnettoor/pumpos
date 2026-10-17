@@ -1,4 +1,10 @@
-import { Role, ShiftState } from '../types/core.js';
+/**
+ * The fixed checks that are NOT Permissions (ADR 0013): station access, and the
+ * whose-data rules. Everything a user "may do" is a Permission in
+ * `catalogue.ts`, asked through `can(principal, permission)`.
+ */
+import { Role } from '../types/core.js';
+import { can, type Principal } from './catalogue.js';
 
 export interface UserContext {
   role: Role;
@@ -11,11 +17,19 @@ export interface ResourceContext {
 }
 
 /**
+ * Owners are not scoped to assigned stations: they reach every station of the
+ * Organization. Station access is a fixed rule, separate from Permissions.
+ */
+export function hasOrganizationWideStationAccess(user: { role?: string | null }): boolean {
+  return user.role === 'Owner';
+}
+
+/**
  * Checks if the user belongs to the same organization and is assigned to the station.
  * Owners bypass station-level scoping.
  */
 export function isAuthorizedForStation(user: UserContext, resource: ResourceContext): boolean {
-  if (user.role === 'Owner') {
+  if (hasOrganizationWideStationAccess(user)) {
     return true;
   }
   if (!resource.stationId) {
@@ -24,342 +38,70 @@ export function isAuthorizedForStation(user: UserContext, resource: ResourceCont
   return user.assignedStationIds.includes(resource.stationId);
 }
 
-// ----------------------------------------------------
-// Shift Permissions
-// ----------------------------------------------------
-
-export function canOpenShift(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Staff';
+/**
+ * May the user write station setup at this station: they hold `station.manage`
+ * and reach the station (Owners everywhere, others at assigned stations only).
+ */
+export function canWriteStationSetup(
+  user: UserContext & Principal,
+  stationId?: string | null,
+): boolean {
+  if (!can(user, 'station.manage')) return false;
+  if (hasOrganizationWideStationAccess(user)) return true;
+  return !!stationId && user.assignedStationIds.includes(stationId);
 }
 
-export function canCloseShift(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Staff';
-}
-
-export function canReopenShift(role: Role): boolean {
-  // Only Owners and Managers can reopen before the parent Business Day closes.
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** True for the mobile-only, self-scoped Attendant role. */
-export function isAttendant(role: Role): boolean {
+/** True for the mobile-only, self-scoped Attendant role (Attendant-app rule). */
+export function isAttendant(role: Role | null | undefined): boolean {
   return role === 'Attendant';
 }
 
-/**
- * Who may record an attendant handover. Owners, Managers and Staff may record
- * on behalf of anyone holding a Drawer. Attendants and Accountants may record
- * only their OWN handover (`isHandoverSelfScoped`): an Accountant holds a Drawer
- * only when covering a pump (#301) and hands it over themselves, on mobile.
- */
-export function canRecordHandover(role: Role): boolean {
-  return (
-    role === 'Owner' ||
-    role === 'Manager' ||
-    role === 'Staff' ||
-    role === 'Attendant' ||
-    role === 'Accountant'
-  );
-}
-
-/** Roles whose handover writes are limited to their own Drawer (#301). */
+/** Roles whose handover writes are limited to their own Drawer (#301). Whose-data rule. */
 export function isHandoverSelfScoped(role: Role): boolean {
   return role === 'Attendant' || role === 'Accountant';
 }
 
-// ----------------------------------------------------
-// Expense Permissions
-// ----------------------------------------------------
-
-export function canCreateExpense(role: Role): boolean {
-  return role !== 'Attendant'; // All roles except the mobile-only Attendant
-}
-
-export function canEditExpense(role: Role, shiftState: ShiftState): boolean {
-  if (shiftState === 'LOCKED') {
-    return false; // Immutable
-  }
-  if (shiftState === 'CLOSED') {
-    // Closed shifts cannot be edited directly; only Owners, Managers, Accountants can create adjustments
-    return false;
-  }
-  return role !== 'Attendant'; // Any operational role during an open shift
-}
-
-export function canCreateExpenseAdjustment(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canVoidExpense(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-// ----------------------------------------------------
-// Purchase Permissions
-// ----------------------------------------------------
-
-export function canCreatePurchase(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canEditPurchase(role: Role, shiftState: ShiftState): boolean {
-  if (shiftState === 'LOCKED' || shiftState === 'CLOSED') {
-    return false;
-  }
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canCreatePurchaseAdjustment(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// Customer Permissions
-// ----------------------------------------------------
-
-export function canCreateCustomer(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canEditCustomer(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canChangeCreditLimit(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-export function canArchiveCustomer(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-// ----------------------------------------------------
-// Supplier Permissions
-// ----------------------------------------------------
-
-export function canCreateSupplier(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canEditSupplier(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canArchiveSupplier(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-// ----------------------------------------------------
-// Collection Permissions
-// ----------------------------------------------------
-
-export function canRecordCollection(role: Role): boolean {
-  return role !== 'Attendant'; // All roles except the mobile-only Attendant
-}
-
-export function canEditCollection(role: Role, shiftState: ShiftState): boolean {
-  if (shiftState === 'LOCKED' || shiftState === 'CLOSED') {
-    return false;
-  }
-  return role !== 'Attendant'; // All operational roles can edit collections in open shifts
-}
-
-export function canCreateCollectionAdjustment(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// Product & Infrastructure Permissions
-// ----------------------------------------------------
-
-export function canManageProduct(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** Tank dips / stock counts are desk operations, not attendant actions. */
-export function canRecordStockCount(role: Role): boolean {
-  return role !== 'Attendant';
-}
-
-/** Other income (money IN outside sales) mirrors expense recording. */
-export function canRecordIncome(role: Role): boolean {
-  return role !== 'Attendant';
-}
-
-export function canManageInfrastructure(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-// ----------------------------------------------------
-// Party (Customer / Supplier) & Purchase Permissions
-// ----------------------------------------------------
-
-/** Create/edit customers or suppliers (back-office). Owner, Manager, Accountant. */
-export function canManageCustomers(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-export function canManageSuppliers(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-/** Archive (soft-delete) a customer or supplier. Owner, Manager only. */
-export function canArchiveParty(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** Record product density readings (morning / ad-hoc). Owner, Manager, Accountant. */
-export function canRecordDensity(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-/** Record / update Decantations (tanker unloads) and their density. Owner, Manager, Accountant. */
-export function canRecordDecantation(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-/** Record purchases / supplier payments. Owner, Manager, Accountant (not Staff). */
-export function canRecordPurchase(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// User Management
-// ----------------------------------------------------
-
-export function canManageUsers(role: Role): boolean {
-  return role === 'Owner';
-}
-
-/**
- * Manage Staff/Attendant accounts (create, reset password, deactivate) — scoped
- * to the manager's own stations at the route layer. Owner has full
- * `canManageUsers`; Manager is limited to the two lowest roles.
- */
-export function canManageStaff(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** Roles a Manager (not Owner) is allowed to create/act on. */
+/** Roles a Manager (not Owner) is allowed to create/act on. Whose-data rule. */
 export function isManageableByManager(targetRole: Role): boolean {
   return targetRole === 'Staff' || targetRole === 'Attendant';
 }
 
-// ----------------------------------------------------
-// Reporting
-// ----------------------------------------------------
-
-/**
- * Back-office roles: the ones accountable for the station's numbers rather
- * than for working a dispenser. Reaching Reports and exporting from it are the
- * same answer, so they are the same list — written once, because three copies
- * of `Owner | Manager | Accountant` in one file is more drift surface than the
- * inline check this replaced.
- */
-export const REPORTS_ROLES: readonly Role[] = ['Owner', 'Manager', 'Accountant'];
-
-/**
- * Reach the Reports workspace at all.
- *
- * Exported because more than the nav needs the answer: anything that offers a
- * route *into* Reports has to agree with the nav that gates it, or it sends
- * the operator to a page their own sidebar does not list and whose reads
- * refuse them. The "See older Business Days" affordance is one such caller
- * (#244).
- */
-export function canViewReports(role: Role): boolean {
-  return REPORTS_ROLES.includes(role);
+/** Whose-data rule: may this actor give a team member this Role? Owners any; Managers Staff/Attendant. */
+export function canAssignTeamRole(actorRole: Role, targetRole: Role): boolean {
+  if (hasOrganizationWideStationAccess({ role: actorRole })) return true;
+  return actorRole === 'Manager' && isManageableByManager(targetRole);
 }
 
-export function canExportReports(role: Role): boolean {
-  return REPORTS_ROLES.includes(role);
+/** Whose-data rule: may this actor assign a member to this station? Owners any; Managers their own. */
+export function canAssignStation(
+  actor: { role: Role; stationIds: readonly string[] },
+  stationId: string,
+): boolean {
+  if (hasOrganizationWideStationAccess(actor)) return true;
+  return actor.role === 'Manager' && actor.stationIds.includes(stationId);
 }
 
 /**
- * View the Attendant Handover Report. Back-office roles only: an Attendant
- * must not see a peer's variance history, and Staff have no accountability
- * role over attendants.
- *
- * This is the Role axis only — the report is additionally gated on the
- * `reports.attendant` Product Capability, which the server checks first.
+ * Whose-data rule for team management: an Owner acts on anyone; a Manager only
+ * on Staff and Attendants, and only when assigned to EVERY station the target
+ * touches (a target with no station scope is not implicitly manageable).
  */
-/**
- * Report templates (#332): which sections each printed report shows and in
- * what order. Owner and Manager only, so other staff can't change what prints;
- * everyone who can print a report still prints it with the saved layout.
- */
-export function canManageReportTemplates(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
+export function canActOnTeamMember(
+  actor: { role: Role; stationIds: readonly string[] },
+  targetRole: Role,
+  targetStationIds: readonly string[] = [],
+): boolean {
+  if (hasOrganizationWideStationAccess(actor)) return true;
+  if (actor.role !== 'Manager') return false;
+  if (!isManageableByManager(targetRole)) return false;
+  if (targetStationIds.length === 0) return false;
+  return targetStationIds.every((s) => actor.stationIds.includes(s));
 }
-
-export function canViewAttendantReport(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// Financial Accounts (Phase F) — money accounts & ledger
-// ----------------------------------------------------
-
-/** Create/edit money accounts and view ledgers/balances. Owner, Manager, Accountant. */
-export function canManageFinancialAccounts(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// Expense categories (master data)
-// ----------------------------------------------------
-
-/** Create/rename expense categories. Owner, Manager, Accountant (not Staff). */
-export function canManageExpenseCategory(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
-}
-
-// ----------------------------------------------------
-// Station onboarding (Phase A) — getting a station operational
-// ----------------------------------------------------
 
 /**
- * Run the station onboarding wizard. Owner and Manager only.
- *
- * Staff and Accountants are shown a "setup in progress" screen until the
- * station is operational, so any affordance that routes them into the wizard is
- * a dead end — and on the console that dead end renders outside the shell,
- * taking their sign-out with it (#132). Gate the affordance, not just the page.
- *
- * Attendants are mobile-only and never see the console at all.
+ * Only an Owner edits another member's Permissions (ADR 0013). A fixed rule,
+ * not a Permission: it can never be delegated.
  */
-export function canOnboardStation(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-// ----------------------------------------------------
-// Mobile Control Room tabs (#390)
-// ----------------------------------------------------
-
-/**
- * Mobile tabs that have no wider permission of their own. Reports and Money use
- * `canViewReports` / `canManageFinancialAccounts`; these three are the tabs
- * whose Role access is stated only here, so the mobile dock reads every answer
- * from this file instead of re-deriving it. Staff and Attendant get no
- * Control Room tabs (Attendant has its own handover shell).
- */
-
-/**
- * The Home overview (live Shift, sales headline, alerts, tanks, money position).
- * Owner and Manager: the Owner decided (#388) a Manager sees the same Home. A Role
- * without it (Accountant, Staff) reaches Home only for its own handover card while
- * assigned to a Dispenser Unit.
- */
-export function canViewMobileHome(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** The Shifts tab: shift history and close-out review. Owner and Manager. */
-export function canViewMobileShifts(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
-
-/** The Insights tab (alerts and analysis). Owner and Manager. */
-export function canViewMobileInsights(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
+export function canEditMemberPermissions(role: string | null | undefined): boolean {
+  return role === 'Owner';
 }

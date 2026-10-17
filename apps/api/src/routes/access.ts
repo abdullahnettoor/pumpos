@@ -25,6 +25,9 @@ accessRouter.get('/', async (c) => {
   const useCase = new GetAccessDocument({
     access: new DrizzleOrganizationAccessReader(c.var.db),
   });
-  const result = await useCase.execute({ role: user.role }, buildContext(user));
+  const result = await useCase.execute(
+    { role: user.role, permissions: user.permissions ? [...user.permissions] : undefined },
+    buildContext(user),
+  );
   return sendResult(c, result);
 });

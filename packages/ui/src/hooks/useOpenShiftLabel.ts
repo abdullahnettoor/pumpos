@@ -19,7 +19,7 @@ import { formatElapsedSince } from '../utils/format.js';
  * same shift's name everywhere else (#228).
  */
 export function useOpenShiftLabel(stationId: string | null | undefined): string | undefined {
-  const { data } = useShiftStatus(stationId, true);
+  const { data } = useShiftStatus(stationId, { lite: true });
   const activeShift = data?.activeShift ?? null;
   const businessDate: string | null = activeShift?.businessDate ?? null;
   const shiftSequence: number | null = activeShift?.shiftSequence ?? null;

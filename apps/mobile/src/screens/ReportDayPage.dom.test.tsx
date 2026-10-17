@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { Station } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
 import { tabsForRole } from '../shell/tabs.js';
+import { ShellContext } from '../shell/context.js';
 
 /**
  * Screen tests for the DSSR page: Sealed reads the snapshot and Draft the
@@ -185,9 +186,19 @@ const mount = (date: string, tabs: readonly TabKey[] = ['reports', 'home']) => {
   start.date = date;
   return render(
     <ToastProvider>
-      <NavProvider tabs={tabs}>
-        <Stage />
-      </NavProvider>
+      <ShellContext.Provider
+        value={{
+          station: null,
+          stationName: '',
+          userName: 'Owner',
+          role: 'Owner',
+          openAccount: () => {},
+        }}
+      >
+        <NavProvider tabs={tabs}>
+          <Stage />
+        </NavProvider>
+      </ShellContext.Provider>
     </ToastProvider>,
   );
 };
@@ -223,7 +234,7 @@ describe('ReportDayPage', () => {
     expect(feed.reads.filter((r) => r.startsWith('snapshot'))).toEqual([]);
     expect(screen.getByText('Draft · day not closed')).toBeTruthy();
     expect(screen.getByText(/can change until the day is closed on desktop/)).toBeTruthy();
-    expect(screen.getByText('DSSR · Thu, 8 Oct')).toBeTruthy();
+    expect(screen.getByText('DSR · Thu, 8 Oct')).toBeTruthy();
     expect(screen.getByText('2 Shifts · Highway Fuels')).toBeTruthy();
   });
 
@@ -243,7 +254,7 @@ describe('ReportDayPage', () => {
     expect(screen.getByText('Purchases')).toBeTruthy();
     expect(screen.getByText('Total sales')).toBeTruthy();
     expect(screen.getByText('Lubricants')).toBeTruthy();
-    expect(screen.getByText('Included Shifts')).toBeTruthy();
+    expect(screen.getByText('Included shifts')).toBeTruthy();
     expect(screen.getByText('Morning')).toBeTruthy();
     expect(screen.getByText('Closed 1:58 pm · 2,210 L')).toBeTruthy();
     expect(screen.getByText('Tank 1 · Petrol')).toBeTruthy();
@@ -306,14 +317,14 @@ describe('ReportDayPage', () => {
     it('steps older, skipping a Report-missing day, and reads that day', () => {
       mount('2026-10-08');
       fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-      expect(screen.getByText('DSSR · Tue, 6 Oct')).toBeTruthy();
+      expect(screen.getByText('DSR · Tue, 6 Oct')).toBeTruthy();
       expect(feed.reads).toContain('snapshot:2026-10-06');
       expect(
         (screen.getByRole('button', { name: 'Previous day' }) as HTMLButtonElement).disabled,
       ).toBe(true);
     });
 
-    it('steps newer into the Live day as Home, not as a DSSR', () => {
+    it('steps newer into the Live day as Home, not as a DSR', () => {
       mount('2026-10-08');
       fireEvent.click(screen.getByRole('button', { name: 'Next day (today, opens Home)' }));
       expect(screen.getByTestId('tab').textContent).toBe('home');
@@ -338,7 +349,7 @@ describe('ReportDayPage', () => {
       feed.snapshots['2026-09-30'] = payload('2026-09-30', false);
       mount('2026-10-06');
       fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-      await waitFor(() => expect(screen.getByText(/^DSSR · Wed, 30 Sep/)).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(/^DSR · Wed, 30 Sep/)).toBeTruthy());
       expect(feed.fetchNext).toHaveBeenCalledTimes(1);
     });
   });
@@ -348,14 +359,16 @@ describe('ReportDayPage', () => {
     feed.failFetch = true;
     mount('2026-10-06');
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    await waitFor(() => expect(screen.getByText('Could not load older days.')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("Couldn't load older days. Scroll down to try again.")).toBeTruthy(),
+    );
     expect(feed.fetchNext).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('DSSR · Tue, 6 Oct')).toBeTruthy();
+    expect(screen.getByText('DSR · Tue, 6 Oct')).toBeTruthy();
     // The button is usable again, and a retry that now succeeds steps back.
     feed.failFetch = false;
     feed.snapshots['2026-09-30'] = payload('2026-09-30', false);
     fireEvent.click(screen.getByRole('button', { name: 'Previous day' }));
-    await waitFor(() => expect(screen.getByText(/^DSSR · Wed, 30 Sep/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/^DSR · Wed, 30 Sep/)).toBeTruthy());
   });
 
   describe('action bar', () => {
@@ -383,14 +396,14 @@ describe('ReportDayPage', () => {
       feed.failPdf = true;
       mount('2026-10-06');
       fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-      await waitFor(() => expect(screen.getByText('No PDF today')).toBeTruthy());
+      await waitFor(() => expect(screen.getByText(/^No PDF today\. Try again\./)).toBeTruthy());
     });
   });
 
-  describe('states without a DSSR', () => {
+  describe('states without a DSR', () => {
     it('sends a Live day to Home instead of showing a report', () => {
       mount('2026-10-09');
-      expect(screen.getByText(/still live, so it has no DSSR/)).toBeTruthy();
+      expect(screen.getByText(/still live, so it has no DSR/)).toBeTruthy();
       expect(feed.reads).toEqual([]);
       expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'See Home' }));
@@ -411,20 +424,20 @@ describe('ReportDayPage', () => {
 
     it('offers no way off a Live day to a Role with neither Home nor Shifts', () => {
       mount('2026-10-09', ['reports', 'money']);
-      expect(screen.getByText(/still live, so it has no DSSR/)).toBeTruthy();
+      expect(screen.getByText(/still live, so it has no DSR/)).toBeTruthy();
       expect(screen.queryByRole('button', { name: /^See / })).toBeNull();
     });
 
-    it('says a Report-missing day has no DSSR, and offers no actions', () => {
+    it('says a Report-missing day has no DSR, and offers no actions', () => {
       mount('2026-10-07');
-      expect(screen.getByText('No DSSR for this day.')).toBeTruthy();
+      expect(screen.getByText('No DSR for this day.')).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
     });
 
     it('says so when the day has no report to read', () => {
       feed.snapshots = {};
       mount('2026-10-06');
-      expect(screen.getByText('This DSSR is not available.')).toBeTruthy();
+      expect(screen.getByText('This DSR is not available.')).toBeTruthy();
       expect(within(document.body).queryByRole('button', { name: 'Share' })).toBeNull();
     });
   });

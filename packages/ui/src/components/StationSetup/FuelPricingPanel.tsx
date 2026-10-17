@@ -1,542 +1,533 @@
-import React, { useCallback, useState, useMemo } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
-import { Station } from '@pump/shared';
-import { useToast } from '../primitives/ToastProvider.js';
-import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../primitives/Tabs.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { Drawer } from '../Drawer.js';
-import { Field, NumberInput, Select } from '../primitives/Field.js';
-import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
-import { useQueryClient } from '@tanstack/react-query';
-import { inr, formatDate } from '../../utils/format.js';
+import React, { useMemo, useState } from 'react';
+import { businessDateSettings, formatStationDateTime, type Station } from '@pump/shared';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
+import { Tabs, tabPanelProps } from '../../pump-ds/tabs/index.js';
+import { mutationKeys, useProducts } from '../../query/hooks.js';
+import { useWriteStates, type WriteEntry } from '../../query/pendingWrites.js';
+import { useFlashingRows } from '../../utils/rowFlash.js';
+import { cn } from '../../pump-ds/lib/cn.js';
+import { withNextStep } from '../primitives/ToastProvider.js';
+import { formatMoney, formatSignedMoney } from '../../utils/format.js';
 import {
-  Panel,
   Button,
-  KpiStrip,
-  KpiTile,
-  EmptyState,
   Chip,
-  DateText,
-  Form,
+  DataSection,
+  EmptyState,
+  FilterChips,
+  Icon,
+  InteractiveTable,
+  Panel,
+  SearchInput,
+  SectionHeader,
+  StatusChip,
+  type TableColumn,
 } from '../../pump-ds/index.js';
-import { Fuel, Package, Search } from 'lucide-react';
-import { useRunTask } from '../../utils/runTask.js';
-
-const pricingService = new CloudPricingService();
-const productService = new CloudProductService();
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
+import { countOf } from '../../utils/ledgerWindow.js';
+import {
+  formatPriceTime,
+  fuelPriceWriteKey,
+  sortNewestFirst,
+  unconfirmedAttempt,
+  type FuelPriceAttempt,
+  type FuelPriceWriteVars,
+  type FuelPriceHistoryEntry,
+  type FuelPriceRow,
+} from './fuelPriceRows.js';
+import { isScheduledFuelPrice } from '@pump/shared';
+import { useFuelPriceRows } from './useFuelPriceRows.js';
+import { ChangePriceDrawer, MrpDrawer, type MerchRow } from './PricingDrawers.js';
 
 type TabType = 'fuels' | 'merchandise';
+type MerchFilter = 'all' | 'unpriced';
 
 interface FuelPricingPanelProps {
   selectedStation: Station | null;
 }
 
-const SearchBox: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}> = ({ value, onChange, placeholder }) => (
-  <div style={{ position: 'relative' }}>
-    <Search
-      size={13}
-      style={{
-        position: 'absolute',
-        left: '8px',
-        top: '50%',
-        transform: 'translateY(-50%)',
-        color: 'var(--text-muted)',
-      }}
-    />
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        height: '28px',
-        padding: '0 8px 0 26px',
-        width: '220px',
-        borderRadius: 'var(--radius-input)',
-        border: '1px solid var(--border-strong)',
-        fontSize: '12px',
-        background: 'var(--bg-surface)',
-      }}
-    />
-  </div>
-);
+interface HistoryRow extends FuelPriceHistoryEntry {
+  productName: string;
+}
 
-const fuelHistoryColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'productName',
-    header: 'Fuel',
-    cell: ({ getValue }) => (
-      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span>
-    ),
-  },
-  {
-    accessorKey: 'price',
-    header: 'Rate',
-    cell: ({ getValue }) => (
-      <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(getValue())}</span>
-    ),
-  },
-  {
-    accessorKey: 'effectiveFrom',
-    header: 'Effective from',
-    cell: ({ getValue }) => (
-      <DateText value={getValue() as string} variant="datetime" tone="muted" />
-    ),
-  },
-];
+const isPriced = (p: MerchRow) => p.sellingPrice != null && Number(p.sellingPrice) > 0;
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
-  const toast = useToast();
-  const runTask = useRunTask();
-  const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<TabType>('fuels');
-
-  // ---- Fuel pricing (time-effective, history-tracked) ----
-  // Shared hooks rather than a loader copying both lists into local state.
-  const pricingQ = usePricing(selectedStation?.id);
-  const historyQ = usePricingHistory(selectedStation?.id);
-  const currentPrices: any[] = (pricingQ.data as any[]) ?? [];
-  const history: any[] = (historyQ.data as any[]) ?? [];
-  const refreshPricing = () =>
-    Promise.all([
-      qc.invalidateQueries({ queryKey: queryKeys.pricing(selectedStation?.id ?? '') }),
-      qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(selectedStation?.id ?? '') }),
-    ]);
-  const loading = pricingQ.isPending || historyQ.isPending;
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedProductIdRaw, setSelectedProductId] = useState('');
-
-  // The loader used to seed this once prices arrived. Derived instead: the
-  // operator's pick wins, otherwise the first priced product.
-  const selectedProductId = selectedProductIdRaw || currentPrices[0]?.productId || '';
-  const [price, setPrice] = useState('');
-  // "Now", in the operator's local time, computed once on mount. A render-time
-  // derivation would recompute on every pass and fight their edits.
-  const [effectiveFrom, setEffectiveFrom] = useState(() => {
-    const localNow = new Date();
-    localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
-    return localNow.toISOString().slice(0, 16);
-  });
-
-  const handleRecordPricing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStation || !selectedProductId || !price || submitting) return;
-    try {
-      setSubmitting(true);
-      await pricingService.recordPricing({
-        stationId: selectedStation.id,
-        productId: selectedProductId,
-        price: parseFloat(price),
-        effectiveFrom: new Date(effectiveFrom).toISOString(),
-      });
-      setPrice('');
-      runTask(refreshPricing(), 'Saved, but fuel pricing could not be refreshed.');
-      toast.success('Fuel rate updated.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to record new price');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ---- Merchandise pricing (single MRP per product) ----
-  const { data: products, isLoading: productsLoading } = useProducts();
-  const merchandise = useMemo(
-    () => (products || []).filter((p: any) => p.productType !== 'FUEL' && p.isActive !== false),
-    [products],
-  );
-  const [merchSearch, setMerchSearch] = useState('');
-  const filteredMerch = useMemo(() => {
-    const q = merchSearch.trim().toLowerCase();
-    if (!q) return merchandise;
-    return merchandise.filter(
-      (p: any) =>
-        (p.name || '').toLowerCase().includes(q) ||
-        (p.code || '').toLowerCase().includes(q) ||
-        (p.brand || '').toLowerCase().includes(q) ||
-        (p.category || '').toLowerCase().includes(q),
+  if (!selectedStation) {
+    return (
+      <PageFrame route={ROUTES.pricing}>
+        <EmptyState
+          icon={<ConceptIcon concept="stations" />}
+          title="No station selected"
+          description="Select a station to manage pricing."
+        />
+      </PageFrame>
     );
-  }, [merchandise, merchSearch]);
+  }
+  return <PricingPage station={selectedStation} />;
+};
 
-  const merchKpis = useMemo(() => {
-    const priced = merchandise.filter(
-      (p: any) => p.sellingPrice != null && Number(p.sellingPrice) > 0,
-    ).length;
-    return { total: merchandise.length, priced, unpriced: merchandise.length - priced };
-  }, [merchandise]);
+const PricingPage: React.FC<{ station: Station }> = ({ station }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('fuels');
+  const [changing, setChanging] = useState<{
+    row: FuelPriceRow;
+    attempt: FuelPriceAttempt | null;
+  } | null>(null);
+  const { timeZone } = businessDateSettings(station.settings);
+  const fuels = useFuelPriceRows(station.id);
+  // Each fuel's price change in flight or refused, from the write itself (#606).
+  const writes = useWriteStates(mutationKeys.fuelPrice(), fuelPriceWriteKey, station.id);
+  // A fuel whose last change has an unknown outcome reopens on that attempt,
+  // so the retry sends the same body under the same key (#606 review).
+  const openChange = (row: FuelPriceRow) =>
+    setChanging({ row, attempt: unconfirmedAttempt(writes.get(row.productId)) });
 
-  const [priceProd, setPriceProd] = useState<any | null>(null);
-  const [mrpValue, setMrpValue] = useState('');
-  const [savingMrp, setSavingMrp] = useState(false);
+  return (
+    <PageFrame
+      route={ROUTES.pricing}
+      subtitle="Fuel rates and product MRP for this station."
+      actions={
+        // The one page primary, the same on both tabs (#537 review).
+        <Button
+          variant="primary"
+          size="sm"
+          leftIcon={<Icon name="pencil" size="sm" />}
+          disabled={fuels.rows.length === 0}
+          onClick={() => fuels.rows[0] && openChange(fuels.rows[0])}
+        >
+          Change price
+        </Button>
+      }
+      tabs={
+        <Tabs
+          id="pricing"
+          aria-label="Pricing views"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'fuels', label: 'Fuels', concept: 'fuels' },
+            { id: 'merchandise', label: 'Products', concept: 'products' },
+          ]}
+        />
+      }
+    >
+      <div {...tabPanelProps('pricing', activeTab)} className="flex flex-col gap-6">
+        {activeTab === 'fuels' ? (
+          <FuelsTab {...fuels} writes={writes} timeZone={timeZone} onChange={openChange} />
+        ) : (
+          <ProductsTab />
+        )}
+      </div>
+      {changing && (
+        <ChangePriceDrawer
+          stationId={station.id}
+          timeZone={timeZone}
+          fuels={fuels.rows}
+          initial={changing.row}
+          attempt={changing.attempt}
+          onClose={() => setChanging(null)}
+        />
+      )}
+    </PageFrame>
+  );
+};
 
-  // Stable so the column definitions below keep memoising with an honest
-  // dependency list; the setters it closes over are stable already.
-  const openMrp = useCallback((p: any) => {
-    setPriceProd(p);
-    setMrpValue(p.sellingPrice != null ? String(p.sellingPrice) : '');
-  }, []);
-  const saveMrp = async () => {
-    if (!priceProd) return;
-    try {
-      setSavingMrp(true);
-      await productService.updateProduct(priceProd.id, {
-        sellingPrice: mrpValue === '' ? null : Number(mrpValue),
-      });
-      await qc.invalidateQueries({ queryKey: ['products'] });
-      setPriceProd(null);
-      toast.success('Price updated.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update price');
-    } finally {
-      setSavingMrp(false);
-    }
-  };
+// ---- Fuels: one card per fuel (owner decision, #605; was one row per fuel, #537) ----
 
-  const merchColumns = useMemo<ColumnDef<any, any>[]>(
+/**
+ * One fuel's price: the price per unit, when it took effect, the last change
+ * (old → new and the signed difference, in plain ink: a price change is not a
+ * problem) and "Change price", which opens the same drawer as before.
+ */
+const FuelPriceCard: React.FC<{
+  row: FuelPriceRow;
+  timeZone: string;
+  onChange: () => void;
+  /** Its price change in flight or refused (#606). */
+  write?: WriteEntry<FuelPriceWriteVars>;
+  /** Just saved: tinted for a moment, the main confirmation (#606). */
+  flash?: boolean;
+}> = ({ row, timeZone, onChange, write, flash }) => (
+  <Panel
+    role="region"
+    aria-label={row.productName}
+    data-testid="fuel-price-card"
+    data-write={write?.state}
+    data-flash={flash ? 'true' : undefined}
+    className={cn(
+      'transition-colors duration-500 motion-reduce:transition-none',
+      flash && 'bg-success-bg',
+    )}
+  >
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <span className="truncate text-[14px] font-semibold text-ink-strong">
+          {row.productName}
+        </span>
+        {row.productCode && (
+          <span className="shrink-0 font-mono text-[12px] text-ink-faint">{row.productCode}</span>
+        )}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {write?.state === 'saving' ? (
+          // No price before the server confirms it (#606).
+          <span className="flex h-[30px] items-center">
+            <StatusChip status="saving" size="md" />
+          </span>
+        ) : row.price == null ? (
+          <span className="text-[20px] font-semibold text-ink-faint">Not set</span>
+        ) : (
+          <span className="flex items-baseline gap-1.5">
+            <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
+              {formatMoney(row.price)}/{row.unit}
+            </span>
+            {/* "now" only beside a change still ahead (#619). */}
+            {row.scheduled && <span className="text-[12px] text-ink-muted">now</span>}
+          </span>
+        )}
+        <span className="text-[12px] text-ink-muted">
+          {row.effectiveFrom
+            ? `Effective from ${formatStationDateTime(row.effectiveFrom, timeZone)}`
+            : 'No price recorded yet'}
+        </span>
+      </div>
+      {row.scheduled && write?.state !== 'saving' && (
+        // A price recorded for later (#619): stored, not current until its time.
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]"
+          data-testid="fuel-price-scheduled"
+        >
+          <StatusChip status="price-scheduled" />
+          <span className="font-mono text-[13px] tabular-nums text-ink-default">
+            {formatMoney(row.scheduled.price)}/{row.unit}
+          </span>
+          <span className="text-ink-muted">
+            from {formatPriceTime(row.scheduled.effectiveFrom, timeZone)}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-col gap-0.5 text-[12px]">
+        <span className="text-ink-muted">Last change</span>
+        {row.lastChange ? (
+          <span className="font-mono text-[13px] tabular-nums text-ink-default">
+            {formatMoney(row.lastChange.from)} → {formatMoney(row.lastChange.to)}{' '}
+            <span className="text-ink-muted">
+              ({formatSignedMoney(row.lastChange.difference, { plus: true })})
+            </span>
+          </span>
+        ) : (
+          <span className="text-[13px] text-ink-faint">None yet</span>
+        )}
+      </div>
+      {write?.state === 'failed' &&
+        (unconfirmedAttempt(write) ? (
+          // Unknown outcome (no answer, timed out): the change may have
+          // landed. Try again resends the same body under the same key.
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-x-2 text-[12px] text-danger-fg"
+          >
+            <span>Couldn&apos;t confirm the new rate.</span>
+            <Button variant="ghost" size="xs" onClick={onChange}>
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <p role="alert" className="text-[12px] text-danger-fg">
+            {withNextStep(
+              `Not saved: ${write.error?.message || 'the server refused the new rate'}`,
+              'Use Change price to try again.',
+            )}
+          </p>
+        ))}
+      <div className="mt-auto flex justify-end border-t border-border-soft pt-3">
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={onChange}
+          disabled={write?.state === 'saving'}
+          aria-label={`Change price of ${row.productName}`}
+        >
+          Change price
+        </Button>
+      </div>
+    </div>
+  </Panel>
+);
+
+const FuelsTab: React.FC<
+  ReturnType<typeof useFuelPriceRows> & {
+    writes: ReadonlyMap<string, WriteEntry<FuelPriceWriteVars>>;
+    timeZone: string;
+    onChange: (row: FuelPriceRow) => void;
+  }
+> = ({ rows, now, pricingQ, historyQ, productsQ, timeZone, onChange, writes }) => {
+  const flashing = useFlashingRows();
+  const history = useMemo(
+    () => sortNewestFirst((historyQ.data ?? []) as HistoryRow[]),
+    [historyQ.data],
+  );
+
+  const historyColumns = useMemo<TableColumn<HistoryRow>[]>(
+    () => [
+      { id: 'fuel', header: 'Fuel', kind: 'text', value: (r) => r.productName },
+      { id: 'rate', header: 'Rate', kind: 'money', total: false, value: (r) => r.price },
+      {
+        id: 'effectiveFrom',
+        header: 'Effective from',
+        kind: 'text',
+        value: (r) => formatStationDateTime(r.effectiveFrom, timeZone),
+      },
+      {
+        // A change recorded for later is not current yet (#619).
+        id: 'status',
+        header: 'Status',
+        kind: 'text',
+        width: '140px',
+        value: (r) => (isScheduledFuelPrice(r, now) ? 'Scheduled' : null),
+        cell: (r) =>
+          isScheduledFuelPrice(r, now) ? <StatusChip status="price-scheduled" /> : null,
+      },
+    ],
+    [timeZone, now],
+  );
+  // The status column only while a change is scheduled: otherwise every cell is blank.
+  const anyScheduled = history.some((r) => isScheduledFuelPrice(r, now));
+  const shownColumns = useMemo(
+    () => (anyScheduled ? historyColumns : historyColumns.filter((c) => c.id !== 'status')),
+    [anyScheduled, historyColumns],
+  );
+
+  return (
+    <>
+      <section className="flex flex-col gap-2">
+        <SectionHeader
+          title="Fuel prices"
+          subtitle={pricingQ.data ? countOf(rows.length, 'fuel', 'fuels') : undefined}
+        />
+        <DataSection
+          title="fuel prices"
+          query={[pricingQ, historyQ, productsQ]}
+          placeholderHeight={160}
+          shape="cards"
+          isEmpty={rows.length === 0}
+          empty={
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="fuels" />}
+              title="No fuel products"
+              description="Add fuel products in Station › Products first."
+            />
+          }
+        >
+          <ul
+            aria-label="Fuel prices"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            {rows.map((row) => (
+              <li key={row.productId} className="flex flex-col [&>*]:flex-1">
+                <FuelPriceCard
+                  row={row}
+                  timeZone={timeZone}
+                  onChange={() => onChange(row)}
+                  write={writes.get(row.productId)}
+                  flash={flashing.has(row.productId)}
+                />
+              </li>
+            ))}
+          </ul>
+        </DataSection>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader
+          title="Price history"
+          subtitle={historyQ.data ? countOf(history.length, 'change', 'changes') : undefined}
+        />
+        <DataSection
+          title="price history"
+          query={historyQ}
+          placeholderHeight={200}
+          flush
+          isEmpty={history.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<ConceptIcon concept="pricing" />}
+                title="No price changes yet"
+                description="Every fuel price change is listed here."
+              />
+            </div>
+          }
+        >
+          <InteractiveTable
+            bare
+            title="price history"
+            columns={shownColumns}
+            rows={history}
+            rowKey={(r) => r.id}
+          />
+        </DataSection>
+      </section>
+    </>
+  );
+};
+
+// ---- Products: MRP per product ----
+
+const ProductsTab: React.FC = () => {
+  const productsQ = useProducts();
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<MerchFilter>('all');
+  const [editing, setEditing] = useState<MerchRow | null>(null);
+
+  const merchandise = useMemo(
+    () =>
+      ((productsQ.data ?? []) as MerchRow[]).filter(
+        (p) => p.productType !== 'FUEL' && p.isActive !== false,
+      ),
+    [productsQ.data],
+  );
+  const unpricedCount = useMemo(
+    () => merchandise.filter((p) => !isPriced(p)).length,
+    [merchandise],
+  );
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return merchandise.filter(
+      (p) =>
+        (filter === 'all' || !isPriced(p)) &&
+        (!q ||
+          [p.name, p.code, p.brand, p.category].some((s) => (s ?? '').toLowerCase().includes(q))),
+    );
+  }, [merchandise, search, filter]);
+
+  const columns = useMemo<TableColumn<MerchRow>[]>(
     () => [
       {
-        accessorKey: 'name',
+        id: 'name',
         header: 'Product',
-        cell: ({ row }) => (
-          <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-            {row.original.name}
-            {row.original.brand ? (
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                {' '}
-                · {row.original.brand}
-              </span>
-            ) : null}
+        kind: 'text',
+        value: (r) => r.name,
+        cell: (r) => (
+          <span className="inline-flex flex-col leading-tight">
+            <span className="font-medium text-ink-strong">{r.name}</span>
+            {r.brand && <span className="mt-0.5 text-[12px] text-ink-muted">{r.brand}</span>}
           </span>
         ),
       },
       {
-        accessorKey: 'code',
+        id: 'code',
         header: 'Code',
-        cell: ({ getValue }) => (
-          <span
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}
-          >
-            {(getValue() as string) || '—'}
-          </span>
-        ),
+        kind: 'text',
+        value: (r) => r.code,
+        cell: (r) => <span className="font-mono text-ink-muted">{r.code || '—'}</span>,
       },
+      { id: 'category', header: 'Category', kind: 'text', value: (r) => r.category },
+      { id: 'unit', header: 'Unit', kind: 'text', value: (r) => r.unit },
       {
-        accessorKey: 'category',
-        header: 'Category',
-        cell: ({ getValue }) => (
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            {(getValue() as string) || '—'}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'unit',
-        header: 'Unit',
-        cell: ({ getValue }) => (
-          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            {(getValue() as string) || '—'}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'sellingPrice',
+        id: 'mrp',
         header: 'MRP',
-        cell: ({ getValue }) => {
-          const v = getValue();
-          return v != null && Number(v) > 0 ? (
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700,
-                color: 'var(--text-strong)',
-              }}
-            >
-              {inr(v)}
-            </span>
+        kind: 'money',
+        total: false,
+        value: (r) => (isPriced(r) ? r.sellingPrice : null),
+        cell: (r) =>
+          isPriced(r) ? (
+            formatMoney(r.sellingPrice)
           ) : (
-            <Chip tone="warning" size="xs">
+            <Chip tone="warning" size="md">
               Not set
             </Chip>
-          );
-        },
+          ),
       },
       {
         id: 'action',
         header: '',
-        cell: ({ row }) => (
-          <Button variant="secondary" size="xs" onClick={() => openMrp(row.original)}>
-            {row.original.sellingPrice != null ? 'Edit price' : 'Set price'}
-          </Button>
+        kind: 'text',
+        sortable: false,
+        width: '120px',
+        value: () => null,
+        cell: (r) => (
+          <span className="flex justify-end">
+            <Button variant="secondary" size="xs" onClick={() => setEditing(r)}>
+              {r.sellingPrice != null ? 'Edit price' : 'Set price'}
+            </Button>
+          </span>
         ),
       },
     ],
-    [openMrp],
+    [],
   );
 
-  if (!selectedStation) {
-    return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
-        Please select a station to manage pricing.
-      </div>
-    );
-  }
+  const filtered = filter !== 'all' || search.trim() !== '';
 
   return (
-    <div className="animate-fade-in">
-      <PageLayout
-        title="Pricing"
-        subtitle="Set fuel rates and merchandise MRP across your product catalogue."
-        toolbar={
-          <Tabs
-            variant="underline"
-            aria-label="Pricing views"
-            activeId={activeTab}
-            onChange={(id) => setActiveTab(id as TabType)}
-            tabs={[
-              { id: 'fuels', label: 'Fuels', icon: <Fuel size={15} /> },
-              { id: 'merchandise', label: 'Merchandise', icon: <Package size={15} /> },
-            ]}
-          />
+    <section className="flex flex-col gap-2">
+      <SectionHeader
+        title="Product prices"
+        subtitle={
+          productsQ.data
+            ? filtered
+              ? `${rows.length} of ${merchandise.length}`
+              : countOf(merchandise.length, 'product', 'products')
+            : undefined
+        }
+        controls={{
+          search: (
+            <div className="w-[240px]">
+              <SearchInput
+                inputSize="sm"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search product / code / brand…"
+              />
+            </div>
+          ),
+          filters: (
+            <FilterChips
+              aria-label="Product price filter"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All', count: merchandise.length },
+                { value: 'unpriced', label: 'No MRP', count: unpricedCount, status: 'unpaid' },
+              ]}
+            />
+          ),
+        }}
+      />
+      <DataSection
+        title="product prices"
+        query={productsQ}
+        placeholderHeight={240}
+        flush
+        isEmpty={rows.length === 0}
+        empty={
+          <div className="p-3">
+            <EmptyState
+              compact
+              icon={<ConceptIcon concept="products" />}
+              title={merchandise.length === 0 ? 'No products' : 'No matching products'}
+              description={
+                merchandise.length === 0
+                  ? 'Add non-fuel products in Station › Products.'
+                  : 'Try a different search or filter.'
+              }
+            />
+          </div>
         }
       >
-        {activeTab === 'fuels' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {!loading && currentPrices.length > 0 && (
-              <KpiStrip columns="auto">
-                {currentPrices.map((cp) => (
-                  <KpiTile
-                    key={cp.productId}
-                    dot="brand"
-                    label={`${cp.productName} · ${cp.productCode}`}
-                    value={`${inr(cp.price)}/${(products || []).find((p: any) => p.id === cp.productId)?.unit || 'L'}`}
-                    hint={
-                      cp.effectiveFrom
-                        ? `since ${formatDate(cp.effectiveFrom, { compact: true })}`
-                        : undefined
-                    }
-                  />
-                ))}
-              </KpiStrip>
-            )}
-            <Panel title="Record a fuel rate">
-              {currentPrices.length === 0 ? (
-                <div style={{ padding: '4px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="No fuel products"
-                    description="Configure fuel products in Station Overview → Products first."
-                  />
-                </div>
-              ) : (
-                <Form
-                  onSubmit={handleRecordPricing}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-                >
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.4fr 1fr 1.2fr',
-                      gap: '12px',
-                      alignItems: 'flex-end',
-                    }}
-                  >
-                    <Field label="Fuel product" required>
-                      <Select
-                        value={selectedProductId}
-                        onChange={(e) => setSelectedProductId(e.target.value)}
-                        required
-                      >
-                        {currentPrices.map((cp) => (
-                          <option key={cp.productId} value={cp.productId}>
-                            {cp.productName}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <Field
-                      label={`Rate / ${(products || []).find((p: any) => p.id === selectedProductId)?.unit || 'L'} (₹)`}
-                      required
-                    >
-                      <NumberInput
-                        step="0.01"
-                        placeholder="e.g. 96.43"
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        required
-                      />
-                    </Field>
-                    <Field label="Effective from" required>
-                      <input
-                        type="datetime-local"
-                        className="input"
-                        value={effectiveFrom}
-                        onChange={(e) => setEffectiveFrom(e.target.value)}
-                        required
-                      />
-                    </Field>
-                  </div>
-                  <div>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="md"
-                      loading={submitting}
-                      disabled={!selectedProductId || !price}
-                    >
-                      Apply New Rate
-                    </Button>
-                  </div>
-                </Form>
-              )}
-            </Panel>
-
-            <Panel flush title="Price history">
-              {loading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="Loading…"
-                    description="Fetching price history."
-                  />
-                </div>
-              ) : history.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Fuel />}
-                    title="No changes logged"
-                    description="Fuel rate changes will appear here."
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={fuelHistoryColumns}
-                  data={history}
-                  getRowId={(r: any) => r.id}
-                  emptyMessage="No price changes."
-                  initialSorting={[{ id: 'effectiveFrom', desc: true }]}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
-
-        {activeTab === 'merchandise' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <KpiStrip columns="auto">
-              <KpiTile
-                dot="brand"
-                label="Products"
-                value={String(merchKpis.total)}
-                hint="non-fuel, active"
-              />
-              <KpiTile
-                dot="success"
-                valueTone="success"
-                label="Priced"
-                value={String(merchKpis.priced)}
-                hint="MRP set"
-              />
-              <KpiTile
-                dot={merchKpis.unpriced > 0 ? 'warning' : 'success'}
-                valueTone={merchKpis.unpriced > 0 ? 'warning' : undefined}
-                label="Unpriced"
-                value={String(merchKpis.unpriced)}
-                hint="no MRP"
-              />
-            </KpiStrip>
-
-            <Panel
-              flush
-              title="Merchandise catalogue"
-              action={
-                <SearchBox
-                  value={merchSearch}
-                  onChange={setMerchSearch}
-                  placeholder="Search product / code / brand…"
-                />
-              }
-            >
-              {productsLoading ? (
-                <div style={{ padding: '16px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Package />}
-                    title="Loading…"
-                    description="Fetching products."
-                  />
-                </div>
-              ) : filteredMerch.length === 0 ? (
-                <div style={{ padding: '12px' }}>
-                  <EmptyState
-                    compact
-                    icon={<Package />}
-                    title={merchandise.length === 0 ? 'No merchandise' : 'No matches'}
-                    description={
-                      merchandise.length === 0
-                        ? 'Add non-fuel products in Station Overview → Products.'
-                        : 'Try a different search.'
-                    }
-                  />
-                </div>
-              ) : (
-                <DataTable
-                  bare
-                  columns={merchColumns}
-                  data={filteredMerch}
-                  getRowId={(r: any) => r.id}
-                  emptyMessage="No merchandise."
-                  initialSorting={[{ id: 'name', desc: false }]}
-                />
-              )}
-            </Panel>
-          </div>
-        )}
-      </PageLayout>
-
-      <Drawer
-        isOpen={!!priceProd}
-        onClose={() => setPriceProd(null)}
-        title={priceProd ? `Set price — ${priceProd.name}` : 'Set price'}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            The MRP (selling price) prefills this product on merchandise sales. Leave blank to clear
-            it.
-          </div>
-          <Field label="MRP (₹)">
-            <NumberInput
-              step="0.01"
-              min="0"
-              placeholder="e.g. 250"
-              value={mrpValue}
-              onChange={(e) => setMrpValue(e.target.value)}
-              autoFocus
-            />
-          </Field>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <Button variant="primary" size="md" fullWidth loading={savingMrp} onClick={saveMrp}>
-              Save Price
-            </Button>
-            <Button
-              variant="secondary"
-              size="md"
-              disabled={savingMrp}
-              onClick={() => setPriceProd(null)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Drawer>
-    </div>
+        <InteractiveTable
+          bare
+          title="product prices"
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.id}
+        />
+      </DataSection>
+      {editing && <MrpDrawer product={editing} onClose={() => setEditing(null)} />}
+    </section>
   );
 };

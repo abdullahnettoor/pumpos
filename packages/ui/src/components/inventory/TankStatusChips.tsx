@@ -1,47 +1,23 @@
 import React from 'react';
-import { Chip } from '../../pump-ds/index.js';
-import { classifyTank, tankPct } from '../../utils/stock.js';
+import type { TankStatusState } from '@pump/shared';
+import { StatusChip } from '../../pump-ds/index.js';
 
 export interface TankStatusChipsProps {
-  tank: {
-    capacity: number | string;
-    currentVolume: number | string;
-    waitingOnDecantation?: boolean;
-  };
+  /** `tankStates(level)`: the tank level's word, then over capacity, then a pending Decantation. */
+  states: readonly TankStatusState[];
+  className?: string;
 }
 
-/** Keeps the normal stock state visible alongside a pending Decantation state. */
-export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ tank }) => {
-  const capacity = Number(tank.capacity) || 0;
-  const volume = Number(tank.currentVolume) || 0;
-  const level = classifyTank(tankPct(volume, capacity));
-  const tone =
-    level === 'critical'
-      ? 'danger'
-      : level === 'low'
-        ? 'warning'
-        : level === 'over'
-          ? 'info'
-          : 'success';
-  const label =
-    level === 'critical'
-      ? 'Critical'
-      : level === 'low'
-        ? 'Low'
-        : level === 'over'
-          ? 'Over capacity'
-          : 'OK';
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '4px' }}>
-      <Chip tone={tone} size="xs">
-        {label}
-      </Chip>
-      {tank.waitingOnDecantation && (
-        <Chip tone="warning" size="xs">
-          Waiting on decantation
-        </Chip>
-      )}
+/**
+ * A tank's states as status chips (#518, #536): Critical / Low from the tank
+ * level (the gauge's own words and tones), Over capacity, Waiting on
+ * decantation. An ordinary tank has none, so nothing renders.
+ */
+export const TankStatusChips: React.FC<TankStatusChipsProps> = ({ states, className }) =>
+  states.length === 0 ? null : (
+    <div className={className ?? 'flex flex-wrap gap-1'}>
+      {states.map((s) => (
+        <StatusChip key={s} status={s} size="md" />
+      ))}
     </div>
   );
-};

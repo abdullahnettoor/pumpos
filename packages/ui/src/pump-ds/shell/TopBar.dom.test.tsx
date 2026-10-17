@@ -7,7 +7,6 @@ import { TopBar, type TitleBarIntegration } from './TopBar.js';
 afterEach(cleanup);
 
 const baseProps = {
-  onToggleSidebar: () => {},
   brand: 'PumpOS',
   userName: 'Asha Menon',
   userInitials: 'AM',
@@ -69,12 +68,23 @@ describe('TopBar as the desktop title bar', () => {
     }
   });
 
-  it('leaves the sidebar toggle clickable', () => {
-    const onToggleSidebar = vi.fn();
-    render(<TopBar {...baseProps} onToggleSidebar={onToggleSidebar} titleBar={macTitleBar} />);
-
-    fireEvent.click(screen.getByLabelText('Toggle sidebar'));
-    expect(onToggleSidebar).toHaveBeenCalledTimes(1);
+  it('leaves the station switcher clickable', () => {
+    render(
+      <TopBar
+        {...baseProps}
+        stationName="Indiranagar HP"
+        stationSwitcher={{
+          stations: [
+            { id: 's1', name: 'Indiranagar HP' },
+            { id: 's2', name: 'Whitefield' },
+          ],
+          selectedId: 's1',
+          onSelect: () => {},
+        }}
+        titleBar={macTitleBar}
+      />,
+    );
+    expect(screen.getByTestId('topbar-station').hasAttribute('data-tauri-drag-region')).toBe(false);
   });
 
   it('draws no window buttons where the OS still paints its own', () => {
@@ -131,16 +141,16 @@ describe('the brand slot as part of the drag region', () => {
     );
 
     const slot = screen.getByTestId('logo').parentElement as HTMLElement;
-    expect(slot.className).toContain('pointer-events-none');
     // The pointer falls through to the bar itself, which is the drag region.
     expect(slot.closest(DRAG)).toBe(container.firstElementChild);
   });
 
   it('leaves the brand interactive on the web, where there is no drag to protect', () => {
-    render(<TopBar {...baseProps} brand={<svg data-testid="logo" />} />);
+    const { container } = render(<TopBar {...baseProps} brand={<svg data-testid="logo" />} />);
 
     const slot = screen.getByTestId('logo').parentElement as HTMLElement;
-    expect(slot.className).not.toContain('pointer-events-none');
+    expect(container.querySelectorAll(DRAG)).toHaveLength(0);
+    expect(slot.closest(DRAG)).toBeNull();
   });
 });
 
@@ -197,14 +207,44 @@ describe('TopBar search trigger', () => {
     const search = screen.getByLabelText('Search');
     // The full trigger carries the placeholder text; the icon fallback does not.
     expect(search.textContent).toContain('Search');
-    expect(search.className).toContain('left-1/2');
   });
 
   it('collapses to an icon-only search button when the bar is narrow', () => {
     mockWidth(700);
     render(<TopBar {...baseProps} stationName="Hosur Road HP" />);
     const search = screen.getByLabelText('Search');
-    // Icon button: no centered-absolute positioning, sits in the right cluster.
-    expect(search.className).not.toContain('left-1/2');
+    // Icon button: no placeholder text, still reachable by its label.
+    expect(search.textContent).not.toContain('Search');
+  });
+});
+
+describe('TopBar station breadcrumb', () => {
+  it('shows plain text without a switcher', () => {
+    render(<TopBar {...baseProps} stationName="Indiranagar HP" pageLabel="Shifts" />);
+    const station = screen.getByTestId('topbar-station');
+    expect(station.tagName).toBe('SPAN');
+    expect(screen.getByTestId('topbar-page').textContent).toBe('Shifts');
+  });
+
+  it('shows a dropdown trigger when a switcher is given', () => {
+    render(
+      <TopBar
+        {...baseProps}
+        stationName="Indiranagar HP"
+        stationSwitcher={{
+          stations: [
+            { id: 's1', name: 'Indiranagar HP' },
+            { id: 's2', name: 'Whitefield' },
+          ],
+          selectedId: 's1',
+          onSelect: vi.fn(),
+        }}
+      />,
+    );
+    // Radix menu content is a portal jsdom can't drive; the contract here is
+    // that the station is a menu trigger (the Menu tests cover selection).
+    const trigger = screen.getByTestId('topbar-station');
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
   });
 });

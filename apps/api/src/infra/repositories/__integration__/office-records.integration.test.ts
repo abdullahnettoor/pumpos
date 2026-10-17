@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { Hono } from 'hono';
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { defaultPermissionsFor } from '@pump/shared';
 import { transactionsRouter } from '../../../routes/transactions.js';
 import { financeRouter } from '../../../routes/finance.js';
 import { dssrRouter } from '../../../routes/dssr.js';
@@ -113,6 +114,9 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
         organizationId: ORG,
         role: 'Manager',
         assignedStationIds: [STATION],
+        // P&L is Owner-only by default (ADR 0013); this Manager has been
+        // granted it so the P&L composition below can be read.
+        permissions: new Set([...defaultPermissionsFor('Manager'), 'finance.viewProfitLoss']),
       });
       await next();
     });

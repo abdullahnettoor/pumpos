@@ -39,9 +39,15 @@ import {
   publishNavIntent,
   clearNavIntent,
   useRoutePath,
+  NAV_PAGES,
+  ROUTES,
+  navTarget,
+  pageRoute,
+  principalFor,
+  useEffectivePrincipal,
 } from '@pump/ui';
-import type { NavIntent } from '@pump/ui';
-import { canOnboardStation, REPORTS_ROLES, Station } from '@pump/shared';
+import type { NavIntent, NavItem } from '@pump/ui';
+import { can, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
@@ -100,8 +106,10 @@ export const App: React.FC = () => {
   // destination can derive from it instead of reacting to it in an effect.
   const navigate = useCallback(
     (path: string, intent?: NavIntent) => {
-      setCurrentPath(path);
-      publishNavIntent(intent);
+      // `{ openAccountId }` is an address of its own: `/accounts/<id>` (#576).
+      const target = navTarget(path, intent);
+      setCurrentPath(target.path);
+      publishNavIntent(target.intent);
     },
     [setCurrentPath],
   );
@@ -127,6 +135,9 @@ export const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(
     null,
   );
+  // Effective Permissions (Access Document), refreshed on focus and every minute;
+  // re-renders this root so every screen re-reads them (ADR 0013).
+  useEffectivePrincipal(userRole);
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<{
     message: string;
@@ -299,28 +310,20 @@ export const App: React.FC = () => {
       ? '/dashboard'
       : currentPath;
 
-  const navItems = navAssumesReady
-    ? [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
-        { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
-        { label: 'Expenses', path: '/expenses' },
-        { label: 'Income', path: '/income' },
-        { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
-        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
-        { label: 'Organization', path: '/organization', roles: ['Owner'] },
-      ]
+  const navItems: NavItem[] = navAssumesReady
+    ? [...NAV_PAGES]
     : [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Organization', path: '/organization', roles: ['Owner', 'Manager'] },
+        { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+        {
+          label: 'Organization',
+          path: '/organization',
+          icon: 'organization',
+          permission: 'station.onboard',
+        },
       ];
 
-  const navItemsWithDev = isLocalDev
-    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+  const navItemsWithDev: NavItem[] = isLocalDev
+    ? [...navItems, { label: 'Design system', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {
@@ -378,10 +381,10 @@ export const App: React.FC = () => {
           >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
               {isNetworkError
-                ? 'API Server Connection Failed'
+                ? 'API server connection failed'
                 : isProfileMissing
-                  ? 'User Profile Connection Error'
-                  : 'Sign-in Failed'}
+                  ? 'User profile connection error'
+                  : 'Sign-in failed'}
             </h2>
             <div
               style={{
@@ -443,7 +446,7 @@ export const App: React.FC = () => {
                 color: 'var(--text-default)',
               }}
             >
-              Sign Out & Try Again
+              Sign out and try again
             </button>
           </div>
         </div>
@@ -466,7 +469,12 @@ export const App: React.FC = () => {
     //    The screen carries its own sign-out because it does not always render
     //    inside the shell: /onboarding renders bare, and a Staff user who got
     //    there had no way out but a page reload (#132).
-    if (!stationsLoading && !isStationReady && userRole && !canOnboardStation(userRole)) {
+    if (
+      !stationsLoading &&
+      !isStationReady &&
+      userRole &&
+      !can(principalFor(userRole), 'station.onboard')
+    ) {
       return (
         <StationOnboardingLockout
           // Layout only — the sign-out is unconditional, so getting this
@@ -497,7 +505,8 @@ export const App: React.FC = () => {
       );
     }
 
-    switch (currentPath) {
+    // A detail route (`/accounts/<id>`) renders its page.
+    switch (pageRoute(currentPath)) {
       case '/onboarding':
         return (
           <OnboardingWizard
@@ -532,24 +541,44 @@ export const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
+            route={currentPath}
+            onRouteChange={setCurrentPath}
           />
         );
       case '/expenses':
         return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
-      case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <IncomeList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
+      case ROUTES.suppliers:
+        return <PurchasesList selectedStation={selectedStation} onNavigate={navigate} />;
       case '/inventory':
         return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
-        return <AccountsPanel selectedStation={selectedStation} />;
+        return (
+          <AccountsPanel
+            selectedStation={selectedStation}
+            route={currentPath}
+            onNavigate={setCurrentPath}
+          />
+        );
       case '/customers':
         return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
-        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
+        return (
+          <ReportsOverview
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
       case '/organization':
         return (
           <OrganizationOverview

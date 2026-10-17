@@ -1,7 +1,7 @@
 import React from 'react';
-import { LoadingSpinner } from '../../components/LoadingSpinner.js';
 import { PumpOSMark } from '../brand/index.js';
 import { cn } from '../lib/cn.js';
+import { Spinner } from '../spinner/Spinner.js';
 
 export interface BootScreenProps {
   /**
@@ -14,7 +14,7 @@ export interface BootScreenProps {
 }
 
 /**
- * The single screen between pressing Sign In and seeing the app.
+ * The single screen between pressing Sign in and seeing the app.
  *
  * It replaces four: a full-page "Initializing connection to Supabase Auth...",
  * a "Resolving operational permissions...", mobile's "Connecting…", and the
@@ -47,8 +47,9 @@ export const BootScreen: React.FC<BootScreenProps> = ({
     />
     {/* Polite, not assertive: this is progress, not something that should
         interrupt whatever a screen reader is already saying. */}
-    <div role="status" aria-live="polite">
-      <LoadingSpinner text={message} />
+    <div role="status" aria-live="polite" className="flex flex-col items-center gap-4 p-8">
+      <Spinner className="size-6 text-brand" />
+      <span className="text-[13px] text-ink-muted">{message}</span>
     </div>
   </div>
 );

@@ -1,4 +1,4 @@
-import type { InsightsDateRange, InsightsRangeDays } from '@pump/shared';
+import type { InsightsDateRange, SalesInsightsDays } from '@pump/shared';
 
 /**
  * Insights (sales block) — source data ports.
@@ -14,7 +14,7 @@ import type { InsightsDateRange, InsightsRangeDays } from '@pump/shared';
 export interface InsightsRangeQuery {
   organizationId: string;
   stationId: string;
-  days: InsightsRangeDays;
+  days: SalesInsightsDays;
 }
 
 /** One CLOSED Business Day of the current period. */
@@ -52,6 +52,8 @@ export interface InsightsSalesSource {
   previousRange: InsightsDateRange | null;
   /** Closed days of the current period, oldest first. */
   days: InsightsClosedDayRow[];
+  /** Closed days of the previous period, oldest first (feeds `previousTrend`). */
+  previousDays: InsightsClosedDayRow[];
   previous: { sales: number; closedDays: number; otherSales: number };
   /** Net volume per fuel grade and unit over the current period; core separates litres from the rest. */
   fuelVolumes: InsightsFuelVolumeRow[];

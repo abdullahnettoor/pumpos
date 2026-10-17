@@ -30,6 +30,7 @@ import {
   InsightsAttendantVariance,
   InsightsCreditHealth,
   InsightsRangeDays,
+  SalesInsightsDays,
   InsightsSales,
   CustomerReceivableSummary,
   PayablesSummary,
@@ -45,6 +46,9 @@ import {
   DensityReadingWithContext,
   DensityTodaySummary,
   RecordDensityReadingPayload,
+  OrganizationPayload,
+  type RoleChangePreview,
+  type UserPermissionsView,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -146,6 +150,22 @@ export function formatDecantationWarningSummary(warnings: DecantationDayCloseWar
   }
   describe('Flagged', warnings.flagged);
   return entries.join('; ');
+}
+
+/** `GET /transactions/supplier-payments`: one Supplier Payment (an Office Record). */
+export interface SupplierPaymentRow {
+  id: string;
+  stationId: string;
+  supplierId: string;
+  supplierName: string;
+  /** Station-calendar Entry Date, `YYYY-MM-DD`. */
+  entryDate: string;
+  amount: string | number;
+  notes: string | null;
+  createdAt: string;
+  /** The Funding Account the money left; null if it is unknown. */
+  accountName: string | null;
+  accountType: string | null;
 }
 
 export interface RecordStockCountPayload {
@@ -335,36 +355,43 @@ export class CloudStationService implements IStationService {
     return request<Station[]>('/setup/stations');
   }
 
-  async createStation(data: any): Promise<Station> {
-    return request<Station>('/setup/stations', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createStation(data: any, opts?: { idempotencyKey?: string }): Promise<Station> {
+    return request<Station>(
+      '/setup/stations',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateStation(id: string, data: any): Promise<Station> {
-    return request<Station>(`/setup/stations/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateStation(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Station> {
+    return request<Station>(
+      `/setup/stations/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getOnboardingStatus(stationId: string): Promise<any> {
     return request<any>(`/setup/onboarding/status?stationId=${stationId}`);
   }
 
-  async completeOnboarding(stationId: string): Promise<any> {
-    return request<any>('/setup/onboarding/complete', {
-      method: 'POST',
-      body: JSON.stringify({ stationId }),
-    });
+  async completeOnboarding(stationId: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/setup/onboarding/complete',
+      { method: 'POST', body: JSON.stringify({ stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async finalizeOnboarding(payload: FinalizeOnboardingPayload): Promise<FinalizeOnboardingResult> {
-    return request<FinalizeOnboardingResult>('/setup/onboarding/finalize', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async finalizeOnboarding(
+    payload: FinalizeOnboardingPayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<FinalizeOnboardingResult> {
+    return request<FinalizeOnboardingResult>(
+      '/setup/onboarding/finalize',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getCurrentSession(): Promise<any> {
@@ -377,40 +404,45 @@ export class CloudProductService implements IProductService {
     return request<Product[]>('/setup/products');
   }
 
-  async createProduct(data: any): Promise<Product> {
-    return request<Product>('/setup/products', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createProduct(data: any, opts?: { idempotencyKey?: string }): Promise<Product> {
+    return request<Product>(
+      '/setup/products',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateProduct(id: string, data: any): Promise<Product> {
-    return request<Product>(`/setup/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateProduct(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Product> {
+    return request<Product>(
+      `/setup/products/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async archiveProduct(id: string): Promise<void> {
-    await request<void>(`/setup/products/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ isActive: false }),
-    });
+  async archiveProduct(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/products/${id}`,
+      { method: 'PUT', body: JSON.stringify({ isActive: false }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async importProducts(
     products: any[],
     stationId?: string,
+    opts?: { idempotencyKey?: string },
   ): Promise<{
     total: number;
     createdCount: number;
     created: { id: string; code: string }[];
     failed: { code?: string; name?: string; error: string }[];
   }> {
-    return request('/setup/products/import', {
-      method: 'POST',
-      body: JSON.stringify({ products, stationId }),
-    });
+    return request(
+      '/setup/products/import',
+      { method: 'POST', body: JSON.stringify({ products, stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -419,19 +451,23 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
     return request<PaymentTerminal[]>(`/setup/payment-terminals?stationId=${stationId}`);
   }
 
-  async createTerminal(data: {
-    stationId: string;
-    label: string;
-    provider?: string | null;
-    terminalCode?: string | null;
-    supportsCard?: boolean;
-    supportsUpi?: boolean;
-    clearingAccountId?: string | null;
-  }): Promise<PaymentTerminal> {
-    return request<PaymentTerminal>('/setup/payment-terminals', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTerminal(
+    data: {
+      stationId: string;
+      label: string;
+      provider?: string | null;
+      terminalCode?: string | null;
+      supportsCard?: boolean;
+      supportsUpi?: boolean;
+      clearingAccountId?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>(
+      '/setup/payment-terminals',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateTerminal(
@@ -445,17 +481,21 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
       isActive: boolean;
       clearingAccountId: string | null;
     }>,
+    opts?: { idempotencyKey?: string },
   ): Promise<PaymentTerminal> {
-    return request<PaymentTerminal>(`/setup/payment-terminals/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    return request<PaymentTerminal>(
+      `/setup/payment-terminals/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTerminal(id: string): Promise<void> {
-    await request<void>(`/setup/payment-terminals/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteTerminal(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/payment-terminals/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -464,25 +504,59 @@ export class CloudTankService implements ITankService {
     return request<Tank[]>(`/setup/tanks?stationId=${stationId}`);
   }
 
-  async createTank(data: any): Promise<Tank> {
-    return request<Tank>('/setup/tanks', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTank(data: any, opts?: { idempotencyKey?: string }): Promise<Tank> {
+    return request<Tank>(
+      '/setup/tanks',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateTank(id: string, data: any): Promise<Tank> {
-    return request<Tank>(`/setup/tanks/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateTank(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Tank> {
+    return request<Tank>(
+      `/setup/tanks/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTank(id: string): Promise<void> {
-    await request<void>(`/setup/tanks/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteTank(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/tanks/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
+}
+
+/** A nozzle created with its dispenser: station and dispenser come from the dispenser. */
+export interface DispenserNozzleBody {
+  name: string;
+  tankId: string;
+  productId: string;
+  currentReading: number;
+}
+
+/** `POST /setup/dispensers/with-nozzles` (#591). */
+export interface DispenserWithNozzlesBody {
+  stationId: string;
+  name: string;
+  code: string;
+  status: 'ACTIVE';
+  nozzles: DispenserNozzleBody[];
+}
+
+export interface DispenserWithNozzles {
+  dispenser: DispenserUnit;
+  nozzles: Nozzle[];
+}
+
+/** One template in `POST /setup/shift-templates/batch` (#591). */
+export interface ShiftTemplateBody {
+  name: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
 }
 
 export class CloudDispenserService implements IDispenserService {
@@ -490,24 +564,47 @@ export class CloudDispenserService implements IDispenserService {
     return request<DispenserUnit[]>(`/setup/dispensers?stationId=${stationId}`);
   }
 
-  async createDispenser(data: any): Promise<DispenserUnit> {
-    return request<DispenserUnit>('/setup/dispensers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createDispenser(data: any, opts?: { idempotencyKey?: string }): Promise<DispenserUnit> {
+    return request<DispenserUnit>(
+      '/setup/dispensers',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateDispenser(id: string, data: any): Promise<DispenserUnit> {
-    return request<DispenserUnit>(`/setup/dispensers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  /**
+   * Create a dispenser and its nozzles in one request (#591), so a retry under
+   * the same key cannot leave a dispenser without nozzles or add a second one.
+   */
+  async createDispenserWithNozzles(
+    data: DispenserWithNozzlesBody,
+    opts?: { idempotencyKey?: string },
+  ): Promise<DispenserWithNozzles> {
+    return request<DispenserWithNozzles>(
+      '/setup/dispensers/with-nozzles',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteDispenser(id: string): Promise<void> {
-    await request<void>(`/setup/dispensers/${id}`, {
-      method: 'DELETE',
-    });
+  async updateDispenser(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<DispenserUnit> {
+    return request<DispenserUnit>(
+      `/setup/dispensers/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  async deleteDispenser(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/dispensers/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -516,24 +613,28 @@ export class CloudNozzleService implements INozzleService {
     return request<Nozzle[]>(`/setup/nozzles?stationId=${stationId}`);
   }
 
-  async createNozzle(data: any): Promise<Nozzle> {
-    return request<Nozzle>('/setup/nozzles', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createNozzle(data: any, opts?: { idempotencyKey?: string }): Promise<Nozzle> {
+    return request<Nozzle>(
+      '/setup/nozzles',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateNozzle(id: string, data: any): Promise<Nozzle> {
-    return request<Nozzle>(`/setup/nozzles/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  async updateNozzle(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<Nozzle> {
+    return request<Nozzle>(
+      `/setup/nozzles/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteNozzle(id: string): Promise<void> {
-    await request<void>(`/setup/nozzles/${id}`, {
-      method: 'DELETE',
-    });
+  async deleteNozzle(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/nozzles/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -542,24 +643,44 @@ export class CloudShiftTemplateService implements IShiftTemplateService {
     return request<ShiftTemplate[]>('/setup/shift-templates');
   }
 
-  async createTemplate(data: any): Promise<ShiftTemplate> {
-    return request<ShiftTemplate>('/setup/shift-templates', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  async createTemplate(data: any, opts?: { idempotencyKey?: string }): Promise<ShiftTemplate> {
+    return request<ShiftTemplate>(
+      '/setup/shift-templates',
+      { method: 'POST', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async updateTemplate(id: string, data: any): Promise<ShiftTemplate> {
-    return request<ShiftTemplate>(`/setup/shift-templates/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  /** Create several templates in one all-or-nothing request (#591). */
+  async createTemplates(
+    templates: ShiftTemplateBody[],
+    opts?: { idempotencyKey?: string },
+  ): Promise<ShiftTemplate[]> {
+    return request<ShiftTemplate[]>(
+      '/setup/shift-templates/batch',
+      { method: 'POST', body: JSON.stringify({ templates }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async deleteTemplate(id: string): Promise<void> {
-    await request<void>(`/setup/shift-templates/${id}`, {
-      method: 'DELETE',
-    });
+  async updateTemplate(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<ShiftTemplate> {
+    return request<ShiftTemplate>(
+      `/setup/shift-templates/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  async deleteTemplate(id: string, opts?: { idempotencyKey?: string }): Promise<void> {
+    await request<void>(
+      `/setup/shift-templates/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -584,11 +705,48 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     );
   }
 
-  async updateUser(id: string, data: any, opts?: { idempotencyKey?: string }): Promise<User> {
-    return request<User>(
+  async updateUser(
+    id: string,
+    data: any,
+    opts?: { idempotencyKey?: string },
+  ): Promise<
+    User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+  > {
+    return request<
+      User & { droppedPermissionChanges?: { granted: string[]; revoked: string[] } | null }
+    >(
       `/setup/users/${id}`,
       { method: 'PUT', body: JSON.stringify(data) },
       { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /** Owner only. Default Permissions, stored changes and effective set for a member. */
+  async getUserPermissions(id: string): Promise<UserPermissionsView> {
+    return request<UserPermissionsView>(`/setup/users/${id}/permissions`);
+  }
+
+  /**
+   * Owner only; needs "Custom permissions". Replaces the member's changes with
+   * what is asked for (granted/revoked relative to Role defaults); the server
+   * adds prerequisites, drops dependants and returns the resulting view.
+   */
+  async setUserPermissions(
+    id: string,
+    changes: { granted?: string[]; revoked?: string[] },
+    opts?: { idempotencyKey?: string },
+  ): Promise<UserPermissionsView> {
+    return request<UserPermissionsView>(
+      `/setup/users/${id}/permissions`,
+      { method: 'PUT', body: JSON.stringify(changes) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /** The Permission changes a Role change would drop; writes nothing. */
+  async previewUserRoleChange(id: string, role: string): Promise<RoleChangePreview> {
+    return request<RoleChangePreview>(
+      `/setup/users/${id}/role-change-preview?role=${encodeURIComponent(role)}`,
     );
   }
 
@@ -651,6 +809,47 @@ export interface BusinessDayStatusResponse {
   recentFromBusinessDate: string;
 }
 
+/** One shift of `today.shifts[]` in the dashboard summary. */
+export interface DaySummaryShift {
+  id: string;
+  shiftTemplateId: string;
+  openedAt: string;
+  closedAt?: string | null;
+  businessDate?: string | null;
+  shiftSequence?: number | null;
+  totalFuelSalesValue?: number | null;
+  cashVariance?: number | null;
+}
+
+/** `GET /shifts/dashboard-summary` (fields the dashboard reads). */
+export interface DashboardSummary {
+  today?: { businessDate?: string; shifts?: DaySummaryShift[] };
+  lastShift?: {
+    id: string;
+    templateName?: string | null;
+    openedAt?: string | null;
+    closedAt?: string | null;
+    businessDate?: string | null;
+    shiftSequence?: number | null;
+  } | null;
+  lastShiftSummary?: {
+    totalFuelSalesValue?: number | null;
+    totalVolumeSold?: number | null;
+    cashVariance?: number | null;
+  } | null;
+  activeShift?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+/** One row of `GET /setup/pricing`. */
+export interface FuelPrice {
+  productId: string;
+  productName: string;
+  productCode: string;
+  price: number;
+  effectiveFrom: string | null;
+}
+
 export class CloudShiftService {
   async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
@@ -675,35 +874,45 @@ export class CloudShiftService {
     return request<any | null>('/shifts/my-assignment');
   }
 
-  async openShift(payload: ShiftOpenPayload): Promise<any> {
-    return request<any>('/shifts/open', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async openShift(payload: ShiftOpenPayload, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/shifts/open',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateNozzleReadings(
     shiftId: string,
     readings: { nozzleId: string; closingReading: number }[],
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>('/shifts/readings', {
-      method: 'PUT',
-      body: JSON.stringify({ shiftId, readings }),
-    });
+    return request<any>(
+      '/shifts/readings',
+      { method: 'PUT', body: JSON.stringify({ shiftId, readings }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async closeShift(shiftId: string, payload: ShiftClosePayload): Promise<any> {
-    return request<any>('/shifts/close', {
-      method: 'POST',
-      body: JSON.stringify({ shiftId, payload }),
-    });
+  /** Close a shift. Pass an `idempotencyKey` so a retry after a lost answer cannot close twice. */
+  async closeShift(
+    shiftId: string,
+    payload: ShiftClosePayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/shifts/close',
+      { method: 'POST', body: JSON.stringify({ shiftId, payload }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async reopenShift(shiftId: string): Promise<any> {
-    return request<any>('/shifts/reopen', {
-      method: 'POST',
-      body: JSON.stringify({ shiftId }),
-    });
+  async reopenShift(shiftId: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      '/shifts/reopen',
+      { method: 'POST', body: JSON.stringify({ shiftId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async recordHandover(
@@ -724,8 +933,8 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
-  async getDashboardSummary(stationId: string): Promise<any> {
-    return request<any>(`/shifts/dashboard-summary?stationId=${stationId}`);
+  async getDashboardSummary(stationId: string): Promise<DashboardSummary> {
+    return request<DashboardSummary>(`/shifts/dashboard-summary?stationId=${stationId}`);
   }
 
   async getShiftSummaries(stationId: string, limit = 200): Promise<any[]> {
@@ -751,18 +960,32 @@ export class CloudShiftService {
     return request<any>(`/shifts/shift-summaries/${encodeURIComponent(shiftId)}`);
   }
 
-  async generateDailyDssr(stationId: string, businessDate: string): Promise<any> {
-    return request<any>('/dssr/daily/generate', {
-      method: 'POST',
-      body: JSON.stringify({ stationId, businessDate }),
-    });
+  /**
+   * Generate (or regenerate) a day's DSR. Pass an `idempotencyKey` so a retry
+   * after a dropped response is answered with the first result (#532).
+   */
+  async generateDailyDssr(
+    stationId: string,
+    businessDate: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/dssr/daily/generate',
+      { method: 'POST', body: JSON.stringify({ stationId, businessDate }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async closeBusinessDay(businessDayId: string, stationId: string): Promise<any> {
-    return request<any>('/shifts/business-day/close', {
-      method: 'POST',
-      body: JSON.stringify({ businessDayId, stationId }),
-    });
+  async closeBusinessDay(
+    businessDayId: string,
+    stationId: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/shifts/business-day/close',
+      { method: 'POST', body: JSON.stringify({ businessDayId, stationId }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getDailyDssr(stationId: string, date: string): Promise<any> {
@@ -826,7 +1049,7 @@ export class CloudShiftService {
    * Insights sales block (trend, product mix, Shift performance) over the last
    * `days` closed Business Days. Sealed data only: a given range end never changes.
    */
-  async getInsightsSales(stationId: string, days: InsightsRangeDays): Promise<InsightsSales> {
+  async getInsightsSales(stationId: string, days: SalesInsightsDays): Promise<InsightsSales> {
     const query = new URLSearchParams({ stationId, days: String(days) });
     return request<InsightsSales>(`/reports/insights/sales?${query.toString()}`);
   }
@@ -982,8 +1205,15 @@ export class CloudTransactionService {
     });
   }
 
-  async getSuppliers(activeOnly: boolean = true): Promise<any> {
-    return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
+  /**
+   * The supplier list with each `currentBalance`. With a `stationId`, that
+   * Station's list balanced on its own ledger (#575); without, the
+   * Organization's (pickers).
+   */
+  async getSuppliers(activeOnly: boolean = true, stationId?: string): Promise<any> {
+    const query = new URLSearchParams({ activeOnly: String(activeOnly) });
+    if (stationId) query.set('stationId', stationId);
+    return request<any>(`/transactions/suppliers?${query.toString()}`);
   }
 
   async createSupplier(payload: {
@@ -1179,6 +1409,18 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases${suffix}`);
   }
 
+  /** Supplier Payments, newest Entry Date first; `from`/`to` bound the Entry Date (#528). */
+  async getSupplierPayments(params: {
+    stationId: string;
+    from?: string;
+    to?: string;
+  }): Promise<SupplierPaymentRow[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<SupplierPaymentRow[]>(`/transactions/supplier-payments?${qs.toString()}`);
+  }
+
   async getPurchaseItems(purchaseId: string): Promise<any[]> {
     return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
   }
@@ -1239,25 +1481,33 @@ export class CloudTransactionService {
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */
-  async recordExpense(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId: string;
-    categoryId: string;
-    amount: number;
-    description?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/expenses', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordExpense(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId: string;
+      categoryId: string;
+      amount: number;
+      description?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/expenses',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async voidExpense(id: string, reason?: string): Promise<any> {
-    return request<any>(`/transactions/expenses/${id}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || undefined }),
-    });
+  async voidExpense(id: string, reason?: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/expenses/${id}/void`,
+      { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
@@ -1270,50 +1520,65 @@ export class CloudTransactionService {
   }
 
   /** Office Record: `fundingAccountId` is required unless `terminalId` is given. */
-  async recordIncome(payload: {
-    stationId: string;
-    entryDate?: string;
-    fundingAccountId?: string;
-    terminalId?: string;
-    categoryId: string;
-    amount: number;
-    payer?: string;
-    description?: string;
-  }): Promise<any> {
-    return request<any>('/transactions/income', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordIncome(
+    payload: {
+      stationId: string;
+      entryDate?: string;
+      fundingAccountId?: string;
+      terminalId?: string;
+      categoryId: string;
+      amount: number;
+      payer?: string;
+      description?: string;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/income',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async voidIncome(id: string, reason?: string): Promise<any> {
-    return request<any>(`/transactions/income/${id}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: reason || undefined }),
-    });
+  async voidIncome(id: string, reason?: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/income/${id}/void`,
+      { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async recordPurchase(payload: {
-    shiftId?: string;
-    stationId?: string;
-    transactionDate?: string;
-    supplierId: string;
-    invoiceNumber?: string;
-    notes?: string;
-    lines: {
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      invoiceDensity?: number | string | null;
-      tankAllocations?: { tankId: string; quantity: number }[];
-    }[];
-    /** Optional immediate payment recorded atomically with the purchase. */
-    payment?: { amount: number; fundingAccountId?: string; entryDate?: string; notes?: string };
-  }): Promise<any> {
-    return request<any>('/transactions/purchases', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordPurchase(
+    payload: {
+      shiftId?: string;
+      stationId?: string;
+      transactionDate?: string;
+      supplierId: string;
+      invoiceNumber?: string;
+      notes?: string;
+      lines: {
+        productId: string;
+        quantity: number;
+        unitPrice: number;
+        invoiceDensity?: number | string | null;
+        tankAllocations?: { tankId: string; quantity: number }[];
+      }[];
+      /** Optional immediate payment recorded atomically with the purchase. */
+      payment?: { amount: number; fundingAccountId?: string; entryDate?: string; notes?: string };
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/purchases',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /**
@@ -1350,12 +1615,22 @@ export class CloudTransactionService {
     );
   }
 
-  async voidCreditSale(id: string): Promise<any> {
-    return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  /** Void a credit sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidCreditSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/credit-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  async voidOmcCardSale(id: string): Promise<any> {
-    return request<any>(`/transactions/omc-card-sales/${id}`, { method: 'DELETE' });
+  /** Void an OMC card sale. Pass an `idempotencyKey` so a retry cannot void twice. */
+  async voidOmcCardSale(id: string, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(
+      `/transactions/omc-card-sales/${id}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
@@ -1470,19 +1745,27 @@ export class CloudTransactionService {
     );
   }
 
-  /** The supplier's statement for a date range: opening balance, enriched rows, closing balance. */
+  /**
+   * The supplier's statement at one Station for a date range: opening balance,
+   * enriched rows, closing balance (#575: each pump has its own account).
+   */
   async getSupplierLedgerRange(
     supplierId: string,
     range: { from: string; to: string },
+    stationId: string,
   ): Promise<RangedPartyLedger> {
-    const query = new URLSearchParams(range);
+    const query = new URLSearchParams({ ...range, stationId });
     return request<RangedPartyLedger>(
       `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
     );
   }
 
-  async getSupplierLedger(supplierId: string): Promise<any[]> {
-    return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
+  /** The supplier's all-time ledger rows at one Station (#575). */
+  async getSupplierLedger(supplierId: string, stationId: string): Promise<any[]> {
+    const query = new URLSearchParams({ stationId });
+    return request<any[]>(
+      `/transactions/suppliers/${encodeURIComponent(supplierId)}/ledger?${query.toString()}`,
+    );
   }
 
   /** Issue (or fetch existing) GST tax invoice for a sale. Idempotent. */
@@ -1548,8 +1831,15 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-sales`);
   }
 
-  async deleteMerchandiseHandover(saleId: string): Promise<any> {
-    return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
+  async deleteMerchandiseHandover(
+    saleId: string,
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      `/transactions/merchandise-handovers/${saleId}`,
+      { method: 'DELETE' },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Office Record (ADR 0005): entry date + funding account, no shift. */
@@ -1574,57 +1864,67 @@ export class CloudTransactionService {
     );
   }
 
-  async recordSale(payload: {
-    shiftId: string;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-    lines: {
-      productId: string;
-      quantity: number;
-      unitPrice: number;
-      discountAmount?: number;
-      taxAmount?: number;
-      tankId?: string | null;
-    }[];
-    customerId?: string | null;
-    vehicleId?: string | null;
-    attendantId?: string | null;
-    notes?: string;
-    /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
-    buyer?: {
-      name: string;
-      phone?: string | null;
-      gstin?: string | null;
-      stateCode?: string | null;
-    } | null;
-    /** When true (with a buyer), save/dedup the buyer into the customer registry. */
-    saveAsCustomer?: boolean;
-  }): Promise<any> {
-    return request<any>('/transactions/sales', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordSale(
+    payload: {
+      shiftId: string;
+      paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+      lines: {
+        productId: string;
+        quantity: number;
+        unitPrice: number;
+        discountAmount?: number;
+        taxAmount?: number;
+        tankId?: string | null;
+      }[];
+      customerId?: string | null;
+      vehicleId?: string | null;
+      attendantId?: string | null;
+      notes?: string;
+      /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
+      buyer?: {
+        name: string;
+        phone?: string | null;
+        gstin?: string | null;
+        stateCode?: string | null;
+      } | null;
+      /** When true (with a buyer), save/dedup the buyer into the customer registry. */
+      saveAsCustomer?: boolean;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/transactions/sales',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
 export class CloudPricingService {
-  async getPricing(stationId: string): Promise<any[]> {
-    return request<any[]>(`/setup/pricing?stationId=${stationId}`);
+  async getPricing(stationId: string): Promise<FuelPrice[]> {
+    return request<FuelPrice[]>(`/setup/pricing?stationId=${stationId}`);
   }
 
   async getPricingHistory(stationId: string): Promise<any[]> {
     return request<any[]>(`/setup/pricing/history?stationId=${stationId}`);
   }
 
-  async recordPricing(payload: {
-    stationId: string;
-    productId: string;
-    price: number;
-    effectiveFrom?: string | null;
-  }): Promise<any> {
-    return request<any>('/setup/pricing', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+  async recordPricing(
+    payload: {
+      stationId: string;
+      productId: string;
+      price: number;
+      effectiveFrom?: string | null;
+    },
+    opts?: { idempotencyKey?: string; signal?: AbortSignal },
+  ): Promise<any> {
+    // `signal` bounds the wait (#606): an aborted request reads as a network
+    // failure, an unknown outcome, so the caller keeps its Idempotency-Key.
+    return request<any>(
+      '/setup/pricing',
+      { method: 'POST', body: JSON.stringify(payload), signal: opts?.signal },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -1643,18 +1943,23 @@ export class CloudDesktopDownloadsService {
 }
 
 export class CloudOrganizationService {
-  async getOrganization(): Promise<any> {
-    return request<any>('/organization');
+  /** Role-shaped: plan and billing fields reach Owners and Managers only (#616). */
+  async getOrganization(): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>('/organization');
   }
 
-  async updateOrganization(payload: {
-    name: string;
-    metadata?: Record<string, unknown> | null;
-  }): Promise<any> {
-    return request<any>('/organization', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+  async updateOrganization(
+    payload: {
+      name: string;
+      metadata?: Record<string, unknown> | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<OrganizationPayload> {
+    return request<OrganizationPayload>(
+      '/organization',
+      { method: 'PUT', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 }
 
@@ -1701,6 +2006,12 @@ export interface ActivityPage {
   nextCursor: string | null;
 }
 
+export interface ActivityDayFeed {
+  date: string;
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
 export class CloudEventsService {
   async getActivityGroups(params?: {
     stationId?: string;
@@ -1717,6 +2028,16 @@ export class CloudEventsService {
     return request<ActivityPage>(`/activity${suffix}`);
   }
 
+  /** GET /activity?stationId&date — one Business Day's events for the dashboard timeline (#508). */
+  async getDayActivity(
+    stationId: string,
+    date: string,
+    entryDate: string = date,
+  ): Promise<ActivityDayFeed> {
+    const qs = new URLSearchParams({ stationId, date, entryDate });
+    return request<ActivityDayFeed>(`/activity?${qs.toString()}`);
+  }
+
   async getActivityGroup(groupId: string): Promise<ActivityGroupDetail> {
     return request<ActivityGroupDetail>(`/activity/${encodeURIComponent(groupId)}`);
   }
@@ -1730,6 +2051,38 @@ export interface FundingAccount {
   name: string;
   accountType: FundingAccountType;
   stationId: string | null;
+}
+
+/** GET /finance/movements — one ledger entry of the station in the range. */
+export interface StationMovement {
+  id: string;
+  entryDate: string;
+  accountId: string;
+  accountType: string;
+  accountName: string;
+  direction: 'in' | 'out' | string;
+  amount: string | number;
+  sourceType: string;
+  /** Shared by the two legs of a transfer or deposit. */
+  transferId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+/** GET /finance/movements — one account's opening (Σ before `from`). */
+export interface StationAccountOpening {
+  accountId: string;
+  accountType: string;
+  accountName: string;
+  /** Organization-shared (no station). */
+  shared: boolean;
+  isActive: boolean;
+  opening: string | number;
+}
+
+export interface StationMovements {
+  movements: StationMovement[];
+  openings: StationAccountOpening[];
 }
 
 /** GET /finance/cash-book — one ledger entry on the requested date. */
@@ -1777,6 +2130,8 @@ export interface DailyCashBookEntry {
   sourceType: string;
   sourceId: string | null;
   notes: string | null;
+  /** Customer / supplier the entry settles, when the API supplies it. */
+  partyName?: string | null;
   createdAt: string;
 }
 
@@ -1825,15 +2180,22 @@ export class CloudFinanceService {
     return request<any>(`/finance/accounts/${accountId}/ledger${suffix}`);
   }
 
-  async createAccount(payload: {
-    stationId?: string | null;
-    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
-    name: string;
-    openingBalance?: number;
-    openingDate?: string | null;
-    metadata?: Record<string, unknown> | null;
-  }): Promise<any> {
-    return request<any>('/finance/accounts', { method: 'POST', body: JSON.stringify(payload) });
+  async createAccount(
+    payload: {
+      stationId?: string | null;
+      accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+      name: string;
+      openingBalance?: number;
+      openingDate?: string | null;
+      metadata?: Record<string, unknown> | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/accounts',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   async updateAccount(
@@ -1850,34 +2212,50 @@ export class CloudFinanceService {
   async setOpeningBalance(
     id: string,
     payload: { openingBalance: number; openingDate?: string | null },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/finance/accounts/${id}/opening`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/finance/accounts/${id}/opening`,
+      { method: 'PUT', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Move money between two accounts (deposit / petty-cash float / bank↔bank). */
-  async recordTransfer(payload: {
-    fromAccountId: string;
-    toAccountId: string;
-    amount: number;
-    date?: string | null;
-    notes?: string | null;
-  }): Promise<any> {
-    return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
+  async recordTransfer(
+    payload: {
+      fromAccountId: string;
+      toAccountId: string;
+      amount: number;
+      date?: string | null;
+      notes?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/transfers',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Settle a card/UPI clearing batch to a bank account, net of MDR fee. */
-  async recordSettlement(payload: {
-    clearingAccountId: string;
-    bankAccountId: string;
-    grossAmount: number;
-    feeAmount?: number;
-    date?: string | null;
-    notes?: string | null;
-  }): Promise<any> {
-    return request<any>('/finance/settlements', { method: 'POST', body: JSON.stringify(payload) });
+  async recordSettlement(
+    payload: {
+      clearingAccountId: string;
+      bankAccountId: string;
+      grossAmount: number;
+      feeAmount?: number;
+      date?: string | null;
+      notes?: string | null;
+    },
+    opts?: { idempotencyKey?: string },
+  ): Promise<any> {
+    return request<any>(
+      '/finance/settlements',
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
   /** Manual entry against one account: bank charge / interest / adjustment. */
@@ -1890,24 +2268,28 @@ export class CloudFinanceService {
       date?: string | null;
       notes?: string | null;
     },
+    opts?: { idempotencyKey?: string },
   ): Promise<any> {
-    return request<any>(`/finance/accounts/${accountId}/entry`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return request<any>(
+      `/finance/accounts/${accountId}/entry`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
   }
 
-  /** Station-wide ledger movements (backs the Cash & Bank report). */
+  /**
+   * Station-wide ledger movements in a range, with one opening per account
+   * (Σ before `from`; 0 with no `from`). Backs Reports › Cash & bank and
+   * Accounts › Transfers.
+   */
   async getMovements(params: {
     stationId: string;
     from?: string;
     to?: string;
-  }): Promise<{ movements: any[]; openings: { accountType: string; opening: string }[] }> {
+  }): Promise<StationMovements> {
     const qs = new URLSearchParams({ stationId: params.stationId });
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
-    return request<{ movements: any[]; openings: { accountType: string; opening: string }[] }>(
-      `/finance/movements?${qs.toString()}`,
-    );
+    return request<StationMovements>(`/finance/movements?${qs.toString()}`);
   }
 }

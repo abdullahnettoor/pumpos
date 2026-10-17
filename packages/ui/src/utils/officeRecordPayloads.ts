@@ -1,6 +1,7 @@
 import type {
   CollectionEntryFormValues,
   ExpenseEntryFormValues,
+  PurchaseEntryFormValues,
   SupplierPaymentEntryFormValues,
 } from '@pump/shared';
 import { methodUsesTerminal } from './fundingAccounts.js';
@@ -47,5 +48,39 @@ export function supplierPaymentPayload(stationId: string, v: SupplierPaymentEntr
     supplierId: v.supplierId,
     amount: Number(v.amount),
     notes: v.notes || undefined,
+  };
+}
+
+/** "Also record a supplier payment now": a separate Supplier payment saved with the purchase. */
+export interface PurchasePayNow {
+  amount: number;
+  fundingAccountId: string;
+  entryDate?: string;
+  notes?: string;
+}
+
+/**
+ * `POST /transactions/purchases`. Fuel is dated by its invoice (an Entry Date),
+ * products by their Business Date; the server tells them apart. A pay-now rides
+ * in the same request so the purchase and its payment save atomically.
+ */
+export function purchasePayload(
+  stationId: string,
+  v: PurchaseEntryFormValues,
+  payment?: PurchasePayNow,
+) {
+  return {
+    stationId,
+    transactionDate: v.transactionDate || undefined,
+    supplierId: v.supplierId,
+    invoiceNumber: v.invoiceNumber || undefined,
+    notes: v.notes || undefined,
+    lines: v.lines.map((l) => ({
+      productId: l.productId,
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+      invoiceDensity: l.invoiceDensity === '' ? undefined : l.invoiceDensity,
+    })),
+    payment: payment && payment.amount > 0 ? payment : undefined,
   };
 }

@@ -39,8 +39,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /shifts/shift-summaries': 'org-scoped-query',
   'GET /shifts/shift-summaries/:shiftId': 'org-scoped-query',
 
-  'GET /transactions/suppliers': 'not-station-scoped',
-  'GET /transactions/suppliers/:id/ledger': 'org-scoped-query',
+  'GET /transactions/suppliers': 'refuses-foreign-station',
+  'GET /transactions/suppliers/:id/ledger': 'refuses-foreign-station',
   'GET /transactions/customers': 'not-station-scoped',
   'GET /transactions/customers/:id/ledger': 'org-scoped-query',
   'GET /transactions/customers/:id/vehicles': 'org-scoped-query',
@@ -55,6 +55,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /transactions/purchases/:id/items': 'org-scoped-query',
   'GET /transactions/purchases/gst-register': 'org-scoped-query',
   'GET /transactions/sales/tax-register': 'org-scoped-query',
+  'GET /transactions/supplier-payments': 'org-scoped-query',
   'GET /transactions/collections': 'org-scoped-query',
   'GET /transactions/credit-sales': 'org-scoped-query',
   'GET /transactions/money-movements': 'org-scoped-query',
@@ -89,6 +90,8 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /setup/nozzles': 'org-scoped-query',
   'GET /setup/shift-templates': 'not-station-scoped',
   'GET /setup/users': 'not-station-scoped',
+  'GET /setup/users/:id/permissions': 'org-scoped-query',
+  'GET /setup/users/:id/role-change-preview': 'org-scoped-query',
   'GET /setup/onboarding/status': 'refuses-foreign-station',
   'GET /setup/pricing': 'org-scoped-query',
   'GET /setup/pricing/history': 'org-scoped-query',
@@ -114,6 +117,7 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /reports/insights/credit-health': 'org-scoped-query',
 
   'GET /access': 'not-station-scoped',
+  'GET /organization': 'not-station-scoped',
 };
 
 function exposedGets(): string[] {
@@ -288,4 +292,34 @@ describe('station-anchored mutation tenancy (#235)', () => {
       expect(body.success).toBe(false);
     },
   );
+
+  it('POST /setup/dispensers/with-nozzles refuses a foreign-organization stationId (#591)', async () => {
+    // Its edge validation wants a UUID, so the foreign station is one.
+    const app = new Hono<{ Variables: { db: unknown; user: unknown } }>();
+    app.use('*', async (c, next) => {
+      c.set('db', accessThenEmptyDb());
+      c.set('user', {
+        id: 'user-1',
+        email: 'owner@example.com',
+        fullName: 'Owner',
+        organizationId: 'org-1',
+        role: 'Owner',
+        assignedStationIds: [],
+      });
+      await next();
+    });
+    for (const [prefix, router] of ROUTERS) app.route(prefix, router);
+    const res = await app.request('/setup/dispensers/with-nozzles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stationId: '00000000-0000-4000-8000-0000000000ff',
+        name: 'Foreign',
+        code: 'DU-X',
+        nozzles: [],
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { success: boolean }).success).toBe(false);
+  });
 });

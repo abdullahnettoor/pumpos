@@ -1,6 +1,8 @@
 # Mobile app access by Role
 
-Status: accepted (2026-10-10).
+Status: accepted (2026-10-10). Superseded by ADR 0013 (tabs follow Permissions): the
+fixed Role table below is now the Default Permissions; mobile tabs follow the
+user's effective Permissions. The Attendant app is unchanged.
 
 The mobile app (#388 "Control Room") is for owners and managers checking on a
 station away from the desk, plus a handover-only app for Attendants. Which tabs

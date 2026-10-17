@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { IDEMPOTENCY_IN_PROGRESS } from '@pump/shared';
 import { isEarlierAttemptReceived, isOutcomeUnknown, teamFailure } from './failure.js';
 
 const failure = (code: string | undefined, message: string, status: number | undefined) =>
@@ -48,6 +49,17 @@ describe('what the key does after a failure', () => {
         failure('CONFLICT', 'A request with this Idempotency-Key is already in progress', 409),
       ),
     ).toBe(true);
+    // The reason the API sends; the message above is the legacy form (one release).
+    expect(
+      isOutcomeUnknown(
+        Object.assign(failure('CONFLICT', 'Busy', 409), {
+          details: { reason: IDEMPOTENCY_IN_PROGRESS },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isOutcomeUnknown(failure('CONFLICT', 'This Idempotency-Key belongs to another user', 409)),
+    ).toBe(false);
   });
   it('treats a refusal as decided', () => {
     expect(isOutcomeUnknown(failure('FORBIDDEN', 'no', 403))).toBe(false);
@@ -55,7 +67,7 @@ describe('what the key does after a failure', () => {
   });
   it('recognises an earlier attempt held under the key with other content', () => {
     const e = failure(
-      'CONFLICT',
+      'IDEMPOTENCY_KEY_REUSED',
       'This Idempotency-Key was already used with different request content',
       409,
     );

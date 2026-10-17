@@ -21,7 +21,7 @@ export interface ReportNoteProps {
 export const ReportNote: React.FC<ReportNoteProps> = ({ children, className }) => (
   // max-w-[78ch]: a long caveat wraps as prose instead of running the width of
   // a desktop display, where the eye loses the line.
-  <p className={cn('m-0 max-w-[78ch] text-[11px] leading-[1.45] text-ink-faint', className)}>
+  <p className={cn('m-0 max-w-[78ch] text-[12px] leading-[1.45] text-ink-faint', className)}>
     {children}
   </p>
 );

@@ -1,354 +1,291 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
-import type { DecantationReportVisit } from '@pump/shared';
+import type {
+  DecantationReportChamber,
+  DecantationReportInvoiceLink,
+  DecantationReportTankLine,
+  DecantationReportVisit,
+} from '@pump/shared';
 import { Drawer } from '../../Drawer.js';
-import { Chip } from '../../../pump-ds/index.js';
-import { formatDateTime, formatQty } from '../../../utils/format.js';
-import { muted, td, tdR, th, thR } from './styles.js';
+import {
+  Icon,
+  SectionHeader,
+  StatementTable,
+  StatusChip,
+  VarianceChip,
+  type TableColumn,
+} from '../../../pump-ds/index.js';
+import { formatDate, formatDateTime, formatDensity, formatTime } from '../../../utils/format.js';
+import { DENSITY_TOLERANCE, linkState, litres, visitState } from './vocabulary.js';
+
+/** A problem cell inside a statement: an outline chip, as the Table module prints status. */
+const Problem: React.FC<{ label: string }> = ({ label }) => (
+  <StatusChip status="variance" label={label} size="md" variant="outline" showIcon={false} />
+);
+
+const Muted: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <span className="text-ink-muted">{children}</span>
+);
+
+const NameAndCode: React.FC<{ name: string; code?: string | null }> = ({ name, code }) => (
+  <span className="flex flex-col leading-tight">
+    <span className="font-medium text-ink-strong">{name}</span>
+    {code && <span className="text-[12px] text-ink-muted">{code}</span>}
+  </span>
+);
+
+const CHAMBER_COLUMNS: TableColumn<DecantationReportChamber>[] = [
+  { id: 'chamber', header: 'Chamber', kind: 'text', value: (c) => `Chamber ${c.chamberNo}` },
+  { id: 'capacity', header: 'Capacity', kind: 'qty', unit: 'L', value: (c) => c.capacityL },
+  { id: 'dip', header: 'Dip', kind: 'qty', unit: 'mm', value: (c) => c.dipMm, total: false },
+  {
+    id: 'mark',
+    header: 'Mark',
+    kind: 'text',
+    value: (c) => c.mark ?? 'OK',
+    cell: (c) =>
+      c.mark === 'SHORT' ? (
+        <Problem label="Short" />
+      ) : c.mark === 'EXCESS' ? (
+        <StatusChip status="surplus" size="md" variant="outline" showIcon={false} />
+      ) : (
+        <Muted>OK</Muted>
+      ),
+  },
+  {
+    id: 'seal',
+    header: 'Seal',
+    kind: 'text',
+    value: (c) => (c.sealOk === false ? 'Broken' : 'Intact'),
+    cell: (c) => (c.sealOk === false ? <Problem label="Broken" /> : <Muted>Intact</Muted>),
+  },
+  {
+    id: 'emptied',
+    header: 'Emptied',
+    kind: 'text',
+    value: (c) => (c.emptied === false ? 'Not emptied' : 'Yes'),
+    cell: (c) => (c.emptied === false ? <Problem label="Not emptied" /> : <Muted>Yes</Muted>),
+  },
+  { id: 'tank', header: 'Target tank', kind: 'text', value: (c) => c.tankName },
+];
+
+const deviationCell = (l: DecantationReportTankLine): React.ReactNode => {
+  if (l.densityDeviation === null) return '—';
+  const text = formatDensity(l.densityDeviation, { plus: true });
+  return Math.abs(l.densityDeviation) > DENSITY_TOLERANCE ? <Problem label={text} /> : text;
+};
+
+const LINE_COLUMNS: TableColumn<DecantationReportTankLine>[] = [
+  {
+    id: 'tank',
+    header: 'Tank / product',
+    kind: 'text',
+    value: (l) => l.tankName,
+    cell: (l) => <NameAndCode name={l.tankName} code={l.productName} />,
+    width: '18%',
+  },
+  {
+    id: 'before',
+    header: 'Before dip',
+    kind: 'qty',
+    unit: 'mm',
+    value: (l) => l.beforeDip,
+    total: false,
+  },
+  {
+    id: 'after',
+    header: 'After dip',
+    kind: 'qty',
+    unit: 'mm',
+    value: (l) => l.afterDip,
+    total: false,
+  },
+  { id: 'sales', header: 'Sales during', kind: 'qty', unit: 'L', value: (l) => l.salesDuring },
+  {
+    id: 'received',
+    header: 'Received',
+    kind: 'qty',
+    unit: 'L',
+    value: (l) => l.receivedQty,
+    cell: (l) => (l.receivedQty === null ? <Muted>Pending</Muted> : litres(l.receivedQty)),
+  },
+  {
+    id: 'ro',
+    header: 'RO density',
+    kind: 'text',
+    value: (l) => (l.roDensity === null ? null : formatDensity(l.roDensity)),
+  },
+  {
+    id: 'invoiceDensity',
+    header: 'Invoice density',
+    kind: 'text',
+    value: (l) => (l.invoiceDensity === null ? null : formatDensity(l.invoiceDensity)),
+  },
+  {
+    id: 'deviation',
+    header: 'Deviation',
+    kind: 'text',
+    value: (l) => l.densityDeviation,
+    cell: deviationCell,
+  },
+];
+
+const linkStatusCell = (link: DecantationReportInvoiceLink): React.ReactNode => {
+  const waiting = linkState(link);
+  if (waiting) {
+    return (
+      <StatusChip
+        status={waiting.status}
+        label={waiting.label}
+        size="md"
+        variant="outline"
+        showIcon={false}
+      />
+    );
+  }
+  return <VarianceChip amount={link.varianceQty} kind="stock" size="md" variant="outline" />;
+};
+
+const LINK_COLUMNS: TableColumn<DecantationReportInvoiceLink>[] = [
+  {
+    id: 'product',
+    header: 'Product',
+    kind: 'text',
+    value: (i) => i.productName,
+    cell: (i) => <NameAndCode name={i.productName} code={i.productCode} />,
+    width: '22%',
+  },
+  { id: 'invoice', header: 'Invoice', kind: 'text', value: (i) => i.invoiceNumber },
+  { id: 'invoiceQty', header: 'Invoice qty', kind: 'qty', unit: 'L', value: (i) => i.invoiceQty },
+  { id: 'received', header: 'Received', kind: 'qty', unit: 'L', value: (i) => i.receivedQty },
+  {
+    id: 'variance',
+    header: 'Variance',
+    kind: 'text',
+    value: (i) => i.varianceQty,
+    cell: (i) => linkStatusCell(i),
+  },
+];
+
+const Fact: React.FC<{ label: string; children: React.ReactNode; mono?: boolean }> = ({
+  label,
+  children,
+  mono,
+}) => (
+  <div className="flex min-w-0 flex-col gap-0.5">
+    <dt className="text-[12px] text-ink-muted">{label}</dt>
+    <dd className={mono ? 'font-mono text-ink-strong' : 'text-ink-strong'}>{children}</dd>
+  </div>
+);
+
+/** `05 Mar 2026, 10:00 am – 11:30 am`; the end keeps its date only when it is another day. */
+function unloadWindow(start: string, end: string | null): string {
+  if (!end) return formatDateTime(start);
+  const sameDay = formatDate(start) === formatDate(end);
+  return `${formatDateTime(start)} – ${sameDay ? formatTime(end) : formatDateTime(end)}`;
+}
+
+const Section: React.FC<{
+  title: string;
+  subtitle?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, subtitle, children }) => (
+  <section className="flex flex-col gap-2">
+    <SectionHeader title={title} subtitle={subtitle} />
+    <div className="rounded-card border border-border-soft bg-surface p-2">{children}</div>
+  </section>
+);
 
 export const DecantationVisitDrawer: React.FC<{
   visit: DecantationReportVisit;
   onClose: () => void;
-}> = ({ visit, onClose }) => (
-  <Drawer
-    isOpen
-    onClose={onClose}
-    title={`Tanker Visit: ${visit.tankerNumber}`}
-    widthVariant="wide"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '4px 0' }}>
-      {/* Header info */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '12px',
-          padding: '12px',
-          backgroundColor: 'var(--bg-subtle)',
-          borderRadius: 'var(--radius-panel)',
-        }}
-      >
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Business Date</div>
-          <div style={{ fontWeight: 600 }}>{visit.date}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Document Number</div>
-          <div style={{ fontWeight: 600 }}>{visit.documentNumber}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Driver</div>
-          <div style={{ fontWeight: 600 }}>{visit.driverName || '—'}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Status</div>
-          <Chip
-            size="xs"
-            tone={
-              visit.status === 'MEASURED'
-                ? 'success'
-                : visit.status === 'PENDING_MEASUREMENT'
-                  ? 'warning'
-                  : 'neutral'
-            }
-            variant="soft"
-          >
-            {visit.status}
-          </Chip>
-        </div>
-        {visit.unloadStartedAt && (
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Unload Time</div>
-            <div style={{ fontSize: '12px' }}>
-              {formatDateTime(visit.unloadStartedAt)}
-              {visit.unloadEndedAt ? ` - ${formatDateTime(visit.unloadEndedAt)}` : ''}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Flags */}
-      {visit.flags.length > 0 && (
-        <div
-          style={{
-            padding: '10px 14px',
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-          }}
-        >
-          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <AlertTriangle size={14} /> Attention Flags
-          </div>
-          {visit.flags.map((f, i) => (
-            <div key={i}>
-              • <strong>{f.code}</strong>: {f.message}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Chamber Inspection (Transit Loss) */}
-      <div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '8px',
-          }}
-        >
-          <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>
-            Chamber Inspection (Transit Integrity)
-          </h4>
-          {visit.chamberSummary.hasTransitDiscrepancy ? (
-            <Chip size="xs" tone="danger" variant="soft">
-              Transit Discrepancy Found
-            </Chip>
-          ) : (
-            <Chip size="xs" tone="success" variant="soft">
-              Seals & Dips OK
-            </Chip>
+}> = ({ visit, onClose }) => {
+  const state = visitState(visit.status);
+  return (
+    <Drawer
+      isOpen
+      onClose={onClose}
+      title={`Tanker visit · ${visit.tankerNumber}`}
+      widthVariant="wide"
+    >
+      <div className="flex flex-col gap-5 text-[13px]">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-card border border-border-soft bg-surface-alt p-4 sm:grid-cols-3">
+          <Fact label="Business date">{formatDate(visit.date)}</Fact>
+          <Fact label="Document" mono>
+            {visit.documentNumber}
+          </Fact>
+          <Fact label="Driver">{visit.driverName || '—'}</Fact>
+          <Fact label="Status">
+            <StatusChip status={state.status} label={state.label} size="md" />
+          </Fact>
+          {visit.unloadStartedAt && (
+            <Fact label="Unloaded">{unloadWindow(visit.unloadStartedAt, visit.unloadEndedAt)}</Fact>
           )}
-        </div>
+        </dl>
 
-        {visit.chambers.length === 0 ? (
+        {visit.flags.length > 0 && (
           <div
-            style={{
-              color: 'var(--text-muted)',
-              fontSize: '12px',
-              padding: '12px',
-              border: '1px dashed var(--border-default)',
-              borderRadius: 'var(--radius-input)',
-            }}
+            role="note"
+            className="flex flex-col gap-1 rounded-card bg-danger-bg px-3.5 py-2.5 text-danger-fg"
           >
-            No chamber check details recorded for this visit.
-          </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '1px solid var(--border-default)',
-                  backgroundColor: 'var(--bg-subtle)',
-                }}
-              >
-                <th style={th}>Chamber #</th>
-                <th style={thR}>Capacity (L)</th>
-                <th style={thR}>Dip (mm)</th>
-                <th style={th}>Mark</th>
-                <th style={th}>Seal</th>
-                <th style={th}>Emptied</th>
-                <th style={th}>Target Tank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visit.chambers.map((ch) => (
-                <tr key={ch.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={td}>Chamber {ch.chamberNo}</td>
-                  <td style={tdR}>
-                    {ch.capacityL !== null ? `${formatQty(ch.capacityL, 2)}` : '—'}
-                  </td>
-                  <td style={tdR}>{ch.dipMm !== null ? `${ch.dipMm}` : '—'}</td>
-                  <td style={td}>
-                    <Chip
-                      size="xs"
-                      tone={
-                        ch.mark === 'SHORT' ? 'danger' : ch.mark === 'EXCESS' ? 'info' : 'neutral'
-                      }
-                      variant="soft"
-                    >
-                      {ch.mark || 'OK'}
-                    </Chip>
-                  </td>
-                  <td style={td}>
-                    {ch.sealOk === false ? (
-                      <Chip size="xs" tone="danger" variant="soft">
-                        <XCircle size={10} style={{ marginRight: '3px' }} /> Broken
-                      </Chip>
-                    ) : (
-                      <Chip size="xs" tone="neutral" variant="soft">
-                        <CheckCircle2 size={10} style={{ marginRight: '3px' }} /> Intact
-                      </Chip>
-                    )}
-                  </td>
-                  <td style={td}>
-                    {ch.emptied === false ? (
-                      <Chip size="xs" tone="danger" variant="soft">
-                        Not Emptied
-                      </Chip>
-                    ) : (
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Yes</span>
-                    )}
-                  </td>
-                  <td style={td}>{ch.tankName || '—'}</td>
-                </tr>
+            <div className="flex items-center gap-1.5 font-semibold">
+              <Icon name="alert-triangle" size="sm" aria-hidden="true" /> Attention flags
+            </div>
+            <ul className="flex flex-col gap-0.5">
+              {visit.flags.map((f, i) => (
+                <li key={`${f.code}:${i}`}>{f.message}</li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          </div>
+        )}
+
+        <Section
+          title="Chamber inspection (transit)"
+          subtitle={
+            visit.chamberSummary.hasTransitDiscrepancy ? (
+              <StatusChip status="variance" label="Transit discrepancy found" size="md" />
+            ) : (
+              <StatusChip status="balanced" label="Seals and dips OK" size="md" />
+            )
+          }
+        >
+          <StatementTable
+            columns={CHAMBER_COLUMNS}
+            rows={visit.chambers}
+            rowKey={(c) => c.id}
+            totalRow={visit.chambers.length > 1 ? { label: 'Total capacity' } : undefined}
+            label="Chamber inspection"
+            emptyMessage="No chamber checks recorded for this visit."
+          />
+        </Section>
+
+        <Section title="Underground tank dips">
+          <StatementTable
+            columns={LINE_COLUMNS}
+            rows={visit.tankLines}
+            rowKey={(l) => l.id}
+            totalRow={visit.tankLines.length > 1 ? true : undefined}
+            label="Underground tank dips"
+            emptyMessage="No tank lines recorded for this visit."
+          />
+        </Section>
+
+        <Section title="Invoice reconciliation">
+          <StatementTable
+            columns={LINK_COLUMNS}
+            rows={visit.invoiceLinks}
+            rowKey={(i, idx) => `${i.purchaseId ?? 'none'}:${i.productId}:${idx}`}
+            label="Invoice reconciliation"
+            emptyMessage="No invoices linked to this visit."
+          />
+        </Section>
+
+        {visit.notes && (
+          <section className="flex flex-col gap-2">
+            <SectionHeader title="Operator notes" />
+            <p className="rounded-card bg-surface-alt px-3 py-2">{visit.notes}</p>
+          </section>
         )}
       </div>
-
-      {/* Tank Lines (Station Decantation Dip) */}
-      <div>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600 }}>
-          Underground Tank Dips & Decantation
-        </h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr
-              style={{
-                borderBottom: '1px solid var(--border-default)',
-                backgroundColor: 'var(--bg-subtle)',
-              }}
-            >
-              <th style={th}>Tank / Product</th>
-              <th style={thR}>Before Dip</th>
-              <th style={thR}>After Dip</th>
-              <th style={thR}>Sales During</th>
-              <th style={thR}>Received Volume</th>
-              <th style={thR}>RO Density</th>
-              <th style={thR}>Inv. Density</th>
-              <th style={thR}>Deviation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visit.tankLines.map((line) => (
-              <tr key={line.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={td}>
-                  <div style={{ fontWeight: 600 }}>{line.tankName}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {line.productName}
-                  </div>
-                </td>
-                <td style={tdR}>{line.beforeDip} mm</td>
-                <td style={tdR}>{line.afterDip !== null ? `${line.afterDip} mm` : '—'}</td>
-                <td style={tdR}>{formatQty(line.salesDuring, 2)} L</td>
-                <td style={{ ...tdR, fontWeight: 600 }}>
-                  {line.receivedQty !== null ? `${formatQty(line.receivedQty, 2)} L` : 'Pending'}
-                </td>
-                <td style={tdR}>{line.roDensity !== null ? `${line.roDensity}` : '—'}</td>
-                <td style={tdR}>{line.invoiceDensity !== null ? `${line.invoiceDensity}` : '—'}</td>
-                <td
-                  style={{
-                    ...tdR,
-                    fontWeight: line.densityDeviation !== null ? 600 : 'normal',
-                    color:
-                      line.densityDeviation !== null && Math.abs(line.densityDeviation) > 3
-                        ? 'var(--state-danger-fg)'
-                        : 'inherit',
-                  }}
-                >
-                  {line.densityDeviation !== null
-                    ? `${line.densityDeviation > 0 ? '+' : ''}${line.densityDeviation}`
-                    : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Linked Invoice & Variance */}
-      <div>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600 }}>
-          Invoice Reconciliation & Station Loss / Excess
-        </h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr
-              style={{
-                borderBottom: '1px solid var(--border-default)',
-                backgroundColor: 'var(--bg-subtle)',
-              }}
-            >
-              <th style={th}>Product</th>
-              <th style={th}>Invoice Number</th>
-              <th style={thR}>Invoice Qty</th>
-              <th style={thR}>Received Qty</th>
-              <th style={thR}>Variance</th>
-              <th style={th}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visit.invoiceLinks.map((inv, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={td}>
-                  <span style={{ fontWeight: 600 }}>{inv.productName}</span>{' '}
-                  <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
-                    ({inv.productCode})
-                  </span>
-                </td>
-                <td style={td}>{inv.invoiceNumber || '—'}</td>
-                <td style={tdR}>
-                  {inv.invoiceQty !== null ? `${formatQty(inv.invoiceQty, 2)} L` : '—'}
-                </td>
-                <td style={tdR}>
-                  {inv.receivedQty !== null ? `${formatQty(inv.receivedQty, 2)} L` : '—'}
-                </td>
-                <td
-                  style={{
-                    ...tdR,
-                    fontWeight: 600,
-                    color:
-                      inv.varianceQty !== null && inv.varianceQty < 0
-                        ? 'var(--state-danger-fg)'
-                        : inv.varianceQty !== null && inv.varianceQty > 0
-                          ? 'var(--state-success-fg)'
-                          : 'inherit',
-                  }}
-                >
-                  {inv.varianceQty !== null
-                    ? `${inv.varianceQty > 0 ? '+' : ''}${formatQty(inv.varianceQty, 2)} L`
-                    : '—'}
-                </td>
-                <td style={td}>
-                  <Chip
-                    size="xs"
-                    tone={
-                      inv.status === 'NOT_LINKED'
-                        ? 'neutral'
-                        : inv.status === 'PENDING_MEASUREMENT'
-                          ? 'warning'
-                          : inv.varianceType === 'SHORT'
-                            ? 'danger'
-                            : inv.varianceType === 'EXCESS'
-                              ? 'success'
-                              : 'neutral'
-                    }
-                    variant="soft"
-                  >
-                    {inv.statusLabel}
-                  </Chip>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Notes */}
-      {visit.notes && (
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-            Operator Notes
-          </div>
-          <div
-            style={{
-              fontSize: '12px',
-              padding: '8px 12px',
-              backgroundColor: 'var(--bg-subtle)',
-              borderRadius: 'var(--radius-input)',
-            }}
-          >
-            {visit.notes}
-          </div>
-        </div>
-      )}
-    </div>
-  </Drawer>
-);
+    </Drawer>
+  );
+};

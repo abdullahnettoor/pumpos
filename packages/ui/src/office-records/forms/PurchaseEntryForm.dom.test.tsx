@@ -1,0 +1,476 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import {
+  createTestQueryClient,
+  muteExpectedConsoleErrors,
+  renderWithProviders,
+} from '../../test/renderWithProviders.js';
+import { queryKeys } from '../../query/hooks.js';
+import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryForm.js';
+import { OfficeRecordContext } from '../../office-records/context.js';
+
+/**
+ * Purchases move stock and money, and the form does real work before it
+ * submits: it derives a fuel line's ₹/L from the total the operator actually
+ * typed and accepts optional invoice density on fuel lines without asking for a
+ * tank allocation. Both are asserted through the payload handed to `onSubmit`.
+ *
+ * The form reads the chosen date's business-day status (closed-day notice,
+ * #308), so it renders under the query provider. Without a stationId that
+ * query stays disabled; the closed-day tests seed it instead. Payment capture
+ * cases live in officeRecordForms.dom.test.tsx.
+ */
+const PETROL = { id: 'p-fuel', name: 'Petrol', productType: 'FUEL', unit: 'L' };
+const OIL = {
+  id: 'p-oil',
+  name: 'Engine Oil',
+  productType: 'MERCHANDISE',
+  unit: 'unit',
+  taxCategory: 'GST',
+  taxConfig: { gst_rate: 18, cess: 0 },
+};
+
+const baseProps = (over: Partial<PurchaseEntryFormProps> = {}): PurchaseEntryFormProps => ({
+  suppliers: [{ id: 's1', name: 'IOCL Depot' }],
+  products: [PETROL, OIL],
+  onSubmit: vi.fn(),
+  ...over,
+});
+
+/** The form's labels are not associated with their inputs, so walk from one. */
+const inputUnder = (labelText: string | RegExp, index = 0): HTMLInputElement => {
+  const label = screen.getAllByText(labelText)[index];
+  const input = label.parentElement?.querySelector('input');
+  if (!input) throw new Error(`no input under label ${String(labelText)}`);
+  return input as HTMLInputElement;
+};
+
+const submitForm = () => {
+  fireEvent.submit(document.querySelector('form')!);
+};
+
+describe('PurchaseEntryForm', () => {
+  let restoreConsole: () => void;
+  beforeEach(() => {
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
+  });
+  afterEach(() => {
+    cleanup();
+    restoreConsole();
+  });
+
+  describe('fuel rate derivation', () => {
+    it('submits the ₹/L implied by the total the operator typed, not a typed rate', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+
+      // ₹4,72,500 for 5,000 L = ₹94.50/L
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      const rate = await screen.findByText(/^₹94\.5000\//);
+      // Words in sans, figures in mono.
+      expect(rate.className).toContain('font-mono');
+      const words = rate.parentElement!;
+      expect(words.className).not.toContain('font-mono');
+      expect(words.textContent).toMatch(/^Derived: ₹94\.5000\/\S+ · tax-incl\.$/);
+      const cost = screen.getByText('Cost:', { exact: false });
+      expect(cost.className).not.toContain('font-mono');
+      expect(cost.querySelector('.font-mono')?.textContent).toBe('₹4,72,500.00');
+      expect(words.closest('[class*="font-mono"]')).toBeNull();
+
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      const [values] = onSubmit.mock.calls[0];
+      expect(values.lines[0].unitPrice).toBeCloseTo(94.5, 6);
+      expect(values.lines[0].quantity).toBe(5000);
+    });
+
+    it('re-derives the rate when the quantity changes, keeping the entered total fixed', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      await screen.findByText(/^₹94\.5000\//);
+
+      // A short delivery: same invoice total, fewer litres, so a higher ₹/L.
+      fireEvent.change(inputUnder(/^Quantity/), { target: { value: '4500' } });
+      await screen.findByText(/^₹105\.0000\//);
+
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].lines[0].unitPrice).toBeCloseTo(105, 6);
+    });
+
+    it('keeps the entered rate for a non-fuel line', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
+            },
+          })}
+        />,
+      );
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].lines[0].unitPrice).toBe(450);
+    });
+  });
+
+  describe('fuel and products on one invoice', () => {
+    it('refuses to submit and says why', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [
+                { productId: PETROL.id, quantity: 100, unitPrice: 90 },
+                { productId: OIL.id, quantity: 10, unitPrice: 450 },
+              ] as never,
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '9000' } });
+      submitForm();
+      await waitFor(() =>
+        expect(screen.getByText('Record fuel and products as separate purchases')).toBeDefined(),
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fuel invoice density', () => {
+    it('submits optional invoice density without requiring a tank allocation', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Invoice density (kg/m³ @15 °C)'), {
+        target: { value: '842.25' },
+      });
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].lines[0].invoiceDensity).toBe(842.25);
+      expect(onSubmit.mock.calls[0][0].lines[0].tankAllocations).toBeUndefined();
+    });
+
+    it('does not render tank allocations for fuel lines', () => {
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      expect(screen.queryByText('Tank Drop Allocation')).toBeNull();
+      expect(inputUnder('Invoice density (kg/m³ @15 °C)')).toBeTruthy();
+    });
+  });
+
+  describe('tax preview', () => {
+    const oilLine = {
+      supplierId: 's1',
+      lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
+    };
+
+    it('splits GST into CGST and SGST for an in-state supply', () => {
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: false })} />,
+      );
+      expect(screen.getByText('CGST + SGST')).toBeDefined();
+      expect(screen.queryByText('IGST')).toBeNull();
+    });
+
+    it('charges IGST for an inter-state supply', () => {
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: oilLine, interState: true })} />,
+      );
+      expect(screen.getByText('IGST')).toBeDefined();
+      expect(screen.queryByText('CGST + SGST')).toBeNull();
+    });
+
+    it('adds tax on top of the taxable value for the invoice total', () => {
+      renderWithProviders(<PurchaseEntryForm {...baseProps({ defaultValues: oilLine })} />);
+      // 10 × ₹450 = ₹4,500 taxable, 18% GST = ₹810, invoice ₹5,310.
+      expect(screen.getAllByText(/4,500/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/810/)).toBeDefined();
+      expect(screen.getByText(/5,310/)).toBeDefined();
+    });
+
+    it('adds no client-side tax to fuel, which is recorded tax-inclusive', async () => {
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 100 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '9450' } });
+      await waitFor(() => expect(screen.getAllByText(/9,450/).length).toBeGreaterThan(0));
+    });
+  });
+
+  describe('validation', () => {
+    it('does not submit without a supplier', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: { lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never] },
+          })}
+        />,
+      );
+      submitForm();
+      await waitFor(() => expect(screen.getByText('Supplier is required')).toBeDefined());
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('does not submit a line with no product', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: { supplierId: 's1' } })} />,
+      );
+      submitForm();
+      await waitFor(() => expect(screen.getByText('Product is required')).toBeDefined());
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('payment capture', () => {
+    const oilLine = {
+      supplierId: 's1',
+      lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
+    };
+
+    it('sends no payment unless "Also record a supplier payment now" is ticked', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ onSubmit, defaultValues: oilLine })} />,
+      );
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][1]).toBeUndefined();
+    });
+  });
+
+  describe('reopening for a different purchase', () => {
+    // Guards the effect that resets the form when `defaultValues` changes. A
+    // "fix" that runs it only on mount would show the previous purchase's
+    // quantities against the new supplier — invisible without this.
+
+    it('shows the new purchase, not the previous one', async () => {
+      const { rerender } = renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              invoiceNumber: 'INV-001',
+              lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
+            },
+          })}
+        />,
+      );
+      expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('10');
+
+      rerender(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              invoiceNumber: 'INV-002',
+              lines: [{ productId: OIL.id, quantity: 25, unitPrice: 500 } as never],
+            },
+          })}
+        />,
+      );
+      await waitFor(() => expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('25'));
+    });
+
+    it('discards what was typed against the previous purchase', async () => {
+      const { rerender } = renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(inputUnder('Invoice density (kg/m³ @15 °C)'), { target: { value: '842' } });
+
+      rerender(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 3000 } as never],
+            },
+          })}
+        />,
+      );
+
+      // Carrying either figure over would book the wrong litres into the tank.
+      await waitFor(() =>
+        expect((inputUnder('Total amount (₹)') as HTMLInputElement).value).toBe(''),
+      );
+      expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('3000');
+      expect((inputUnder('Invoice density (kg/m³ @15 °C)') as HTMLInputElement).value).toBe('');
+    });
+
+    it('does not require tank allocation when opening a fuel line', async () => {
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      expect(inputUnder('Invoice density (kg/m³ @15 °C)')).toBeTruthy();
+      fireEvent.change(inputUnder('Total amount (₹)'), { target: { value: '472500' } });
+
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].lines[0].tankAllocations).toBeUndefined();
+    });
+  });
+
+  // Product stock purchases remain sealed; fuel invoices are Office Records.
+  describe('closed business day', () => {
+    const dayStatus = (date: string, state: 'OPEN' | 'CLOSED') => ({
+      currentBusinessDate: '2026-03-15',
+      requestedBusinessDate: date,
+      requestedState: state,
+      requestedBusinessDay: null,
+      openBusinessDays: [],
+      pastOpenBusinessDays: [],
+      recentBusinessDays: [],
+      recentFromBusinessDate: '2026-03-01',
+    });
+    const renderFor = (date: string, state: 'OPEN' | 'CLOSED') => {
+      const queryClient = createTestQueryClient();
+      queryClient.setQueryData(queryKeys.businessDayStatus('st-1', date), dayStatus(date, state));
+      const onSubmit = vi.fn();
+      renderWithProviders(
+        <OfficeRecordContext.Provider
+          value={{
+            stationId: 'st-1',
+            balances: new Map(),
+            disabled: false,
+            today: '2026-03-15',
+            businessDate: '2026-03-15',
+          }}
+        >
+          <PurchaseEntryForm
+            {...baseProps({
+              onSubmit,
+              defaultValues: {
+                supplierId: 's1',
+                transactionDate: date,
+                lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never],
+              },
+            })}
+          />
+        </OfficeRecordContext.Provider>,
+        { queryClient },
+      );
+      return onSubmit;
+    };
+    it('warns and blocks submit when the chosen day is closed', async () => {
+      const onSubmit = renderFor('2026-03-10', 'CLOSED');
+      expect(await screen.findByText('2026-03-10 is closed.')).toBeTruthy();
+      submitForm();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an open past day', '2026-03-12'],
+      ['today', '2026-03-15'],
+    ])('shows no warning for %s', (_label, date) => {
+      renderFor(date, 'OPEN');
+      expect(screen.queryByText(/is closed\./)).toBeNull();
+    });
+  });
+
+  describe('fuel or products', () => {
+    it('dates fuel by its invoice and products by their Business date', () => {
+      renderWithProviders(
+        <PurchaseEntryForm {...baseProps({ defaultValues: { supplierId: 's1' } })} />,
+      );
+      expect(screen.getByText('Invoice date')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: 'Products' }));
+      expect(screen.getByText('Business date')).toBeTruthy();
+    });
+
+    it('starts on Products when the invoice lines are products', () => {
+      renderWithProviders(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: OIL.id, quantity: 1, unitPrice: 10 } as never],
+            },
+          })}
+        />,
+      );
+      expect(screen.getByRole('radio', { name: 'Products' }).getAttribute('aria-checked')).toBe(
+        'true',
+      );
+    });
+  });
+});

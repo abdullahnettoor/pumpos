@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { BootScreen, Login, useStations, runTask } from '@pump/ui';
-import type { Station } from '@pump/shared';
+import { BootScreen, Login, useStations, runTask, useEffectivePrincipal } from '@pump/ui';
+import { isAttendant, type Station } from '@pump/shared';
 import { useOwnHandover } from './lib/handover/useOwnHandover.js';
 import { useSession, signOut } from './lib/session.js';
 import { MobileShell } from './shell/MobileShell.js';
@@ -39,8 +39,14 @@ export const App: React.FC = () => {
 
   // Non-attendant roles who happen to be assigned to a DU on an open shift get a
   // pinned handover card on Home (the same self-service form as the Attendant shell).
-  const hasHandover = useOwnHandover(status === 'ready' && role !== 'Attendant') !== null;
-  const allowedTabs = useMemo(() => tabsForRole(role, hasHandover), [role, hasHandover]);
+  const hasHandover = useOwnHandover(status === 'ready' && !isAttendant(role)) !== null;
+  // Tabs follow the effective Permissions (ADR 0013): the document refreshes on
+  // focus and every minute, and `permissions` re-derives the dock when it changes.
+  const principal = useEffectivePrincipal(role);
+  const allowedTabs = useMemo(
+    () => tabsForRole(role, hasHandover, principal),
+    [role, hasHandover, principal],
+  );
 
   // The operator's pick, falling back to the first station until stations load.
   // Derived rather than synced by an effect, so the fallback is right on first render.
@@ -79,7 +85,7 @@ export const App: React.FC = () => {
     runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error));
 
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
-  if (role === 'Attendant') {
+  if (isAttendant(role)) {
     return <AttendantScreen userName={userName} onSignOut={onSignOut} stations={stations} />;
   }
 

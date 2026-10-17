@@ -11,6 +11,10 @@
 export const INSIGHTS_RANGE_DAYS = [7, 30, 90] as const;
 export type InsightsRangeDays = (typeof INSIGHTS_RANGE_DAYS)[number];
 
+/** The dashboard's trend window. Only the sales block accepts it; no picker offers it. */
+export const DASHBOARD_TREND_DAYS = 14 as const;
+export type SalesInsightsDays = InsightsRangeDays | typeof DASHBOARD_TREND_DAYS;
+
 /** Closed Business Days each period needs before the tab compares it with the other. */
 export const INSIGHTS_MIN_COMPARABLE_DAYS = 3;
 
@@ -95,6 +99,8 @@ export interface InsightsSales {
   previousAverage: number;
   best: { date: string; sales: number } | null;
   trend: InsightsTrendDay[];
+  /** The previous equal period's per-day series, same shape as `trend` (one entry per calendar date). */
+  previousTrend: InsightsTrendDay[];
   productMix: InsightsProductMixLine[];
   /** Fuel metered in other units than litres: noted beside the mix. */
   otherUnitFuels: InsightsOtherUnitFuel[];

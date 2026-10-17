@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { reconcileDrawer } from '@pump/shared';
+import { drawerProductCash, reconcileDrawer } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -57,6 +57,10 @@ export interface RecordHandoverResult {
   terminalEntries: HandoverTerminalEntry[];
   nozzleReadings: AcceptedHandoverReading[];
   expectedFuelSales: number;
+  /**
+   * Product cash this Drawer counts: the Attendant's whole product cash on the
+   * Drawer `productCashDrawer` names, 0 on their other Drawers (#419).
+   */
   merchandiseCash: number;
   expectedSales: number;
   expectedTotal: number;
@@ -319,10 +323,17 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     // DU cash sales are the metered total not settled by card, UPI, credit or OMC card.
     const openingFloat = source.openingFloat;
     const cashDrops = Number(cmd.cashDrops ?? 0);
+    // A product sale carries no DU, so the Attendant's product cash is counted
+    // in one Drawer only: their first DU by code (#419, Fix A).
+    const merchandiseCash = drawerProductCash({
+      assignments: source.attendantDus,
+      duId: cmd.duId,
+      productCash: source.merchandiseCash,
+    });
     const { expectedTotal, declaredTotal, expectedCash, varianceAmount } = reconcileDrawer({
       openingFloat,
       expectedFuelSales,
-      merchandiseCash: source.merchandiseCash,
+      merchandiseCash,
       cardHandedOver,
       upiHandedOver,
       creditSales: source.creditSales,
@@ -404,7 +415,7 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       terminalEntries: saved.terminalEntries,
       nozzleReadings: acceptedReadings,
       expectedFuelSales,
-      merchandiseCash: source.merchandiseCash,
+      merchandiseCash,
       expectedSales: expectedFuelSales,
       expectedTotal,
       creditSales: source.creditSales,

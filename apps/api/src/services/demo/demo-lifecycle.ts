@@ -1,4 +1,4 @@
-import { and, eq, ilike, ne, sql } from 'drizzle-orm';
+import { and, eq, ilike, isNotNull, ne, sql } from 'drizzle-orm';
 import { schema, seedDemoStation, type DbClient } from '@pump/db';
 import { err, ok, SuspendOrganization, type CoreError, type Result } from '@pump/core';
 import { buildPlatformContext } from '../../infra/context.js';
@@ -54,6 +54,33 @@ export function logDemoError(
     ...detail,
     detail: error instanceof Error ? error.message : String(error),
   });
+}
+
+// No lookalikes (0/o, 1/l/i) so the login can be read out or typed from a chat.
+const SHAREABLE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+function randomCode(length: number, alphabet = SHAREABLE_ALPHABET): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+/**
+ * A short, shareable demo login, e.g. `samplefuels-k7m2qx@demo.pumpos.app`.
+ * Six random characters keep collisions negligible across demos with the
+ * same station name.
+ */
+export function demoOwnerEmail(stationName: string): string {
+  const slug =
+    stationName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 16) || 'demo';
+  return `${slug}-${randomCode(6)}@demo.pumpos.app`;
+}
+
+/** A short demo password that meets the 8-character minimum, e.g. `Demo4827`. */
+export function demoPassword(): string {
+  return `Demo${randomCode(4, '0123456789')}`;
 }
 
 /** Lock the organisation row and confirm it is still a demo. */
@@ -232,7 +259,49 @@ export interface CreatedDemo {
   ownerEmail: string;
   authUserId: string;
   password?: string;
+  /** On-duty attendant login (same password); only for demos without a prospect email. */
+  attendantEmail?: string;
+  attendantName?: string;
   demoExpiresAt: string;
+}
+
+/** Preferred demo attendant login, when on duty (Anitha S has handed over). */
+const PREFERRED_LOGIN_ATTENDANT = 'Ravi K';
+
+/** The demo attendant login for an owner login: `slug-code-attendant@…`. */
+export function demoAttendantEmail(ownerEmail: string): string {
+  return ownerEmail.replace('@', '-attendant@');
+}
+
+/**
+ * An attendant still on duty in the open shift: assigned to a DU and not yet
+ * handed over. Null on demos too small to leave one (one DU or one attendant).
+ */
+async function onDutyAttendant(tx: DbClient, shiftId: string) {
+  const assigned = await tx
+    .select({ id: schema.users.id, fullName: schema.users.fullName })
+    .from(schema.shiftStaffAssignments)
+    .innerJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+    .where(
+      and(
+        eq(schema.shiftStaffAssignments.shiftId, shiftId),
+        eq(schema.users.role, 'Attendant'),
+        sql`${schema.users.id} not in (select user_id from attendant_handovers where shift_id = ${shiftId})`,
+      ),
+    );
+  const sorted = assigned.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  return sorted.find((user) => user.fullName === PREFERRED_LOGIN_ATTENDANT) ?? sorted[0] ?? null;
+}
+
+async function linkAttendantLogin(
+  tx: DbClient,
+  userId: string,
+  login: { authUserId: string; email: string },
+) {
+  await tx
+    .update(schema.users)
+    .set({ authUserId: login.authUserId, email: login.email })
+    .where(eq(schema.users.id, userId));
 }
 
 /**
@@ -301,12 +370,18 @@ export async function createDemo(
 
   let organizationId: string | undefined;
   let authUserId: string | undefined;
+  let attendantAuthUserId: string | undefined;
   try {
     if (prospectEmail) {
       const seeded = await runInTransaction(db, async (tx) => {
         const [organization] = await tx
           .insert(schema.organizations)
-          .values({ name: organizationName, isDemo: true, demoExpiresAt: expiresAt })
+          .values({
+            name: organizationName,
+            isDemo: true,
+            subscriptionPlan: 'PRO',
+            demoExpiresAt: expiresAt,
+          })
           .returning();
         const [owner] = await tx
           .insert(schema.users)
@@ -352,8 +427,8 @@ export async function createDemo(
       });
     }
 
-    const ownerEmail = `owner+${crypto.randomUUID()}@demo.pumpos.invalid`;
-    const password = `${crypto.randomUUID()}aA1!`;
+    const ownerEmail = demoOwnerEmail(setup.stationName);
+    const password = demoPassword();
     const created = await admin.createUser({
       email: ownerEmail,
       password,
@@ -368,25 +443,39 @@ export async function createDemo(
     // leaves an org that the demo Delete/expiry can always remove.
     await db
       .update(schema.organizations)
-      .set({ isDemo: true, demoExpiresAt: expiresAt })
+      .set({ isDemo: true, subscriptionPlan: 'PRO', demoExpiresAt: expiresAt })
       .where(eq(schema.organizations.id, owner.organizationId));
     const seeded = await runInTransaction(db, async (tx) => {
       await limitAbandonedTransaction(tx);
-      await seedDemoOrganization(tx, owner.organizationId, owner.id, setup, { now });
-      return ok(true);
+      const { history } = await seedDemoOrganization(tx, owner.organizationId, owner.id, setup, {
+        now,
+      });
+      return ok(await onDutyAttendant(tx, history.eveningShiftId));
     });
     if (!seeded.success) throw new Error(seeded.error.message);
+    const onDuty = seeded.data;
+    let attendantEmail: string | undefined;
+    if (onDuty) {
+      attendantEmail = demoAttendantEmail(ownerEmail);
+      const attendant = await admin.createUser({ email: attendantEmail, password });
+      attendantAuthUserId = attendant.id;
+      await linkAttendantLogin(db, onDuty.id, { authUserId: attendant.id, email: attendantEmail });
+    }
     logDemo('DEMO_ORGANIZATION_CREATED', { organizationId, platformAdmin: actor.email });
     return ok({
       organizationId,
       ownerEmail: owner.email ?? ownerEmail,
       authUserId,
       password,
+      attendantEmail,
+      attendantName: onDuty?.fullName,
       demoExpiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
     logDemoError('create', { organizationId, authUserId }, error);
     await rollbackCreate(db, admin, organizationId, authUserId);
+    if (attendantAuthUserId)
+      await deleteLogins(admin, organizationId ?? 'unknown', [attendantAuthUserId]);
     return failure('DEMO_CREATE_FAILED', 'Could not create the demo organization.');
   }
 }
@@ -447,9 +536,29 @@ export async function resetDemo(
     const setup = station
       ? storedDemoSetup(station)
       : { stationName: 'Sample Fuels', town: 'Thrissur', tanks: 2, nozzles: 6, attendants: 3 };
+    const [attendantLogin] = await tx
+      .select({ authUserId: schema.users.authUserId, email: schema.users.email })
+      .from(schema.users)
+      .where(
+        and(
+          eq(schema.users.organizationId, organizationId),
+          eq(schema.users.role, 'Attendant'),
+          isNotNull(schema.users.authUserId),
+        ),
+      )
+      .limit(1);
     await limitAbandonedTransaction(tx);
     await clearDemoData(tx, organizationId, { keepOwner: true });
-    await seedDemoOrganization(tx, organizationId, owner.id, setup, { now: options.now });
+    const { history } = await seedDemoOrganization(tx, organizationId, owner.id, setup, {
+      now: options.now,
+    });
+    // Keep the shared attendant login working: move it to whoever is on duty now.
+    const onDuty = await onDutyAttendant(tx, history.eveningShiftId);
+    if (onDuty && attendantLogin?.authUserId && attendantLogin.email)
+      await linkAttendantLogin(tx, onDuty.id, {
+        authUserId: attendantLogin.authUserId,
+        email: attendantLogin.email,
+      });
     return ok({ organizationId, reset: true as const });
   });
   if (result.success)

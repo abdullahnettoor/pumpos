@@ -17,7 +17,7 @@ import {
   type ReportTemplate,
   type SectionState,
 } from '../../../services/reports/reportTemplates.js';
-import { ReportPaperPreview } from './ReportPaperPreview.js';
+import { ReportDocPreview } from './ReportDocPreview.js';
 
 export interface ReportTemplateDrawerProps {
   template: ReportTemplate;
@@ -33,9 +33,10 @@ export interface ReportTemplateDrawerProps {
 
 /**
  * Customize one report's layout (#332): pick a preset, then switch sections
- * on or off and move them with ↑/↓, with the page preview beside the list.
- * Hovering a row outlines its section on the page and the other way round.
- * The letterhead always prints first. Closing with unsaved edits asks first.
+ * on or off and move them with ↑/↓, with the printed document beside the list
+ * (#605: the real PDF on sample data, redrawn a moment after each change).
+ * Hovering a row marks it. The letterhead always prints first. Closing with
+ * unsaved edits asks first.
  */
 export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
   template,
@@ -97,7 +98,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
           </Button>
           <span className="flex-1" />
           {dirty ? (
-            <Chip tone="warning" dot>
+            <Chip size="md" tone="warning" dot>
               Unsaved changes
             </Chip>
           ) : null}
@@ -110,7 +111,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
       <div className="flex flex-col gap-4">
         <p className="text-[12px] text-ink-muted">{template.when}</p>
 
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-col gap-2">
               <SubHeading>Start from</SubHeading>
@@ -130,7 +131,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
                     )}
                   >
                     <span className="text-[12px] font-semibold text-ink-strong">{p.name}</span>
-                    <span className="text-[11px] text-ink-muted">{p.description}</span>
+                    <span className="text-[12px] text-ink-muted">{p.description}</span>
                   </button>
                 ))}
               </div>
@@ -158,15 +159,16 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
 
           <div className="flex flex-col gap-2 lg:sticky lg:top-0">
             <SubHeading>Preview · {paper === 'LETTER' ? 'Letter' : 'A4'}</SubHeading>
-            <ReportPaperPreview
+            <ReportDocPreview
               template={template}
               sections={sections}
               station={station}
               paper={paper}
               showLogo={showLogo}
-              highlighted={highlighted}
-              onHighlight={setHighlighted}
             />
+            <span className="text-[12px] text-ink-muted">
+              The printed document on sample figures.
+            </span>
           </div>
         </div>
       </div>
@@ -175,7 +177,7 @@ export const ReportTemplateDrawer: React.FC<ReportTemplateDrawerProps> = ({
 };
 
 const SubHeading: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+  <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
     {children}
   </span>
 );
@@ -221,13 +223,14 @@ const SectionRow: React.FC<{
           <span className={cn(!section.enabled && 'text-ink-faint')}>
             {label}
             {locked ? (
-              <Chip size="xs" className="ml-2" title="The letterhead always prints first">
+              <Chip size="md" className="ml-2" title="The letterhead always prints first">
                 Always
               </Chip>
             ) : null}
           </span>
         }
-        description={template.descriptions[section.key]}
+        // The shared Switch prints its description at 11px (#539); 12px here.
+        description={<span className="text-[12px]">{template.descriptions[section.key]}</span>}
       />
       {locked ? null : (
         <span className="flex shrink-0 gap-1">

@@ -139,6 +139,21 @@ describe('cloud request auth', () => {
     expect(keys).toEqual(['key-1', 'key-1']);
   });
 
+  it('closes a shift and writes readings with an Idempotency-Key (#534)', async () => {
+    setAuthToken('t');
+    fetchMock
+      .mockResolvedValueOnce(okResponse({ shift: { id: 's1' } }))
+      .mockResolvedValueOnce(okResponse({}));
+
+    const service = new CloudShiftService();
+    await service.closeShift('s1', { closingCash: 100 } as any, { idempotencyKey: 'close-1' });
+    await service.updateNozzleReadings('s1', [], { idempotencyKey: 'read-1' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/shifts/close');
+    expect(headersOf(fetchMock.mock.calls[0])['Idempotency-Key']).toBe('close-1');
+    expect(headersOf(fetchMock.mock.calls[1])['Idempotency-Key']).toBe('read-1');
+  });
+
   it('updates one customer field with an Idempotency-Key and sends nothing else', async () => {
     setAuthToken('t');
     fetchMock.mockResolvedValueOnce(okResponse({ id: 'c1', creditLimit: '5000' }));

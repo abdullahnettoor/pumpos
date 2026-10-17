@@ -11,7 +11,7 @@
  */
 
 /** Commercial package assigned to an Organization. `CORE` is the baseline. */
-export type ProductPlanKey = 'CORE';
+export type ProductPlanKey = 'CORE' | 'PRO' | 'PRO_PLUS';
 
 /**
  * Capability keys the client gates on. The *definition* (title, message,
@@ -20,11 +20,15 @@ export type ProductPlanKey = 'CORE';
  */
 export const ATTENDANT_REPORT_CAPABILITY = 'reports.attendant';
 
+/** Per-user Permission changes on top of Role defaults (ADR 0013). */
+export const CUSTOM_PERMISSIONS_CAPABILITY = 'permissions.custom';
+
 /**
- * A numeric allowance supplied by a Product Plan. `station_count` is the only
- * Limit in E1: every Station row an Organization owns consumes one.
+ * A numeric allowance supplied by a Product Plan. `station_count`: every
+ * Station row an Organization owns consumes one. `login_count`: every active
+ * user with a login consumes one (#648).
  */
-export type LimitKey = 'station_count';
+export type LimitKey = 'station_count' | 'login_count';
 
 /** The Organization's commercial access state. */
 export type SubscriptionStatus =
@@ -110,6 +114,12 @@ export interface AccessDocument {
   capabilities: Record<string, AccessCapabilityEntry>;
   limits: Record<LimitKey, AccessLimitEntry>;
   subscription: AccessSubscription;
+  /**
+   * The requesting user's effective Permission ids (Role defaults, plus their
+   * changes when entitled). Presentation only: the API checks the same set on
+   * every request. Absent on documents not built for a user (platform view).
+   */
+  permissions?: string[];
 }
 
 /**
@@ -162,6 +172,25 @@ export function capabilityState(
 }
 
 /**
+ * A Limit value at or above this is "no limit". Demo Organizations are not
+ * metered, so the API lifts their Limits to this sentinel rather than leaving
+ * the Limit out; every screen that shows a Limit reads it through
+ * `isUnlimitedLimit` so the sentinel is never printed as a number (#603).
+ */
+export const UNLIMITED_LIMIT = 1_000_000;
+
+/** Is this Limit value the "no limit" sentinel? */
+export function isUnlimitedLimit(value: number): boolean {
+  return value >= UNLIMITED_LIMIT;
+}
+
+/** One Limit as a line of text: `1 of 3 used`, `3 of 3 used (reached)`, `1 used · no limit`. */
+export function limitUsageText(entry: AccessLimitEntry): string {
+  if (isUnlimitedLimit(entry.value)) return `${entry.used} used · no limit`;
+  return `${entry.used} of ${entry.value} used${entry.reached ? ' (reached)' : ''}`;
+}
+
+/**
  * The sentence shown when Station capacity is used up. Defined once: the API
  * puts it in the LIMIT_REACHED error, the Organization screen shows it beside
  * a disabled onboarding action, and they must not drift.
@@ -170,6 +199,14 @@ export function stationLimitMessage(value: number): string {
   return value === 1
     ? 'This plan includes one Station. Contact PumpOS to add another.'
     : `This plan includes ${value} Stations. Contact PumpOS to add another.`;
+}
+
+/**
+ * The sentence shown when the login allowance is used up. Defined once: the
+ * API puts it in the LIMIT_REACHED error and the invite screens show it.
+ */
+export function loginLimitMessage(value: number): string {
+  return `Your plan's login limit is reached (${value}). Contact PumpOS to add more logins.`;
 }
 
 /** Error code the API returns when the Organization lacks a capability. */

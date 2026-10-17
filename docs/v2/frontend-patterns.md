@@ -25,9 +25,12 @@ packages/ui/src/
   services/
     cloud.ts                  HTTP service layer (envelope unwrapping)
     supabase.ts               Supabase client
+  pump-ds/                    design system: Button, Input/Select, Chip, KpiTile, tables, …
+  statement/, office-records/ Statement module; Office Record entry + keyed save
   components/
-    primitives/               PageLayout, KpiCard, DataTable
-    Drawer, StatusBadge, SyncIndicator, LoadingSpinner, ErrorBoundary
+    page-frame/               PageFrame
+    primitives/               Field, Banner, Toggle, Combobox, ConfirmDialog, Toast, DataTable
+    Drawer, SyncIndicator, ErrorBoundary
     AppShell, Dashboard/, Shifts/, StationSetup/, transactions/, *List.tsx
 ```
 
@@ -77,33 +80,26 @@ cached data via an effect keyed on the query data.
 
 ## Primitives
 
-| Primitive                                                         | Use                                                                     |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `PageLayout`                                                      | screen header (title/subtitle/actions) + optional toolbar + content     |
-| `KpiCard`                                                         | compact metric tile (mono numbers, semantic tone)                       |
-| `DataTable<T>`                                                    | dense, sortable TanStack Table with built-in loading/empty/error states |
-| `Drawer`                                                          | slide-in panel (prefer drawers over stacked modals)                     |
-| `StatusBadge`, `SyncIndicator`, `LoadingSpinner`, `ErrorBoundary` | state-forward UI                                                        |
+The module catalog is [`packages/ui/src/pump-ds/README.md`](../../packages/ui/src/pump-ds/README.md)
+("Modules"). The ones every screen uses:
+
+| Module                                                         | Use                                                                          |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `PageFrame`                                                    | page header: back link, title + actions, tabs (sticky), toolbar, content     |
+| `SectionHeader` + `ControlBar`                                 | in-page heading; its `controls` sit directly above the table they filter     |
+| `KpiTile` / `TileSection`                                      | at most 4 tiles; a shared period named once on the strip, none on a balance  |
+| `DataSection`                                                  | a region that loads its own data (loading / refused / error + Retry / empty) |
+| `InteractiveTable`, `GroupedTable`, `StatementTable`           | tables from one `TableColumn<T>[]`, with total rows                          |
+| `Drawer`                                                       | slide-in panel (prefer drawers over stacked modals)                          |
+| `StatusChip`, `VarianceChip`, `SyncIndicator`, `ErrorBoundary` | state-forward UI                                                             |
 
 ```tsx
-<PageLayout
-  title="Inventory Management"
-  subtitle="…"
-  actions={<button className="btn btn-secondary btn-sm">Refresh</button>}
->
-  <DataTable
-    columns={cols}
-    data={q.data}
-    isLoading={q.isLoading}
-    error={q.error as Error | null}
-    emptyMessage="No records."
-    getRowId={(r) => r.id}
-    initialSorting={[{ id: 'businessDate', desc: true }]}
-  />
-</PageLayout>
+<PageFrame route={ROUTES.inventory} actions={<Button variant="secondary">Refresh</Button>}>
+  <DataSection title="Stock movements" query={q} placeholderHeight={240} shape="bare">
+    <InteractiveTable columns={cols} rows={q.data ?? []} rowKey={(r) => r.id} />
+  </DataSection>
+</PageFrame>
 ```
-
-`DataTable` columns are TanStack `ColumnDef<T>` with `accessorKey` + `cell` renderers.
 
 ## Forms
 
@@ -129,13 +125,16 @@ state-forward, operator-speed.
 
 - **Tokens** (`index.css`): `--bg-*`, `--text-*`, `--brand-primary` (Petrol Green),
   `--brand-secondary` (Diesel Blue), `--brand-warning` (Amber), `--brand-danger` (Red),
-  `--state-*-bg/fg`, `--radius-*`, `--space-1..10`. Fonts: IBM Plex Sans / Mono.
-- **Classes**: `.btn` + `.btn-sm/md/lg` + `.btn-primary/secondary/danger/ghost`; `.card*`;
-  forms `.form-input` / `.form-label` / `.input` / `.select` / `.input-compact` /
-  `.textarea` / `.field-label` / `.field-error`; tables `.dense-table` (or use `DataTable`).
-- **Prefer tokens + classes over inline styles and raw hex.** Numbers use the mono font.
-  Keep operator screens tighter than manager/owner screens. Always handle
-  loading/empty/error states.
+  `--state-*-bg/fg`, `--text-on-*`, `--shadow-*`, `--overlay-*`, `--focus-ring`,
+  `--radius-*`, `--space-1..10`. Fonts: Plus Jakarta Sans / Geist Mono.
+- **Styling**: Tailwind utilities over those tokens (`bg-surface`, `text-ink-muted`,
+  `border-border-soft`) and pump-ds components (`Button`, `Input`, `Select`, `Chip`).
+  The legacy `.btn-*`, `.card*`, `.badge-*`, `.form-*` and `.dense-table` classes were
+  deleted in #539. The plain classes left in `index.css` are the drawer, the form field
+  (`.field-label`, `.input`, `.textarea`) and print (`.print-area`, `.no-print`).
+- **No inline styles or raw hex.** The style check (`npm run test:classes -w @pump/ui`)
+  fails on raw colours. Nothing below 12px except 10px table headers. Numbers use the
+  mono font. Always handle loading/empty/error states.
 
 ## Navigation
 
@@ -147,8 +146,10 @@ gated.
 ## Conventions for new screens
 
 1. Read data via query hooks; mutate via `cloud.ts`; refresh via `useInvalidateOperational`.
-2. Wrap in `PageLayout`; render lists with `DataTable`.
-3. Forms = RHF + Zod (`@pump/shared` schemas) inside a `Drawer`.
-4. Use tokens/classes; cover loading/empty/error; mono for numbers.
+2. Wrap in `PageFrame`; load regions through `DataSection`; render lists with
+   `InteractiveTable`.
+3. Forms = RHF + Zod (`@pump/shared` schemas) inside a `Drawer`; save through
+   `useKeyedSave`.
+4. Use tokens and pump-ds components; cover loading/empty/error; mono for numbers.
 
 See [ui-assessment.md](ui-assessment.md) for the current migration status and backlog.

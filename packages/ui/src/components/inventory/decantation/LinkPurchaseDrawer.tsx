@@ -71,31 +71,22 @@ const LinkForm: React.FC<LinkPurchaseDrawerProps & { decantation: DecantationVie
 
   return (
     <Drawer isOpen onClose={onClose} title={`Link purchase · ${decantation.tankerNumber}`}>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+      <div className="mb-2.5 text-[12px] text-ink-muted">
         Pick the Fuel Purchase invoice for each product on this tanker. Variance and the density
         check update once linked.
       </div>
       {error && (
         <div
           role="alert"
-          style={{
-            background: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: 12,
-            marginBottom: 10,
-          }}
+          className="mb-2.5 rounded-input bg-danger-bg px-3 py-2 text-[12px] text-danger-fg"
         >
           {error}
         </div>
       )}
       {productIds.map((productId, i) => (
-        <div key={productId} style={{ marginBottom: 14 }}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 6 }}
-          >
-            <span style={{ fontWeight: 600 }}>{productNames[productId] ?? 'Fuel'}</span>
+        <div key={productId} className="mb-3.5">
+          <div className="mb-1.5 flex items-center gap-2 text-[12px]">
+            <span className="font-semibold">{productNames[productId] ?? 'Fuel'}</span>
             {linked[productId] && (
               <UnlinkButton
                 label={productNames[productId] ?? 'Fuel'}

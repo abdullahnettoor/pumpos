@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button, Input } from '../../pump-ds/index.js';
 
 export interface ConfirmOptions {
@@ -30,6 +38,18 @@ const ConfirmContext = createContext<ConfirmFn | null>(null);
 export const useConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) => {
   const ask = useAsk();
   return useCallback(async (options: ConfirmOptions) => (await ask(options)).confirmed, [ask]);
+};
+
+/**
+ * `useConfirm` for code that may render outside a `<ConfirmProvider>` (a
+ * shared guard, a test render): null there, so the caller can fall back.
+ */
+export const useOptionalConfirm = (): ((options: ConfirmOptions) => Promise<boolean>) | null => {
+  const ask = useContext(ConfirmContext);
+  return useMemo(
+    () => (ask ? async (options: ConfirmOptions) => (await ask(options)).confirmed : null),
+    [ask],
+  );
 };
 
 /**
@@ -90,17 +110,9 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
         <div
           role="presentation"
           onMouseDown={() => close(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            // Above drawers (1001): a confirm is often asked from inside one.
-            zIndex: 1100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            padding: '16px',
-          }}
+          // Above drawers (1001): a confirm is often asked from inside one. The
+          // scrim takes the dialog blur (#604); a drawer's scrim does not.
+          className="fixed inset-0 z-[1100] flex items-center justify-center bg-(--overlay-scrim) p-4 backdrop-blur-(--overlay-blur)"
         >
           <div
             role="alertdialog"
@@ -113,7 +125,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-soft)',
               borderRadius: 'var(--radius-card)',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+              boxShadow: 'var(--shadow-dialog)',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',

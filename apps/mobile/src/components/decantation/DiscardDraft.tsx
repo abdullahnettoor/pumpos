@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useDiscardDecantation, useToast } from '@pump/ui';
+import { useDiscardDecantation, useToast, withNextStep } from '@pump/ui';
 import { useBack } from '../../ui/backStack.js';
 
 /** Discard a draft visit (a tanker that never unloaded), with an inline confirm. */
@@ -19,7 +19,12 @@ export const DiscardDraft: React.FC<{ stationId: string; decantationId: string }
       back();
     } catch (e) {
       setConfirming(false);
-      toast.error((e as { message?: string } | null)?.message || 'Could not discard the draft');
+      toast.error(
+        withNextStep(
+          (e as { message?: string } | null)?.message || "Couldn't discard the draft",
+          'Try again.',
+        ),
+      );
     }
   };
 

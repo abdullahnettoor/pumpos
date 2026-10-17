@@ -147,8 +147,22 @@ _Avoid_: operator, pumper
 
 **Role**:
 Authorization level for app users: Owner, Manager, Accountant, Staff (console),
-Attendant (mobile-only, DU-scoped). `guards.ts` is the source of truth.
+Attendant (mobile-only, DU-scoped). Each Role carries a set of Default
+Permissions. `guards.ts` is the source of truth.
 _Avoid_: user type, permission group
+
+**Permission**:
+One thing a user may do or see, such as void an expense, change a credit limit
+or view profit and loss. A user's Permissions are their Role's Default
+Permissions plus any changes the Owner made for that user. A Permission is
+about the user; whether the Organization may use a capability at all is its
+Entitlement.
+_Avoid_: entitlement, capability, access right
+
+**Default Permissions**:
+The Permissions a Role grants to every user who holds it, before any
+per-user change.
+_Avoid_: role template, base permissions
 
 **Product Capability**:
 A coarse, customer-visible area of PumpOS that can be granted independently,
@@ -237,6 +251,20 @@ A Sale whose volume derives from Nozzle Reading deltas (Closing − Opening).
 Never entered by hand; never re-moves stock.
 _Avoid_: pump sale, petrol sale
 
+**Fuel Price**:
+A fuel's price per unit at a Station, effective from an instant. The current
+price is the latest one in effect (effective at or before now, by the server's
+clock). A Shift's fuel sales are valued at the price current when the Shift
+opens, for the whole Shift: a later change reaches only Shifts opened after it.
+A Shift cannot open while a fuel on a pump in service has no price in effect
+(#630).
+_Avoid_: rate card, MRP (reserved for products)
+
+**Scheduled Price**:
+A Fuel Price recorded with an effective time still ahead. It is stored and
+listed in the price history, but it isn't current until that time (#619).
+_Avoid_: future price, pending price
+
 **Product Sale**:
 A Sale of directly-entered non-fuel lines — engine oil, coolant, grease,
 accessories. What earlier docs called a manual sale.
@@ -291,12 +319,17 @@ Supplier Payment.
 _Avoid_: procurement, inward
 
 **Payables**:
-What the Organization owes its suppliers (Σ Purchases − Σ Supplier Payments). A
-Supplier Payment or a credit Adjustment pays the oldest unpaid amount first; an
-**unpaid Purchase** is a Purchase not yet fully paid that way, and its Business
-Date is how long it has waited. An Opening Balance takes its turn in that order
-but is not "an unpaid Purchase". Organization-wide, like the Supplier balance. An
-overpayment is an advance (a negative Supplier balance), not a negative payable.
+What a Station owes its suppliers (Σ Purchases − Σ Supplier Payments on that
+Station's supplier ledger). A Supplier Payment or a credit Adjustment pays the
+oldest unpaid amount first; an **unpaid Purchase** is a Purchase not yet fully
+paid that way, and its Business Date is how long it has waited. An Opening
+Balance takes its turn in that order but is not "an unpaid Purchase". Per
+Station, like the Supplier balance a Station shows (#575): each pump has its own
+account with its OMC (dealer code, invoices, statement), and two pumps of one
+owner may buy from different OMCs. A supplier shared by two Stations shows each
+only its own share; a payment covering both is recorded as one Supplier Payment
+at each. An overpayment is an advance (a negative Supplier balance), not a
+negative payable.
 "This month": Purchases by their Business Date, Supplier Payments by their Entry
 Date.
 _Avoid_: dues, overdue (suppliers have no payment terms, so no due date exists)
@@ -360,7 +393,9 @@ Per Drawer, at Handover: `Opening Float + DU cash sales − Cash Drops`,
 compared with the cash handed over (attendant variance). At Shift close the
 office's expected cash is Σ declared cash (less unnamed close drops), compared
 with the office count (office count variance). The two levels are separate (#287). Office money, card/UPI and credit never enter it. Cash the office takes from a Drawer is a
-Cash Drop.
+Cash Drop. An Attendant's cash Product Sales carry no DU, so they count in one
+Drawer only: the Attendant's first assigned DU by code, in natural order
+(`productCashDrawer`, #419). Their other Drawers count no product cash.
 _Avoid_: cash count, tally
 
 **Cash in Hand**:
@@ -408,7 +443,7 @@ _Avoid_: wallet (standalone), fuel-card account
 
 **OMC Card Sale**:
 Fuel dispensed against an Oil Marketing Company card; settles into the OMC
-Wallet — never Drawer cash, never a station receivable. It appears in the DSSR
+Wallet — never Drawer cash, never a station receivable. It appears in the DSR
 and in the Shift Summary payment split as "OMC card", so the split adds up to
 total sales.
 _Avoid_: fuel-card sale
@@ -462,8 +497,8 @@ on the server; shown as "2.6 days" / "0.9 day".
 _Avoid_: runway, stock days
 
 Days of Cover counts only Nozzle Reading movements (`reference_type = 'reading'`);
-the DSSR tank movement's sold litres count every `Sale` stock movement. Days of
-Cover uses the Station's 7 most recent closed Business Days; the DSSR uses all
+the DSR tank movement's sold litres count every `Sale` stock movement. Days of
+Cover uses the Station's 7 most recent closed Business Days; the DSR uses all
 movements through its specific Business Date and only that day's movements for
 received, sold and adjusted totals.
 
@@ -500,15 +535,18 @@ _Avoid_: observed density (in UI), sample density
 **Shift Summary**:
 Immutable snapshot created when a Shift closes: that shift's nozzle and drawer
 reconciliation plus totals.
-_Avoid_: shift report, closing report, DSSR
+_Avoid_: shift report, closing report, DSR, DSSR
 
-**DSSR Snapshot** (Daily Station Sales Report):
+**DSR Snapshot** (Daily Station Sales Report):
 Immutable snapshot created when a Business Day closes: a sales-only report
 composing the day's closed Shift Summaries (fuel, product and credit sales,
 their card/UPI split, stock). Office Records are not in it; see Daily Cash
 Book (ADR 0005). A snapshot exists if and only if its Business Day is closed;
-an open day's DSSR is a preview, computed on demand and never persisted.
-_Avoid_: Shift Summary, daily report, day summary
+an open day's DSR is a preview, computed on demand and never persisted.
+Code and stored names stay `dssr` (the `dssr_snapshots` table, the
+`DSSR_GENERATED` event, the `/dssr/...` routes, the `dssr` report-template
+settings key); only the name users see is "DSR".
+_Avoid_: DSSR, Shift Summary, daily report, day summary
 
 **Attendant Handover Report**:
 A read-only, date-range report composing one Attendant's Handovers across
@@ -526,7 +564,7 @@ _Avoid_: refresh, recompute
 **Business Day Status**:
 Where a Business Day stands in the day list: _Live_ (open, the Current Business
 Date, figures still moving), _Draft_ (a Past Open Business Day: ended, not yet
-closed, so its DSSR is a preview), _Sealed_ (closed, with its immutable DSSR
+closed, so its DSR is a preview), _Sealed_ (closed, with its immutable DSR
 Snapshot) or _Report Missing_ (closed but no snapshot exists; shown with no
 figures, never as Sealed).
 _Avoid_: day state

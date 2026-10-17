@@ -706,6 +706,35 @@ describe.skipIf(!CONNECTION)('Insights part 2 readers against real Postgres', ()
       expect(hsd.valueAtCost).toBeNull();
     });
 
+    it('values a balanced dip (isBalancedQuantity) without a frozen cost at zero, not null (#556)', async () => {
+      // Frozen by an older release on the idle tank: float noise, no unit cost.
+      const noise = { tankId: T_IDLE, tankName: 'Tank Idle', varianceQuantity: 0.0004 };
+      const real = { tankId: T_IDLE, tankName: 'Tank Idle', varianceQuantity: 0.001 };
+      const where = sql`station_id = ${STATION} and business_date = '2026-03-08'`;
+      const append = (row: Record<string, unknown>) => sql`
+        update dssr_snapshots
+        set snapshot_data = jsonb_set(snapshot_data, '{fuelStockVariance}',
+          (snapshot_data -> 'fuelStockVariance') || ${JSON.stringify([row])}::jsonb)
+        where ${where}`;
+      // Reads the idle tank with one extra row frozen in the 03-08 DSSR, then drops it.
+      const idleWith = async (row: Record<string, unknown>) => {
+        await append(row);
+        try {
+          return (await stock.read(q(STATION))).find((t) => t.tankId === T_IDLE)!;
+        } finally {
+          await sql`
+            update dssr_snapshots set snapshot_data = snapshot_data #- '{fuelStockVariance,-1}'
+            where ${where}`;
+        }
+      };
+      const balanced = await idleWith(noise);
+      expect(balanced.dips).toBe(1);
+      expect(balanced.valueAtCost).not.toBeNull();
+      expect(Number(balanced.valueAtCost)).toBe(0);
+      // One recorded step (1 ml) is a real variance: with no cost, its value is unknown.
+      expect((await idleWith(real)).valueAtCost).toBeNull();
+    });
+
     it('lists every tank of the station, a tank with no dip as zero litres and zero dips', async () => {
       const r = await stock.read(q(STATION));
       expect(r.map((t) => t.tankId).sort()).toEqual([T_MS, T_HSD, T_IDLE].sort());

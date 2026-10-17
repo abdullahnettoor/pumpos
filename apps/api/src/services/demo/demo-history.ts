@@ -32,6 +32,7 @@ import {
   DrizzleShiftRepository,
   DrizzleShiftSummaryWriter,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
   DrizzleStockMovementWriter,
 } from '../../infra/repositories/station-ops-repositories.js';
 import {
@@ -265,11 +266,14 @@ export async function seedDemoHistory(
   )
     throw new DemoSeedError('Demo station master data is incomplete');
 
-  const du2 = dispensers[Math.min(1, dispensers.length - 1)];
-  // Anitha S works DU-2; the other attendants cover the remaining DUs.
+  const du2Index = Math.min(1, dispensers.length - 1);
+  // Anitha S works DU-2; the other attendants take turns on the remaining DUs
+  // (skipping DU-2), so each of them is on duty when there are enough DUs.
   const others = attendants.length > 1 ? attendants.slice(1) : attendants;
   const attendantFor = (duIndex: number) =>
-    dispensers[duIndex].id === du2.id ? anitha : others[duIndex % others.length];
+    duIndex === du2Index
+      ? anitha
+      : others[(duIndex > du2Index ? duIndex - 1 : duIndex) % others.length];
   const terminalFor = (duIndex: number) => terminals[duIndex];
 
   const now = options.now ?? new Date();
@@ -327,6 +331,7 @@ export async function seedDemoHistory(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(
         {
@@ -911,7 +916,6 @@ export async function seedDemoHistory(
       },
     ],
   });
-  const du2Index = dispensers.findIndex((du) => du.id === du2.id);
   const pending = await handover(
     eveningToday.shift.id,
     todayAt(0.9),

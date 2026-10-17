@@ -163,7 +163,7 @@ describe('GET /reports/insights/sales', () => {
 
   it('refuses a range length the tab does not offer', async () => {
     const { db, counter } = makeFakeDb(ROW);
-    for (const days of ['14', '', 'abc']) {
+    for (const days of ['10', '', 'abc']) {
       const res = await makeApp(db).request(
         `/reports/insights/sales?stationId=${STATION}&days=${days}`,
       );

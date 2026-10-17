@@ -2,32 +2,42 @@ import { Hono } from 'hono';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
-  canManageProduct,
-  canManageInfrastructure,
-  canManageReportTemplates,
+  can,
   DECANTATION_SETTINGS_KEY_SET,
-  decantationSettingsSchema,
   DECANTATION_SETTINGS_KEYS,
-  canManageStaff,
-  isManageableByManager,
+  decantationSettingsSchema,
+  finalizeOnboardingSchema,
+  fuelPriceSchema,
+  canActOnTeamMember,
+  canWriteStationSetup,
+  canEditMemberPermissions,
+  CUSTOM_PERMISSIONS_CAPABILITY,
   isAuthorizedForStation,
   normalizeIndianMobile,
+  OnboardingDraft,
   phoneToAuthEmail,
-  stationSchema,
   resolveDecantationSettings,
+  Role,
+  stationSchema,
+  TANK_LEVEL_SETTINGS_KEY,
+  tankLevelsChanged,
   userSchema,
   userUpdateSchema,
-  fuelPriceSchema,
-  finalizeOnboardingSchema,
-  OnboardingDraft,
-  Role,
 } from '@pump/shared';
+import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
 import {
   CreateStation,
+  ensureLoginCapacity,
+  claimLoginSeatForActivation,
+  err,
+  validationError,
   UpdateStation,
   CreateUser,
   UpdateUser,
+  GetUserPermissions,
+  SetUserPermissions,
+  PreviewUserRoleChange,
   ResetUserPassword,
   SetUserStatus,
   RecordFuelPrice,
@@ -35,12 +45,14 @@ import {
   UpdateTank,
   DeleteTank,
   CreateDispenser,
+  CreateDispenserWithNozzles,
   UpdateDispenser,
   DeleteDispenser,
   CreateNozzle,
   UpdateNozzle,
   DeleteNozzle,
   CreateShiftTemplate,
+  CreateShiftTemplates,
   UpdateShiftTemplate,
   DeleteShiftTemplate,
   FinalizeStationOnboarding,
@@ -49,13 +61,24 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import {
+  listCurrentFuelPrices,
+  listFuelPriceHistory,
+} from '../infra/repositories/fuel-price-queries.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
+import { evictCachedAuthUser } from '../infra/auth-cache.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
+import { DrizzleUserPermissionChangesRepository } from '../infra/repositories/user-permission-changes.repo.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
-import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
+import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleStationCapacityPort,
+} from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
 import {
   loadStationDecantationSettings,
@@ -89,13 +112,7 @@ export const stationSetupRouter = new Hono<{ Bindings: Bindings; Variables: Vari
 // Helper Checkers
 // ----------------------------------------------------
 function checkWriteAccess(c: any, stationId?: string | null): boolean {
-  const user = c.var.user;
-  if (user.role === 'Owner') return true;
-  if (user.role === 'Manager') {
-    if (!stationId) return false;
-    return user.assignedStationIds.includes(stationId);
-  }
-  return false; // Accountant & Staff are read-only
+  return canWriteStationSetup(c.var.user, stationId);
 }
 
 /**
@@ -167,7 +184,7 @@ stationSetupRouter.post(
   validateJson(stationSchema),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,
@@ -214,7 +231,7 @@ stationSetupRouter.put(
       !!submittedSettings &&
       Object.keys(submittedSettings).some((key) => DECANTATION_SETTINGS_KEY_SET.has(key));
     if (updatesDecantationSettings) {
-      if (!['Owner', 'Manager'].includes(user.role)) {
+      if (!can(user, 'station.manage')) {
         return c.json(
           {
             success: false,
@@ -249,7 +266,7 @@ stationSetupRouter.put(
     if (
       body.settings &&
       'report_config' in (body.settings as Record<string, unknown>) &&
-      !canManageReportTemplates(user.role)
+      !can(user, 'station.reportTemplates')
     ) {
       return c.json(
         {
@@ -261,6 +278,33 @@ stationSetupRouter.put(
         },
         403,
       );
+    }
+    // Tank-level thresholds (#520) colour every tank on every screen: Owner and
+    // Manager only, and — like the UpdateStation use-case — only an actual
+    // change is refused, so re-saving other settings that echo the stored
+    // thresholds back (keys reordered by JSONB) passes. Answers early at the edge.
+    if (
+      submittedSettings &&
+      TANK_LEVEL_SETTINGS_KEY in submittedSettings &&
+      !can(user, 'station.tankLevels')
+    ) {
+      const existing = await new DrizzleStationRepository(c.var.db).findById(stationId);
+      const stored =
+        existing && existing.organizationId === user.organizationId
+          ? existing.settings[TANK_LEVEL_SETTINGS_KEY]
+          : undefined;
+      if (tankLevelsChanged(stored, submittedSettings[TANK_LEVEL_SETTINGS_KEY])) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: 'FORBIDDEN',
+              message: 'Only an Owner or Manager can change tank levels',
+            },
+          },
+          403,
+        );
+      }
     }
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new UpdateStation({
@@ -319,7 +363,7 @@ stationSetupRouter.get('/tanks', async (c) => {
 stationSetupRouter.post('/tanks', writePolicyGuard('POST /setup/tanks'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -367,7 +411,7 @@ stationSetupRouter.get('/dispensers', async (c) => {
 stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -382,6 +426,54 @@ stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'
   const result = await useCase.execute(body, buildContext(user, { stationId: body.stationId }));
   return sendResult(c, result);
 });
+
+/**
+ * Ids the dispenser-with-nozzles body names, checked at the edge so a
+ * malformed one answers VALIDATION_ERROR instead of reaching the driver. The
+ * rest of the command is validated by the use-case.
+ */
+const dispenserWithNozzlesIds = z
+  .object({
+    stationId: z.string().uuid(),
+    nozzles: z
+      .array(z.object({ tankId: z.string().uuid(), productId: z.string().uuid() }).passthrough())
+      .default([]),
+  })
+  .passthrough();
+
+/**
+ * Create a dispenser and its nozzles in one request (#591): one use-case, one
+ * transaction, one Idempotency-Key. A refused nozzle leaves no dispenser, and a
+ * replayed key answers with the first result instead of a second dispenser.
+ * `POST /dispensers` and `POST /nozzles` stay for adding one later.
+ */
+stationSetupRouter.post(
+  '/dispensers/with-nozzles',
+  writePolicyGuard('POST /setup/dispensers/with-nozzles'),
+  validateJson(dispenserWithNozzlesIds),
+  async (c) => {
+    const user = c.var.user;
+    const body = c.req.valid('json');
+    if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
+        403,
+      );
+    }
+    if (!(await stationInOrg(c, body.stationId))) return stationNotFound(c);
+    const db = c.var.db;
+    const result = await runInTransaction(db, (tx, events) =>
+      new CreateDispenserWithNozzles({
+        dispensers: new DrizzleDispenserRepository(tx),
+        nozzles: new DrizzleNozzleRepository(tx),
+        tanks: new DrizzleTankRepository(tx),
+        products: new DrizzleProductRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body.stationId })),
+    );
+    return sendResult(c, result);
+  },
+);
 
 // ----------------------------------------------------
 // Nozzles CRUD
@@ -415,7 +507,7 @@ stationSetupRouter.get('/nozzles', async (c) => {
 stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+  if (!checkWriteAccess(c, body.stationId) || !can(user, 'station.infrastructure')) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
       403,
@@ -427,6 +519,8 @@ stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), asy
     new CreateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      dispensers: new DrizzleDispenserRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body.stationId })),
   );
@@ -454,7 +548,7 @@ stationSetupRouter.post(
   writePolicyGuard('POST /setup/shift-templates'),
   async (c) => {
     const user = c.var.user;
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -474,6 +568,35 @@ stationSetupRouter.post(
   },
 );
 
+/**
+ * Create several shift templates in one request (#591), e.g. the three-shift
+ * pre-fill: all or nothing in one transaction under one Idempotency-Key.
+ */
+stationSetupRouter.post(
+  '/shift-templates/batch',
+  writePolicyGuard('POST /setup/shift-templates/batch'),
+  async (c) => {
+    const user = c.var.user;
+    if (!can(user, 'station.manage')) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new CreateShiftTemplates({
+        repository: new DrizzleShiftTemplateRepository(tx),
+        events,
+      }).execute(body, buildContext(user)),
+    );
+    return sendResult(c, result);
+  },
+);
+
 // ----------------------------------------------------
 // User Management & Assignments
 // ----------------------------------------------------
@@ -483,7 +606,26 @@ stationSetupRouter.get('/users', async (c) => {
   const repo = new DrizzleUserRepository(c.var.db);
   const data = await repo.listWithAssignments(user.organizationId);
   // Never expose auth linkage ids to clients; they only need "has a login".
-  const sanitized = data.map(({ authUserId, ...rest }) => ({ ...rest, hasLogin: !!authUserId }));
+  // `hasCustomPermissions` lets the Team list badge members whose Permissions differ from
+  // their Role's defaults (ADR 0013); the detail comes from GET /users/:id/permissions.
+  const changed = await c.var.db
+    .select({
+      userId: schema.userPermissionChanges.userId,
+      granted: schema.userPermissionChanges.granted,
+      revoked: schema.userPermissionChanges.revoked,
+    })
+    .from(schema.userPermissionChanges)
+    .where(eq(schema.userPermissionChanges.organizationId, user.organizationId));
+  const custom = new Set(
+    changed
+      .filter((r) => (r.granted?.length ?? 0) + (r.revoked?.length ?? 0) > 0)
+      .map((r) => r.userId),
+  );
+  const sanitized = data.map(({ authUserId, ...rest }) => ({
+    ...rest,
+    hasLogin: !!authUserId,
+    hasCustomPermissions: custom.has(rest.id),
+  }));
   return c.json({ success: true, data: sanitized });
 });
 
@@ -495,20 +637,17 @@ function getSupabaseAdmin(c: any): SupabaseAdmin | null {
   return new SupabaseAdmin({ url, secretKey: key });
 }
 
-// Owner = full; Manager = Staff/Attendant on own stations only.
+// Owner = full; Manager = Staff/Attendant on own stations only (whose-data rule).
 function canActOnTarget(
   actor: { role: Role; assignedStationIds: string[] },
   targetRole: Role,
   targetStationIds: string[] = [],
 ): boolean {
-  if (actor.role === 'Owner') return true;
-  if (actor.role !== 'Manager') return false;
-  if (!isManageableByManager(targetRole)) return false;
-  // A Manager must be assigned to EVERY station the target touches (current
-  // and requested). A target with no station scope is NOT implicitly
-  // manageable — that previously let Managers control any org account.
-  if (targetStationIds.length === 0) return false;
-  return targetStationIds.every((s) => actor.assignedStationIds.includes(s));
+  return canActOnTeamMember(
+    { role: actor.role, stationIds: actor.assignedStationIds },
+    targetRole,
+    targetStationIds,
+  );
 }
 
 /** Current station assignments of a target user (for authorization). */
@@ -527,7 +666,7 @@ stationSetupRouter.post(
   validateJson(userSchema, 'BAD_REQUEST'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageStaff(user.role)) {
+    if (!can(user, 'team.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } },
         403,
@@ -560,7 +699,6 @@ stationSetupRouter.post(
     // The request schema already refused an invalid mobile (#300), so this is
     // the single stored spelling, +91XXXXXXXXXX, or null when blank.
     const normalizedPhone = normalizeIndianMobile(body.phone);
-    let authUserId: string | null = null;
 
     if (wantsLogin) {
       const admin = getSupabaseAdmin(c);
@@ -590,44 +728,65 @@ stationSetupRouter.post(
           400,
         );
       }
-      try {
-        const created = await admin.createUser({
-          email: authEmail,
-          password: String(body.password),
-        });
-        authUserId = created.id;
-      } catch (e: any) {
-        const status = e?.status === 422 ? 409 : 400;
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'AUTH_PROVISION_FAILED',
-              message: e?.message ?? 'Could not create login account',
-            },
-          },
-          status,
-        );
-      }
     }
 
-    const useCase = new CreateUser({
-      repository: new DrizzleUserRepository(db),
-      events: createDispatcher(db),
+    // A login consumes `login_count`: the seat is claimed under the
+    // Organization lock inside the database transaction that inserts the user
+    // row, so concurrent invites cannot both take the last seat. The auth
+    // account (admin.createUser) and ban/unban are external HTTP calls and are
+    // NOT part of that transaction; a failed insert after createUser leaves an
+    // orphan auth account, and no compensation exists for these paths.
+    let provisionFailure: Response | null = null;
+    const result = await runInTransaction(db, async (tx, events) => {
+      let authUserId: string | null = null;
+      if (wantsLogin) {
+        // An INACTIVE member does not count yet; reactivating takes the seat.
+        if ((body.status ?? 'ACTIVE') === 'ACTIVE') {
+          const capacity = await ensureLoginCapacity(
+            new DrizzleStationCapacityPort(tx),
+            user.organizationId,
+          );
+          if (!capacity.success) return capacity;
+        }
+        const admin = getSupabaseAdmin(c)!;
+        try {
+          const created = await admin.createUser({
+            email: (rawEmail ?? phoneToAuthEmail(normalizedPhone))!,
+            password: String(body.password),
+          });
+          authUserId = created.id;
+        } catch (e: any) {
+          provisionFailure = c.json(
+            {
+              success: false,
+              error: {
+                code: 'AUTH_PROVISION_FAILED',
+                message: e?.message ?? 'Could not create login account',
+              },
+            },
+            e?.status === 422 ? 409 : 400,
+          );
+          return err(validationError('Could not create login account'));
+        }
+      }
+      return new CreateUser({
+        repository: new DrizzleUserRepository(tx),
+        events,
+      }).execute(
+        {
+          fullName: body.fullName,
+          // Phone-identity accounts keep users.email null (handle is synthetic).
+          email: rawEmail,
+          phone: normalizedPhone,
+          role: targetRole,
+          status: body.status ?? 'ACTIVE',
+          stationIds: body.stationIds,
+          authUserId,
+        },
+        buildContext(user),
+      );
     });
-    const result = await useCase.execute(
-      {
-        fullName: body.fullName,
-        // Phone-identity accounts keep users.email null (handle is synthetic).
-        email: rawEmail,
-        phone: normalizedPhone,
-        role: targetRole,
-        status: body.status ?? 'ACTIVE',
-        stationIds: body.stationIds,
-        authUserId,
-      },
-      buildContext(user),
-    );
+    if (provisionFailure) return provisionFailure;
     return sendResult(c, result);
   },
 );
@@ -658,12 +817,121 @@ stationSetupRouter.put(
         403,
       );
     }
-    const db = c.var.db;
-    const useCase = new UpdateUser({
-      repository: new DrizzleUserRepository(db),
-      events: createDispatcher(db),
+    // The update, the Permission-change reset on a Role change, and their
+    // events commit together. Setting a member with a login back to ACTIVE
+    // takes a login seat, decided on a re-read taken after the Organization lock.
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      const seat = await claimLoginSeatForActivation(
+        new DrizzleStationCapacityPort(tx),
+        user.organizationId,
+        () => new DrizzleUserRepository(tx).findById(id),
+        body.status === 'ACTIVE',
+      );
+      if (!seat.success) return seat;
+      return new UpdateUser({
+        repository: new DrizzleUserRepository(tx),
+        events,
+        permissionChanges: new DrizzleUserPermissionChangesRepository(tx),
+      }).execute({ ...body, id }, buildContext(user));
     });
-    const result = await useCase.execute({ ...body, id }, buildContext(user));
+    // Role, status and stations feed the cached principal: next request re-reads.
+    if (result.success) evictCachedAuthUser(target.authUserId);
+    return sendResult(c, result);
+  },
+);
+
+/**
+ * What changing this member's Role would drop. A read, so the UI can warn
+ * before it calls PUT /users/:id (whose response lists what was dropped).
+ */
+stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const role = z
+    .enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'])
+    .safeParse(c.req.query('role'));
+  if (!role.success) {
+    return c.json(
+      { success: false, error: { code: 'BAD_REQUEST', message: 'A valid role is required' } },
+      400,
+    );
+  }
+  const repo = new DrizzleUserRepository(c.var.db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+  const scope = await loadTargetStationIds(c.var.db, id);
+  if (!canActOnTarget(user, target.role, scope) || !canActOnTarget(user, role.data, scope)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
+      403,
+    );
+  }
+  const result = await new PreviewUserRoleChange({
+    users: repo,
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
+  }).execute({ userId: id, role: role.data }, buildContext(user));
+  return sendResult(c, result);
+});
+
+/** A member's Default Permissions, stored changes and effective set (Owner only). */
+stationSetupRouter.get('/users/:id/permissions', async (c) => {
+  const result = await new GetUserPermissions({
+    users: new DrizzleUserRepository(c.var.db),
+    changes: new DrizzleUserPermissionChangesRepository(c.var.db),
+    access: new DrizzleOrganizationAccessReader(c.var.db),
+  }).execute({ userId: c.req.param('id') }, buildContext(c.var.user));
+  return sendResult(c, result);
+});
+
+/**
+ * Replace a member's Permission changes. Owner only and gated on the
+ * "Custom permissions" capability; the Restricted Access answer is declared in
+ * write-policy-declarations.ts. The Owner check runs before the capability
+ * guard so a non-Owner is told FORBIDDEN, not "not entitled".
+ */
+stationSetupRouter.put(
+  '/users/:id/permissions',
+  writePolicyGuard('PUT /setup/users/:id/permissions'),
+  async (c, next) => {
+    if (!canEditMemberPermissions(c.var.user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: "Only Owners can change a team member's permissions",
+          },
+        },
+        403,
+      );
+    }
+    await next();
+  },
+  requireCapabilityGuard(CUSTOM_PERMISSIONS_CAPABILITY),
+  async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new SetUserPermissions({
+        users: new DrizzleUserRepository(tx),
+        changes: new DrizzleUserPermissionChangesRepository(tx),
+        access: new DrizzleOrganizationAccessReader(tx),
+        events,
+      }).execute(
+        {
+          userId: id,
+          granted: body.granted as string[] | undefined,
+          revoked: body.revoked as string[] | undefined,
+        },
+        buildContext(c.var.user),
+      ),
+    );
+    if (result.success) {
+      const target = await new DrizzleUserRepository(c.var.db).findById(id);
+      evictCachedAuthUser(target?.authUserId);
+    }
     return sendResult(c, result);
   },
 );
@@ -776,31 +1044,44 @@ async function setUserActive(c: any, active: boolean) {
       403,
     );
   }
-  if (target.authUserId) {
-    const admin = getSupabaseAdmin(c);
-    if (admin) {
-      try {
-        if (active) await admin.unbanUser(target.authUserId);
-        else await admin.banUser(target.authUserId);
-      } catch (e: any) {
-        return c.json(
-          {
-            success: false,
-            error: {
-              code: 'AUTH_BAN_FAILED',
-              message: e?.message ?? 'Could not update login account',
+  // Reactivating a member with a login takes a login seat, decided on a
+  // re-read taken after the Organization lock and before the auth unban.
+  let banFailure: Response | null = null;
+  const result = await runInTransaction(db, async (tx, events) => {
+    const seat = await claimLoginSeatForActivation(
+      new DrizzleStationCapacityPort(tx),
+      user.organizationId,
+      () => new DrizzleUserRepository(tx).findById(id),
+      active,
+    );
+    if (!seat.success) return seat;
+    if (target.authUserId) {
+      const admin = getSupabaseAdmin(c);
+      if (admin) {
+        try {
+          if (active) await admin.unbanUser(target.authUserId);
+          else await admin.banUser(target.authUserId);
+        } catch (e: any) {
+          banFailure = c.json(
+            {
+              success: false,
+              error: {
+                code: 'AUTH_BAN_FAILED',
+                message: e?.message ?? 'Could not update login account',
+              },
             },
-          },
-          400,
-        );
+            400,
+          );
+          return err(validationError('Could not update login account'));
+        }
       }
     }
-  }
-  const useCase = new SetUserStatus({ repository: repo, events: createDispatcher(db) });
-  const result = await useCase.execute(
-    { id, status: active ? 'ACTIVE' : 'INACTIVE' },
-    buildContext(user),
-  );
+    return new SetUserStatus({ repository: new DrizzleUserRepository(tx), events }).execute(
+      { id, status: active ? 'ACTIVE' : 'INACTIVE' },
+      buildContext(user),
+    );
+  });
+  if (banFailure) return banFailure;
   return sendResult(c, result);
 }
 
@@ -835,7 +1116,7 @@ async function authorizeInfrastructure(
   id: string,
 ): Promise<{ error: Response | null; stationId: string | null }> {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!can(user, 'station.infrastructure')) {
     return {
       error: c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
@@ -944,6 +1225,8 @@ stationSetupRouter.put('/nozzles/:id', writePolicyGuard('PUT /setup/nozzles/:id'
     new UpdateNozzle({
       repository: new DrizzleNozzleRepository(tx),
       tanks: new DrizzleTankRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      dispensers: new DrizzleDispenserRepository(tx),
       events,
     }).execute({ ...body, id }, buildContext(user, { stationId })),
   );
@@ -962,6 +1245,8 @@ stationSetupRouter.delete(
     const useCase = new DeleteNozzle({
       repository: new DrizzleNozzleRepository(db),
       tanks: new DrizzleTankRepository(db),
+      products: new DrizzleProductRepository(db),
+      dispensers: new DrizzleDispenserRepository(db),
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id }, buildContext(user));
@@ -975,7 +1260,7 @@ stationSetupRouter.put(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1001,7 +1286,7 @@ stationSetupRouter.delete(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    if (user.role !== 'Owner' && user.role !== 'Manager') {
+    if (!can(user, 'station.manage')) {
       return c.json(
         {
           success: false,
@@ -1200,7 +1485,7 @@ stationSetupRouter.post(
     const db = c.var.db;
     const user = c.var.user;
 
-    if (user.role !== 'Owner') {
+    if (!can(user, 'station.create')) {
       return c.json(
         {
           success: false,
@@ -1254,48 +1539,7 @@ stationSetupRouter.get('/pricing', async (c) => {
   }
 
   try {
-    const fuels = await db
-      .select()
-      .from(schema.products)
-      .where(
-        and(
-          eq(schema.products.organizationId, user.organizationId),
-          eq(schema.products.productType, 'FUEL'),
-          eq(schema.products.isActive, true),
-        ),
-      );
-
-    const fuelIds = fuels.map((f) => f.id);
-    const allPrices =
-      fuelIds.length > 0
-        ? await db
-            .select()
-            .from(schema.fuelPrices)
-            .where(
-              and(
-                eq(schema.fuelPrices.stationId, stationId),
-                inArray(schema.fuelPrices.productId, fuelIds),
-              ),
-            )
-            .orderBy(desc(schema.fuelPrices.effectiveFrom))
-        : [];
-
-    const latestByProduct = new Map<string, (typeof allPrices)[number]>();
-    for (const p of allPrices) {
-      if (!latestByProduct.has(p.productId)) latestByProduct.set(p.productId, p);
-    }
-
-    const prices = fuels.map((f) => {
-      const latestPrice = latestByProduct.get(f.id);
-      return {
-        productId: f.id,
-        productName: f.name,
-        productCode: f.code,
-        price: latestPrice ? Number(latestPrice.price) : 0,
-        effectiveFrom: latestPrice ? latestPrice.effectiveFrom : null,
-      };
-    });
-
+    const prices = await listCurrentFuelPrices(db, user.organizationId, stationId);
     return c.json({ success: true, data: prices });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
@@ -1323,25 +1567,7 @@ stationSetupRouter.get('/pricing/history', async (c) => {
   }
 
   try {
-    const list = await db
-      .select({
-        id: schema.fuelPrices.id,
-        productId: schema.fuelPrices.productId,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-        price: schema.fuelPrices.price,
-        effectiveFrom: schema.fuelPrices.effectiveFrom,
-        createdAt: schema.fuelPrices.createdAt,
-      })
-      .from(schema.fuelPrices)
-      .innerJoin(schema.products, eq(schema.fuelPrices.productId, schema.products.id))
-      .where(
-        and(
-          eq(schema.fuelPrices.stationId, stationId),
-          eq(schema.fuelPrices.organizationId, user.organizationId),
-        ),
-      )
-      .orderBy(desc(schema.fuelPrices.effectiveFrom));
+    const list = await listFuelPriceHistory(db, user.organizationId, stationId);
 
     return c.json({ success: true, data: list });
   } catch (err: any) {

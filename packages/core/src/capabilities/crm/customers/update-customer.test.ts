@@ -47,7 +47,11 @@ const customer = (over: Partial<Customer> = {}): Customer => ({
 });
 
 /** `role: undefined` = no actor snapshot (a system caller). */
-const ctx = (role?: string | null, kind: 'tenant_user' | 'system' = 'tenant_user') =>
+const ctx = (
+  role?: string | null,
+  kind: 'tenant_user' | 'system' = 'tenant_user',
+  permissions?: readonly string[],
+) =>
   ({
     organizationId: 'org-1',
     stationId: null,
@@ -57,6 +61,7 @@ const ctx = (role?: string | null, kind: 'tenant_user' | 'system' = 'tenant_user
     ...(role === undefined
       ? {}
       : { actorSnapshot: { kind, displayName: 'Someone', role, subjectId: 'u' } }),
+    ...(permissions ? { permissions: new Set(permissions) } : {}),
     clock: new FixedClock(new Date('2026-03-15T10:00:00Z')),
     ids: new SequentialIdGenerator('ev'),
   }) satisfies ExecutionContext;
@@ -92,6 +97,21 @@ describe('UpdateCustomer — credit limit', () => {
       expect(store.events).toHaveLength(0);
     },
   );
+
+  it('follows the effective Permissions, not the Role defaults', async () => {
+    const revoked = setup();
+    const no = await revoked.run(
+      { creditLimit: 1 },
+      ctx('Manager', 'tenant_user', ['pages.customers']),
+    );
+    expect(no.success).toBe(false);
+    const granted = setup();
+    const yes = await granted.run(
+      { creditLimit: 1 },
+      ctx('Accountant', 'tenant_user', ['pages.customers', 'customers.changeCreditLimit']),
+    );
+    expect(yes.success).toBe(true);
+  });
 
   it('refuses an Accountant removing the limit too', async () => {
     const { run } = setup();

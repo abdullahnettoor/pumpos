@@ -1,8 +1,7 @@
 import React from 'react';
 import { Drawer } from '../Drawer.js';
-import { Button, DateText, EmptyState } from '../../pump-ds/index.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { Button, DataSection, DateText, EmptyState, SectionHeader } from '../../pump-ds/index.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import type { PurchaseLinkRow } from './columns.js';
 import {
   useDecantations,
@@ -55,71 +54,71 @@ export const LinkToDecantationDrawer: React.FC<LinkToDecantationDrawerProps> = (
       toast.success(`Linked to decantation ${decantation.documentNumber}.`);
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not link the purchase.');
+      toast.error(
+        withNextStep(
+          e instanceof Error ? e.message : "Couldn't link the purchase",
+          'Pick the decantation again and link it.',
+        ),
+      );
     }
   };
 
   return (
     <Drawer isOpen={!!purchase} onClose={onClose} title="Link to decantation">
       {purchase && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+        <div className="flex flex-col gap-4">
+          <p className="text-[12px] text-ink-muted">
             Invoice {purchase.invoiceNumber || purchase.documentNumber} · {purchase.supplierName}
-          </div>
-          {itemsQ.isLoading || decantationsQ.isLoading ? (
-            <LoadingSpinner text="Loading decantations…" />
-          ) : (
-            products.map((product) => {
-              const rows = candidates(product.id);
-              return (
-                <section
-                  key={product.id}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
-                >
-                  <h3 style={{ margin: 0, fontSize: '13px', fontWeight: 700 }}>{product.name}</h3>
-                  {rows.length === 0 ? (
-                    <EmptyState
-                      compact
-                      title="No decantation to link"
-                      description={`No decantation at this station has an unlinked ${product.name} line yet.`}
-                    />
-                  ) : (
-                    rows.map((d) => (
-                      <div
-                        key={d.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '12px',
-                          padding: '8px 10px',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: '6px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                            {d.documentNumber}
-                          </span>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Tanker {d.tankerNumber} · <DateText value={d.businessDate} />
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={link.isPending}
-                          onClick={() => doLink(d, product.id)}
+          </p>
+          <DataSection
+            title="decantations"
+            query={[itemsQ, decantationsQ]}
+            enabled
+            placeholderHeight={120}
+            shape="bare"
+          >
+            <div className="flex flex-col gap-4">
+              {products.map((product) => {
+                const rows = candidates(product.id);
+                return (
+                  <section key={product.id} className="flex flex-col gap-2">
+                    <SectionHeader title={product.name} />
+                    {rows.length === 0 ? (
+                      <EmptyState
+                        compact
+                        title="No decantation to link"
+                        description={`No decantation at this station has an unlinked ${product.name} line yet.`}
+                      />
+                    ) : (
+                      rows.map((d) => (
+                        <div
+                          key={d.id}
+                          className="flex items-center justify-between gap-3 rounded-input border border-border-soft px-2.5 py-2"
                         >
-                          Link
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </section>
-              );
-            })
-          )}
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-mono font-semibold text-ink-strong">
+                              {d.documentNumber}
+                            </span>
+                            <span className="text-[12px] text-ink-muted">
+                              Tanker {d.tankerNumber} · <DateText value={d.businessDate} />
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={link.isPending}
+                            onClick={() => doLink(d, product.id)}
+                          >
+                            Link
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          </DataSection>
         </div>
       )}
     </Drawer>

@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { IDEMPOTENCY_IN_PROGRESS, IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
 
 export interface IdempotencyRecord {
   id: string;
@@ -102,7 +103,8 @@ async function hashRequestBody(text: string): Promise<string> {
  * - GET/HEAD and keyless requests pass through untouched.
  * - 5xx responses are NOT cached (the reservation is released) so transient
  *   failures can be retried.
- * - Concurrent in-flight duplicates get a 409 until the first completes.
+ * - Concurrent in-flight duplicates get a 409 (reason IDEMPOTENCY_IN_PROGRESS)
+ *   until the first completes.
  *
  * Must run after auth (needs `c.var.user`) and the db middleware (`c.var.db`).
  */
@@ -162,7 +164,7 @@ export function createIdempotencyMiddleware(
             {
               success: false,
               error: {
-                code: 'CONFLICT',
+                code: IDEMPOTENCY_KEY_REUSED,
                 message: 'This Idempotency-Key was already used with different request content',
               },
             },
@@ -171,12 +173,15 @@ export function createIdempotencyMiddleware(
         }
         return c.json(existing.responseBody as any, existing.responseStatus as any);
       }
+      // Code and message stay as released clients read them (a CONFLICT keeps
+      // the key in the stock count); new clients read the reason.
       return c.json(
         {
           success: false,
           error: {
             code: 'CONFLICT',
             message: 'A request with this Idempotency-Key is already in progress',
+            details: { reason: IDEMPOTENCY_IN_PROGRESS },
           },
         },
         409,

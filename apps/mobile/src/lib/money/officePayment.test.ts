@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { IDEMPOTENCY_IN_PROGRESS } from '@pump/shared';
 import {
   applyPaymentToParties,
   balanceAfterPayment,
@@ -80,11 +81,26 @@ describe('idempotency keys', () => {
     expect(keepsIdempotencyKey(err('FORBIDDEN', 'no', 403))).toBe(false);
   });
 
+  it('reads the in-progress reason, and still the legacy message for one release', () => {
+    const inProgress = Object.assign(err('CONFLICT', 'Busy', 409), {
+      details: { reason: IDEMPOTENCY_IN_PROGRESS },
+    });
+    expect(keepsIdempotencyKey(inProgress)).toBe(true);
+    expect(
+      keepsIdempotencyKey(
+        err('CONFLICT', 'A request with this Idempotency-Key is already in progress', 409),
+      ),
+    ).toBe(true);
+    expect(
+      keepsIdempotencyKey(err('CONFLICT', 'This Idempotency-Key belongs to another user', 409)),
+    ).toBe(false);
+  });
+
   it('a conflict over changed content means the earlier attempt arrived', () => {
     expect(
       isEarlierAttemptReceived(
         err(
-          'CONFLICT',
+          'IDEMPOTENCY_KEY_REUSED',
           'This Idempotency-Key was already used with different request content',
           409,
         ),
@@ -100,6 +116,11 @@ describe('idempotency keys', () => {
     expect(
       isEarlierAttemptReceived(
         err('CONFLICT', 'This Idempotency-Key belongs to another user', 409),
+      ),
+    ).toBe(false);
+    expect(
+      isEarlierAttemptReceived(
+        err('CONFLICT', 'This Idempotency-Key was already used for another request', 409),
       ),
     ).toBe(false);
     expect(

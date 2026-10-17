@@ -30,6 +30,37 @@ describe('SegmentedControl', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('is 32px by default and 36px at size md, to sit beside form inputs', () => {
+    const { unmount } = render(
+      <SegmentedControl aria-label="Paper" options={options} value="A4" onChange={() => {}} />,
+    );
+    expect(screen.getByRole('radiogroup').className).toContain('h-8');
+    unmount();
+    render(
+      <SegmentedControl
+        aria-label="Paper"
+        size="md"
+        stretch
+        options={options}
+        value="A4"
+        onChange={() => {}}
+      />,
+    );
+    const group = screen.getByRole('radiogroup').className;
+    expect(group).toContain('h-9');
+    expect(group).not.toContain('h-8');
+  });
+
+  // #603: a column parent (Reports › Ledgers, GST) stretched the track across the page.
+  it('hugs its segments by default, so a column parent never stretches it', () => {
+    render(
+      <SegmentedControl aria-label="Paper" options={options} value="A4" onChange={() => {}} />,
+    );
+    const group = screen.getByRole('radiogroup').className;
+    expect(group).toContain('w-fit');
+    expect(group).not.toContain('w-full');
+  });
+
   it('stretch gives every segment an equal share of the row', () => {
     render(
       <SegmentedControl

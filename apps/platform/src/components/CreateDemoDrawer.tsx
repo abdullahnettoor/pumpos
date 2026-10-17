@@ -16,6 +16,22 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
   const [result, setResult] = useState<DemoCreateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyCredentials = async (created: DemoCreateResult) => {
+    const lines = [
+      `PumpOS demo: ${stationName}`,
+      `Owner (console): ${created.ownerEmail}`,
+      created.attendantEmail && `Attendant (mobile): ${created.attendantEmail}`,
+      `Password: ${created.password}`,
+    ].filter(Boolean);
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+    } catch {
+      setError('Copy failed. Select the credentials and copy them by hand.');
+    }
+  };
 
   const submit = async () => {
     setSaving(true);
@@ -46,7 +62,14 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
       title={result ? 'Demo station created' : 'Create demo station'}
       footer={
         result ? (
-          <Button onClick={onClose}>Done</Button>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <Button onClick={onClose}>Done</Button>
+            {result.password && (
+              <Button variant="ghost" onClick={() => void copyCredentials(result)}>
+                {copied ? 'Copied' : 'Copy credentials'}
+              </Button>
+            )}
+          </div>
         ) : (
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <Button disabled={saving || target.production} onClick={submit}>
@@ -64,6 +87,7 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
           <Banner severity="success" title="Ready to open in the console">
             The demo organization and station are ready on {target.label}.
           </Banner>
+          {error && <Banner severity="danger">{error}</Banner>}
           <dl
             style={{
               display: 'grid',
@@ -82,10 +106,13 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
                 </dd>
               </>
             )}
-            {!prospectEmail.trim() && (
+            {result.attendantEmail && (
               <>
-                <dt>Demo owner</dt>
-                <dd>Use the login credentials above for the demo owner.</dd>
+                <dt>Attendant login</dt>
+                <dd>
+                  {result.attendantEmail}
+                  {result.attendantName && ` (${result.attendantName}, on duty, same password)`}
+                </dd>
               </>
             )}
             <dt>Organization</dt>

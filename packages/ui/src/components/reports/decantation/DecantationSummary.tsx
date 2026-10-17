@@ -1,111 +1,153 @@
 import React from 'react';
-import type { DecantationReport } from '@pump/shared';
-import { KpiStrip, KpiTile, Panel } from '../../../pump-ds/index.js';
-import { formatQty } from '../../../utils/format.js';
-import { litres, signedLitres, td, tdR, th, thR, varianceColor } from './styles.js';
+import {
+  variancePresentation,
+  type DecantationReportProductTotal,
+  type DecantationReportTotals,
+} from '@pump/shared';
+import {
+  InteractiveTable,
+  KpiStrip,
+  KpiTile,
+  VarianceChip,
+  type TableColumn,
+} from '../../../pump-ds/index.js';
+import { formatQuantity } from '../../../utils/format.js';
+import { formatStockVariance } from '../../../utils/variance.js';
+import { litres } from './vocabulary.js';
 
-/** KPI strip + per-product totals. All figures are server-composed. */
-export const DecantationSummary: React.FC<{ report: DecantationReport }> = ({ report }) => {
-  const t = report.totals;
-  return (
-    <>
-      <KpiStrip columns="auto">
-        <KpiTile
-          dot="brand"
-          label="Tanker Visits"
-          value={String(t.totalVisits)}
-          hint={`${t.measuredVisits} measured · ${t.pendingVisits} pending`}
-        />
-        <KpiTile
-          dot="info"
-          label="Volume Received"
-          value={litres(t.totalReceivedQty)}
-          hint={`${formatQty(t.pendingReceivedQty, 2)} L not yet settled`}
-        />
-        <KpiTile
-          dot="neutral"
-          label="Settled Invoice Volume"
-          value={litres(t.totalInvoiceQty)}
-          hint={`${formatQty(t.pendingInvoiceQty, 2)} L pending · ${t.settlingInvoiceCount} settling`}
-        />
-        <KpiTile
-          dot={t.totalVarianceQty < 0 ? 'danger' : t.totalVarianceQty > 0 ? 'success' : 'neutral'}
-          label="Settled Invoice Variance"
-          value={signedLitres(t.totalVarianceQty)}
-          hint={
-            t.totalVarianceQty < 0
-              ? 'station decantation loss'
-              : t.totalVarianceQty > 0
-                ? 'station decantation excess'
-                : 'exact match'
-          }
-        />
-        <KpiTile
-          dot={t.transitDiscrepancies > 0 ? 'danger' : 'neutral'}
-          label="Transit Discrepancies"
-          value={String(t.transitDiscrepancies)}
-          hint={`${t.totalChambersShort} short · ${t.totalChambersExcess} excess · ${t.totalSealsBroken} broken seals · ${t.totalChambersNotEmptied} unemptied`}
-        />
-      </KpiStrip>
+/** Balanced by the shared quantity rule (#556), else the variance's sign. */
+const VARIANCE_WORD = {
+  short: 'station decantation loss',
+  surplus: 'station decantation excess',
+  balanced: 'exact match',
+} as const;
+const varianceWord = (v: number): string => VARIANCE_WORD[variancePresentation(v, 'stock').state];
 
-      {report.productTotals.length > 0 && (
-        <Panel title="Totals by Product">
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
-                  <th style={th}>Product</th>
-                  <th style={thR}>Received (settled)</th>
-                  <th style={thR}>Invoiced (settled)</th>
-                  <th style={thR}>Net Variance</th>
-                  <th style={thR}>Short (Loss)</th>
-                  <th style={thR}>Excess</th>
-                  <th style={thR}>Pending</th>
-                  <th style={thR}>Visits / Lines</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.productTotals.map((p) => (
-                  <tr key={p.productId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={td}>
-                      <span style={{ fontWeight: 600 }}>{p.productName}</span>{' '}
-                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
-                        ({p.productCode})
-                      </span>
-                    </td>
-                    <td style={tdR}>{litres(p.settledReceivedQty)}</td>
-                    <td style={tdR}>{litres(p.totalInvoiceQty)}</td>
-                    <td
-                      style={{
-                        ...tdR,
-                        fontWeight: 600,
-                        color: varianceColor(p.totalVarianceQty),
-                      }}
-                    >
-                      {signedLitres(p.totalVarianceQty)}
-                    </td>
-                    <td style={{ ...tdR, color: varianceColor(p.shortVarianceQty ? -1 : 0) }}>
-                      {p.shortVarianceQty > 0 ? `-${formatQty(p.shortVarianceQty, 2)} L` : '—'}
-                    </td>
-                    <td style={{ ...tdR, color: varianceColor(p.excessVarianceQty ? 1 : 0) }}>
-                      {p.excessVarianceQty > 0 ? `+${formatQty(p.excessVarianceQty, 2)} L` : '—'}
-                    </td>
-                    <td style={tdR}>
-                      {p.pendingReceivedQty > 0 || p.pendingInvoiceQty > 0
-                        ? `${formatQty(p.pendingReceivedQty, 2)} L rec. / ${formatQty(p.pendingInvoiceQty, 2)} L inv.`
-                        : '—'}
-                    </td>
-                    <td style={tdR}>
-                      {p.visitCount} visits · {p.measuredLineCount} measured
-                      {p.pendingLineCount > 0 ? `, ${p.pendingLineCount} pend.` : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      )}
-    </>
-  );
-};
+/**
+ * The report's four headline figures, all server-composed and all following
+ * the range. Volume received is not a tile: it is the total of the visits
+ * table below.
+ */
+export const DecantationSummary: React.FC<{ totals: DecantationReportTotals }> = ({
+  totals: t,
+}) => (
+  <KpiStrip columns="auto">
+    <KpiTile
+      label="Tanker visits"
+      value={String(t.totalVisits)}
+      hint={`${t.measuredVisits} measured · ${t.pendingVisits} pending`}
+    />
+    <KpiTile
+      label="Settled invoice volume"
+      value={litres(t.totalInvoiceQty)}
+      hint={`${litres(t.pendingInvoiceQty)} pending · ${t.settlingInvoiceCount} settling`}
+    />
+    <KpiTile
+      alert={
+        variancePresentation(t.totalVarianceQty, 'stock').state === 'short' ? 'danger' : undefined
+      }
+      label="Settled invoice variance"
+      value={formatStockVariance(t.totalVarianceQty, 'L')}
+      hint={varianceWord(t.totalVarianceQty)}
+    />
+    <KpiTile
+      alert={t.transitDiscrepancies > 0 ? 'danger' : undefined}
+      label="Transit discrepancies"
+      value={String(t.transitDiscrepancies)}
+      hint={`${t.totalChambersShort} short · ${t.totalChambersExcess} excess · ${t.totalSealsBroken} broken seals · ${t.totalChambersNotEmptied} unemptied`}
+    />
+  </KpiStrip>
+);
+
+const pendingText = (p: DecantationReportProductTotal): string | null =>
+  p.pendingReceivedQty > 0 || p.pendingInvoiceQty > 0
+    ? `${litres(p.pendingReceivedQty)} received · ${litres(p.pendingInvoiceQty)} invoiced`
+    : null;
+
+const visitsText = (p: DecantationReportProductTotal): string =>
+  `${p.visitCount} ${p.visitCount === 1 ? 'visit' : 'visits'} · ${p.measuredLineCount} measured` +
+  (p.pendingLineCount > 0 ? ` · ${p.pendingLineCount} pending` : '');
+
+const PRODUCT_COLUMNS: TableColumn<DecantationReportProductTotal>[] = [
+  {
+    id: 'product',
+    header: 'Product',
+    kind: 'text',
+    value: (p) => p.productName,
+    cell: (p) => (
+      <span className="flex flex-col leading-tight">
+        <span className="font-medium text-ink-strong">{p.productName}</span>
+        <span className="text-[12px] text-ink-muted">{p.productCode}</span>
+      </span>
+    ),
+    width: '16%',
+  },
+  {
+    id: 'received',
+    header: 'Received (settled)',
+    kind: 'qty',
+    unit: 'L',
+    value: (p) => p.settledReceivedQty,
+  },
+  {
+    id: 'invoiced',
+    header: 'Invoiced (settled)',
+    kind: 'qty',
+    unit: 'L',
+    value: (p) => p.totalInvoiceQty,
+  },
+  {
+    id: 'variance',
+    header: 'Net variance',
+    kind: 'qty',
+    unit: 'L',
+    value: (p) => p.totalVarianceQty,
+    cell: (p) => <VarianceChip amount={p.totalVarianceQty} kind="stock" size="md" />,
+  },
+  {
+    id: 'short',
+    header: 'Short',
+    kind: 'qty',
+    unit: 'L',
+    value: (p) => (p.shortVarianceQty > 0 ? -p.shortVarianceQty : null),
+    cell: (p) =>
+      p.shortVarianceQty > 0 ? (
+        <span className="whitespace-nowrap">{formatQuantity(-p.shortVarianceQty, 'L')}</span>
+      ) : (
+        '—'
+      ),
+  },
+  {
+    id: 'excess',
+    header: 'Excess',
+    kind: 'qty',
+    unit: 'L',
+    value: (p) => (p.excessVarianceQty > 0 ? p.excessVarianceQty : null),
+    cell: (p) =>
+      p.excessVarianceQty > 0 ? (
+        <span className="whitespace-nowrap">
+          {formatQuantity(p.excessVarianceQty, 'L', { plus: true })}
+        </span>
+      ) : (
+        '—'
+      ),
+  },
+  { id: 'pending', header: 'Not yet settled', kind: 'text', value: pendingText },
+  { id: 'visits', header: 'Visits', kind: 'text', value: visitsText },
+];
+
+/**
+ * Settled figures per product. No total row: the tiles above are its totals,
+ * across products.
+ */
+export const DecantationProductTotals: React.FC<{ products: DecantationReportProductTotal[] }> = ({
+  products,
+}) => (
+  <InteractiveTable
+    bare
+    columns={PRODUCT_COLUMNS}
+    rows={products}
+    rowKey={(p) => p.productId}
+    title="totals by product"
+  />
+);

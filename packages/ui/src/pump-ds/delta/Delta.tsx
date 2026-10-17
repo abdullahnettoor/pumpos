@@ -23,8 +23,8 @@ const deltaVariants = cva(
   {
     variants: {
       size: {
-        xs: 'h-[16px] px-[5px] text-[10px] [&_svg]:size-[7px]',
-        sm: 'h-[18px] px-1.5 text-[11px] [&_svg]:size-2',
+        xs: 'h-[18px] px-[5px] text-[12px] [&_svg]:size-[7px]',
+        sm: 'h-5 px-1.5 text-[12px] [&_svg]:size-2',
         md: 'h-[22px] px-2 text-[12px] [&_svg]:size-2.5',
       },
       tone: {
@@ -72,6 +72,11 @@ export interface DeltaProps
    * (down still points down); only the tone flips.
    */
   invert?: boolean;
+  /**
+   * For figures where neither direction is good or bad (spend, volume): the
+   * arrow stays truthful and the tone stays neutral.
+   */
+  neutral?: boolean;
   /** Hide the leading arrow (rare — kept for cases where the sign is inside `value`). */
   showArrow?: boolean;
 }
@@ -105,13 +110,13 @@ const DashFlat = (
 );
 
 export const Delta = forwardRef<HTMLSpanElement, DeltaProps>(function Delta(
-  { className, size, value, direction, invert, showArrow = true, ...rest },
+  { className, size, value, direction, invert, neutral, showArrow = true, ...rest },
   ref,
 ) {
   const dir = direction ?? inferDirection(value);
   // Resolve tone from direction × invert.
   const tone =
-    dir === 'flat'
+    dir === 'flat' || neutral
       ? 'flat'
       : dir === 'up'
         ? invert

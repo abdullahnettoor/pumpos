@@ -275,6 +275,15 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
       expect(Number(handover.cash) - Number(handover.expectedCash)).toBe(-350);
     });
 
+    it('keeps every attendant on a DU in the open shift, so Ravi K can hand over on mobile', async () => {
+      const onDuty = await db
+        .select({ attendant: schema.users.fullName })
+        .from(schema.shiftStaffAssignments)
+        .innerJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+        .where(eq(schema.shiftStaffAssignments.shiftId, demo.history.eveningShiftId));
+      expect(onDuty.map((row) => row.attendant).sort()).toEqual(['Anitha S', 'Meera P', 'Ravi K']);
+    });
+
     it('records the −18 L HSD dip variance with a reason', async () => {
       const variances = await db
         .select()
@@ -645,11 +654,27 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         data: { organizationId: string; authUserId: string };
       };
       expect(calls.invited).toEqual(['prospect@demo.pumpos.invalid']);
+      const [demoOrganization] = await db
+        .select({ plan: schema.organizations.subscriptionPlan })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, data.organizationId));
+      expect(demoOrganization.plan).toBe('PRO');
       const tanksBefore = await db
         .select()
         .from(schema.tanks)
         .where(eq(schema.tanks.organizationId, data.organizationId));
       expect(tanksBefore).toHaveLength(3);
+      // A demo created without a prospect email gives the on-duty attendant a login.
+      const attendantLogin = crypto.randomUUID();
+      await db
+        .update(schema.users)
+        .set({ authUserId: attendantLogin, email: 'lifecycle-attendant@demo.pumpos.app' })
+        .where(
+          and(
+            eq(schema.users.organizationId, data.organizationId),
+            eq(schema.users.fullName, 'Ravi K'),
+          ),
+        );
 
       const reset = await app(admin).request(
         `/demos/${data.organizationId}/reset`,
@@ -675,6 +700,17 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
           and(eq(schema.users.organizationId, data.organizationId), eq(schema.users.role, 'Owner')),
         );
       expect(owner.authUserId).toBe(data.authUserId);
+      const [ravi] = await db
+        .select()
+        .from(schema.users)
+        .where(
+          and(
+            eq(schema.users.organizationId, data.organizationId),
+            eq(schema.users.fullName, 'Ravi K'),
+          ),
+        );
+      expect(ravi.authUserId).toBe(attendantLogin);
+      expect(ravi.email).toBe('lifecycle-attendant@demo.pumpos.app');
 
       const extended = await app(admin).request(
         `/demos/${data.organizationId}/extend`,
@@ -695,6 +731,7 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
       );
       expect(deleted.status).toBe(200);
       expect(calls.deleted).toContain(data.authUserId);
+      expect(calls.deleted).toContain(attendantLogin);
       expect(await rowsLeftFor(data.organizationId)).toEqual({});
       expect(
         await db

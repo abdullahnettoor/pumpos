@@ -109,6 +109,7 @@ const handoverContext: HandoverContext = {
   creditSales: 0,
   omcCardSales: 0,
   merchandiseCash: 0,
+  attendantDus: [{ duId: 'du-1', duCode: 'DU-1', duName: 'DU 1' }],
   openingFloat: 0,
 };
 

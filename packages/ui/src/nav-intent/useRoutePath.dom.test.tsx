@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { useRoutePath } from './useRoutePath.js';
+import { previousRoute, useRoutePath } from './useRoutePath.js';
+import { LEGACY_ROUTES } from './routes.js';
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
@@ -46,5 +47,59 @@ describe('useRoutePath', () => {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     });
     expect(result.current[0]).toBe('/sales');
+  });
+
+  it('replaces the history entry when asked, rather than adding one (#576)', () => {
+    const { result } = renderHook(() => useRoutePath('/dashboard'));
+    act(() => result.current[1]('/accounts/sbi'));
+    const before = window.history.length;
+    act(() => result.current[1]('/accounts/sbi?from=2026-09-01&to=2026-09-30', { replace: true }));
+    expect(window.location.hash).toBe('#/accounts/sbi?from=2026-09-01&to=2026-09-30');
+    expect(window.history.length).toBe(before);
+    // The next plain navigation pushes again.
+    act(() => result.current[1]('/accounts'));
+    expect(window.history.length).toBe(before + 1);
+  });
+
+  it('each pushed entry knows the route it was opened from; a replace keeps it (#576)', () => {
+    const { result } = renderHook(() => useRoutePath('/dashboard'));
+    act(() => result.current[1]('/accounts'));
+    act(() => result.current[1]('/accounts/sbi'));
+    expect(previousRoute()).toBe('/accounts');
+    act(() => result.current[1]('/accounts/sbi?from=2026-09-01&to=2026-09-30', { replace: true }));
+    expect(previousRoute()).toBe('/accounts');
+  });
+
+  describe('renamed routes', () => {
+    it.each(Object.entries(LEGACY_ROUTES))('a reload of #%s lands on %s', (oldPath, newPath) => {
+      window.history.replaceState(null, '', `/#${oldPath}`);
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      expect(result.current[0]).toBe(newPath);
+      expect(window.location.hash).toBe(`#${newPath}`);
+    });
+
+    it('rewrites the old hash in place rather than adding a history entry', () => {
+      window.history.replaceState(null, '', '/#/purchases');
+      const before = window.history.length;
+      renderHook(() => useRoutePath('/dashboard'));
+      expect(window.location.hash).toBe('#/suppliers');
+      expect(window.history.length).toBe(before);
+    });
+
+    it('resolves a navigation to an old route', () => {
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      act(() => result.current[1]('/purchases'));
+      expect(result.current[0]).toBe('/suppliers');
+      expect(window.location.hash).toBe('#/suppliers');
+    });
+
+    it('resolves an old route reached by back/forward', () => {
+      const { result } = renderHook(() => useRoutePath('/dashboard'));
+      act(() => {
+        window.history.replaceState(null, '', '/#/purchases');
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      });
+      expect(result.current[0]).toBe('/suppliers');
+    });
   });
 });

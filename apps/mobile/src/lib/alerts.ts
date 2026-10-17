@@ -6,9 +6,10 @@ import {
   useDecantations,
   useShiftSummaries,
   useProducts,
+  principalFor,
 } from '@pump/ui';
 import type { Role, Station } from '@pump/shared';
-import { businessDateSettings } from '@pump/shared';
+import { businessDateSettings, can } from '@pump/shared';
 import { deriveAlerts } from './attention/derive.js';
 import type { MobileAlert } from './attention/types.js';
 import { useOwnHandover } from './handover/useOwnHandover.js';
@@ -18,7 +19,7 @@ import { usePastOpenDates } from './pastOpenDays.js';
 export type { MobileAlert } from './attention/types.js';
 
 const canSeeInventoryAttention = (role: Role | null): boolean =>
-  role === 'Owner' || role === 'Manager' || role === 'Accountant';
+  can(principalFor(role), 'pages.inventory');
 
 /**
  * The one "needs attention" list of the mobile app: the header bell's badge,
@@ -37,7 +38,8 @@ export function useMobileAlerts(station: Station | null, role: Role | null = nul
   });
   const productsQ = useProducts();
   const densityQ = useDensityTodaySummary(station?.id ?? null, undefined, {
-    enabled: !!station && canSeeInventoryAttention(role),
+    // Follows the shared guard (Staff record density too).
+    enabled: !!station && role !== null && can(principalFor(role), 'inventory.density'),
   });
 
   const productNames = useMemo(

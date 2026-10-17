@@ -51,7 +51,12 @@ export function usePartyStatement({
 }: Input): PartyStatementState {
   const range = useStatementRange(station);
   const customer = useCustomerStatementData(kind === 'customer' ? partyId : '', range.range);
-  const supplier = useSupplierStatementData(kind === 'supplier' ? partyId : '', range.range);
+  // A supplier's statement is the Station's own ledger with it (#575).
+  const supplier = useSupplierStatementData(
+    station?.id,
+    kind === 'supplier' ? partyId : '',
+    range.range,
+  );
   const q = kind === 'customer' ? customer : supplier;
   const [filtering, setFiltering] = useState(false);
   const { share, download } = buildStatementPdf({

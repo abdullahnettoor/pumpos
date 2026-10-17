@@ -1,67 +1,74 @@
 import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
+import {
+  ROUTES,
+  parseShiftCloseRoute,
+  shiftCloseRoute,
+  type ShiftCloseStep,
+} from '../../nav-intent/routes.js';
+import type { RouteNavigate } from '../../nav-intent/useRoutePath.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { inr } from '../../utils/format.js';
+import { formatShortDay, inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
-import { ShiftControlBar } from './ShiftControlBar.js';
+import { handoverProductCash } from './handoverFigures.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
-import { CloseShiftWizard } from './CloseShiftWizard.js';
+import { CloseShiftPage } from './CloseShiftPage.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
-import { AttendantHandoversDashboard } from './AttendantHandoversDashboard.js';
-import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
-import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
-import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { BusinessDayTab } from './BusinessDayTab.js';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
 import { buildOpenShiftAssignments } from './openShiftAssignments.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
-import { Tabs } from '../primitives/Tabs.js';
-import { useToast } from '../primitives/ToastProvider.js';
-import { useRunTask } from '../../utils/runTask.js';
+import { noRateRefusal } from './shiftRates.js';
+import { LiveShiftView } from './LiveShiftView.js';
+import { IdleShiftView } from './IdleShiftView.js';
+import { ShiftsHeaderActions, type RecordAction } from './ShiftsHeaderActions.js';
+import { dayFigures } from './businessDayModel.js';
+import {
+  nozzleGroups,
+  type PreHandoverTotals,
+  type StaffAssignmentInput,
+} from './liveShiftModel.js';
+import { useCloseShiftFlow } from './useCloseShiftFlow.js';
+import { PageFrame } from '../page-frame/index.js';
+import {
+  Button,
+  DataSection,
+  EmptyState,
+  Skeleton,
+  Tabs,
+  tabPanelProps,
+  type TabItem,
+} from '../../pump-ds/index.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   useShiftStatus,
   useShiftTransactions,
   useInventoryStatus,
   useInvalidateOperational,
+  useDailyDssrPreview,
   queryKeys,
 } from '../../query/hooks.js';
-import {
-  applyPendingTankDips,
-  createStockCountIdempotencyKey,
-  discardUnrecordedTankDips,
-  isAmbiguousMutationError,
-  loadPendingTankDipWorkflow,
-  savePendingTankDipWorkflow,
-  shouldResetTankDipDraft,
-  type PendingTankDipWorkflow,
-} from '../../query/stockCountMutation.js';
+import type { PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, buildCloseCashSummary, parseDrawerKey } from '@pump/shared';
-import type { CloseCashDrawer, ShiftStaffAssignment } from '@pump/shared';
-import type { DrawerRow } from './DrawerReconciliationTable.js';
-import type { CloseDropRow } from './CloseShiftWizard.js';
+import { businessDateSettings, can, Station } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import type { OpenShiftFormValues } from '@pump/shared';
-import {
-  FileText,
-  User,
-  Lock,
-  AlertTriangle,
-  Check,
-  Fuel,
-  Info,
-  Play,
-  History,
-  Clock3,
-  CalendarRange,
-} from 'lucide-react';
-import { LoadingSpinner } from '../LoadingSpinner.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
+import { useHandoverWrites, useShiftMoneyState } from './handoverWrites.js';
+import { useNow } from './useNow.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 
 const shiftService = new CloudShiftService();
+const TABS_ID = 'shifts';
 const transactionService = new CloudTransactionService();
 
 interface ShiftTotals {
@@ -104,6 +111,13 @@ interface ShiftsManagementProps {
    * affordance, which is the only route to a day beyond the recent window.
    */
   onNavigate: (path: string) => void;
+  /**
+   * The shell's current path. `/shifts/<id>/close` is the Close shift page
+   * (#534). Omitted, the page keeps its own (no address of its own).
+   */
+  route?: string;
+  /** Changes the path; `{ replace: true }` rewrites the entry (a step change). */
+  onRouteChange?: RouteNavigate;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -111,19 +125,47 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
+  route: shellRoute,
+  onRouteChange,
 }) => {
+  // The page's address: the shell's when it passes one, else its own.
+  const [ownRoute, setOwnRoute] = useState<string>(ROUTES.shifts);
+  const route = shellRoute ?? ownRoute;
+  const goRoute = useCallback<RouteNavigate>(
+    (next, options) =>
+      onRouteChange
+        ? onRouteChange(next, options)
+        : setOwnRoute((prev) => (typeof next === 'function' ? next(prev) : next)),
+    [onRouteChange],
+  );
+  const closeRoute = parseShiftCloseRoute(route);
+  const onCloseRoute = !!closeRoute;
+  const now = useNow();
   const stationId = selectedStation?.id ?? null;
   const stationSettings = (selectedStation?.settings ?? {}) as {
     timezone?: string;
     business_day_starts_at?: string;
   };
+  // The Open shift form's clock: its planned window and rate times (#619).
+  const stationClock = useMemo(
+    () => businessDateSettings(selectedStation?.settings),
+    [selectedStation?.settings],
+  );
   const currentBusinessDate = useStationBusinessDate(
     stationSettings.timezone,
     stationSettings.business_day_starts_at,
   );
-  const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
+  const canWorkLiveShift = can(principalFor(userRole), 'shifts.viewLive');
+  const statusQ = useShiftStatus(stationId, { refetchOnWindowFocus: false });
+  // Idle Live shift: today so far, from the Business Day's DSR (the Dashboard
+  // and Business days read the same cached preview).
+  const todayQ = useDailyDssrPreview(stationId, currentBusinessDate, {
+    enabled: !!stationId && !!statusQ.data && !statusQ.data.activeShift && canWorkLiveShift,
+  });
+  const todayFigures = useMemo(() => dayFigures(todayQ.data?.snapshotData), [todayQ.data]);
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -134,7 +176,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Shift Tab Sub-Navigation
   const [selectedSubTab, setSelectedSubTab] = useState<'today' | 'business-day' | 'history'>(
-    userRole === 'Accountant' ? 'business-day' : 'today',
+    canWorkLiveShift ? 'today' : 'business-day',
   );
   const [selectedBusinessDayDate, setSelectedBusinessDayDate] = useState<string | null>(null);
   // Deep link from the top-bar business-day pill. Derived rather than synced by
@@ -144,11 +186,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const intentBusinessDay = intent?.openBusinessDayDate ?? null;
   // Deep link to one closed shift's summary (dashboard "Last closed shift" card).
   const intentShiftSummaryId = intent?.openShiftSummaryId ?? null;
-  const shiftSubTab = intentBusinessDay
-    ? 'business-day'
-    : intentShiftSummaryId
-      ? 'history'
-      : selectedSubTab;
+  const intentOpenPastDays = intent?.openPastDays === true;
+  const shiftSubTab =
+    intentBusinessDay || intentOpenPastDays
+      ? 'business-day'
+      : intentShiftSummaryId
+        ? 'history'
+        : selectedSubTab;
   const requestedBusinessDayDate = intentBusinessDay ?? selectedBusinessDayDate;
   const setShiftSubTab = (tab: 'today' | 'business-day' | 'history') => {
     clearNavIntent();
@@ -158,7 +202,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
    * BusinessDayTab reports the requested date as consumed on mount. Commit the
    * durable half — that we are on the business-day sub-tab — into local state
    * first: clearing the intent alone would drop the tab derivation and bounce
-   * the operator straight back to Active Shift.
+   * the operator straight back to Live shift.
    */
   const setRequestedBusinessDayDate = (date: string | null) => {
     setSelectedSubTab('business-day');
@@ -170,7 +214,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   /**
    * Mirror of `setRequestedBusinessDayDate`: commit the durable half (we are on
    * History) before clearing the intent, so dismissing the summary leaves the
-   * operator in History rather than bouncing back to Active Shift.
+   * operator in History rather than bouncing back to Live shift.
    */
   const clearRequestedHistoryShiftId = () => {
     setSelectedSubTab('history');
@@ -193,117 +237,35 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     { nozzleId: string; openingReading: number }[]
   >([]);
   const [isOpening, setIsOpening] = useState(false);
-  // Active Shift Workspace States
-  const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
-
-  // Close Flow Inline States
-  const [isPreparingClose, setIsPreparingClose] = useState(false);
-  const [closeWizardOpen, setCloseWizardOpen] = useState(false);
-  const [closingCash, setClosingCash] = useState(0);
-  // Cash Drops recorded at close (#287).
-  const [closeDrops, setCloseDrops] = useState<CloseDropRow[]>([]);
-  const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const inventoryStatusQ = useInventoryStatus(stationId);
-  const stationTanks = inventoryStatusQ.data ?? [];
-  const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
-  const [dipReasons, setDipReasons] = useState<Record<string, string>>({});
-  const [initialPendingWorkflow] = useState(() =>
-    stationId ? loadPendingTankDipWorkflow(stationId) : null,
-  );
-  const [closedShiftSuccess, setClosedShiftSuccess] = useState<PendingTankDipWorkflow | null>(
-    initialPendingWorkflow?.closeStatus === 'submitting' ? null : initialPendingWorkflow,
-  );
-  const [tankDipDraftShiftId, setTankDipDraftShiftId] = useState<string | null>(null);
-  const [uncertainCloseWorkflow, setUncertainCloseWorkflow] =
-    useState<PendingTankDipWorkflow | null>(
-      initialPendingWorkflow?.closeStatus === 'submitting' ? initialPendingWorkflow : null,
-    );
-
-  const saveTankDips = useCallback(
-    async (workflow?: PendingTankDipWorkflow | null) => {
-      const target = workflow ?? closedShiftSuccess;
-      if (!target || !stationId) return;
-      await applyPendingTankDips({
-        stationId,
-        workflow: target,
-        recordStockCount: (payload, options) =>
-          transactionService.recordStockCount(payload, options),
-        onWorkflowChange: setClosedShiftSuccess,
-      });
-      await invalidateOperational(stationId);
-    },
-    [closedShiftSuccess, invalidateOperational, stationId],
-  );
-
-  // Synchronize station-specific state before children render. React permits
-  // guarded state adjustment during render and restarts with the new state.
-  const [lastStationId, setLastStationId] = useState(selectedStation?.id);
-  const [lastCurrentBusinessDate, setLastCurrentBusinessDate] = useState(currentBusinessDate);
-  if (selectedStation?.id !== lastStationId) {
-    const stored = stationId ? loadPendingTankDipWorkflow(stationId) : null;
-    setLastStationId(selectedStation?.id);
-    setLastCurrentBusinessDate(currentBusinessDate);
-    setPreserveNextShiftDate(false);
-    setBusinessDate(currentBusinessDate);
-    setUncertainCloseWorkflow(stored?.closeStatus === 'submitting' ? stored : null);
-    setClosedShiftSuccess(stored?.closeStatus === 'submitting' ? null : stored);
-  } else if (currentBusinessDate !== lastCurrentBusinessDate) {
-    setLastCurrentBusinessDate(currentBusinessDate);
-    if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
-  }
-
-  useEffect(() => {
-    if (!stationId || !statusQ.data || !uncertainCloseWorkflow) return;
-    if (statusQ.data.activeShift?.id === uncertainCloseWorkflow.lastClosedShiftId) {
-      return;
-    }
-    const confirmed = { ...uncertainCloseWorkflow, closeStatus: 'closed' as const };
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setUncertainCloseWorkflow(null);
-      savePendingTankDipWorkflow(stationId, confirmed);
-      setClosedShiftSuccess(confirmed);
-      void saveTankDips(confirmed);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [saveTankDips, stationId, statusQ.data, uncertainCloseWorkflow]);
-
-  useEffect(() => {
-    if (stationId && closedShiftSuccess) {
-      savePendingTankDipWorkflow(stationId, closedShiftSuccess);
-    }
-  }, [stationId, closedShiftSuccess]);
-
+  // Idle Live shift: the open-shift form shows once the operator asks for it.
+  const [openFormVisible, setOpenFormVisible] = useState(false);
+  // One Idempotency-Key session for the open-shift form's lifetime: a retry
+  // after a lost answer reuses the key even if the form was edited, so the
+  // server refuses it as an edited retry rather than opening a second shift.
+  const openShiftKeys = useRef<SubmitKeySession | null>(null);
+  // Opened: the success is shown at once; the new shift renders when the
+  // status refresh (background) lands.
+  const [awaitingOpenedShift, setAwaitingOpenedShift] = useState(false);
+  // The server's refusal of the last open for a fuel without a rate (#630).
+  const [openRefusal, setOpenRefusal] = useState<{ message: string; at: number } | null>(null);
+  const showOpenForm = (visible: boolean) => {
+    openShiftKeys.current = null;
+    setOpenRefusal(null);
+    setOpenFormVisible(visible);
+  };
   // Handover Drawer states
   const [handoverDrawerOpen, setHandoverDrawerOpen] = useState(false);
   const [selectedHandoverAssignment, setSelectedHandoverAssignment] = useState<any>(null);
-  const [handoverCreditCustomers, setHandoverCreditCustomers] = useState<any[]>([]);
-
   const handleOpenHandoverDrawer = async (assignment: any) => {
     setSelectedHandoverAssignment(assignment);
     setHandoverDrawerOpen(true);
-    // Refresh the vehicle/customer caches so newly-added records (created in
-    // another tab/session) are pickable in the Customer Sales section.
-    await qc.invalidateQueries({ queryKey: ['vehicles'] });
-    // Load customers pickable for on-account (Customer Sales) billing: all
-    // customers except legacy station-prepaid non-fleet wallets. Prepaid Fleet
-    // customers ARE included — they're OMC fleet cards (settled to CMS).
-    try {
-      const custList = await qc.fetchQuery({
-        queryKey: queryKeys.customers(true),
-        queryFn: () => transactionService.getCustomers(true),
-        staleTime: 0,
-      });
-      setHandoverCreditCustomers(
-        (custList || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
-      );
-    } catch {
-      setHandoverCreditCustomers([]);
-    }
+    // Refresh the vehicle and customer caches so records added in another tab
+    // or session are pickable in Customer sales; the drawer reads them through
+    // their queries (a failure shows there, with Retry).
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.vehicles(true) }),
+      qc.invalidateQueries({ queryKey: queryKeys.customers(true) }),
+    ]);
   };
 
   // Quick entry is handled by the global QuickEntryHost (mounted at the app shell).
@@ -316,145 +278,43 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // invalidateOperational — no manual reload wiring.
   const shiftTxQ = useShiftTransactions(data?.activeShift?.id ?? null);
   const shiftTotals = useMemo(() => computeShiftTotals(shiftTxQ.data), [shiftTxQ.data]);
-
-  const recon = data?.activeShift?.reconciliation;
-  const handovers = data?.activeShift?.handovers || [];
-  const hasHandovers = handovers.length > 0;
-
-  const totalCashHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.cashHandedOver || 0),
-    0,
-  );
-  const totalCardHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.cardHandedOver || 0),
-    0,
-  );
-  const totalUpiHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.upiHandedOver || 0),
-    0,
-  );
-  const totalCreditHandedOver = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.creditHandedOver || 0),
-    0,
-  );
-  // Net attendant accountability variance (declared − meter-expected), summed
-  // across handovers. Positive = surplus, negative = shortage.
-  const totalAttendantVariance = handovers.reduce(
-    (sum: number, h: any) => sum + Number(h.varianceAmount || 0),
-    0,
+  const beforeHandovers = useMemo<PreHandoverTotals>(
+    () => ({
+      card: shiftTotals.cardCollections,
+      upi: shiftTotals.upiCollections,
+      credit: shiftTotals.creditSales,
+    }),
+    [shiftTotals],
   );
 
-  const activeCashCollections = hasHandovers ? totalCashHandedOver : shiftTotals.cashCollections;
-  const activeCardCollections = hasHandovers ? totalCardHandedOver : shiftTotals.cardCollections;
-  const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
-  const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
-
-  // Close-shift cash summary (#307, ADR 0005): the server recon when loaded,
-  // else Σ Opening Floats from the staff assignments. The two-level variance
-  // (#287) uses the same shared formula CloseShift uses.
-  const staffAssignmentRows: ShiftStaffAssignment[] = data?.activeShift?.staffAssignments ?? [];
-  const reconDrawers: any[] = Array.isArray(recon?.drawers) ? recon.drawers : [];
-  const closeDropEntries = closeDrops
-    .filter((r) => r.amount > 0)
-    .map((r) => ({ ...parseDrawerKey(r.drawerKey), amount: r.amount }));
-  const { lines: cashLines, closeCash } = buildCloseCashSummary<CloseCashDrawer & DrawerRow>({
-    recon,
-    staffAssignments: staffAssignmentRows,
-    closeDrops: closeDropEntries,
-    closingCash,
-    cashHandedOver: hasHandovers ? totalCashHandedOver : null,
+  const inventoryStatusQ = useInventoryStatus(stationId);
+  // Keep broad operational invalidation, then wait for the active full status
+  // query so lifecycle transitions cannot render its stale active Shift.
+  const loadShiftStatus = (opts?: { throwOnError?: boolean }) =>
+    refreshShiftStatus(qc, invalidateOperational, stationId, opts);
+  const mayClose = can(principalFor(userRole), 'shifts.close');
+  // The Close shift page (#534): draft, figures, the keyed close and its outcome.
+  const flow = useCloseShiftFlow({
+    stationId,
+    timeZone: stationSettings.timezone,
+    currentBusinessDate,
+    statusQ,
+    closeRoute,
+    goRoute,
+    creditSales: shiftTotals.creditSales,
+    tanks: inventoryStatusQ.data ?? [],
+    loadShiftStatus,
+    mayClose,
   });
-  const expectedCash = cashLines.expectedOfficeCash;
-  const cashVariance = closingCash - expectedCash;
 
-  // Station-level cash summary for the closing wizard (#4). Aggregate figures —
-  // cross-attendant settlements (e.g. a borrowed POS) net out in the drawer total.
-  const cashSummary =
-    recon && closeCash
-      ? {
-          merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
-          drawers: closeCash.drawers,
-          merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
-            ? recon.merchCashOutsideHandoverBreakdown
-            : [],
-          attendantVariance: reconDrawers.length
-            ? closeCash.attendantVariance
-            : totalAttendantVariance,
-          attendantVariances: reconDrawers.length
-            ? closeCash.drawers
-                .filter((d: any) => d.variance !== null)
-                .map((d: any) => ({
-                  name: d.attendantName || 'Attendant',
-                  du: d.duName || null,
-                  variance: Number(d.variance || 0),
-                }))
-            : handovers.map((h: any) => ({
-                name: h.attendantName || h.userName || 'Attendant',
-                du: h.duName || null,
-                variance: Number(h.varianceAmount || 0),
-              })),
-          hasHandovers,
-        }
-      : null;
-
-  // Reactively compute close warnings when close flow is active
-  const warnings: string[] = [];
-
-  if (data?.activeShift && isPreparingClose) {
-    let zeroVolumeCount = 0;
-    for (const nr of data.activeShift.nozzleReadings) {
-      const opening = Number(nr.openingReading);
-      const closing = closingReadings[nr.nozzleId] ?? opening;
-      const volume = closing - opening;
-
-      if (volume === 0) {
-        zeroVolumeCount++;
-      }
-      if (volume > 5000) {
-        warnings.push(
-          `High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} ${nr.unit || 'L'}.`,
-        );
-      }
-    }
-
-    if (zeroVolumeCount === data.activeShift.nozzleReadings.length) {
-      warnings.push('Zero fuel volume was sold across all nozzles during this shift.');
-    }
-
-    // Check if all assigned attendants have recorded handovers
-    const assignedStaff = data.activeShift.staffAssignments || [];
-    for (const sa of assignedStaff) {
-      const hasRecorded = handovers.some((h: any) => h.userId === sa.userId && h.duId === sa.duId);
-      if (!hasRecorded) {
-        warnings.push(
-          `Handover not recorded for attendant ${sa.userName} on dispenser ${sa.duName || 'DU'}.`,
-        );
-      }
-    }
-
-    // Mismatch check for credit chits vs customer bills
-    const detailedCreditSum = shiftTotals.creditSales;
-    if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.0) {
-      warnings.push(
-        `Credit Sales mismatch: Attendants declared ${inr(totalCreditHandedOver)} in chits, but only ${inr(detailedCreditSum)} of detailed customer billing has been logged in the transaction panel.`,
-      );
-    }
-
-    if (closingCash === 0 && expectedCash > 0) {
-      warnings.push('Closing cash is ₹0, indicating no collections entered.');
-    }
-    if (Math.abs(cashVariance) > 100) {
-      warnings.push(
-        `Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`,
-      );
-    }
-  }
-
-  // Quick entry opens the global QuickEntryHost. Minimize the close wizard first if
-  // it's open (preserves its draft — the user can resume via "Continue Close").
+  // Quick entry opens the global QuickEntryHost.
   const launchQuickEntry = (type: QuickEntryType) => {
-    if (closeWizardOpen) setCloseWizardOpen(false);
-    openQuickEntry(type);
+    // Office Records opened here are still office records: the drawer says so
+    // ("not part of <shift>") rather than taking the shift's name as its title.
+    openQuickEntry(type, {
+      origin: 'shifts',
+      shiftName: data?.activeShift?.templateName ?? null,
+    });
   };
 
   const triggerExpenseDrawer = () => launchQuickEntry('expense');
@@ -462,16 +322,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const triggerPurchaseDrawer = () => launchQuickEntry('purchase');
   const triggerMerchandiseSaleDrawer = () => launchQuickEntry('merchandise-sale');
 
-  const quickEntryActions = [
-    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
-    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
-    {
-      key: 'merchandise-sale',
-      label: 'Merchandise Sale',
-      onClick: triggerMerchandiseSaleDrawer,
-      hotkey: 'M',
-    },
-    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
+  // Record ▾ (#533): a Product sale (a Billed Sale) while a shift is open, then
+  // the Office Records. Same launchers and hotkeys as the old shift bar.
+  const productSaleAction: RecordAction = {
+    key: 'merchandise-sale',
+    label: 'Product sale',
+    hotkey: 'M',
+    onSelect: triggerMerchandiseSaleDrawer,
+  };
+  const officeRecordActions: RecordAction[] = [
+    { key: 'expense', label: 'Expense', hotkey: 'E', onSelect: triggerExpenseDrawer },
+    { key: 'collection', label: 'Collection', hotkey: 'C', onSelect: triggerCollectionDrawer },
+    { key: 'purchase', label: 'Purchase', hotkey: 'P', onSelect: triggerPurchaseDrawer },
   ];
 
   // The shortcut triggers are re-created every render, so the listener reads
@@ -497,7 +359,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (!data?.activeShift?.id) return;
     if (shiftSubTab !== 'today') return;
     if (viewingShiftSummary || requestedHistoryShiftId) return;
-    if (closeWizardOpen || qe.open || handoverDrawerOpen) return;
+    if (onCloseRoute || qe.open || handoverDrawerOpen) return;
 
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -529,7 +391,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     shiftSubTab,
     viewingShiftSummary,
     requestedHistoryShiftId,
-    closeWizardOpen,
+    onCloseRoute,
     qe.open,
     handoverDrawerOpen,
   ]);
@@ -561,31 +423,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           openingReading: Number(nz.currentReading),
         })),
       );
-      if (statusData.activeShift && statusData.activeShift.nozzleReadings) {
-        const readingsMap: Record<string, number> = {};
-        statusData.activeShift.nozzleReadings.forEach((nr: any) => {
-          readingsMap[nr.nozzleId] = Number(nr.closingReading);
-        });
-        setClosingReadings(readingsMap);
-        if (shouldResetTankDipDraft(tankDipDraftShiftId, statusData.activeShift.id)) {
-          setDipReadings({});
-          setDipReasons({});
-        }
-        setTankDipDraftShiftId(statusData.activeShift.id);
-      } else {
-        setTankDipDraftShiftId(null);
-      }
     }
   }
-
-  // Keep broad operational invalidation, then wait for the active full status
-  // query so lifecycle transitions cannot render its stale active Shift.
-  const loadShiftStatus = () => refreshShiftStatus(qc, invalidateOperational, stationId);
 
   const handleOpenShift = async (values: OpenShiftFormValues) => {
     if (!selectedStation) return;
     try {
       setIsOpening(true);
+      setOpenRefusal(null);
       setBusinessDate(values.businessDate);
       setSelectedTemplateId(values.shiftTemplateId);
       const payload: any = {
@@ -600,11 +445,32 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         payload.initialReadings = initialReadings;
       }
 
-      await shiftService.openShift(payload);
-      await loadShiftStatus();
+      openShiftKeys.current ??= officeSubmitKeys.session(`shift:open:${selectedStation.id}`);
+      await sendKeyed(openShiftKeys.current, payload, (key) =>
+        shiftService.openShift(payload, { idempotencyKey: key }),
+      );
+      // The open is saved: report it now; the workspace refreshes in the
+      // background (caching rule 6) and the new shift shows when it lands.
+      showOpenForm(false);
+      setAwaitingOpenedShift(true);
       toast.success('Shift opened.');
+      refresh(
+        () => loadShiftStatus({ throwOnError: true }).finally(() => setAwaitingOpenedShift(false)),
+        'Shift opened.',
+      );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to open shift');
+      const noRate = noRateRefusal(err);
+      if (noRate) {
+        // Said beside Open shift, where the form's own check says it; the
+        // rates this screen read were out of date, so read them again.
+        setOpenRefusal({ message: noRate, at: Date.now() });
+        void qc.invalidateQueries({ queryKey: queryKeys.pricing(selectedStation.id) });
+        void qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(selectedStation.id) });
+      } else {
+        toast.error(withNextStep(err.message, 'Check the form and open the shift again.'), {
+          title: 'Shift not opened',
+        });
+      }
     } finally {
       setIsOpening(false);
     }
@@ -630,557 +496,456 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   };
 
-  const handleClosingReadingChange = (nozzleId: string, val: number) => {
-    setClosingReadings((prev) => ({
-      ...prev,
-      [nozzleId]: val,
-    }));
-  };
+  // Handovers in flight or refused, and whether the shift's money is still
+  // to be confirmed by the refresh (#606).
+  const handoverWrites = useHandoverWrites(data?.activeShift?.id ?? null);
+  const money = useShiftMoneyState(handoverWrites, stationId, statusQ);
+  const retryMoney = () => runTask(statusQ.refetch(), 'Could not refresh the shift.');
+  // The live board and the close page read the shift status (#606 review): a
+  // failed status read shows in their Data Section with Retry. After a
+  // Handover, that failure is the inline "Couldn't confirm the drawer totals ·
+  // Retry" instead, with the figures held as Saving…, so the section is kept.
+  const statusSectionQ =
+    money === 'unconfirmed' ? { ...statusQ, isError: false, error: null } : statusQ;
 
-  const handlePrepareClose = () => {
-    if (!data.activeShift) return;
-
-    // Perform validation checks
-    for (const nr of data.activeShift.nozzleReadings) {
-      const opening = Number(nr.openingReading);
-      const closing = closingReadings[nr.nozzleId] ?? opening;
-
-      if (closing < opening) {
-        toast.error(
-          `Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`,
-        );
-        return;
-      }
-    }
-
-    setConfirmWarningsChecked(false);
-    setIsPreparingClose(true);
-    setCloseWizardOpen(true);
-  };
-
-  const handleCloseShift = async () => {
-    if (!data.activeShift) return;
-    try {
-      setIsClosing(true);
-      const readingsArray = Object.entries(closingReadings).map(([nozzleId, closingReading]) => ({
-        nozzleId,
-        closingReading,
-      }));
-
-      const tankDips = Object.entries(dipReadings)
-        .filter(
-          ([_, actualQuantity]) =>
-            actualQuantity !== undefined && actualQuantity !== null && actualQuantity !== '',
-        )
-        .map(([tankId, actualQuantity]) => ({
-          tankId,
-          tankName: stationTanks.find((tank) => tank.id === tankId)?.name ?? 'Tank',
-          actualQuantity: Number(actualQuantity),
-          reason: dipReasons[tankId]?.trim() || undefined,
-          status: 'pending' as const,
-          idempotencyKey: createStockCountIdempotencyKey(),
-        }));
-
-      // Calculate expected, actual, variance and nextTemplateId before closing
-      const expected = expectedCash;
-      const actual = closingCash;
-      const variance = cashVariance;
-      const closedId = data.activeShift.id;
-
-      let nextTemplateId = '';
-      if (data?.templates && data.templates.length > 0 && data?.activeShift) {
-        const currentIdx = data.templates.findIndex(
-          (t: any) => t.id === data.activeShift.shiftTemplateId,
-        );
-        if (currentIdx !== -1) {
-          nextTemplateId = data.templates[(currentIdx + 1) % data.templates.length].id;
-        } else {
-          nextTemplateId = data.templates[0].id;
-        }
-      }
-
-      const preparedWorkflow: PendingTankDipWorkflow = {
-        expectedCash: expected,
-        closingCash: actual,
-        variance,
-        lastClosedShiftId: closedId,
-        nextTemplateId,
-        businessDate: data.activeShift.businessDate,
-        currentBusinessDate,
-        scheduledStartTime: data.activeShift.scheduledStartTime,
-        scheduledEndTime: data.activeShift.scheduledEndTime,
-        openedAt: data.activeShift.openedAt,
-        closedAt: new Date().toISOString(),
-        timeZone: stationSettings.timezone,
-        tankDips,
-        closeStatus: 'submitting',
-      };
-      if (stationId && tankDips.length > 0) savePendingTankDipWorkflow(stationId, preparedWorkflow);
-
-      const closeResult = await shiftService.closeShift(data.activeShift.id, {
-        closingCash,
-        nozzleReadings: readingsArray,
-        ...(closeDropEntries.length > 0 ? { closeCashDrops: closeDropEntries } : {}),
-      });
-      setCloseDrops([]);
-
-      setIsPreparingClose(false);
-      setCloseWizardOpen(false);
-
-      const closedWorkflow: PendingTankDipWorkflow = {
-        ...preparedWorkflow,
-        closeStatus: 'closed',
-        closedAt: closeResult.shift.closedAt,
-      };
-      savePendingTankDipWorkflow(stationId!, closedWorkflow);
-      // The success card is rendered from the close response, which already
-      // carries everything it shows. Cache invalidation/refetch runs in the
-      // background so the operator is never made to wait on the slowest
-      // operational query for feedback the server has already given us.
-      setClosedShiftSuccess(closedWorkflow);
-      runTask(loadShiftStatus(), 'Shift closed, but the screen could not be refreshed.');
-      await saveTankDips(closedWorkflow).catch(() => undefined);
-    } catch (err: any) {
-      if (stationId && isAmbiguousMutationError(err)) {
-        const status = await shiftService.getShiftStatus(stationId).catch(() => null);
-        if (status && status.activeShift?.id !== data.activeShift.id) {
-          const workflow = loadPendingTankDipWorkflow(stationId);
-          if (workflow) {
-            const confirmed = { ...workflow, closeStatus: 'closed' as const };
-            savePendingTankDipWorkflow(stationId, confirmed);
-            setClosedShiftSuccess(confirmed);
-            await saveTankDips(confirmed).catch(() => undefined);
-          }
-        }
-      } else if (stationId) {
-        savePendingTankDipWorkflow(stationId, null);
-      }
-      toast.error(err.message || 'Failed to close shift');
-    } finally {
-      setIsClosing(false);
-    }
-  };
-
-  const discardTankDips = async () => {
-    const unsavedCount =
-      closedShiftSuccess?.tankDips.filter((dip) => dip.status !== 'saved').length ?? 0;
-    if (
-      !(await confirm({
-        title: 'Discard unrecorded Tank Dips?',
-        message: `${unsavedCount} unrecorded Tank Dip ${unsavedCount === 1 ? 'value' : 'values'} will be discarded. Any Tank Dips already saved remain recorded for the Business Day.`,
-        confirmLabel: 'Discard Unrecorded',
-        danger: true,
-      }))
-    )
-      return;
-    setClosedShiftSuccess((current) => (current ? discardUnrecordedTankDips(current) : current));
+  const startClose = () => {
+    setSelectedSubTab('today');
+    clearNavIntent();
+    flow.startClose();
   };
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+      <p className="p-6 text-[13px] text-ink-muted">
         Please select a station to manage operational shifts.
-      </div>
+      </p>
     );
   }
 
-  if (loading) {
-    return <LoadingSpinner text="Resolving shift workspace states..." />;
-  }
-
-  if (error) {
-    return (
-      <div
-        style={{
-          padding: '24px',
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          borderRadius: 'var(--radius-card)',
-        }}
-      >
-        <strong>Error:</strong> {error.message || 'Failed to load shifts configuration'}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <LoadingSpinner text="Resolving shift workspace states..." />;
-  }
-
-  const {
-    activeShift,
-    lastShift,
-    lastShiftSummary,
-    canReopenLastShift,
-    gracePeriodExpiresAt,
-    templates,
-    nozzles,
-    staff,
-    dispensers,
-    terminals,
-  } = data;
+  // The status payload is untyped; LiveShiftView reads it through `LiveShift`.
+  const activeShift = data?.activeShift ?? null;
+  const lastShift = data?.lastShift ?? null;
+  const lastShiftSummary = data?.lastShiftSummary ?? null;
   const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
-    ? isPreparingClose
+    ? flow.inProgress
       ? 'closing'
       : 'active'
     : 'idle';
 
-  const renderShiftSubTabs = () => (
-    // Lift the tab strip above the sticky control-bar backdrop (z-20) so its
-    // underline baseline is never masked by the backdrop at rest.
-    <div style={{ position: 'relative', zIndex: 25 }}>
-      <Tabs
-        variant="underline"
-        aria-label="Shift views"
-        className="no-print"
-        activeId={shiftSubTab}
-        onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
-        tabs={[
-          {
-            id: 'today',
-            label: 'Active Shift',
-            icon: <Clock3 size={13} />,
-            badge: activeShift ? (
-              <span
-                style={{
-                  fontSize: '10px',
-                  padding: '1px 6px',
-                  borderRadius: '8px',
-                  background: 'var(--state-success-bg)',
-                  color: 'var(--state-success-fg)',
-                  fontWeight: 600,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Open
-              </span>
-            ) : undefined,
-          },
-          { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
-          { id: 'history', label: 'History', icon: <History size={13} /> },
-        ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
+  const viewLastShiftSummary = lastShiftSummary
+    ? () => {
+        setViewHistoryShiftId(lastShiftSummary.shiftId);
+        setShiftSubTab('history');
+      }
+    : null;
+
+  const openHandover = (assignment: StaffAssignmentInput) =>
+    runTask(handleOpenHandoverDrawer(assignment), 'Could not open the handover.');
+
+  const viewShiftSummary = (shiftId: string) => {
+    setViewHistoryShiftId(shiftId);
+    setShiftSubTab('history');
+    goRoute(ROUTES.shifts);
+  };
+  const dismissCloseResult = (result: PendingTankDipWorkflow) => {
+    flow.dismissOutcome(result);
+    setViewingShiftSummary(false);
+  };
+
+  // The attendant's product cash, counted in one Drawer only (#419).
+  const selectedProductCash =
+    activeShift && selectedHandoverAssignment
+      ? handoverProductCash({
+          assignments: activeShift.staffAssignments || [],
+          userId: selectedHandoverAssignment.userId,
+          duId: selectedHandoverAssignment.duId,
+          productCash: Number(
+            (activeShift.staffAssignments || []).find(
+              (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+            )?.attributed?.merchandiseCash ?? 0,
+          ),
+        })
+      : null;
+
+  const handoverDrawer =
+    activeShift && selectedHandoverAssignment ? (
+      <HandoverDrawer
+        isOpen={handoverDrawerOpen}
+        onClose={() => {
+          setHandoverDrawerOpen(false);
+          setSelectedHandoverAssignment(null);
+        }}
+        shiftId={activeShift.id}
+        stationId={stationId}
+        canSetMrp={can(principalFor(userRole), 'products.manage')}
+        userId={selectedHandoverAssignment.userId}
+        userName={selectedHandoverAssignment.userName}
+        duId={selectedHandoverAssignment.duId}
+        duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
+        nozzles={activeShift.nozzleReadings.filter(
+          (nr: any) => nr.duId === selectedHandoverAssignment.duId,
+        )}
+        terminals={(activeShift.terminalLinks || []).filter(
+          (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
+        )}
+        stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
+        merchandiseCash={selectedProductCash?.productCash ?? 0}
+        productCashCountedIn={selectedProductCash?.countedIn ?? null}
+        openingFloat={Number(
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.openingFloat ?? 0,
+        )}
+        merchandiseNonCash={(() => {
+          const a = (activeShift.staffAssignments || []).find(
+            (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+          )?.attributed;
+          return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
+        })()}
+        creditSales={
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.creditSales ||
+          selectedHandoverAssignment.creditSales ||
+          []
+        }
+        omcSales={
+          (activeShift.staffAssignments || []).find(
+            (sa: any) =>
+              sa.userId === selectedHandoverAssignment.userId &&
+              sa.duId === selectedHandoverAssignment.duId,
+          )?.omcSales ||
+          selectedHandoverAssignment.omcSales ||
+          []
+        }
+        onCreditChanged={async () => {
+          await loadShiftStatus({ throwOnError: true });
+        }}
+        existingHandover={activeShift.handovers?.find(
+          (h: any) =>
+            h.userId === selectedHandoverAssignment.userId &&
+            h.duId === selectedHandoverAssignment.duId,
+        )}
+        onSaveSuccess={() => {}}
       />
-    </div>
-  );
+    ) : null;
 
-  // Sub-tab: Business Day (read-only day cockpit)
-  if (shiftSubTab === 'business-day') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        {renderShiftSubTabs()}
-        <BusinessDayTab
-          selectedStation={selectedStation}
-          userRole={userRole}
-          activeBusinessDayId={activeShift?.businessDayId ?? null}
-          requestedBusinessDate={requestedBusinessDayDate}
-          onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
-          onNavigate={onNavigate}
+  // ── Close shift page (#534): `/shifts/<id>/close` ──────────────────────────
+  // An outcome left on Live shift (a reload with tank dips still to save) is
+  // the close page's final state, as the old screen replaced Live shift.
+  const closePage =
+    closeRoute ??
+    (shiftSubTab === 'today' && flow.strayOutcome
+      ? { shiftId: flow.strayOutcome.lastClosedShiftId, step: 'done' as const }
+      : null);
+  if (closePage) {
+    const view = flow.viewFor(closePage);
+    if (view.kind === 'outcome') {
+      const result = view.outcome;
+      return (
+        <ShiftCloseSuccess
+          result={result}
+          shiftName={result.shiftName}
+          tankDips={result.tankDips}
+          onSaveTankDips={() => flow.saveTankDips(result)}
+          onDiscardTankDips={flow.discardTankDips}
+          onStartNext={() => {
+            setSelectedTemplateId(result.nextTemplateId);
+            setBusinessDate(result.businessDate);
+            setPreserveNextShiftDate(true);
+            dismissCloseResult(result);
+            setSelectedSubTab('today');
+            showOpenForm(true);
+            goRoute(ROUTES.shifts);
+          }}
+          onViewSummary={() => {
+            dismissCloseResult(result);
+            viewShiftSummary(result.lastClosedShiftId);
+          }}
+          onBack={() => {
+            dismissCloseResult(result);
+            flow.leave();
+          }}
         />
-      </div>
-    );
-  }
-
-  // Sub-tab: History
-  if (shiftSubTab === 'history') {
+      );
+    }
+    if (view.kind === 'close' && activeShift) {
+      const f = flow.figures;
+      return (
+        <>
+          <CloseShiftPage
+            shift={activeShift}
+            currentBusinessDate={currentBusinessDate}
+            timeZone={stationSettings.timezone}
+            step={view.step}
+            onStepChange={flow.setStep}
+            onBack={flow.leave}
+            queries={[inventoryStatusQ, shiftTxQ, statusSectionQ]}
+            groups={nozzleGroups(activeShift, { now, timeZone: stationSettings.timezone })}
+            readingErrors={f.readingErrors}
+            tanks={inventoryStatusQ.data ?? []}
+            drawerRows={f.drawerRows}
+            drawerTotal={f.drawerTotal}
+            onOpenHandover={openHandover}
+            cashLines={f.cashLines}
+            productCashOutside={f.productCashOutside}
+            productCashBreakdown={f.productCashBreakdown}
+            dropDrawers={f.dropDrawers}
+            canRecordDrops={f.canRecordDrops}
+            draft={flow.draft}
+            onDraftChange={flow.updateDraft}
+            hasHandovers={f.hasHandovers}
+            attendantVariance={f.attendantVariance}
+            warnings={f.warnings}
+            confirmWarningsChecked={flow.confirmWarningsChecked}
+            onConfirmWarningsChange={flow.setConfirmWarningsChecked}
+            isClosing={flow.isClosing}
+            onConfirmClose={(save) => runTask(flow.closeShift(save), 'Could not close the shift.')}
+            handoverWrites={handoverWrites}
+            money={money}
+            onRetryMoney={retryMoney}
+          />
+          {handoverDrawer}
+        </>
+      );
+    }
+    // Loading, or a shift that is not open (closed, another shift) or a role
+    // that cannot close: say so, with the way back.
     return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          fontFamily: 'var(--font-sans)',
-        }}
+      <PageFrame
+        route={ROUTES.shifts}
+        title="Close shift"
+        back={{ label: 'Live shift', href: `#${ROUTES.shifts}`, onClick: flow.leave }}
       >
-        {renderShiftSubTabs()}
-        <ShiftHistoryTab
-          selectedStation={selectedStation}
-          userRole={userRole}
-          viewShiftId={requestedHistoryShiftId}
-          onClearViewShiftId={clearRequestedHistoryShiftId}
-        />
-      </div>
+        <DataSection
+          title="shift status"
+          query={statusQ}
+          shape="cards"
+          placeholderHeight={320}
+          enabled
+        >
+          <EmptyState
+            title={mayClose ? 'This shift is not open' : 'Your role cannot close shifts'}
+            description={
+              mayClose
+                ? 'It may already be closed. Its Shift Summary is in History.'
+                : 'An Owner, Manager or Staff member closes the shift.'
+            }
+            action={
+              <div className="flex gap-2">
+                {mayClose && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => viewShiftSummary(closePage.shiftId)}
+                  >
+                    View shift summary
+                  </Button>
+                )}
+                <Button variant="primary" size="sm" onClick={flow.leave}>
+                  Back to Live shift
+                </Button>
+              </div>
+            }
+          />
+        </DataSection>
+      </PageFrame>
     );
   }
 
-  // Render Success Screen if set
-  if (closedShiftSuccess) {
-    return (
-      <ShiftCloseSuccess
-        result={closedShiftSuccess}
-        tankDips={closedShiftSuccess.tankDips}
-        onSaveTankDips={() => saveTankDips()}
-        onDiscardTankDips={discardTankDips}
-        onStartNext={() => {
-          setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
-          setBusinessDate(closedShiftSuccess.businessDate);
-          setPreserveNextShiftDate(true);
-          setClosedShiftSuccess(null);
-          setViewingShiftSummary(false);
-        }}
-        onViewSummary={() => {
-          setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
-          setShiftSubTab('history');
-          setClosedShiftSuccess(null);
-        }}
-        onBack={() => {
-          setClosedShiftSuccess(null);
-          setViewingShiftSummary(false);
-        }}
-      />
-    );
-  }
-
-  // Render Shift Summary View if toggled
-  if (viewingShiftSummary && lastShiftSummary) {
+  if (shiftSubTab === 'today' && viewingShiftSummary && lastShiftSummary) {
     return (
       <ShiftSummaryView
         shiftSummary={lastShiftSummary}
         userRole={userRole}
-        canReopen={canReopenLastShift}
-        gracePeriodExpiresAt={gracePeriodExpiresAt}
+        canReopen={data?.canReopenLastShift}
+        gracePeriodExpiresAt={data?.gracePeriodExpiresAt}
         shiftStatus={lastShift?.status}
         station={selectedStation}
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingShiftSummary(false);
-          runTask(loadShiftStatus(), 'Shift reopened, but the screen could not be refreshed.');
+          refresh(() => loadShiftStatus({ throwOnError: true }), 'Shift reopened.');
         }}
         onBack={() => setViewingShiftSummary(false)}
       />
     );
   }
 
-  // Render Active Shift Workspace
-  if (shiftScreenState === 'active' || shiftScreenState === 'closing') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          fontFamily: 'var(--font-sans)',
-        }}
-      >
-        {renderShiftSubTabs()}
-        <ShiftControlBar
-          activeShift={activeShift}
-          shiftTotals={shiftTotals}
-          handoversCompleted={handovers.length}
-          handoversAssigned={activeShift.staffAssignments?.length || 0}
-          quickActions={quickEntryActions}
-          onCloseShiftClick={() => {
-            if (isPreparingClose) {
-              setCloseWizardOpen(true);
-            } else {
-              handlePrepareClose();
-            }
-          }}
-          isPreparingClose={shiftScreenState === 'closing'}
-          currentBusinessDate={currentBusinessDate}
-          timeZone={stationSettings.timezone}
-          onViewLastShiftSummary={
-            lastShiftSummary
-              ? () => {
-                  setViewHistoryShiftId(lastShiftSummary.shiftId);
-                  setShiftSubTab('history');
-                }
-              : undefined
-          }
-        />
+  const primary = activeShift
+    ? mayClose
+      ? {
+          label: shiftScreenState === 'closing' ? 'Continue close' : 'Close shift',
+          icon: 'lock' as const,
+          onClick: startClose,
+        }
+      : null
+    : data && can(principalFor(userRole), 'shifts.open') && !openFormVisible
+      ? {
+          label: 'Open shift',
+          icon: 'play' as const,
+          onClick: () => {
+            setShiftSubTab('today');
+            showOpenForm(true);
+          },
+        }
+      : null;
 
-        {/* 1. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel
-          shiftId={activeShift.id}
-          stationId={selectedStation?.id ?? null}
-          onChanged={loadShiftStatus}
-          initialHandovers={data?.activeShift?.merchandiseHandovers}
-          initialSales={data?.activeShift?.merchandiseSales}
-        />
+  const tabs: TabItem[] = (
+    [
+      {
+        id: 'today',
+        label: 'Live shift',
+        concept: 'live-shift',
+        badge: activeShift ? 'shift-live' : undefined,
+      },
+      { id: 'business-day', label: 'Business days', concept: 'business-days' },
+      { id: 'history', label: 'History', concept: 'history' },
+    ] satisfies TabItem[]
+  ).filter((tab) => canWorkLiveShift || tab.id !== 'today');
 
-        {/* 2. Attendant (DU) Handovers Dashboard */}
-        <AttendantHandoversDashboard
-          staffAssignments={activeShift.staffAssignments}
-          handovers={handovers}
-          onRecordHandover={handleOpenHandoverDrawer}
-        />
+  const historyTab = (
+    <ShiftHistoryTab
+      selectedStation={selectedStation}
+      userRole={userRole}
+      viewShiftId={requestedHistoryShiftId}
+      onClearViewShiftId={clearRequestedHistoryShiftId}
+      onOpenShift={setViewHistoryShiftId}
+    />
+  );
+  // An open Shift Summary is a page of its own (#535), with its back link to
+  // History, so it renders outside this page's frame and tabs.
+  if (shiftSubTab === 'history' && requestedHistoryShiftId) return historyTab;
 
-        {/* 3. Nozzle Readings Grid (fuel sales preview) */}
-        <NozzleReadingsGrid
-          nozzleReadings={activeShift.nozzleReadings}
-          closingReadings={closingReadings}
-          staffAssignments={data?.activeShift?.staffAssignments || []}
-        />
-
-        {/* 4. Shift Totals Summary Card (KPI) */}
-        <ShiftTotalsSummary
-          shiftTotals={shiftTotals}
-          cashCollections={activeCashCollections}
-          cardCollections={activeCardCollections}
-          upiCollections={activeUpiCollections}
-          creditSales={activeCreditSales}
-          handoverCount={handovers.length}
-        />
-
-        {/* Close Shift Wizard (Drawer) */}
-        <CloseShiftWizard
-          isOpen={closeWizardOpen}
-          onClose={() => {
-            setCloseWizardOpen(false);
-            // Keep isPreparingClose=true so the control bar shows "Continue Close"
-            // User cancels explicitly via the wizard's Cancel button only on step 1
-            // and we only fully exit close mode if they haven't made progress.
-            if (closingCash === 0 && Object.keys(dipReadings).length === 0) {
-              setIsPreparingClose(false);
-              setConfirmWarningsChecked(false);
-            }
-          }}
-          shiftTemplateName={activeShift.templateName}
-          openedAt={activeShift.openedAt}
-          businessDate={activeShift.businessDate}
-          currentBusinessDate={currentBusinessDate}
-          scheduledStartTime={activeShift.scheduledStartTime}
-          scheduledEndTime={activeShift.scheduledEndTime}
-          timeZone={stationSettings.timezone}
-          cashLines={cashLines}
-          closingCash={closingCash}
-          onClosingCashChange={setClosingCash}
-          cashSummary={cashSummary}
-          closeCashDrops={closeDrops}
-          onCloseCashDropsChange={setCloseDrops}
-          stationTanks={stationTanks}
-          dipReadings={dipReadings}
-          onDipReadingsChange={setDipReadings}
-          dipReasons={dipReasons}
-          onDipReasonsChange={setDipReasons}
-          warnings={warnings}
-          confirmWarningsChecked={confirmWarningsChecked}
-          onConfirmWarningsChange={setConfirmWarningsChecked}
-          isClosing={isClosing}
-          onConfirmClose={() => handleCloseShift()}
-        />
-
-        {selectedHandoverAssignment && (
-          <HandoverDrawer
-            isOpen={handoverDrawerOpen}
-            onClose={() => {
-              setHandoverDrawerOpen(false);
-              setSelectedHandoverAssignment(null);
-            }}
-            shiftId={activeShift.id}
-            stationId={stationId}
-            userId={selectedHandoverAssignment.userId}
-            userName={selectedHandoverAssignment.userName}
-            duId={selectedHandoverAssignment.duId}
-            duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
-            nozzles={activeShift.nozzleReadings.filter(
-              (nr: any) => nr.duId === selectedHandoverAssignment.duId,
-            )}
-            terminals={(activeShift.terminalLinks || []).filter(
-              (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
-            )}
-            stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
-            customers={handoverCreditCustomers}
-            merchandiseCash={Number(
-              (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-              )?.attributed?.merchandiseCash ?? 0,
-            )}
-            openingFloat={Number(
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.openingFloat ?? 0,
-            )}
-            merchandiseNonCash={(() => {
-              const a = (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-              )?.attributed;
-              return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
-            })()}
-            creditSales={
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.creditSales ||
-              selectedHandoverAssignment.creditSales ||
-              []
-            }
-            omcSales={
-              (activeShift.staffAssignments || []).find(
-                (sa: any) =>
-                  sa.userId === selectedHandoverAssignment.userId &&
-                  sa.duId === selectedHandoverAssignment.duId,
-              )?.omcSales ||
-              selectedHandoverAssignment.omcSales ||
-              []
-            }
-            onCreditChanged={async () => {
-              await loadShiftStatus();
-            }}
-            existingHandover={activeShift.handovers?.find(
-              (h: any) =>
-                h.userId === selectedHandoverAssignment.userId &&
-                h.duId === selectedHandoverAssignment.duId,
-            )}
-            onSaveSuccess={() => {}}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Render Open Shift Form
   return (
-    <div
-      className="animate-fade-in"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      {renderShiftSubTabs()}
-      <OpenShiftForm
-        lastShiftSummary={lastShiftSummary}
-        lastShift={lastShift}
-        stationId={selectedStation.id}
-        templates={templates}
-        dispensers={dispensers}
-        staff={staff}
-        nozzles={nozzles}
-        terminals={terminals}
-        terminalAssignments={terminalAssignments}
-        onTerminalAssignmentChange={handleTerminalAssignmentChange}
-        selectedTemplateId={selectedTemplateId}
-        businessDate={businessDate}
-        currentBusinessDate={currentBusinessDate}
-        timeZone={stationSettings.timezone}
-        staffAssignments={staffAssignments}
-        onStaffAssignmentChange={handleStaffAssignmentChange}
-        onOpeningFloatChange={handleOpeningFloatChange}
-        initialReadings={initialReadings}
-        onInitialReadingChange={handleInitialReadingChange}
-        isOpening={isOpening}
-        onSubmit={handleOpenShift}
-        onViewLastShiftSummary={() => {
-          setViewHistoryShiftId(lastShiftSummary.shiftId);
-          setShiftSubTab('history');
-        }}
-      />
-    </div>
+    <>
+      <PageFrame
+        route={ROUTES.shifts}
+        subtitle={`${selectedStation.name} · Business day ${formatShortDay(
+          activeShift?.businessDate ?? currentBusinessDate,
+        )}`}
+        actions={
+          <ShiftsHeaderActions
+            productSale={activeShift ? productSaleAction : null}
+            officeRecords={officeRecordActions}
+            primary={primary}
+            showHotkeys={shiftSubTab === 'today' && !!activeShift}
+          />
+        }
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Shift views"
+            className="no-print"
+            activeId={shiftSubTab}
+            onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
+            tabs={tabs}
+          />
+        }
+      >
+        <div {...tabPanelProps(TABS_ID, shiftSubTab)}>
+          {shiftSubTab === 'business-day' && (
+            <BusinessDayTab
+              selectedStation={selectedStation}
+              userRole={userRole}
+              activeBusinessDayId={activeShift?.businessDayId ?? null}
+              requestedBusinessDate={requestedBusinessDayDate}
+              onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+              openPastDaysRequested={intentOpenPastDays}
+              onOpenPastDaysConsumed={() => {
+                setSelectedSubTab('business-day');
+                clearNavIntent();
+              }}
+              onNavigate={onNavigate}
+            />
+          )}
+          {shiftSubTab === 'history' && historyTab}
+          {shiftSubTab === 'today' && (
+            <DataSection
+              title="shift status"
+              query={statusSectionQ}
+              shape="cards"
+              placeholderHeight={420}
+              enabled
+            >
+              {activeShift ? (
+                <LiveShiftView
+                  shift={activeShift}
+                  stationId={stationId}
+                  timeZone={stationSettings.timezone}
+                  currentBusinessDate={currentBusinessDate}
+                  cashDeclared={flow.figures.cashLines.cashDeclared}
+                  before={beforeHandovers}
+                  closing={shiftScreenState === 'closing'}
+                  canClose={mayClose}
+                  onOpenHandover={openHandover}
+                  onStartClose={startClose}
+                  onViewLastSummary={viewLastShiftSummary}
+                  handoverWrites={handoverWrites}
+                  money={money}
+                  onRetryMoney={retryMoney}
+                  canSetMrp={can(principalFor(userRole), 'products.manage')}
+                />
+              ) : awaitingOpenedShift ? (
+                <Skeleton aria-label="Loading the new shift" height={420} />
+              ) : openFormVisible && data ? (
+                <section className="flex flex-col gap-3" aria-label="Open a shift">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-[14px] font-semibold text-ink-strong">Open a shift</h2>
+                    <Button variant="ghost" size="sm" onClick={() => showOpenForm(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                  <OpenShiftForm
+                    lastShift={lastShift}
+                    stationId={selectedStation.id}
+                    templates={data.templates}
+                    dispensers={data.dispensers}
+                    staff={data.staff}
+                    nozzles={data.nozzles}
+                    terminals={data.terminals}
+                    terminalAssignments={terminalAssignments}
+                    onTerminalAssignmentChange={handleTerminalAssignmentChange}
+                    selectedTemplateId={selectedTemplateId}
+                    businessDate={businessDate}
+                    currentBusinessDate={currentBusinessDate}
+                    staffAssignments={staffAssignments}
+                    onStaffAssignmentChange={handleStaffAssignmentChange}
+                    onOpeningFloatChange={handleOpeningFloatChange}
+                    initialReadings={initialReadings}
+                    onInitialReadingChange={handleInitialReadingChange}
+                    isOpening={isOpening}
+                    onSubmit={handleOpenShift}
+                    clock={stationClock}
+                    canChangePrice={can(principalFor(userRole), 'pricing.change')}
+                    openRefusal={openRefusal}
+                  />
+                </section>
+              ) : (
+                <IdleShiftView
+                  dayQuery={todayQ}
+                  day={todayFigures}
+                  lastShift={lastShift}
+                  lastShiftId={lastShiftSummary?.shiftId ?? lastShift?.id ?? null}
+                  lastVariance={
+                    lastShiftSummary?.snapshotData?.cashVariance != null
+                      ? Number(lastShiftSummary.snapshotData.cashVariance)
+                      : null
+                  }
+                  timeZone={stationSettings.timezone}
+                  onViewLastSummary={viewLastShiftSummary}
+                />
+              )}
+            </DataSection>
+          )}
+        </div>
+      </PageFrame>
+
+      {handoverDrawer}
+    </>
   );
 };

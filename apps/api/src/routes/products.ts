@@ -1,6 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canManageProduct } from '@pump/shared';
+import { can, redactProductCosts } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
@@ -18,18 +18,29 @@ type Variables = {
   user: AuthenticatedPrincipal;
 };
 
+/** sendResult with `costBasis` withheld from a returned product without View costs. */
+function sendProductResult<T extends object>(
+  c: Context<{ Variables: Variables }>,
+  result: Result<T>,
+): Response {
+  const shown: Result<T> = result.success
+    ? { ...result, data: redactProductCosts([result.data], c.var.user)[0] }
+    : result;
+  return sendResult(c, shown) as Response;
+}
+
 export const productsRouter = new Hono<{ Variables: Variables }>();
 
 // GET /api/setup/products
 productsRouter.get('/products', async (c) => {
   const repo = new DrizzleProductRepository(c.var.db);
   const data = await repo.listByOrganization(c.var.user.organizationId);
-  return c.json({ success: true, data });
+  return c.json({ success: true, data: redactProductCosts(data, c.var.user) });
 });
 
 // POST /api/setup/products
 productsRouter.post('/products', writePolicyGuard('POST /setup/products'), async (c) => {
-  if (!canManageProduct(c.var.user.role)) {
+  if (!can(c.var.user, 'products.manage')) {
     return c.json(
       {
         success: false,
@@ -53,7 +64,7 @@ productsRouter.post('/products', writePolicyGuard('POST /setup/products'), async
       events,
     }).execute(body, buildContext(c.var.user, { stationId: body?.stationId, ...stationClock })),
   );
-  return sendResult(c, result);
+  return sendProductResult(c, result);
 });
 
 // POST /api/setup/products/import — bulk create products from a (frontend-validated)
@@ -64,7 +75,7 @@ productsRouter.post(
   '/products/import',
   writePolicyGuard('POST /setup/products/import'),
   async (c) => {
-    if (!canManageProduct(c.var.user.role)) {
+    if (!can(c.var.user, 'products.manage')) {
       return c.json(
         {
           success: false,
@@ -117,7 +128,7 @@ productsRouter.post(
 
 // PUT /api/setup/products/:id
 productsRouter.put('/products/:id', writePolicyGuard('PUT /setup/products/:id'), async (c) => {
-  if (!canManageProduct(c.var.user.role)) {
+  if (!can(c.var.user, 'products.manage')) {
     return c.json(
       {
         success: false,
@@ -134,7 +145,7 @@ productsRouter.put('/products/:id', writePolicyGuard('PUT /setup/products/:id'),
     events: createDispatcher(db),
   });
   const result = await useCase.execute({ ...body, id }, buildContext(c.var.user));
-  return sendResult(c, result);
+  return sendProductResult(c, result);
 });
 
 // DELETE /api/setup/products/:id  (archive -> isActive=false)
@@ -142,7 +153,7 @@ productsRouter.delete(
   '/products/:id',
   writePolicyGuard('DELETE /setup/products/:id'),
   async (c) => {
-    if (!canManageProduct(c.var.user.role)) {
+    if (!can(c.var.user, 'products.manage')) {
       return c.json(
         {
           success: false,
@@ -158,6 +169,6 @@ productsRouter.delete(
       events: createDispatcher(db),
     });
     const result = await useCase.execute({ id, isActive: false }, buildContext(c.var.user));
-    return sendResult(c, result);
+    return sendProductResult(c, result);
   },
 );

@@ -1,27 +1,20 @@
 import React from 'react';
 import { exportReactPdf, outputReactPdf, type PdfOutput } from '../exportPdf.js';
 import {
-  DEFAULT_ATTENDANT_REPORT_CONFIG,
-  DEFAULT_DSSR_CONFIG,
-  DEFAULT_SHIFT_SUMMARY_CONFIG,
+  attendantReportDocConfig,
+  dssrDocConfig,
   paperFromStation,
-  resolveSections,
+  shiftSummaryDocConfig,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
-import { formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
+import { DSR_LABEL, formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
-import type { AttendantReportSection } from './reportConfig.js';
 import { ledgerFileName } from './ledgerFileName.js';
 import {
-  partyStatementDoc,
+  legacyPartyStatementDoc,
   statementFilePrefix,
   type PartyStatementInput,
 } from './partyStatement.js';
-
-/** The slice of station settings the report generators read. */
-interface StationReportSettings {
-  report_config?: { attendantReport?: string[] } | null;
-}
 
 /**
  * One-call report PDF generators that build the station-configured document and
@@ -41,20 +34,10 @@ export async function generateDssrPdf(
   output: PdfOutput = 'save',
 ): Promise<void> {
   const doc = await import('./dssrDoc.js');
-  const sections = resolveSections(
-    station?.settings?.report_config?.dssr,
-    DEFAULT_DSSR_CONFIG.sections,
-  );
-  const config = {
-    ...DEFAULT_DSSR_CONFIG,
-    sections: sections,
-    stationName: station?.name,
-    letterhead: letterheadFromStation(station),
-    paper: paperFromStation(station),
-  };
+  const config = dssrDocConfig(station);
   await outputReactPdf(
     React.createElement(doc.DssrDoc, { dssr, config }),
-    `Daily_DSSR_${dssr?.businessDate || ''}${dssr?.draft === true ? '_DRAFT' : ''}`,
+    dsrFileName(dssr?.businessDate, dssr?.draft === true),
     output,
   );
 }
@@ -76,23 +59,16 @@ export async function generateShiftSummaryPdf(
   output: PdfOutput = 'save',
 ): Promise<void> {
   const doc = await import('./shiftSummaryDoc.js');
-  const sections = resolveSections(
-    station?.settings?.report_config?.shiftSummary,
-    DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
-  );
-  const config = {
-    ...DEFAULT_SHIFT_SUMMARY_CONFIG,
-    sections: sections,
-    stationName: station?.name || templateName,
-    letterhead: letterheadFromStation(station),
-    paper: paperFromStation(station),
-  };
+  const config = shiftSummaryDocConfig(station, {}, templateName);
   const businessDate = shift?.businessDate ?? snapshot?.businessDate ?? null;
   const shiftSequence = shift?.shiftSequence ?? snapshot?.shiftSequence ?? null;
+  // Times print in the station's timezone, as on screen.
+  const timeZone: string | undefined = station?.settings?.timezone;
   await outputReactPdf(
     React.createElement(doc.ShiftSummaryDoc, {
       snapshot: { ...snapshot, businessDate, shiftSequence },
       config,
+      clock: { timeZone },
     }),
     // File names stay ASCII: the display fallback carries an ellipsis.
     `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,
@@ -111,18 +87,7 @@ export async function generateAttendantReportPdf(
   period: { from: string; to: string; generatedAt: string },
 ): Promise<void> {
   const doc = await import('./attendantReportDoc.js');
-  const configured = (station?.settings as StationReportSettings | undefined)?.report_config
-    ?.attendantReport;
-  const sections = resolveSections(configured, DEFAULT_ATTENDANT_REPORT_CONFIG.sections);
-  const config = {
-    ...DEFAULT_ATTENDANT_REPORT_CONFIG,
-    sections,
-    stationName: station?.name,
-    letterhead: letterheadFromStation(station),
-    paper: paperFromStation(station),
-    // A station that turned its logo off must not get one back.
-    showLogo: showLogoFromStation(station),
-  };
+  const config = attendantReportDocConfig(station);
   await exportReactPdf(
     React.createElement(doc.AttendantReportDoc, { data: { ...entry, ...period }, config }),
     `Attendant_Report_${entry.attendantName.replace(/\s+/g, '_')}_${period.from}_${period.to}`,
@@ -130,11 +95,11 @@ export async function generateAttendantReportPdf(
 }
 
 /**
- * Customer or Supplier statement PDF over one date range: the ranged ledger laid
- * out by `LedgerDoc` (the same document as the desktop Unified Ledger), with the
- * server's opening, running and closing balances printed as they are (see
- * `partyStatement.ts`). `output` 'save' = the platform saver (the mobile share
- * sheet), 'download' = always a browser download.
+ * The mobile app's Customer or Supplier statement PDF over one date range: the
+ * ranged ledger laid out by `LedgerDoc` in the mobile layout
+ * (`legacyPartyStatementDoc`), which matches the mobile on-screen statement
+ * until both move to the Statement module together. `output` 'save' = the
+ * platform saver (the mobile share sheet), 'download' = always a browser download.
  */
 export async function generateStatementPdf(
   station: { name?: string; settings?: unknown } | null,
@@ -144,7 +109,7 @@ export async function generateStatementPdf(
   const doc = await import('./ledgerDoc.js');
   await outputReactPdf(
     React.createElement(doc.LedgerDoc, {
-      ...partyStatementDoc(input),
+      ...legacyPartyStatementDoc(input),
       stationName: station?.name,
       letterhead: letterheadFromStation(station),
       paper: paperFromStation(station),
@@ -159,4 +124,9 @@ export async function generateStatementPdf(
     ),
     output,
   );
+}
+
+/** `DSR-<date>` (`.pdf` is added on save); a draft day ends `-DRAFT` (#570). */
+export function dsrFileName(businessDate: string | undefined, draft: boolean): string {
+  return `${DSR_LABEL}-${businessDate || ''}${draft ? '-DRAFT' : ''}`;
 }

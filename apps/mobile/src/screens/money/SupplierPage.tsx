@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supplierStatementParty, useAccess, useToast } from '@pump/ui';
+import { supplierStatementParty, principalFor, useAccess, useToast, withNextStep } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { supplierPaymentAccess } from '../../lib/money/supplierPayment.js';
 import { balanceOf, supplierIdentity, type MoneySupplier } from '../../lib/money/parties.js';
@@ -42,13 +42,13 @@ export const SupplierPage: React.FC<{
   /** The selected Station: its clock anchors "this month" and the age of the oldest unpaid Purchase. */
   station?: Station | null;
 }> = ({ supplier: initial, station: stationProp = null }) => {
-  // The list row is a snapshot; read the live entry so a refreshed balance shows.
-  const { suppliers } = useSuppliersData();
-  const supplier = suppliers.find((s) => s.id === initial.id) ?? initial;
-
   const shell = useShell();
   const { role } = shell;
   const station = stationProp ?? shell.station;
+
+  // The list row is a snapshot; read the live entry so a refreshed balance shows.
+  const { suppliers } = useSuppliersData(station?.id);
+  const supplier = suppliers.find((s) => s.id === initial.id) ?? initial;
 
   const payable = useSupplierPayableData(station?.id, supplier.id);
   const toast = useToast();
@@ -65,7 +65,7 @@ export const SupplierPage: React.FC<{
   // payment already made must be recorded (FINISH_OPEN_WORK). No station, no Office Record.
   const accessMode = useAccess().data?.subscription.mode;
   const paymentAccess = station
-    ? supplierPaymentAccess({ role, accessMode })
+    ? supplierPaymentAccess({ role, permissions: principalFor(role).permissions, accessMode })
     : { status: 'hidden' as const };
   const [paying, setPaying] = useState(false);
 
@@ -78,7 +78,7 @@ export const SupplierPage: React.FC<{
       }
       share={statement.share}
       download={statement.download}
-      onActionError={(message) => toast.error(message)}
+      onActionError={(message) => toast.error(withNextStep(message, 'Try again.'))}
     >
       <SupplierBalanceCard
         supplier={supplier}

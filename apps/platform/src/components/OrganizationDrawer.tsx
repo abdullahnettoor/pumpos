@@ -8,16 +8,8 @@
  *   Billing      → `organization plan|subscription|suspend|restore`
  */
 import React, { useState } from 'react';
-import {
-  Banner,
-  Drawer,
-  Field,
-  NumberInput,
-  Select,
-  Tabs,
-  TextInput,
-  LoadingSpinner,
-} from '@pump/ui';
+import { limitUsageText } from '@pump/shared';
+import { Banner, Drawer, Field, NumberInput, Select, Tabs, TextInput, Spinner } from '@pump/ui';
 import { commands, useInvalidatePlatform, useOrganizationAccess } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import { SUBSCRIPTION_STATUSES, type OrganizationAccess, type OwnerRow } from '../api/types.js';
@@ -59,8 +51,6 @@ export const OrganizationDrawer: React.FC<OrganizationDrawerProps> = ({ target, 
         </div>
 
         <Tabs
-          variant="underline"
-          size="sm"
           activeId={tab}
           onChange={setTab}
           aria-label="Organization administration"
@@ -75,7 +65,13 @@ export const OrganizationDrawer: React.FC<OrganizationDrawerProps> = ({ target, 
         {tab === 'owner' ? (
           <OwnerTab row={row} onRun={run} target={target} />
         ) : access.isLoading ? (
-          <LoadingSpinner />
+          <div
+            role="status"
+            aria-label="Loading organization access"
+            style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}
+          >
+            <Spinner className="size-6 text-brand" />
+          </div>
         ) : access.error ? (
           <Banner severity="danger">{access.error.message}</Banner>
         ) : access.data ? (
@@ -356,9 +352,7 @@ const LimitRow: React.FC<{
       <div style={{ fontSize: '13px' }}>
         <strong>{limitKey}</strong>{' '}
         <span style={{ color: entry?.reached ? 'var(--state-warning-fg)' : 'var(--text-muted)' }}>
-          {entry
-            ? `${entry.used} of ${entry.value} used${entry.reached ? ' (reached)' : ''}`
-            : 'not resolved'}
+          {entry ? limitUsageText(entry) : 'not resolved'}
         </span>
       </div>
       <Field label="New value">

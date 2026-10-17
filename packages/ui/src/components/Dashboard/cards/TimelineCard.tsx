@@ -1,0 +1,259 @@
+import React, { useMemo } from 'react';
+import {
+  businessDayWindow,
+  dashboardTimeline,
+  deriveDuHandoverStatuses,
+  groupEventPins,
+  isHandoverDue,
+  type TimelineTemplate,
+} from '@pump/shared';
+import { formatDayMonth } from '../../../utils/format.js';
+import { Button } from '../../../pump-ds/index.js';
+import {
+  useDashboardSummary,
+  useDayActivity,
+  useShiftStatus,
+  useShiftTemplates,
+} from '../../../query/hooks.js';
+import { DashboardCard } from '../frame/DashboardCard.js';
+import { useCardEnabled, useDashboard } from '../frame/DashboardContext.js';
+import { isDashboardEvent, toTimelineEvent, type PinTarget } from './timeline/activityPins.js';
+import {
+  buildBars,
+  buildCarryBar,
+  deriveCarryOver,
+  clockLabel,
+  minutesLate,
+  money,
+  openingChips,
+  scheduledEndAt,
+  scheduledStartAt,
+  scheduleSegments,
+  type ShiftBarInput,
+} from './timeline/timelineModel.js';
+import { TimelineStrip } from './timeline/TimelineStrip.js';
+import { useTimelineCollapsed } from './timeline/useTimelineCollapsed.js';
+
+type Row = Record<string, any>;
+
+/** Drawers of the open shift whose handover is due (shared status). */
+function handoversDue(shift: Row | null | undefined, now: number, timeZone: string): number | null {
+  if (!shift) return null;
+  const statuses = deriveDuHandoverStatuses(
+    {
+      openedAt: String(shift.openedAt),
+      scheduledEndTime: shift.scheduledEndTime,
+      staffAssignments: shift.staffAssignments ?? [],
+      handovers: shift.handovers ?? [],
+    },
+    now,
+    timeZone,
+  );
+  return statuses.filter((x) => x === 'due').length;
+}
+
+/** Compact Business Day timeline: shift bars, merged event pins, collapsible. */
+export const TimelineCard: React.FC = () => {
+  const {
+    station,
+    now: nowDate,
+    businessDate,
+    entryDate,
+    timeZone,
+    dayStartsAt,
+    onNavigate,
+  } = useDashboard();
+  const now = nowDate.getTime();
+  const enabled = useCardEnabled('timeline');
+  const status = useDashboardSummary(station.id, { enabled });
+  const shiftStatus = useShiftStatus(station.id, { enabled });
+  const templates = useShiftTemplates({ enabled });
+  const activity = useDayActivity(station.id, businessDate, { enabled, entryDate });
+  const [collapsed, toggle] = useTimelineCollapsed();
+
+  const model = useMemo(() => {
+    if (!status.data || !templates.data) return null;
+    const day = status.data.today?.shifts ?? [];
+    const templateList: TimelineTemplate[] = templates.data;
+    const tplById = new Map(templateList.map((t) => [t.id, t]));
+    const active = (shiftStatus.data as { activeShift?: Row | null } | undefined)?.activeShift;
+    const { from: dayStartAt } = businessDayWindow(businessDate, { timeZone, dayStartsAt });
+    const carryOver = deriveCarryOver({
+      active: active ?? status.data.activeShift,
+      lastShift: status.data.lastShift,
+      businessDate,
+      dayStartAt,
+    });
+    const carryLate =
+      carryOver != null &&
+      carryOver.closedAt == null &&
+      isHandoverDue(String(carryOver.openedAt), now, active?.scheduledEndTime, timeZone);
+    const timeline = dashboardTimeline({
+      carryOver,
+      now: new Date(now),
+      shifts: day.map((s) => ({
+        shiftTemplateId: s.shiftTemplateId,
+        openedAt: s.openedAt,
+        closedAt: s.closedAt ?? null,
+      })),
+      templates: templateList,
+      timeZone,
+      dayStartsAt,
+    });
+    const inputs: ShiftBarInput[] = [...day]
+      .sort((x, y) => Date.parse(x.openedAt) - Date.parse(y.openedAt))
+      .map((s, i) => {
+        const tpl = tplById.get(s.shiftTemplateId);
+        return {
+          id: s.id,
+          name: tpl?.name ?? 'Shift',
+          sequence: i + 1,
+          openedAt: s.openedAt,
+          closedAt: s.closedAt ?? null,
+          total: s.closedAt ? (s.totalFuelSalesValue ?? null) : null,
+          variance: s.closedAt ? (s.cashVariance ?? null) : null,
+          scheduledEndAt: scheduledEndAt(tpl, timeline, dayStartsAt),
+          scheduledStartAt: scheduledStartAt(tpl, timeline, dayStartsAt),
+          late: !s.closedAt && isHandoverDue(String(s.openedAt), now, tpl?.endTime, timeZone),
+          handoversDue: s.id === active?.id ? handoversDue(active, now, timeZone) : null,
+        };
+      });
+    const segments = scheduleSegments(templateList, timeline, dayStartsAt);
+    return { timeline, inputs, segments, carryOver, carryLate };
+  }, [status.data, templates.data, shiftStatus.data, timeZone, dayStartsAt, businessDate, now]);
+
+  const events = useMemo(
+    () =>
+      (activity.data?.items ?? [])
+        .filter((g) => isDashboardEvent(g.primary.eventType))
+        .map(toTimelineEvent),
+    [activity.data],
+  );
+  const pins = useMemo(() => groupEventPins(events), [events]);
+
+  if (!enabled) return null;
+  // Visibility depends on the shifts and templates only, so a hidden strip
+  // stays hidden even when the activity feed failed.
+  if (model && !model.timeline.visible) return null;
+
+  const open = (t: PinTarget) => onNavigate(t.path, t.intent);
+  const bars = model
+    ? [
+        ...(model.carryOver
+          ? [buildCarryBar(model.carryOver, model.timeline, now, timeZone, model.carryLate)]
+          : []),
+        ...buildBars(model.inputs, model.timeline, now, timeZone),
+      ]
+    : [];
+  const chips = model ? openingChips(model.inputs, model.timeline, timeZone) : [];
+  const alerts = events.filter((e) => e.tone === 'danger').length;
+  const lastClosed = model?.inputs.filter((i) => i.closedAt).at(-1);
+  const live = model?.inputs.find((i) => !i.closedAt);
+  const toggleButton = (
+    <Button
+      variant="ghost"
+      size="xs"
+      className="ml-auto"
+      onClick={toggle}
+      aria-expanded={!collapsed}
+    >
+      {collapsed ? 'Show timeline ▾' : 'Collapse ▴'}
+    </Button>
+  );
+
+  return (
+    <DashboardCard
+      card="timeline"
+      title="Timeline"
+      query={[status, templates, activity]}
+      placeholderHeight={80}
+    >
+      {model &&
+        (collapsed ? (
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] text-ink-muted">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+              Today
+            </span>
+            <span data-testid="timeline-summary" className="contents">
+              {model.carryOver && (
+                <span>
+                  Shift {model.carryOver.sequence} from{' '}
+                  {formatDayMonth(model.carryOver.businessDate)}{' '}
+                  {model.carryOver.closedAt
+                    ? `closed ${clockLabel(Date.parse(String(model.carryOver.closedAt)), timeZone)}`
+                    : model.carryLate
+                      ? 'past scheduled end'
+                      : 'live'}
+                </span>
+              )}
+              {lastClosed && (
+                <span>
+                  Shift {lastClosed.sequence} closed{' '}
+                  {clockLabel(Date.parse(lastClosed.closedAt!), timeZone)}
+                  {lastClosed.total != null && (
+                    <>
+                      {' · '}
+                      <b className="font-mono text-ink-strong">{money(lastClosed.total)}</b>
+                    </>
+                  )}
+                </span>
+              )}
+              {live &&
+                (live.late ? (
+                  <span>
+                    Shift {live.sequence} <b className="text-warning-fg">past scheduled end</b>
+                  </span>
+                ) : (
+                  <span>
+                    Shift {live.sequence} live since{' '}
+                    {clockLabel(Date.parse(live.openedAt), timeZone)}
+                    {minutesLate(live) != null && ` · opened ${minutesLate(live)}m late`}
+                  </span>
+                ))}
+              {model.timeline.nextWindow && (
+                <span>
+                  Shift {model.inputs.length + 1} scheduled{' '}
+                  {clockLabel(model.timeline.nextWindow.startAt, timeZone)}
+                </span>
+              )}
+              <span>
+                {events.length} event{events.length === 1 ? '' : 's'}
+                {alerts > 0 && (
+                  <>
+                    {' · '}
+                    <b className="text-danger-fg">
+                      {alerts} alert{alerts === 1 ? '' : 's'}
+                    </b>
+                  </>
+                )}
+              </span>
+            </span>
+            {toggleButton}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5">
+              <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+                Today
+              </span>
+              <span className="text-[12px] text-ink-muted">
+                {clockLabel(model.timeline.dayStartAt, timeZone)} →{' '}
+                {clockLabel(model.timeline.dayEndAt, timeZone)}
+              </span>
+              {toggleButton}
+            </div>
+            <TimelineStrip
+              timeline={model.timeline}
+              bars={bars}
+              chips={chips}
+              segments={model.segments}
+              pins={pins}
+              now={now}
+              timeZone={timeZone}
+              onOpen={open}
+            />
+          </>
+        ))}
+    </DashboardCard>
+  );
+};

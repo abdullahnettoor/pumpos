@@ -11,7 +11,8 @@ import {
   Path,
 } from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
-import { formatMoney } from '../../utils/format.js';
+import { formatDateTime, formatQuantity, formatSignedMoney } from '../../utils/format.js';
+import { formatVariance } from '../../utils/variance.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -35,11 +36,47 @@ export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
 export type { Letterhead } from './letterhead.js';
 export { letterheadFromStation } from './letterhead.js';
-import { shiftDisplayLabel } from '@pump/shared';
+import { variancePresentation, type StatusTone, type VarianceKind } from '@pump/shared';
 import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
-import { legacyPurchases } from './legacyPurchases.js';
 import type { Letterhead } from './letterhead.js';
+import {
+  creditTotalNotes,
+  fuelTotalNotes,
+  readShiftSummary,
+  totalNote,
+  volumeTotalNotes,
+  type ShiftSummary,
+} from '../../components/Shifts/shiftSummaryModel.js';
+import {
+  CREDIT_COLUMNS,
+  FUEL_COLUMNS,
+  HANDOVER_COLUMNS,
+  LEGACY_PURCHASE_COLUMNS,
+  NOZZLE_COLUMNS,
+  NOZZLES_EMPTY,
+  SHIFT_SUMMARY_TITLES as TITLES,
+  SIGNATURE_LINES,
+  TERMINAL_COLUMNS,
+  cashLineText,
+  creditTotalRow,
+  fuelTotalRow,
+  handoverTotalRow,
+  legacyPurchaseRows,
+  legacyPurchaseTotalRow,
+  nozzleTotalRow,
+  snapshotNote,
+  summaryDetails,
+  terminalTotalRow,
+} from '../../components/Shifts/shiftSummaryColumns.js';
+import {
+  closeDrawerTotal,
+  drawerColumns,
+  drawerRows,
+  drawerTotalRow,
+  type CloseDrawerRow,
+} from '../../components/Shifts/DrawerReconciliationTable.js';
+import { PdfScreenTable, PdfTitle } from './pdfScreenTable.js';
 
 export const C = {
   green: '#1F6A53',
@@ -57,45 +94,29 @@ export const C = {
   white: '#FFFFFF',
 };
 
-export const inr = (n: any) => formatMoney(n);
-export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
-export const vol3 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
-export const vol1 = (n: any) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
-// Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
-export const vol3u = (n: any, u?: string) =>
-  `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${u || 'L'}`;
-export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
-  const m: Record<string, number> = {};
-  for (const r of rows) {
-    const u = r.unit || 'L';
-    m[u] = (m[u] || 0) + Number(getter(r) || 0);
-  }
-  return Object.entries(m)
-    .map(
-      ([u, v]) =>
-        `${Number(v).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec })} ${u}`,
-    )
-    .join(' \u00b7 ');
-};
-export const fix3 = (n: any) => Number(n || 0).toFixed(3);
-export const fmtTime = (iso?: string) => {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '—';
-  }
-};
-export const fmtDateTime = (iso?: string) => {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('en-IN');
-  } catch {
-    return '—';
-  }
-};
+/**
+ * Shared tones on paper (#518): balanced green, surplus amber, short red. Hex,
+ * since react-pdf has no CSS variables; exhaustive over `StatusTone`, so a new
+ * tone fails here at compile time.
+ */
+const PDF_TONE = {
+  success: C.success,
+  warning: C.amber,
+  danger: C.danger,
+  info: C.ink,
+  neutral: C.muted,
+} satisfies Record<StatusTone, string>;
+
+/** PDF money: paise kept, a negative signed `−₹1,200.00` (the app's one signed-money rule). */
+export const inr = (n: any) => formatSignedMoney(n);
+/** PDF money in whole rupees: `−₹1,200`. */
+export const inr0 = (n: any) => formatSignedMoney(n, { decimals: 0 });
+// The shared quantity format with 3 decimals (meter and dip readings). A
+// missing figure prints 0, as these PDFs always have, not the screen's `—`.
+const reading = (n: any) => Number(n) || 0;
+export const vol3 = (n: any) => formatQuantity(reading(n), 'L', { decimals: 3 });
+/** PDF date + time: the app's one format (`11 Jul 2026, 06:30 am`), `—` when missing. */
+export const fmtDateTime = (iso?: string) => formatDateTime(iso);
 
 export const s = StyleSheet.create({
   page: {
@@ -220,6 +241,11 @@ export const s = StyleSheet.create({
 export type Col = {
   header: string;
   flex: number;
+  /**
+   * The share is the column's whole width (`flexBasis: 0`), whatever its
+   * text, so a total row whose label spans columns lines up with the rows.
+   */
+  fixed?: boolean;
   align?: 'right';
   mono?: boolean;
   strong?: boolean;
@@ -231,19 +257,26 @@ export type Cell = {
   detail?: string;
 };
 
+/** A cell's horizontal padding (`s.cell`), each side. */
+const CELL_PAD = 6;
+
+/** A cell's width: its share of the row, fixed or grown from its text. */
+const width = (c: Col) =>
+  c.fixed ? { flexGrow: c.flex, flexShrink: 1, flexBasis: 0 } : { flex: c.flex };
+
 /** One cell of a table row: its text, and the detail line under it when there is one. */
 const cellView = (cell: Cell, c: Col, base: any, tone?: string, key?: number) => {
   const align = c.align === 'right' ? { textAlign: 'right' as const } : {};
   const color = tone ? { color: tone } : {};
   if (!cell.detail) {
     return (
-      <Text key={key} style={[base, { flex: c.flex }, align, color]}>
+      <Text key={key} style={[base, width(c), align, color]}>
         {cell.text}
       </Text>
     );
   }
   return (
-    <View key={key} style={{ flex: c.flex, paddingVertical: 4, paddingHorizontal: 6 }}>
+    <View key={key} style={[width(c), { paddingVertical: 4, paddingHorizontal: 6 }]}>
       <Text style={[base, { paddingVertical: 0, paddingHorizontal: 0 }, align, color]}>
         {cell.text}
       </Text>
@@ -255,6 +288,23 @@ const cellView = (cell: Cell, c: Col, base: any, tone?: string, key?: number) =>
 /** A row with a second line never splits across pages; a plain row is left as it was. */
 const noSplit = (cells: Cell[]) => (cells.some((cell) => cell.detail) ? { wrap: false } : {});
 
+/** How many leading cells the label takes: itself and the empty cells after it. */
+const labelSpan = (row: Cell[]): number => {
+  let n = 1;
+  while (n < row.length - 1 && !row[n].text) n++;
+  return n;
+};
+
+/** The columns with the first `span` merged into one, left-aligned, for a label. */
+const spanColumns = (columns: Col[], span: number): Col[] => [
+  {
+    header: '',
+    flex: columns.slice(0, span).reduce((a, c) => a + c.flex, 0),
+    fixed: columns[0].fixed,
+  },
+  ...columns.slice(span),
+];
+
 const baseStyle = (c: Col) =>
   c.mono ? (c.strong ? s.cellMonoStrong : s.cellMono) : c.strong ? s.cellStrong : s.cell;
 
@@ -264,6 +314,8 @@ export const TableView = ({
   total,
   totals,
   lead,
+  spanLabel,
+  keepHeader,
 }: {
   columns: Col[];
   rows: Cell[][];
@@ -271,14 +323,18 @@ export const TableView = ({
   totals?: Cell[][];
   /** A bold line before the first row: a statement's opening balance. */
   lead?: Cell[];
+  /**
+   * A total row's label runs across the empty cells after it, so a long label
+   * ("Total of 3 nozzles") does not wrap in a narrow first column.
+   */
+  spanLabel?: boolean;
+  /** The header row never splits or ends a page: it keeps at least its first row. */
+  keepHeader?: boolean;
 }) => (
   <View>
-    <View style={[s.tr, s.thRow]}>
+    <View style={[s.tr, s.thRow]} {...(keepHeader && { wrap: false, minPresenceAhead: 20 })}>
       {columns.map((c, i) => (
-        <Text
-          key={i}
-          style={[s.th, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}]}
-        >
+        <Text key={i} style={[s.th, width(c), c.align === 'right' ? { textAlign: 'right' } : {}]}>
           {c.header}
         </Text>
       ))}
@@ -303,19 +359,29 @@ export const TableView = ({
         )}
       </View>
     ))}
-    {[...(total ? [total] : []), ...(totals ?? [])].map((tRow, ti) => (
-      <View key={`t${ti}`} {...noSplit(tRow)} style={s.totalRow}>
-        {tRow.map((cell, ci) =>
-          cellView(
-            cell,
-            columns[ci],
-            columns[ci].mono ? s.cellMonoStrong : s.cellStrong,
-            cell.color ?? C.ink,
-            ci,
-          ),
-        )}
-      </View>
-    ))}
+    {[...(total ? [total] : []), ...(totals ?? [])].map((tRow, ti) => {
+      const span = spanLabel ? labelSpan(tRow) : 1;
+      const cols = span > 1 ? spanColumns(columns, span) : columns;
+      const cells = span > 1 ? [tRow[0], ...tRow.slice(span)] : tRow;
+      return (
+        <View key={`t${ti}`} {...noSplit(tRow)} style={s.totalRow}>
+          {cells.map((cell, ci) =>
+            cellView(
+              cell,
+              cols[ci],
+              ci === 0 && span > 1
+                ? // The spanned cells' padding too, so the figures after it line up.
+                  { ...s.cellStrong, paddingRight: CELL_PAD + 2 * CELL_PAD * (span - 1) }
+                : cols[ci].mono
+                  ? s.cellMonoStrong
+                  : s.cellStrong,
+              cell.color ?? C.ink,
+              ci,
+            ),
+          )}
+        </View>
+      );
+    })}
   </View>
 );
 
@@ -326,7 +392,14 @@ export const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) =
   </View>
 );
 
-export const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
+/**
+ * A variance's ink by the shared balanced rule of its kind (#556): balanced
+ * green, a shortage red, a surplus amber. Cash by default; litres pass `stock`.
+ */
+export const varColor = (v: number, kind: VarianceKind = 'cash') => {
+  const { state } = variancePresentation(v, kind);
+  return state === 'short' ? C.danger : state === 'surplus' ? C.amber : C.success;
+};
 
 /**
  * Branded report header: green band with legal/station name + a doc title, the
@@ -381,493 +454,293 @@ export const LetterheadBand = ({
   );
 };
 
-/** Pre-#287 snapshots keep a single Cash Variance line (snapshots are immutable). */
-const twoLevel = (d: any) => Number(d?.cashVarianceModel ?? 0) >= 2;
+/*
+ * The Shift Summary PDF reads the snapshot through `readShiftSummary`, the
+ * screen's model, and prints the screen's columns, total rows, titles, notes
+ * and words (#595): stored totals as stored (a missing one blank, with a
+ * note), `—` for volumes across L and kg, 2-decimal volumes and 3-decimal
+ * meter readings, Short / Surplus / Balanced. It never recomputes a figure.
+ */
 
-const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
-  header: (d, cfg) => (
-    <View key="header">
-      <LetterheadBand
-        title="SHIFT SUMMARY RECORD"
-        stationName={cfg.stationName}
-        letterhead={cfg.letterhead}
-        showLogo={cfg.showLogo}
-      />
-      <Text style={s.sub}>
-        Authoritative Operational Snapshot
-        {d.generatedAt ? ` • Compiled ${fmtDateTime(d.generatedAt)}` : ''}
-      </Text>
-    </View>
-  ),
-  meta: (d) => (
-    <View key="meta" style={s.metaBox}>
-      <View style={s.metaCell}>
-        <Text style={s.label}>SHIFT</Text>
-        <Text style={s.valMono}>
-          {shiftDisplayLabel({
-            businessDate: d.businessDate,
-            shiftSequence: d.shiftSequence,
-            shiftId: d.shiftId,
-          })}
-        </Text>
-      </View>
-      <View style={s.metaCell}>
-        <Text style={s.label}>SHIFT TEMPLATE</Text>
-        <Text style={s.val}>{d.templateName || 'Custom'}</Text>
-      </View>
-      <View style={s.metaCell}>
-        <Text style={s.label}>OPERATIONAL DURATION</Text>
-        <Text style={s.val}>
-          {fmtTime(d.openedAt)} - {fmtTime(d.closedAt)}
-        </Text>
-      </View>
-      <View style={s.metaCell}>
-        <Text style={s.label}>RECONCILED BY</Text>
-        <Text style={s.val}>{d.closedByName || d.closedBy || '—'}</Text>
-      </View>
-    </View>
-  ),
-  warnings: (d) =>
-    d.warnings && d.warnings.length > 0 ? (
-      <View key="warnings" style={s.warn}>
-        <Text style={s.warnTitle}>Warnings Captured at Close Time:</Text>
-        {d.warnings.map((w: string, i: number) => (
-          <Text key={i} style={s.warnItem}>
-            • {w}
-          </Text>
-        ))}
-      </View>
-    ) : null,
-  nozzles: (d) => {
-    const nrs = d.nozzleReadings || [];
-    const rows: Cell[][] = nrs.map((nr: any) => {
-      const gross = Number(nr.volumeSold ?? 0);
-      const testing = Number(nr.testingVolume ?? 0);
-      const net = nr.netVolume != null ? Number(nr.netVolume) : gross - testing;
-      return [
-        { text: nr.nozzleName || '' },
-        { text: `${nr.productName || ''}${nr.productCode ? ` (${nr.productCode})` : ''}` },
-        { text: fix3(nr.openingReading) },
-        { text: fix3(nr.closingReading ?? nr.openingReading) },
-        { text: vol3u(gross, nr.unit) },
-        { text: vol3u(testing, nr.unit), color: testing > 0 ? C.amber : C.muted },
-        { text: vol3u(net, nr.unit) },
-      ];
-    });
-    const nUnits: string[] = Array.from(new Set(nrs.map((r: any) => r.unit || 'L')));
-    const fbp = d.fuelByProduct || [];
+/**
+ * The PDF's inputs besides the snapshot: the station's timezone, for its
+ * times. Paper prints absolute dates only: the screen's business-day line is
+ * advice relative to now, so the PDF leaves it out.
+ */
+export interface ShiftSummaryClock {
+  timeZone?: string;
+}
+
+/** A variance tints only when it is a problem: a shortage red, a surplus amber. */
+const problemInk = (amount: number | null | undefined): string | undefined => {
+  if (amount == null) return undefined;
+  const { tone } = formatVariance(amount, 'cash');
+  return tone === 'danger' || tone === 'warning' ? PDF_TONE[tone] : undefined;
+};
+const varianceInk =
+  <T,>(pick: (row: T) => number | null) =>
+  (col: { id: string }, row: T) =>
+    col.id === 'variance' ? problemInk(pick(row)) : undefined;
+
+/**
+ * Whether a table section may break across pages. A short one (a title and up
+ * to 12 rows) moves to the next page whole, so a title never ends a page.
+ */
+const breaks = (rows: unknown[]): boolean => rows.length > 12;
+
+interface Ctx {
+  summary: ShiftSummary;
+  clock: ShiftSummaryClock;
+  config: ReportConfig;
+}
+
+const builders: Record<ShiftSummarySection, (ctx: Ctx) => React.ReactNode> = {
+  header: ({ summary, clock, config }) => {
+    const taken = snapshotNote(summary, clock.timeZone);
     return (
-      <View key="nozzles">
-        <Text style={s.h2}>NOZZLE RECONCILIATION & VOLUME SOLD</Text>
-        <TableView
-          columns={[
-            { header: 'Nozzle', flex: 1.2, strong: true },
-            { header: 'Product', flex: 2.2 },
-            { header: 'Opening Rd', flex: 1.3, align: 'right', mono: true },
-            { header: 'Closing Rd', flex: 1.3, align: 'right', mono: true },
-            { header: 'Gross', flex: 1.2, align: 'right', mono: true },
-            { header: 'Testing', flex: 1.1, align: 'right', mono: true },
-            { header: 'Net Sold', flex: 1.3, align: 'right', mono: true, strong: true },
-          ]}
-          rows={rows}
-          totals={nUnits.map((u) => {
-            const ru = nrs.filter((r: any) => (r.unit || 'L') === u);
-            const g = ru.reduce((a: number, r: any) => a + Number(r.volumeSold || 0), 0);
-            const t = ru.reduce((a: number, r: any) => a + Number(r.testingVolume || 0), 0);
-            const n = ru.reduce(
-              (a: number, r: any) =>
-                a +
-                (r.netVolume != null
-                  ? Number(r.netVolume)
-                  : Number(r.volumeSold || 0) - Number(r.testingVolume || 0)),
-              0,
-            );
-            return [
-              { text: `TOTAL — ${u}` },
-              { text: '' },
-              { text: '' },
-              { text: '' },
-              { text: vol3u(g, u), color: C.muted },
-              { text: vol3u(t, u), color: C.muted },
-              { text: vol3u(n, u), color: C.green },
-            ];
-          })}
+      <View key="header">
+        <LetterheadBand
+          title={TITLES.page.toUpperCase()}
+          stationName={config.stationName}
+          letterhead={config.letterhead}
+          showLogo={config.showLogo}
         />
-        {fbp.length > 0 ? (
-          <View style={{ marginTop: 10 }}>
-            <Text style={s.h2}>PRODUCT-WISE FUEL SALES</Text>
-            <TableView
-              columns={[
-                { header: 'Product', flex: 2.4, strong: true },
-                { header: 'Gross Vol', flex: 1.4, align: 'right', mono: true },
-                { header: 'Testing', flex: 1.3, align: 'right', mono: true },
-                { header: 'Net Sold', flex: 1.4, align: 'right', mono: true, strong: true },
-                {
-                  header: 'Sales Value (\u20b9)',
-                  flex: 1.6,
-                  align: 'right',
-                  mono: true,
-                  strong: true,
-                },
-              ]}
-              rows={fbp.map((p: any) => [
-                { text: `${p.productName || ''}${p.productCode ? ` (${p.productCode})` : ''}` },
-                { text: vol3u(p.grossVolume, p.unit) },
-                {
-                  text: vol3u(p.testingVolume, p.unit),
-                  color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted,
-                },
-                { text: vol3u(p.netVolume, p.unit) },
-                { text: inr(p.salesValue) },
-              ])}
-              totals={Array.from(new Set<string>(fbp.map((p: any) => String(p.unit || 'L')))).map(
-                (u) => {
-                  const pu = fbp.filter((p: any) => (p.unit || 'L') === u);
-                  const g = pu.reduce((a: number, p: any) => a + Number(p.grossVolume || 0), 0);
-                  const t = pu.reduce((a: number, p: any) => a + Number(p.testingVolume || 0), 0);
-                  const n = pu.reduce((a: number, p: any) => a + Number(p.netVolume || 0), 0);
-                  const sv = pu.reduce((a: number, p: any) => a + Number(p.salesValue || 0), 0);
-                  return [
-                    { text: `TOTAL — ${u}` },
-                    { text: vol3u(g, u), color: C.muted },
-                    { text: vol3u(t, u), color: C.muted },
-                    { text: vol3u(n, u), color: C.green },
-                    { text: inr(sv) },
-                  ];
-                },
-              )}
-            />
-          </View>
-        ) : null}
+        <Text style={s.sub}>{`${summary.label} \u00b7 ${summary.template}`}</Text>
+        {taken && <Text style={[s.sub, { marginTop: 2 }]}>{taken}</Text>}
       </View>
     );
   },
-  handovers: (d) =>
-    d.handovers && d.handovers.length > 0 ? (
-      <View key="handovers">
-        <Text style={s.h2}>ATTENDANT HANDOVERS SUMMARY</Text>
-        <TableView
-          columns={[
-            { header: 'Attendant', flex: 1.6, strong: true },
-            { header: 'Dispenser', flex: 1.1 },
-            { header: 'Cash (\u20b9)', flex: 1.3, align: 'right', mono: true },
-            { header: 'Card/UPI (\u20b9)', flex: 1.4, align: 'right', mono: true },
-            { header: 'Credit Chits (\u20b9)', flex: 1.5, align: 'right', mono: true },
-            { header: 'Expected (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
-            { header: 'Variance (\u20b9)', flex: 1.4, align: 'right', mono: true },
-          ]}
-          rows={(d.handovers || []).map((h: any) => {
-            const v = Number(h.varianceAmount || 0);
-            return [
-              { text: h.attendantName || '' },
-              { text: h.duCode || '' },
-              { text: inr(h.cashHandedOver) },
-              { text: inr(Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0)) },
-              { text: inr(h.creditHandedOver) },
-              { text: inr(h.expectedSales) },
-              { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
-            ];
-          })}
-          total={(() => {
-            const tv = (d.handovers || []).reduce(
-              (a: number, h: any) => a + Number(h.varianceAmount || 0),
-              0,
-            );
-            return [
-              { text: 'TOTALS' },
-              { text: '' },
-              {
-                text: inr(
-                  (d.handovers || []).reduce(
-                    (a: number, h: any) => a + Number(h.cashHandedOver || 0),
-                    0,
-                  ),
-                ),
-              },
-              {
-                text: inr(
-                  (d.handovers || []).reduce(
-                    (a: number, h: any) =>
-                      a + Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0),
-                    0,
-                  ),
-                ),
-              },
-              {
-                text: inr(
-                  (d.handovers || []).reduce(
-                    (a: number, h: any) => a + Number(h.creditHandedOver || 0),
-                    0,
-                  ),
-                ),
-              },
-              {
-                text: inr(
-                  (d.handovers || []).reduce(
-                    (a: number, h: any) => a + Number(h.expectedSales || 0),
-                    0,
-                  ),
-                ),
-              },
-              { text: `${tv > 0 ? '+' : ''}${inr(tv)}`, color: varColor(tv) },
-            ];
-          })()}
-        />
-      </View>
-    ) : null,
-  terminals: (d) => {
-    const tb = d.terminalBreakdown || [];
-    if (tb.length === 0) return null;
-    const rows: Cell[][] = tb.map((t: any) => {
-      const handledBy =
-        (t.entries || [])
-          .filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0)
-          .map((e: any) => `${e.attendantName}${e.duCode ? ` \u00b7 ${e.duCode}` : ''}`)
-          .join('\n') || '—';
-      return [
-        { text: `${t.terminalLabel || 'Unknown'}${t.provider ? `\n${t.provider}` : ''}` },
-        { text: handledBy },
-        { text: inr(t.card) },
-        { text: inr(t.upi) },
-        { text: inr(Number(t.card || 0) + Number(t.upi || 0)) },
-      ];
-    });
-    const totCard = tb.reduce((a: number, t: any) => a + Number(t.card || 0), 0);
-    const totUpi = tb.reduce((a: number, t: any) => a + Number(t.upi || 0), 0);
+  meta: ({ summary, clock }) => {
     return (
-      <View key="terminals">
-        <Text style={s.h2}>POS TERMINAL SETTLEMENT SUMMARY</Text>
-        <TableView
-          columns={[
-            { header: 'Terminal', flex: 1.6, strong: true },
-            { header: 'Handled By', flex: 2.6 },
-            { header: 'Card (\u20b9)', flex: 1.3, align: 'right', mono: true },
-            { header: 'UPI (\u20b9)', flex: 1.3, align: 'right', mono: true },
-            { header: 'Total (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
-          ]}
-          rows={rows}
-          total={[
-            { text: 'POS TOTALS' },
-            { text: '' },
-            { text: inr(totCard) },
-            { text: inr(totUpi) },
-            { text: inr(totCard + totUpi), color: C.green },
-          ]}
-        />
-      </View>
-    );
-  },
-  creditSales: (d) =>
-    d.creditSales && d.creditSales.length > 0 ? (
-      <View key="creditSales">
-        <Text style={s.h2}>FUEL-ON-CREDIT SALES</Text>
-        <TableView
-          columns={[
-            { header: 'Customer', flex: 1.8, strong: true },
-            { header: 'Vehicle', flex: 1.3, mono: true },
-            { header: 'Product', flex: 1.4 },
-            { header: 'Qty', flex: 1.1, align: 'right', mono: true },
-            { header: 'Notes', flex: 1.8 },
-            { header: 'Amount (\u20b9)', flex: 1.3, align: 'right', mono: true, strong: true },
-          ]}
-          rows={(d.creditSales || []).map((r: any) => [
-            { text: r.customerName || 'Customer' },
-            { text: r.vehicleNumber || '—' },
-            { text: r.productName || '—' },
-            { text: r.quantity != null ? vol3u(r.quantity, r.unit) : '—' },
-            { text: r.notes || '—' },
-            { text: inr(r.amount) },
-          ])}
-          total={[
-            { text: 'TOTAL CREDIT SALES' },
-            { text: '' },
-            { text: '' },
-            { text: '' },
-            { text: '' },
-            {
-              text: inr(
-                d.creditSalesTotal ??
-                  (d.creditSales || []).reduce((a: number, r: any) => a + Number(r.amount || 0), 0),
-              ),
-              color: C.green,
-            },
-          ]}
-        />
-      </View>
-    ) : null,
-  cashRecon: (d) => (
-    <View key="cashRecon">
-      <Text style={s.h2}>CASH RECONCILIATION & VARIANCES</Text>
-      <View style={s.reconBox}>
-        {[
-          { l: 'Opening Floats', v: inr(d.openingCash), c: C.ink },
-          {
-            l: '(+) Cash Sales (Attendant Handovers)',
-            v: `+ ${inr(d.cashSalesSum)}`,
-            c: C.success,
-          },
-          {
-            l: '(-) Handover Drops',
-            v: `- ${inr(d.handoverCashDrops ?? d.cashDrops)}`,
-            c: C.danger,
-          },
-          { l: '(-) Drops at Close', v: `- ${inr(d.closeCashDrops ?? 0)}`, c: C.danger },
-          {
-            l: twoLevel(d) ? 'Expected Office Cash' : 'Expected Cash in Drawer',
-            v: inr(d.expectedCash),
-            c: C.ink,
-          },
-          { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
-          ...(twoLevel(d)
-            ? [
-                {
-                  l: 'Attendant Variance (Handover)',
-                  v: `${Number(d.attendantVariance || 0) > 0 ? '+' : ''}${inr(d.attendantVariance ?? 0)}`,
-                  c: Number(d.attendantVariance || 0) < 0 ? C.danger : C.ink,
-                },
-              ]
-            : []),
-        ].map((r, i) => (
-          <View key={i} style={s.reconRow}>
-            <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
-            <Text style={{ fontSize: 9, color: r.c, fontFamily: 'Geist Mono', fontWeight: 700 }}>
-              {r.v}
-            </Text>
-          </View>
-        ))}
-        <View
-          style={[
-            s.reconRow,
-            {
-              borderBottomWidth: 0,
-              backgroundColor:
-                Math.abs(Number(d.cashVariance || 0)) > 100 ? '#F8E3E0' : C.surfaceAlt,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
-            }}
-          >
-            {twoLevel(d) ? 'Office Count Variance' : 'Cash Variance'}
-          </Text>
-          <Text
-            style={{
-              fontSize: 10,
-              fontFamily: 'Geist Mono',
-              fontWeight: 700,
-              color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink,
-            }}
-          >
-            {Number(d.cashVariance || 0) > 0 ? '+' : ''}
-            {inr(d.cashVariance)}
-            {Number(d.cashVariance || 0) === 0
-              ? ' (Perfect Match)'
-              : Math.abs(Number(d.cashVariance || 0)) > 100
-                ? ' (Discrepancy)'
-                : ''}
-          </Text>
+      <View key="meta">
+        <View style={s.metaBox}>
+          {summaryDetails(summary, clock.timeZone).map(([label, value]) => (
+            <View key={label} style={s.metaCell}>
+              <Text style={s.label}>{label.toUpperCase()}</Text>
+              <Text style={[s.val, { fontSize: 9 }]}>{value}</Text>
+            </View>
+          ))}
         </View>
+      </View>
+    );
+  },
+  warnings: ({ summary }) =>
+    summary.warnings.length > 0 ? (
+      <View key="warnings" style={s.warn}>
+        <Text style={s.warnTitle}>{TITLES.warnings}</Text>
+        {summary.warnings.map((w, i) => (
+          <Text key={i} style={s.warnItem}>
+            {`\u2022 ${w}`}
+          </Text>
+        ))}
+      </View>
+    ) : null,
+  // The nozzle table always prints, empty or not, as on screen; fuel by
+  // product (no section of its own in a station's layout) follows it.
+  nozzles: ({ summary }) => (
+    <View key="nozzles">
+      <View wrap={breaks(summary.nozzles)}>
+        <PdfTitle title={TITLES.nozzles} subtitle={TITLES.nozzlesSubtitle} />
+        <PdfScreenTable
+          columns={NOZZLE_COLUMNS}
+          rows={summary.nozzles}
+          flex={{ product: 1.5, opening: 1.5, closing: 1.5, gross: 1.2, net: 1.2 }}
+          totalRow={nozzleTotalRow(summary)}
+          note={totalNote(volumeTotalNotes(summary.volumes))}
+          empty={NOZZLES_EMPTY}
+        />
+      </View>
+      {summary.fuel.length > 0 && (
+        <View wrap={breaks(summary.fuel)}>
+          <PdfTitle title={TITLES.fuel} />
+          <PdfScreenTable
+            columns={FUEL_COLUMNS}
+            rows={summary.fuel}
+            totalRow={fuelTotalRow(summary)}
+            note={totalNote(fuelTotalNotes(summary))}
+            empty=""
+          />
+        </View>
+      )}
+    </View>
+  ),
+  handovers: ({ summary }) =>
+    summary.handovers.length > 0 ? (
+      <View key="handovers" wrap={breaks(summary.handovers)}>
+        <PdfTitle title={TITLES.handovers} />
+        <PdfScreenTable
+          columns={HANDOVER_COLUMNS}
+          rows={summary.handovers}
+          flex={{ cash: 1.2, cardUpi: 1.2, expected: 1.4 }}
+          totalRow={handoverTotalRow(summary)}
+          empty=""
+          tone={varianceInk((r) => r.variance)}
+          totalTone={(col) =>
+            col.id === 'variance' ? problemInk(summary.handoverVariance) : undefined
+          }
+        />
+      </View>
+    ) : null,
+  terminals: ({ summary }) =>
+    summary.terminals.length > 0 ? (
+      <View key="terminals" wrap={breaks(summary.terminals)}>
+        <PdfTitle title={TITLES.terminals} />
+        <PdfScreenTable
+          columns={TERMINAL_COLUMNS}
+          rows={summary.terminals}
+          flex={{ terminal: 1.6, handledBy: 2.4 }}
+          totalRow={terminalTotalRow(summary)}
+          empty=""
+        />
+      </View>
+    ) : null,
+  creditSales: ({ summary }) =>
+    summary.credit.length > 0 ? (
+      <View key="creditSales" wrap={breaks(summary.credit)}>
+        <PdfTitle title={TITLES.credit} />
+        <PdfScreenTable
+          columns={CREDIT_COLUMNS}
+          rows={summary.credit}
+          flex={{ customer: 1.3, vehicle: 1.4, notes: 1.3, amount: 1.2 }}
+          totalRow={creditTotalRow(summary)}
+          note={totalNote(creditTotalNotes(summary))}
+          empty=""
+        />
+      </View>
+    ) : null,
+  cashRecon: ({ summary }) => (
+    <View key="cashRecon" wrap={false}>
+      <PdfTitle title={TITLES.cash} />
+      <View style={s.reconBox}>
+        {summary.cash.map((line, i) => {
+          const result = line.role === 'result';
+          const ink = line.role === 'variance' ? (problemInk(line.amount) ?? C.ink) : C.ink;
+          return (
+            <View
+              key={line.key}
+              style={[
+                s.reconRow,
+                result ? { backgroundColor: C.surfaceAlt } : {},
+                i === summary.cash.length - 1 ? { borderBottomWidth: 0 } : {},
+              ]}
+            >
+              <Text style={{ fontSize: 9, color: C.body, fontWeight: result ? 700 : 400 }}>
+                {line.label}
+              </Text>
+              <Text style={{ fontSize: 9, color: ink, fontFamily: 'Geist Mono', fontWeight: 700 }}>
+                {cashLineText(line)}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   ),
   // Office Records (collections, expenses) never appear on a Shift Summary
   // (ADR 0005); saved configs naming those old sections simply skip them.
-  drawers: (d) =>
-    Array.isArray(d.drawers) && d.drawers.length > 0 ? (
-      <View key="drawers">
-        <Text style={s.h2}>DRAWERS</Text>
-        <TableView
-          columns={[
-            { header: 'Attendant', flex: 2, strong: true },
-            { header: 'Float', flex: 1, align: 'right', mono: true },
-            { header: 'Cash Sales', flex: 1.2, align: 'right', mono: true },
-            { header: 'Handover Drops', flex: 1.1, align: 'right', mono: true },
-            { header: 'Close Drops', flex: 1, align: 'right', mono: true },
-            { header: 'Expected', flex: 1.2, align: 'right', mono: true },
-            { header: 'Handed Over', flex: 1.2, align: 'right', mono: true },
-            { header: 'Variance', flex: 1.2, align: 'right', mono: true },
-          ]}
-          rows={d.drawers.map((r: any) => {
-            const m = (v: unknown) => (v == null ? '—' : inr(v));
-            const v = r.variance == null ? null : Number(r.variance);
-            return [
-              { text: `${r.attendantName ?? 'Attendant'}${r.duName ? ` · ${r.duName}` : ''}` },
-              { text: m(r.openingFloat) },
-              { text: m(r.cashSales) },
-              { text: m(r.cashDrops) },
-              { text: m(r.closeCashDrops ?? 0) },
-              { text: m(r.expectedCash) },
-              { text: m(r.cashHandedOver) },
-              {
-                text: v == null ? 'Not handed over' : inr(v),
-                color: v == null || v === 0 ? C.muted : v < 0 ? C.danger : C.success,
-              },
-            ];
-          })}
+  // The screen's Drawers table (#534): its rows, columns and total row, with
+  // the variance total in words (`texts`).
+  drawers: ({ summary }) => {
+    if (summary.drawers.length === 0) return null;
+    const rows = drawerRows(summary.drawers);
+    const total = closeDrawerTotal(rows);
+    const totalRow = drawerTotalRow(rows, total);
+    const handedOver = rows.some((r) => !r.pending);
+    return (
+      <View key="drawers" wrap={breaks(rows)}>
+        <PdfTitle title={TITLES.drawers} subtitle={TITLES.drawersSubtitle} />
+        <PdfScreenTable
+          columns={drawerColumns()}
+          rows={rows}
+          // Eight columns: room for a lakh-sized total (₹1,40,000.00) in each figure.
+          flex={{
+            drawer: 1.1,
+            status: 1,
+            openingFloat: 1.15,
+            cashSales: 1.15,
+            drops: 1.15,
+            expected: 1.15,
+            declared: 1.15,
+            variance: 1.15,
+          }}
+          totalRow={totalRow}
+          empty=""
+          tone={varianceInk((r: CloseDrawerRow) => r.variance)}
+          totalTone={(col) =>
+            col.id === 'variance' && handedOver ? problemInk(total.variance) : undefined
+          }
         />
       </View>
-    ) : null,
+    );
+  },
   signatures: () => (
     <View key="signatures" style={s.signRow}>
-      <Text style={s.sign}>Operator / Reconciliation Staff Signature</Text>
-      <Text style={s.sign}>Owner / Manager Verification Signature</Text>
+      {SIGNATURE_LINES.map((who) => (
+        <Text key={who} style={s.sign}>
+          {who}
+        </Text>
+      ))}
     </View>
   ),
 };
 
 /**
- * Older snapshots stored the shift's purchases; render them as they were saved.
- * New snapshots carry none (#308), so this renders nothing for them.
+ * Older snapshots stored the shift's purchases; print them as they were saved,
+ * as the screen does. New snapshots carry none (#308), so this prints nothing.
  */
-function legacyPurchasesSection(d: any): React.ReactNode {
-  const rows = legacyPurchases(d);
+function legacyPurchasesSection(snapshot: unknown): React.ReactNode {
+  const rows = legacyPurchaseRows(snapshot);
   if (rows.length === 0) return null;
   return (
-    <View key="purchases">
-      <Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
-      <TableView
-        columns={[
-          { header: 'Supplier', flex: 1.8, strong: true },
-          { header: 'Ref / Invoice', flex: 1.8, mono: true },
-          { header: 'Notes', flex: 2 },
-          { header: 'Amount', flex: 1.2, align: 'right', mono: true },
-        ]}
-        rows={rows.map((p: any) => [
-          { text: p.supplierName || 'Unknown Supplier' },
-          { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
-          { text: p.notes || '—' },
-          { text: inr(p.amount) },
-        ])}
+    <View key="purchases" wrap={breaks(rows)}>
+      <PdfTitle title={TITLES.legacyPurchases} />
+      <PdfScreenTable
+        columns={LEGACY_PURCHASE_COLUMNS}
+        rows={rows}
+        totalRow={legacyPurchaseTotalRow(rows)}
+        empty=""
       />
     </View>
   );
 }
 
-export const ShiftSummaryDoc: React.FC<{ snapshot: any; config?: ReportConfig }> = ({
-  snapshot,
-  config = DEFAULT_SHIFT_SUMMARY_CONFIG,
-}) => (
-  <Document>
-    <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) =>
-        key === 'signatures' ? (
-          <React.Fragment key="signatures">
-            {legacyPurchasesSection(snapshot)}
-            {builders.signatures(snapshot, config)}
-          </React.Fragment>
-        ) : (
-          builders[key]?.(snapshot, config)
-        ),
-      )}
-      {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
-      <View style={s.foot} fixed>
-        <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
-        <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
-      </View>
-    </Page>
-  </Document>
-);
+/**
+ * The snapshot as the screen reads it. `generateShiftSummaryPdf` puts the
+ * read's `businessDate` and `shiftSequence` on the snapshot.
+ */
+const readSnapshot = (snapshot: Record<string, any>): ShiftSummary =>
+  readShiftSummary({
+    shiftId: snapshot.shiftId,
+    businessDate: snapshot.businessDate ?? null,
+    shiftSequence: snapshot.shiftSequence ?? null,
+    snapshotData: snapshot,
+  });
+
+export const ShiftSummaryDoc: React.FC<{
+  snapshot: any;
+  config?: ReportConfig;
+  clock?: ShiftSummaryClock;
+}> = ({ snapshot, config = DEFAULT_SHIFT_SUMMARY_CONFIG, clock = {} }) => {
+  const ctx: Ctx = { summary: readSnapshot(snapshot ?? {}), clock, config };
+  return (
+    <Document>
+      <Page size={config.paper} style={s.page}>
+        {config.sections.map((key) =>
+          key === 'signatures' ? (
+            <React.Fragment key="signatures">
+              {legacyPurchasesSection(snapshot)}
+              {builders.signatures(ctx)}
+            </React.Fragment>
+          ) : (
+            builders[key]?.(ctx)
+          ),
+        )}
+        {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
+        <View style={s.foot} fixed>
+          <Text>Generated {formatDateTime(new Date())}</Text>
+          <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+        </View>
+      </Page>
+    </Document>
+  );
+};

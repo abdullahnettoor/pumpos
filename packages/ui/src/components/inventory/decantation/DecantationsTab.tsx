@@ -1,38 +1,55 @@
 import React, { useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { resolveDecantationSettings, type DecantationView } from '@pump/shared';
+import {
+  can,
+  resolveDecantationSettings,
+  statusPresentation,
+  type DecantationView,
+} from '@pump/shared';
+import { principalFor } from '../../../access/effectivePrincipal.js';
 import {
   Button,
   Chip,
-  DateText,
+  DataSection,
+  DateRangeMenu,
   EmptyState,
+  FilterChips,
   Icon,
-  Panel,
-  SegmentedControl,
+  InteractiveTable,
+  SectionHeader,
+  StatusChip,
+  computeRange,
+  type DateRange,
+  type FilterChipOption,
+  type PumpStatus,
+  type RangeClock,
+  type TableColumn,
+  type TotalRow,
 } from '../../../pump-ds/index.js';
-import { DataTable } from '../../primitives/DataTable.js';
 import { Banner } from '../../primitives/Banner.js';
+import { InfoTip } from '../../primitives/InfoTip.js';
 import { useDecantations, useInventoryStatus } from '../../../query/hooks.js';
 import { DecantationDrawer } from './DecantationDrawer.js';
 import { LinkPurchaseDrawer } from './LinkPurchaseDrawer.js';
-import { toDecantationRow, type DecantationRow } from './decantationRows.js';
-import { fmtLitres } from './format.js';
+import { decantationTotal, toDecantationRow, type DecantationRow } from './decantationRows.js';
+import { formatDensity, formatQuantity, formatDate } from '../../../utils/format.js';
+import { formatStockVariance } from '../../../utils/variance.js';
+import { countOf, inWindow } from '../../../utils/ledgerWindow.js';
 
 type Filter = 'all' | 'flagged' | 'pending' | 'unlinked';
 
 export interface DecantationsTabProps {
   station: { id: string; settings?: unknown } | null;
   userRole?: string | null;
+  /** The station clock: a Decantation sits on a Business Day. */
+  clock?: RangeClock;
 }
 
-const STATUS: Record<
-  DecantationView['status'],
-  { label: string; tone: 'neutral' | 'info' | 'success' }
-> = {
-  DRAFT: { label: 'Draft', tone: 'neutral' },
-  PENDING_MEASUREMENT: { label: 'Pending measurement', tone: 'info' },
-  MEASURED: { label: 'Measured', tone: 'success' },
-  DISCARDED: { label: 'Discarded', tone: 'neutral' },
+/** A Decantation's lifecycle in the status vocabulary (#518, #536). */
+const STATUS: Record<DecantationView['status'], PumpStatus> = {
+  DRAFT: 'decantation-draft',
+  PENDING_MEASUREMENT: 'pending-measurement',
+  MEASURED: 'measured',
+  DISCARDED: 'discarded',
 };
 
 const FLAG_LABEL: Record<string, string> = {
@@ -42,19 +59,81 @@ const FLAG_LABEL: Record<string, string> = {
   EARLY_AFTER_DIP: 'Early after dip',
 };
 
-const Muted: React.FC<{ children?: React.ReactNode }> = ({ children = '—' }) => (
-  <span style={{ color: 'var(--text-faint)' }}>{children}</span>
-);
-
-const stack: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 3,
-  alignItems: 'flex-start',
+const FILTERS: Record<
+  Filter,
+  { label: string; test: (r: DecantationRow) => boolean; status?: PumpStatus }
+> = {
+  all: { label: 'All', test: () => true },
+  flagged: { label: 'Flagged', test: (r) => r.decantation.flags.length > 0, status: 'variance' },
+  pending: {
+    label: 'Pending',
+    test: (r) => r.decantation.status !== 'MEASURED',
+    status: 'pending-measurement',
+  },
+  unlinked: {
+    label: 'Not linked',
+    test: (r) => r.unlinked.length > 0,
+    status: 'purchase-not-linked',
+  },
 };
 
-/** Inventory → Decantations: one row per tanker visit with its tank lines grouped. */
-export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userRole }) => {
+/**
+ * One product's received − invoiced as a vocabulary chip: the word and tone
+ * come from `decantationVarianceState` (station tolerance), the figure here.
+ */
+const varianceLabel = (v: DecantationRow['variances'][number]): string => {
+  const label = statusPresentation(v.state).label;
+  if (v.state === 'tanker-matches') return `${v.productName} · ${label}`;
+  // The figure only: the words sit on a line of their own (`VarianceChip`).
+  if (v.state === 'within-tolerance')
+    return `${v.productName} · ${formatStockVariance(v.qty, 'L')}`;
+  return `${v.productName} · ${label} ${formatStockVariance(Math.abs(v.qty), 'L', { plus: false })}`;
+};
+
+/**
+ * A difference within tolerance keeps its figure in the chip and says so on a
+ * visible line under it (never hover-only); the other states' chip says it all.
+ */
+const VarianceChip: React.FC<{ variance: DecantationRow['variances'][number] }> = ({
+  variance: v,
+}) => {
+  const chip = <StatusChip status={v.state} size="md" label={varianceLabel(v)} />;
+  if (v.state !== 'within-tolerance') return chip;
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      {chip}
+      <span className="text-[12px] text-ink-muted">
+        {statusPresentation(v.state).label.toLowerCase()}
+      </span>
+    </span>
+  );
+};
+
+const dateOf = (r: DecantationRow) => r.decantation.businessDate ?? r.decantation.createdAt;
+
+/** A visit still being worked on shows whatever the range: open work never hides. */
+const isOpen = (r: DecantationRow) =>
+  r.decantation.status === 'DRAFT' || r.decantation.status === 'PENDING_MEASUREMENT';
+
+const visits = (n: number) => countOf(n, 'visit', 'visits');
+
+const Muted: React.FC = () => <span className="text-ink-faint">—</span>;
+
+const Qty: React.FC<{ value: number }> = ({ value }) => (
+  <span className="whitespace-nowrap">{formatQuantity(value, 'L')}</span>
+);
+
+const Stack: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex flex-col items-start gap-1">{children}</div>
+);
+
+/**
+ * Inventory → Decantations: the tanker-visit ledger (layout B, #567), one row
+ * per visit with its tank lines grouped (ADR 0007). Range, row filter and
+ * "New decantation" sit in the ledger's header; statuses are the shared
+ * vocabulary. A row still open reopens in the drawer.
+ */
+export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userRole, clock }) => {
   const stationId = station?.id ?? null;
   const settings = useMemo(
     () => resolveDecantationSettings(station?.settings),
@@ -62,6 +141,7 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
   );
   const decantationsQ = useDecantations(stationId);
   const tanksQ = useInventoryStatus(stationId);
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [filter, setFilter] = useState<Filter>('all');
   const [drawer, setDrawer] = useState<{ decantation: DecantationView | null } | null>(null);
   const [linking, setLinking] = useState<DecantationView | null>(null);
@@ -76,47 +156,48 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
     return { tanks, products };
   }, [tanksQ.data]);
 
-  const rows = useMemo(
+  const all = useMemo(
     () =>
       (decantationsQ.data ?? []).map((d) => toDecantationRow(d, names, settings.quantityTolerance)),
     [decantationsQ.data, names, settings.quantityTolerance],
   );
-  const counts = useMemo(
-    () => ({
-      all: rows.length,
-      flagged: rows.filter((r) => r.decantation.flags.length > 0).length,
-      pending: rows.filter((r) => r.decantation.status !== 'MEASURED').length,
-      unlinked: rows.filter((r) => r.unlinked.length > 0).length,
-    }),
-    [rows],
-  );
-  const visible = useMemo(
+  const flagged = useMemo(() => all.filter(FILTERS.flagged.test).length, [all]);
+  const inRange = useMemo(
     () =>
-      rows.filter((r) =>
-        filter === 'flagged'
-          ? r.decantation.flags.length > 0
-          : filter === 'pending'
-            ? r.decantation.status !== 'MEASURED'
-            : filter === 'unlinked'
-              ? r.unlinked.length > 0
-              : true,
-      ),
-    [rows, filter],
+      all
+        .filter((r) => isOpen(r) || inWindow(dateOf(r).slice(0, 10), range))
+        .sort((a, b) => dateOf(b).localeCompare(dateOf(a))),
+    [all, range],
   );
+  const options = useMemo<FilterChipOption<Filter>[]>(
+    () =>
+      (Object.keys(FILTERS) as Filter[]).map((value) => ({
+        value,
+        label: FILTERS[value].label,
+        count: inRange.filter(FILTERS[value].test).length,
+        ...(FILTERS[value].status ? { status: FILTERS[value].status } : {}),
+      })),
+    [inRange],
+  );
+  const rows = useMemo(() => inRange.filter(FILTERS[filter].test), [inRange, filter]);
+  const totalRow = useMemo<TotalRow>(() => {
+    const t = decantationTotal(rows);
+    return { label: t.label, values: { invoiceQty: t.invoiceQty, received: t.receivedQty } };
+  }, [rows]);
 
-  const columns = useMemo<ColumnDef<DecantationRow, any>[]>(
+  const columns = useMemo<TableColumn<DecantationRow>[]>(
     () => [
       {
         id: 'date',
         header: 'Date',
-        accessorFn: (r) => r.decantation.businessDate ?? r.decantation.createdAt,
-        cell: ({ row }) => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <DateText
-              value={row.original.decantation.businessDate ?? row.original.decantation.createdAt}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {row.original.decantation.documentNumber}
+        kind: 'date',
+        value: dateOf,
+        width: '13%',
+        cell: (r) => (
+          <div className="flex flex-col gap-0.5">
+            <span className="whitespace-nowrap">{formatDate(dateOf(r))}</span>
+            <span className="font-mono text-[12px] text-ink-muted">
+              {r.decantation.documentNumber}
             </span>
           </div>
         ),
@@ -124,40 +205,37 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
       {
         id: 'tanker',
         header: 'Tanker',
-        accessorFn: (r) => r.decantation.tankerNumber,
-        cell: ({ row }) => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-              {row.original.decantation.tankerNumber}
+        kind: 'text',
+        value: (r) => r.decantation.tankerNumber,
+        width: '12%',
+        cell: (r) => (
+          <div className="flex flex-col gap-0.5">
+            <span className="whitespace-nowrap font-semibold text-ink">
+              {r.decantation.tankerNumber}
             </span>
-            {row.original.decantation.driverName && (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {row.original.decantation.driverName}
-              </span>
+            {r.decantation.driverName && (
+              <span className="text-[12px] text-ink-muted">{r.decantation.driverName}</span>
             )}
           </div>
         ),
       },
       {
-        id: 'product',
-        header: 'Product',
-        enableSorting: false,
-        cell: ({ row }) => <span>{row.original.productNames.join(' · ') || '—'}</span>,
-      },
-      {
         id: 'tanks',
         header: 'Tanks',
-        enableSorting: false,
-        cell: ({ row }) => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
-            {row.original.tanks.map((t) => (
-              <span key={t.lineId} style={{ whiteSpace: 'nowrap' }}>
+        kind: 'text',
+        width: '15%',
+        value: (r) => r.tanks.map((t) => t.tankName).join(', '),
+        sortable: false,
+        cell: (r) => (
+          <div className="flex flex-col gap-0.5 text-[12px]">
+            {r.tanks.map((t) => (
+              <span key={t.lineId} className="whitespace-nowrap">
                 {t.tankName}
-                <span style={{ color: 'var(--text-muted)' }}>
+                <span className="text-ink-muted">
                   {' '}
                   · {t.productName}
                   {t.status === 'MEASURED' && t.receivedQty != null
-                    ? ` · ${fmtLitres(t.receivedQty)}`
+                    ? ` · ${formatQuantity(t.receivedQty, 'L')}`
                     : ''}
                 </span>
               </span>
@@ -168,121 +246,106 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
       {
         id: 'invoiceQty',
         header: 'Invoice qty',
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.invoiceQty != null ? fmtLitres(row.original.invoiceQty) : <Muted />,
+        kind: 'qty',
+        value: (r) => r.invoiceQty,
+        unit: 'L',
+        width: '10%',
+        cell: (r) => (r.invoiceQty != null ? <Qty value={r.invoiceQty} /> : <Muted />),
       },
       {
         id: 'received',
         header: 'Received',
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.receivedQty != null ? fmtLitres(row.original.receivedQty) : <Muted />,
+        kind: 'qty',
+        value: (r) => r.receivedQty,
+        unit: 'L',
+        width: '10%',
+        cell: (r) => (r.receivedQty != null ? <Qty value={r.receivedQty} /> : <Muted />),
       },
       {
         id: 'variance',
-        header: 'Excess / Short',
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.variances.length === 0 ? (
+        header: 'Excess / short',
+        kind: 'text',
+        value: (r) => r.variances.length,
+        sortable: false,
+        cell: (r) =>
+          r.variances.length === 0 ? (
             <Muted />
           ) : (
-            <div style={stack}>
-              {row.original.variances.map((v) => (
-                <Chip
-                  key={v.productName}
-                  size="xs"
-                  variant="soft"
-                  tone={
-                    v.kind === 'OK'
-                      ? 'success'
-                      : v.outOfTolerance
-                        ? v.kind === 'SHORT'
-                          ? 'danger'
-                          : 'warning'
-                        : 'neutral'
-                  }
-                >
-                  {v.kind === 'OK'
-                    ? `${v.productName} · Matches`
-                    : `${v.productName} · ${v.kind === 'SHORT' ? 'Short' : 'Excess'} ${fmtLitres(v.qty)}`}
-                </Chip>
+            <Stack>
+              {r.variances.map((v) => (
+                <VarianceChip key={v.productName} variance={v} />
               ))}
-            </div>
+            </Stack>
           ),
       },
       {
         id: 'density',
         header: 'Density',
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.density.length === 0 ? (
+        kind: 'text',
+        value: (r) => r.density.length,
+        sortable: false,
+        cell: (r) =>
+          r.density.length === 0 ? (
             <Muted />
           ) : (
-            <div style={stack}>
-              {row.original.density.map((d) => (
+            <Stack>
+              {r.density.map((d) => (
                 <Chip
                   key={d.productName}
-                  size="xs"
-                  variant="soft"
-                  tone={d.outOfTolerance ? 'danger' : 'success'}
+                  size="md"
+                  tone={d.outOfTolerance ? 'danger' : 'neutral'}
+                  className="tabular-nums"
                 >
-                  {d.productName} · {d.diff > 0 ? '+' : ''}
-                  {d.diff} kg/m³
+                  {d.productName} · {formatDensity(d.diff, { plus: true })} kg/m³
                 </Chip>
               ))}
-            </div>
-          ),
-      },
-      {
-        id: 'flags',
-        header: 'Flags',
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.decantation.flags.length === 0 ? (
-            <Muted />
-          ) : (
-            <div style={stack}>
-              {row.original.decantation.flags.map((f, i) => (
-                <span key={i} title={f.message}>
-                  <Chip size="xs" tone="danger" icon={<Icon name="alert-triangle" size="xs" />}>
-                    {FLAG_LABEL[f.code] ?? f.code}
-                  </Chip>
-                </span>
-              ))}
-            </div>
+            </Stack>
           ),
       },
       {
         id: 'status',
         header: 'Status',
-        accessorFn: (r) => r.decantation.status,
-        cell: ({ row }) => {
-          const s = STATUS[row.original.decantation.status];
-          return (
-            <div style={{ ...stack, gap: 4 }}>
-              <Chip size="xs" tone={s.tone} variant="soft">
-                {s.label}
+        kind: 'text',
+        value: (r) => r.decantation.status,
+        width: '16%',
+        // Flags are problems of the visit, so they sit under its status.
+        cell: (r) => (
+          <Stack>
+            <StatusChip status={STATUS[r.decantation.status]} size="md" />
+            {r.decantation.flags.map((f, i) => (
+              <Chip
+                key={i}
+                size="md"
+                tone="danger"
+                title={f.message}
+                icon={<Icon name="alert-triangle" size="xs" />}
+              >
+                {FLAG_LABEL[f.code] ?? f.code}
               </Chip>
-              {row.original.unlinked.map((p) => (
-                <button
-                  key={p}
-                  type="button"
+            ))}
+            {r.unlinked.map((p) => (
+              <span key={p} className="inline-flex items-center gap-1">
+                <StatusChip
+                  status="purchase-not-linked"
+                  size="md"
+                  label={`Not linked · ${p}`}
+                  showIcon={false}
+                />
+                <Button
+                  variant="ghost"
+                  size="xs"
                   aria-label={`Link purchase for ${p}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setLinking(row.original.decantation);
+                    setLinking(r.decantation);
                   }}
-                  style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
                 >
-                  <Chip size="xs" tone="warning" variant="soft">
-                    Purchase not linked · {p}
-                  </Chip>
-                </button>
-              ))}
-            </div>
-          );
-        },
+                  Link ›
+                </Button>
+              </span>
+            ))}
+          </Stack>
+        ),
       },
     ],
     [],
@@ -290,66 +353,92 @@ export const DecantationsTab: React.FC<DecantationsTabProps> = ({ station, userR
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {userRole === 'Owner' && counts.flagged > 0 && (
+      <div className="flex flex-col gap-3">
+        {can(principalFor(userRole), 'inventory.reviewFlagged') && flagged > 0 && (
           <Banner severity="danger" title="Needs your review">
-            {counts.flagged} flagged Decantation{counts.flagged === 1 ? '' : 's'}: density off,
-            tanker short or chamber not emptied.
+            {flagged} flagged Decantation{flagged === 1 ? '' : 's'}: density off, tanker short or
+            chamber not emptied.
           </Banner>
         )}
-        <Panel
-          flush
-          title="Decantations"
-          icon={<Icon name="truck" size="sm" />}
-          action={
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <SegmentedControl<Filter>
-                aria-label="Decantation filter"
-                value={filter}
-                onChange={setFilter}
-                options={[
-                  { value: 'all', label: `All ${counts.all}` },
-                  { value: 'flagged', label: `Flagged ${counts.flagged}` },
-                  { value: 'pending', label: `Pending ${counts.pending}` },
-                  { value: 'unlinked', label: `Not linked ${counts.unlinked}` },
-                ]}
-              />
-              <Button
-                size="sm"
-                leftIcon={<Icon name="plus" size="sm" />}
-                onClick={() => setDrawer({ decantation: null })}
-              >
-                New Decantation
-              </Button>
-            </div>
-          }
-        >
-          {!decantationsQ.isLoading && rows.length === 0 ? (
-            <div style={{ padding: 16 }}>
-              <EmptyState
-                compact
-                icon={<Icon name="truck" size="md" />}
-                title="No Decantations yet"
-                description="Record each tanker unloading to measure what actually reached the tanks."
-              />
-            </div>
-          ) : (
-            <DataTable
+        <section className="flex flex-col gap-2">
+          <SectionHeader
+            title="Decantations"
+            subtitle={decantationsQ.data ? visits(rows.length) : undefined}
+            controls={{
+              range: (
+                <DateRangeMenu
+                  value={range}
+                  onChange={setRange}
+                  clock={clock}
+                  align="end"
+                  aria-label="Decantations period"
+                />
+              ),
+              filters: decantationsQ.data && (
+                <FilterChips
+                  aria-label="Decantation filter"
+                  options={options}
+                  value={filter}
+                  onChange={setFilter}
+                />
+              ),
+              actions: (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Icon name="plus" size="sm" />}
+                  onClick={() => setDrawer({ decantation: null })}
+                >
+                  New decantation
+                </Button>
+              ),
+              info: (
+                <InfoTip label="About decantations" placement="bottom">
+                  One row per tanker visit. Received is measured at the next tank dip, so it shows
+                  once every tank line is measured. The total adds invoice and received only for
+                  products that have both, so pending and unlinked lines are left out of both
+                  columns. A visit still open shows whatever the range. Excess or short within the
+                  station&rsquo;s tolerance reads grey and says so; flags sit under the status.
+                </InfoTip>
+              ),
+            }}
+          />
+          <DataSection
+            title="decantations"
+            query={decantationsQ}
+            placeholderHeight={240}
+            flush
+            isEmpty={rows.length === 0}
+            empty={
+              <div className="p-3">
+                <EmptyState
+                  compact
+                  icon={<Icon name="truck" size="md" />}
+                  title={all.length === 0 ? 'No decantations yet' : 'No matching decantations'}
+                  description={
+                    all.length === 0
+                      ? 'Record each tanker unloading to measure what actually reached the tanks.'
+                      : 'Adjust the range or the filter.'
+                  }
+                />
+              </div>
+            }
+          >
+            <InteractiveTable
               bare
               columns={columns}
-              data={visible}
-              isLoading={decantationsQ.isLoading}
-              error={decantationsQ.error}
-              emptyMessage="No Decantations match this filter."
-              getRowId={(r) => r.decantation.id}
-              initialSorting={[{ id: 'date', desc: true }]}
+              rows={rows}
+              rowKey={(r) => r.decantation.id}
+              totalRow={totalRow}
+              title="decantations"
+              rowLabel={(r) => `Decantation ${r.decantation.documentNumber}`}
               onRowClick={(r) => {
                 // A measured visit has posted stock and is sealed; the others reopen in the drawer.
                 if (r.decantation.status !== 'MEASURED') setDrawer({ decantation: r.decantation });
               }}
             />
-          )}
-        </Panel>
+          </DataSection>
+        </section>
       </div>
       <DecantationDrawer
         isOpen={!!drawer}

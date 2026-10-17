@@ -1,1101 +1,405 @@
-import React from 'react';
-import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
-import { Button } from '../pump-ds/index.js';
-import { formatDateTime, formatMoney, inr } from '../utils/format.js';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { can, DSR_FULL_NAME, DSR_LABEL, resolveBusinessDate } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
+import type { Role } from '@pump/shared';
+import {
+  Button,
+  ControlBar,
+  DataSection,
+  EmptyState,
+  ExportMenu,
+  Icon,
+  InteractiveTable,
+  KpiStrip,
+  KpiTile,
+  Panel,
+  SectionHeader,
+  StatusChip,
+} from '../pump-ds/index.js';
+import { PageFrame } from './page-frame/index.js';
+import { ROUTES } from '../nav-intent/routes.js';
+import { Banner } from './primitives/Banner.js';
+import { InfoTip } from './primitives/InfoTip.js';
 import { ReportNote } from './reports/ReportNote.js';
+import { DayPicker } from './reports/DayPicker.js';
+import { invalidateAfterDssrGenerate, useDailyDssrPreview } from '../query/hooks.js';
+import { CloudShiftService } from '../services/cloud.js';
+import { formatBusinessDate, formatDateTime } from '../utils/format.js';
 import { useRunTask } from '../utils/runTask.js';
-import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
+import { officeSubmitKeys } from '../office-records/submitKeys.js';
+import {
+  dssrDayStatus,
+  readDssrDay,
+  type DssrDay,
+  type DssrRow,
+  type FigureLine,
+} from './reports/dssr/dssrModel.js';
+import {
+  ATTENDANT_COLUMNS,
+  FUEL_PRODUCT_COLUMNS,
+  FUEL_STOCK_COLUMNS,
+  MERCHANDISE_STOCK_COLUMNS,
+  NOZZLE_COLUMNS,
+  DSSR_COGS_NOTE,
+  DSSR_EMPTY,
+  DSSR_TITLES,
+  attendantTotalNotes,
+  attendantTotalRow,
+  fuelTotalNotes,
+  shiftColumns,
+  shiftTotalNotes,
+  totalNote,
+  dssrTiles,
+  fuelTotalRow,
+  shiftTotalRow,
+} from './reports/dssr/dssrColumns.js';
+
+const shiftService = new CloudShiftService();
 
 interface DailyDssrViewProps {
+  /**
+   * The DSR the Reports page opened: a stored snapshot row or a preview. A row
+   * with no `snapshotData` (just `{ businessDate }`) names the day only; the
+   * screen then reads it like any other day.
+   */
   dailyDssr: any;
   onBack?: () => void;
   station?: any;
+  /** Generate DSR shows only to Roles the generate route allows (`reports.export`). */
+  userRole?: Role;
 }
 
-export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack, station }) => {
+/** A closed day with no stored snapshot (the preview read answers 409). */
+const isReportMissing = (error: unknown): boolean =>
+  (error as { code?: unknown } | null)?.code === 'CONFLICT';
+
+/**
+ * DSR (Daily Station Sales Report) for one Business Day, layout A (#532).
+ *
+ * The page opens on the DSR the Reports page handed over. The day picker in the
+ * control bar steps to other days, each read through the DSR preview (the
+ * stored snapshot for a closed day, live figures for an open one). The control
+ * bar drives everything below it; Export and the info tip sit at its right end.
+ */
+export const DailyDssrView: React.FC<DailyDssrViewProps> = ({
+  dailyDssr,
+  onBack,
+  station,
+  userRole,
+}) => {
   const runTask = useRunTask();
-  const snapshot = dailyDssr?.snapshotData || {};
+  const qc = useQueryClient();
+  const stationId: string | undefined = station?.id;
+  const settings = station?.settings || {};
+  const currentBusinessDate = resolveBusinessDate({
+    timeZone: settings.timezone,
+    dayStartsAt: settings.business_day_starts_at,
+  });
 
-  const fuel = snapshot.fuel || {};
-  const byProduct = (fuel.byProduct || []) as Array<any>;
-  const nozzles = (fuel.nozzles || []) as Array<any>;
-  const credit = snapshot.credit || {};
-  const merchandise = snapshot.merchandise || {};
-  const purchases = snapshot.purchases || {};
-  const fuelStockVariance = (snapshot.fuelStockVariance || []) as Array<any>;
-  const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
-  const shifts = snapshot.shifts || [];
-  const warnings = snapshot.warnings || [];
-  const generatedAt = dailyDssr?.generatedAt ?? snapshot.generatedAt;
-  const lateEntryCount = Number(dailyDssr?.lateEntryCount ?? 0);
+  const openedDate: string = dailyDssr?.businessDate ?? dailyDssr?.snapshotData?.businessDate ?? '';
+  const [date, setDate] = useState<string>(openedDate || currentBusinessDate);
+  // The opened row is shown as handed over, without a read. It is always a real
+  // DSR (a snapshot or a preview), never the Report missing state: that state
+  // only comes from reading another day, and Generate DSR only shows there. So
+  // generating never leaves the opened row stale; it refreshes the day it ran
+  // on through the preview key below. A row without figures is read like any day.
+  const onOpenedDay = date === openedDate && !!dailyDssr?.snapshotData;
 
-  const totalGrossVolume = Number(fuel.totalGrossVolume ?? fuel.totalVolume ?? 0);
-  const totalTestingVolume = Number(fuel.totalTestingVolume || 0);
-  const totalNetVolume = Number(fuel.totalNetVolume ?? totalGrossVolume - totalTestingVolume);
-  const totalFuelSalesValue = Number(fuel.totalSalesValue || 0);
-  // Fuel units (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
-  const dssrFuelUnits: string[] = Array.from(new Set(byProduct.map((p: any) => p.unit || 'L')));
-  const singleDssrUnit: string | null = dssrFuelUnits.length === 1 ? dssrFuelUnits[0] : null;
-  const dssrUnitTotals = (getter: (p: any) => number, dec = 3): string => {
-    const m: Record<string, number> = {};
-    for (const p of byProduct) {
-      const u = p.unit || 'L';
-      m[u] = (m[u] || 0) + Number(getter(p) || 0);
-    }
-    const entries = Object.entries(m);
-    return entries.length
-      ? entries.map(([u, v]) => `${Number(v).toFixed(dec)} ${u}`).join(' \u00b7 ')
-      : `${(0).toFixed(dec)} L`;
-  };
-  const normalCredit = Number(credit.normalCredit || 0);
-  const fleetCredit = Number(credit.fleetCredit || 0);
-  const omcCard = readDssrOmcCard(snapshot);
-  // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
-  // lines: fuel VAT is outside GST and carries no input credit for the buyer.
-  const salesTax = (snapshot.salesTax || {}) as {
-    gst?: Record<string, number>;
-    vat?: Record<string, number>;
-  };
-  const salesGstTotal = Number(salesTax.gst?.total || 0);
-  const salesVatTotal = Number(salesTax.vat?.vat || 0);
-  const pnl = snapshot.pnl || {};
+  const dayQ = useDailyDssrPreview(stationId, date, {
+    enabled: !!stationId && !onOpenedDay,
+    // A missing report is an answer, not a fault: asking again changes nothing.
+    retry: (count, error) => !isReportMissing(error) && count < 1,
+  });
+  const missing = !onOpenedDay && dayQ.isError && isReportMissing(dayQ.error);
+  const row: DssrRow | null = onOpenedDay ? (dailyDssr ?? null) : (dayQ.data ?? null);
+  const day = useMemo(() => (row ? readDssrDay(row) : null), [row]);
+  const status = row ? dssrDayStatus(row, date, currentBusinessDate) : null;
+
+  const canGenerate = !!stationId && !!userRole && can(principalFor(userRole), 'reports.export');
+  const generate = useMutation({
+    // The day is the mutation's own variable, never the screen's current date:
+    // the operator may step to another day while Generate is still in flight.
+    // One Idempotency-Key per logical generate: a retry after a dropped
+    // response reuses it, so the snapshot cannot be generated twice.
+    mutationFn: async (day: { stationId: string; date: string }) => {
+      const keys = officeSubmitKeys.session('dssr:generate');
+      const idempotencyKey = keys.next(
+        JSON.stringify({ stationId: day.stationId, businessDate: day.date }),
+      );
+      try {
+        const result: unknown = await shiftService.generateDailyDssr(day.stationId, day.date, {
+          idempotencyKey,
+        });
+        keys.settle();
+        return result;
+      } catch (error) {
+        keys.settle(error);
+        throw error;
+      }
+    },
+    // Synchronous on purpose (pump-data-caching rule 6): the screen shows the
+    // write's own response at once, and the refreshes run in the background.
+    // Returning them would keep Generate spinning until every refetch lands.
+    onSuccess: (generated, day) =>
+      invalidateAfterDssrGenerate(qc, day.stationId, day.date, generated),
+  });
+
   // Save PDF and Print render the same DssrDoc, so they match page for page (#309).
+  // A preview prints with the draft mark, as the screen shows it.
   const printOrSave = async (output: 'save' | 'print') => {
     const { generateDssrPdf } = await import('../services/reports/generate.js');
-    await generateDssrPdf(station, dailyDssr, output);
+    await generateDssrPdf(station, { ...row, draft: row?.live === true }, output);
   };
+
+  // The date, then what the state means for the figures. Never the date twice.
+  const detail = !day
+    ? null
+    : status === 'day-sealed'
+      ? day.generatedAt && `Generated ${formatDateTime(day.generatedAt)}`
+      : 'Figures can change until the day is closed';
+  const subtitle = (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {status && <StatusChip status={status} size="sm" />}
+      <span>
+        {formatBusinessDate(date)}
+        {detail && ` · ${detail}`}
+      </span>
+    </span>
+  );
+
   return (
-    <div
-      className="card card-comfortable print-area"
-      style={{ maxWidth: '920px', margin: '0 auto' }}
+    <PageFrame
+      route={ROUTES.reports}
+      title={DSR_LABEL}
+      subtitle={subtitle}
+      // The DSR is a view inside /reports, not a route of its own: the entry
+      // behind it in history is not the Reports list, so back closes the view
+      // (onBack) instead of history.back().
+      back={onBack && { label: 'Reports', href: `#${ROUTES.reports}`, onClick: onBack }}
+      toolbar={
+        <ControlBar
+          className="w-full"
+          range={
+            <DayPicker
+              value={date}
+              onChange={setDate}
+              max={currentBusinessDate}
+              aria-label={`${DSR_LABEL} date`}
+            />
+          }
+          exportMenu={
+            <ExportMenu
+              aria-label={`Export the ${DSR_LABEL}`}
+              disabled={!row}
+              onPdf={() => runTask(printOrSave('save'), 'Could not create the PDF.')}
+              onPrint={() => runTask(printOrSave('print'), `Could not print the ${DSR_LABEL}.`)}
+            />
+          }
+          info={
+            <InfoTip label={`About the ${DSR_LABEL}`} placement="bottom">
+              {DSR_FULL_NAME}: sales only, for one business day. Collections, expenses, income and
+              supplier payments are office records by entry date — see Accounts → Daily cash book.
+            </InfoTip>
+          }
+        />
+      }
     >
-      <div
-        className="no-print"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '24px',
-          borderBottom: '1px solid var(--border-soft)',
-          paddingBottom: '16px',
-        }}
-      >
-        <Button variant="secondary" size="sm" leftIcon={<ArrowLeft />} onClick={onBack}>
-          Back to Reports
-        </Button>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Download />}
-            onClick={() => runTask(printOrSave('save'), 'Could not create the PDF.')}
-          >
-            Save PDF
-          </Button>
-          {/* Prints the same PDF Save PDF writes, on web and desktop (#309). */}
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Printer />}
-            onClick={() => runTask(printOrSave('print'), 'Could not print the DSSR.')}
-          >
-            Print Daily DSSR
-          </Button>
-        </div>
-      </div>
-
-      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-        <h2
-          style={{
-            fontSize: '18px',
-            fontWeight: 700,
-            color: 'var(--text-strong)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Daily Sales Summary Record
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(generatedAt)}
-        </p>
-      </div>
-
-      {lateEntryCount > 0 && (
-        <div
-          className="no-print"
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '8px',
-            padding: '10px 12px',
-            marginBottom: '12px',
-            border: '1px solid var(--state-warning-fg)',
-            borderRadius: 'var(--radius-input)',
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            fontSize: '12px',
-          }}
-        >
-          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-          <span>
-            {lateEntryCount} late {lateEntryCount === 1 ? 'entry was' : 'entries were'} recorded
-            after day close. The immutable snapshot below was not changed.
-          </span>
-        </div>
-      )}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '8px',
-          padding: '10px 12px',
-          marginBottom: '20px',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-input)',
-          backgroundColor: 'var(--bg-surface-alt)',
-          color: 'var(--text-muted)',
-          fontSize: '11px',
-        }}
-      >
-        <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-        <span>
-          Sales-only report for this business day. Collections, expenses, income and supplier
-          payments are office records by entry date — see Reports → Daily Cash Book.
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-          padding: '20px',
-          backgroundColor: 'var(--bg-surface-alt)',
-          borderRadius: 'var(--radius-input)',
-          marginBottom: '24px',
-          border: '1px solid var(--border-soft)',
-        }}
-      >
-        <div>
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
-            Shifts Included
-          </span>
-          <strong style={{ fontSize: '16px', color: 'var(--text-strong)' }}>
-            {snapshot.shiftsIncluded || 0}
-          </strong>
-        </div>
-        <div>
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
-            Net Fuel Volume
-          </span>
-          <strong
-            style={{
-              fontSize: '16px',
-              color: 'var(--text-strong)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {singleDssrUnit
-              ? `${totalNetVolume.toFixed(3)} ${singleDssrUnit}`
-              : dssrUnitTotals((p) => Number(p.netVolume || 0))}
-          </strong>
-          <span
-            style={{
-              fontSize: '10px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            Gross {totalGrossVolume.toFixed(3)} − Testing {totalTestingVolume.toFixed(3)}
-          </span>
-        </div>
-        <div>
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
-            Fuel Sales Value
-          </span>
-          <strong
-            style={{
-              fontSize: '16px',
-              color: 'var(--text-strong)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {inr(totalFuelSalesValue)}
-          </strong>
-        </div>
-        <div>
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              textTransform: 'uppercase',
-              fontWeight: 600,
-            }}
-          >
-            Gross Margin
-          </span>
-          <strong
-            style={{
-              fontSize: '16px',
-              color: 'var(--state-success-fg)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            {inr(Number(pnl.grossMargin || 0))}
-          </strong>
-          <span
-            style={{
-              fontSize: '10px',
-              color: 'var(--text-muted)',
-              display: 'block',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            Revenue {inr(Number(pnl.revenue || 0))} − COGS {inr(Number(pnl.cogs || 0))}
-          </span>
-        </div>
-      </div>
-
-      {warnings.length > 0 && (
-        <div
-          style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '16px',
-            borderRadius: 'var(--radius-input)',
-            marginBottom: '24px',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-          }}
-        >
-          <strong style={{ display: 'block', marginBottom: '6px' }}>
-            <AlertTriangle
-              size={14}
-              style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }}
-            />{' '}
-            Daily Warnings
-          </strong>
-          <ul style={{ margin: 0, paddingLeft: '20px' }}>
-            {warnings.map((warn: string, idx: number) => (
-              <li key={idx} style={{ marginTop: '4px' }}>
-                {warn}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
-      >
-        Gross Margin
-      </h3>
-      <div
-        style={{
-          border: '1px solid var(--border-strong)',
-          borderRadius: 'var(--radius-input)',
-          display: 'flex',
-          flexDirection: 'column',
-          fontSize: '13px',
-          overflow: 'hidden',
-          marginBottom: '8px',
-        }}
-      >
-        {(
-          [
-            { label: 'Revenue — Fuel', value: inr(Number(pnl.revenueFuel || 0)) },
-            { label: 'Revenue — Merchandise', value: inr(Number(pnl.revenueMerch || 0)) },
-            { label: 'Total Revenue', value: inr(Number(pnl.revenue || 0)), strong: true },
-            {
-              label: 'COGS — Fuel',
-              value: `(${inr(Number(pnl.cogsFuel || 0))})`,
-              color: 'var(--brand-warning)',
-            },
-            {
-              label: 'COGS — Merchandise',
-              value: `(${inr(Number(pnl.cogsMerch || 0))})`,
-              color: 'var(--brand-warning)',
-            },
-            { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
-          ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>
-        ).map((r, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '11px 16px',
-              borderBottom: '1px solid var(--border-soft)',
-              backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent',
-            }}
-          >
-            <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>
-            <span
-              style={{
-                fontWeight: r.strong ? 700 : 600,
-                fontFamily: 'var(--font-mono)',
-                color: r.color || 'var(--text-default)',
-              }}
-            >
-              {r.value}
-            </span>
-          </div>
-        ))}
-      </div>
-      <ReportNote className="mb-6">
-        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
-        (excluded from cost); merchandise cost is pre-tax.
-      </ReportNote>
-
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
-      >
-        Sales Summary
-      </h3>
-      <div
-        style={{
-          border: '1px solid var(--border-strong)',
-          borderRadius: 'var(--radius-input)',
-          display: 'flex',
-          flexDirection: 'column',
-          fontSize: '13px',
-          overflow: 'hidden',
-          marginBottom: '28px',
-        }}
-      >
-        {(
-          [
-            { label: 'Merchandise Sales', value: inr(Number(merchandise.salesValue || 0)) },
-            {
-              label: 'Normal Credit Sales',
-              value: inr(normalCredit),
-              color: 'var(--brand-warning)',
-            },
-            { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
-            // ADR 0001: OMC card fuel settles to the OMC Wallet; only snapshots that carry it show it.
-            ...(omcCard ? [{ label: 'OMC Card Sales', value: inr(omcCard.total) }] : []),
-            { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
-            ...(salesGstTotal > 0
-              ? [
-                  {
-                    label: 'Merchandise — Taxable Value',
-                    value: inr(Number(salesTax.gst?.taxable || 0)),
-                  },
-                  Number(salesTax.gst?.igst || 0) > 0
-                    ? {
-                        label: 'Output GST on Sales (IGST)',
-                        value: inr(Number(salesTax.gst?.igst || 0)),
-                      }
-                    : {
-                        label: 'Output GST on Sales (CGST / SGST)',
-                        value: `${inr(Number(salesTax.gst?.cgst || 0))} / ${inr(Number(salesTax.gst?.sgst || 0))}`,
-                      },
-                ]
-              : []),
-            ...(salesVatTotal > 0
-              ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }]
-              : []),
-          ] as Array<{ label: string; value: string; color?: string }>
-        ).map((r, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '11px 16px',
-              borderBottom: '1px solid var(--border-soft)',
-            }}
-          >
-            <span>{r.label}</span>
-            <span
-              style={{
-                fontWeight: 600,
-                fontFamily: 'var(--font-mono)',
-                color: r.color || 'var(--text-default)',
-              }}
-            >
-              {r.value}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
-      >
-        Fuel Sales by Product
-      </h3>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          marginBottom: '28px',
-          fontSize: '13px',
-        }}
-      >
-        <thead>
-          <tr
-            style={{
-              borderBottom: '2px solid var(--border-strong)',
-              textAlign: 'left',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Sales Value
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {byProduct.length > 0 ? (
-            byProduct.map((p: any, idx: number) => (
-              <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  {p.productName || 'Unknown'}
-                  {p.productCode ? ` (${p.productCode})` : ''}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {Number(p.grossVolume || 0).toFixed(3)} {p.unit || 'L'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                    color:
-                      Number(p.testingVolume || 0) > 0
-                        ? 'var(--brand-warning)'
-                        : 'var(--text-muted)',
-                  }}
-                >
-                  {Number(p.testingVolume || 0).toFixed(3)} {p.unit || 'L'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {Number(p.netVolume || 0).toFixed(3)} {p.unit || 'L'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {inr(Number(p.salesValue || 0))}
-                </td>
-              </tr>
-            ))
+      <DataSection
+        title={`the ${DSR_LABEL}`}
+        query={onOpenedDay || missing ? undefined : dayQ}
+        enabled={onOpenedDay || missing ? undefined : true}
+        shape="cards"
+        placeholderHeight={420}
+        isEmpty={!day}
+        empty={
+          missing ? (
+            <EmptyState
+              icon={<Icon name="report" size="md" />}
+              title="Report missing"
+              description={`${formatBusinessDate(date)} is closed, but its ${DSR_LABEL} was never generated.${canGenerate ? '' : ' An owner, manager or accountant can generate it.'}`}
+              action={
+                canGenerate && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={generate.isPending}
+                    onClick={() =>
+                      runTask(
+                        generate.mutateAsync({ stationId, date }),
+                        `Could not generate the ${DSR_LABEL}.`,
+                      )
+                    }
+                  >
+                    Generate {DSR_LABEL}
+                  </Button>
+                )
+              }
+            />
           ) : (
-            <tr>
-              <td
-                colSpan={6}
-                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
-              >
-                No fuel sales in this daily DSSR.
-              </td>
-            </tr>
-          )}
-          <tr
-            style={{
-              borderTop: '2px solid var(--border-strong)',
-              backgroundColor: 'var(--bg-surface-alt)',
-              fontWeight: 700,
-            }}
-          >
-            <td
-              style={{
-                padding: '10px 12px',
-                textTransform: 'uppercase',
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-              }}
-            >
-              Total
-            </td>
-            <td
-              style={{
-                padding: '10px 12px',
-                textAlign: 'right',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              {dssrUnitTotals((p) => Number(p.grossVolume || 0))}
-            </td>
-            <td
-              style={{
-                padding: '10px 12px',
-                textAlign: 'right',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-muted)',
-              }}
-            >
-              {dssrUnitTotals((p) => Number(p.testingVolume || 0))}
-            </td>
-            <td
-              style={{
-                padding: '10px 12px',
-                textAlign: 'right',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-strong)',
-                fontSize: '14px',
-              }}
-            >
-              {dssrUnitTotals((p) => Number(p.netVolume || 0))}
-            </td>
-            <td
-              style={{
-                padding: '10px 12px',
-                textAlign: 'right',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--text-strong)',
-              }}
-            >
-              {inr(totalFuelSalesValue)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
+            <EmptyState
+              icon={<Icon name="report" size="md" />}
+              title={`No ${DSR_LABEL} for this day`}
+              description={`No shift or sale was recorded on ${formatBusinessDate(date)}.`}
+            />
+          )
+        }
       >
-        Nozzle Aggregation
-      </h3>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          marginBottom: '28px',
-          fontSize: '13px',
-        }}
-      >
-        <thead>
-          <tr
-            style={{
-              borderBottom: '2px solid var(--border-strong)',
-              textAlign: 'left',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nozzle</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net</th>
-          </tr>
-        </thead>
-        <tbody>
-          {nozzles.length > 0 ? (
-            nozzles.map((nz: any, idx: number) => (
-              <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  {nz.nozzleName || 'Unknown'}
-                </td>
-                <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
-                  {nz.productName || 'Unknown'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {Number(nz.grossVolume || 0).toFixed(3)} {nz.unit || 'L'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                    color:
-                      Number(nz.testingVolume || 0) > 0
-                        ? 'var(--brand-warning)'
-                        : 'var(--text-muted)',
-                  }}
-                >
-                  {Number(nz.testingVolume || 0).toFixed(3)} {nz.unit || 'L'}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 12px',
-                    textAlign: 'right',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {Number(nz.netVolume || 0).toFixed(3)} {nz.unit || 'L'}
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td
-                colSpan={6}
-                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
-              >
-                No nozzle data in this daily DSSR.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        {day && <DssrBody day={day} />}
+      </DataSection>
+    </PageFrame>
+  );
+};
 
-      {fuelStockVariance.length > 0 && (
-        <>
-          <h3
-            style={{
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginBottom: '12px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.02em',
-            }}
-          >
-            Tank Dip &amp; Fuel Stock Variance
-          </h3>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              marginBottom: '28px',
-              fontSize: '13px',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '2px solid var(--border-strong)',
-                  textAlign: 'left',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Dip</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-                  Variance
-                </th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fuelStockVariance.map((v: any, idx: number) => {
-                const variance = Number(v.varianceQuantity || 0);
-                const varColor =
-                  variance < 0
-                    ? 'var(--brand-danger)'
-                    : variance > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--state-success-fg)';
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td
-                      style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}
-                    >
-                      {v.tankName || 'Unknown'}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
-                      {v.productName || 'Unknown'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {Number(v.expectedQuantity || 0).toFixed(3)} {v.unit || 'L'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {Number(v.actualQuantity || 0).toFixed(3)} {v.unit || 'L'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontWeight: 600,
-                        fontFamily: 'var(--font-mono)',
-                        color: varColor,
-                      }}
-                    >
-                      {variance > 0 ? '+' : ''}
-                      {variance.toFixed(3)} {v.unit || 'L'}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>
-                      {v.status || '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+/** The report itself: notices, headline tiles, then one section per table. */
+const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
+  const shiftCols = useMemo(() => shiftColumns(day), [day]);
+  return (
+    <div className="flex flex-col gap-5">
+      {(day.lateEntryCount > 0 || day.warnings.length > 0) && (
+        <div className="flex flex-col gap-2">
+          {day.lateEntryCount > 0 && (
+            <Banner severity="warning">
+              {day.lateEntryCount} late {day.lateEntryCount === 1 ? 'entry was' : 'entries were'}{' '}
+              recorded after day close. The sealed snapshot below was not changed.
+            </Banner>
+          )}
+          {day.warnings.length > 0 && (
+            <Banner severity="warning" title="Daily warnings">
+              {day.warnings.length === 1 ? (
+                day.warnings[0]
+              ) : (
+                <ul className="m-0 mt-1 list-disc pl-5">
+                  {day.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </Banner>
+          )}
+        </div>
       )}
 
-      {merchandiseStockVariance.length > 0 && (
-        <>
-          <h3
-            style={{
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginBottom: '12px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.02em',
-            }}
-          >
-            Merchandise Stock Variance{' '}
-            <span
-              style={{
-                textTransform: 'none',
-                fontWeight: 400,
-                color: 'var(--text-muted)',
-                fontSize: '12px',
-              }}
-            >
-              (Units)
-            </span>
-          </h3>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              marginBottom: '28px',
-              fontSize: '13px',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  borderBottom: '2px solid var(--border-strong)',
-                  textAlign: 'left',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Unit</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-                  Counted
-                </th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-                  Variance
-                </th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {merchandiseStockVariance.map((v: any, idx: number) => {
-                const variance = Number(v.varianceQuantity || 0);
-                const varColor =
-                  variance < 0
-                    ? 'var(--brand-danger)'
-                    : variance > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--state-success-fg)';
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td
-                      style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}
-                    >
-                      {v.productName || 'Unknown'}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
-                      {v.unit || '-'}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {Number(v.expectedQuantity || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                      }}
-                    >
-                      {Number(v.actualQuantity || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: 'right',
-                        fontWeight: 600,
-                        fontFamily: 'var(--font-mono)',
-                        color: varColor,
-                      }}
-                    >
-                      {variance > 0 ? '+' : ''}
-                      {Number(variance).toLocaleString('en-IN')}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>
-                      {v.status || '-'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+      {/* The margin statement as tiles: every figure once, none repeating a table total. */}
+      <div className="flex flex-col gap-1.5">
+        <KpiStrip columns={4}>
+          {dssrTiles(day).map((tile) => (
+            <KpiTile key={tile.label} label={tile.label} value={tile.value} hint={tile.hint} />
+          ))}
+        </KpiStrip>
+        <ReportNote>{DSSR_COGS_NOTE}</ReportNote>
+      </div>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader title={DSSR_TITLES.sales} />
+        <FigureList lines={day.sales} label={DSSR_TITLES.sales} />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader title={DSSR_TITLES.fuel} />
+        <InteractiveTable
+          columns={FUEL_PRODUCT_COLUMNS}
+          rows={day.fuel.rows}
+          rowKey={(r) => r.key}
+          totalRow={fuelTotalRow(day.fuel)}
+          title="fuel sales"
+          emptyMessage={DSSR_EMPTY.fuel}
+        />
+        <TotalNote rows={day.fuel.rows.length} notes={fuelTotalNotes(day.fuel)} />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader title={DSSR_TITLES.nozzles} subtitle={DSSR_TITLES.nozzlesSubtitle} />
+        <InteractiveTable
+          columns={NOZZLE_COLUMNS}
+          rows={day.nozzles}
+          rowKey={(r) => r.key}
+          title="nozzles"
+          emptyMessage={DSSR_EMPTY.nozzles}
+        />
+      </section>
+
+      {day.fuelStock.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title={DSSR_TITLES.fuelStock} />
+          <InteractiveTable
+            columns={FUEL_STOCK_COLUMNS}
+            rows={day.fuelStock}
+            rowKey={(r) => r.key}
+            title="fuel stock variance"
+          />
+        </section>
       )}
 
-      <h3
-        style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text-strong)',
-          marginBottom: '12px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.02em',
-        }}
-      >
-        Included Shifts
-      </h3>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          marginBottom: '28px',
-          fontSize: '13px',
-        }}
-      >
-        <thead>
-          <tr
-            style={{
-              borderBottom: '2px solid var(--border-strong)',
-              textAlign: 'left',
-              color: 'var(--text-muted)',
-            }}
-          >
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Template</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Closed At</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Net Volume (L)
-            </th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Attendant Var. (₹)
-            </th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
-              Office Count Var. (₹)
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {shifts.length > 0 ? (
-            shifts.map((shift: any, idx: number) => {
-              const variance = Number(shift.cashVariance || 0);
-              const varColor =
-                variance < 0
-                  ? 'var(--brand-danger)'
-                  : variance > 0
-                    ? 'var(--brand-warning)'
-                    : 'var(--state-success-fg)';
-              return (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td
-                    style={{
-                      padding: '10px 12px',
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--text-strong)',
-                    }}
-                  >
-                    {shiftDisplayLabel({
-                      businessDate: dailyDssr?.businessDate ?? snapshot.businessDate,
-                      shiftSequence: shift.shiftSequence,
-                      shiftId: shift.shiftId,
-                    })}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
-                    {shift.templateName || 'Custom'}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
-                    {shift.closedAt ? new Date(shift.closedAt).toLocaleString('en-IN') : '-'}
-                  </td>
-                  <td
-                    style={{
-                      padding: '10px 12px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {Number(shift.netVolume || 0).toFixed(3)}
-                  </td>
-                  {/* Null for pre-#287 shifts (their Cash Variance already includes it). */}
-                  <td
-                    style={{
-                      padding: '10px 12px',
-                      textAlign: 'right',
-                      fontFamily: 'var(--font-mono)',
-                      color:
-                        Number(shift.attendantVariance || 0) < 0
-                          ? 'var(--brand-danger)'
-                          : 'var(--text-default)',
-                    }}
-                  >
-                    {shift.attendantVariance == null
-                      ? '—'
-                      : `${Number(shift.attendantVariance) > 0 ? '+' : ''}${formatMoney(Number(shift.attendantVariance), { symbol: false })}`}
-                  </td>
-                  <td
-                    style={{
-                      padding: '10px 12px',
-                      textAlign: 'right',
-                      color: varColor,
-                      fontWeight: 600,
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {variance > 0 ? '+' : ''}
-                    {formatMoney(variance, { symbol: false })}
-                  </td>
-                </tr>
-              );
-            })
-          ) : (
-            <tr>
-              <td
-                colSpan={6}
-                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
-              >
-                No shifts were included for this day.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      {day.merchandiseStock.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title={DSSR_TITLES.merchandiseStock} />
+          <InteractiveTable
+            columns={MERCHANDISE_STOCK_COLUMNS}
+            rows={day.merchandiseStock}
+            rowKey={(r) => r.key}
+            title="product stock variance"
+          />
+        </section>
+      )}
+
+      <section className="flex flex-col gap-2">
+        <SectionHeader title={DSSR_TITLES.shifts} />
+        <InteractiveTable
+          columns={shiftCols}
+          rows={day.shifts}
+          rowKey={(r) => r.key}
+          totalRow={shiftTotalRow(day)}
+          title="included shifts"
+          emptyMessage={DSSR_EMPTY.shifts}
+        />
+        <TotalNote rows={day.shifts.length} notes={shiftTotalNotes(day)} />
+      </section>
 
       {/* Attendant (Handover) variance per Attendant/DU for the day (#287). */}
-      {Array.isArray(snapshot.drawer?.attendants) && snapshot.drawer.attendants.length > 0 && (
-        <>
-          <h3
-            style={{
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginBottom: '12px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.02em',
-            }}
-          >
-            Attendant Variance
-          </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <tbody>
-              {snapshot.drawer.attendants.map((a: any, i: number) => {
-                const v = Number(a.variance || 0);
-                return (
-                  <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '8px 12px' }}>
-                      {a.attendantName ?? 'Attendant'}
-                      {a.duName ? ` · ${a.duName}` : ''}
-                    </td>
-                    <td
-                      style={{
-                        padding: '8px 12px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                        color: v < 0 ? 'var(--brand-danger)' : 'var(--text-default)',
-                      }}
-                    >
-                      {v > 0 ? '+' : ''}
-                      {formatMoney(v, { symbol: false })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+      {day.attendants.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <SectionHeader title={DSSR_TITLES.attendants} subtitle={DSSR_TITLES.attendantsSubtitle} />
+          <InteractiveTable
+            columns={ATTENDANT_COLUMNS}
+            rows={day.attendants}
+            rowKey={(r) => r.key}
+            totalRow={attendantTotalRow(day)}
+            title="attendant variance"
+          />
+          <TotalNote rows={day.attendants.length} notes={attendantTotalNotes(day)} />
+        </section>
       )}
     </div>
   );
 };
+
+/**
+ * Why a total row shows `—` or a blank, as one full-width line under the
+ * table; the PDF prints the same line. Only under a table with rows, where
+ * the total row shows.
+ */
+const TotalNote: React.FC<{ rows: number; notes: string[] }> = ({ rows, notes }) => {
+  const note = rows > 0 ? totalNote(notes) : null;
+  return note ? <ReportNote className="max-w-none">{note}</ReportNote> : null;
+};
+
+/**
+ * Independent figures (they do not add up), so no total row: a label and a
+ * plain amount per line, in two columns on a wide screen.
+ */
+const FigureList: React.FC<{ lines: FigureLine[]; label: string }> = ({ lines, label }) => (
+  <Panel flush>
+    <dl aria-label={label} className="m-0 grid grid-cols-1 lg:grid-cols-2">
+      {lines.map((line) => (
+        <div
+          key={line.label}
+          className="flex items-baseline justify-between gap-4 border-b border-border-soft px-4 py-2.5 text-[13px] lg:odd:border-r"
+        >
+          <dt className="text-ink-default">{line.label}</dt>
+          <dd className="m-0 font-mono tabular-nums text-ink-strong">{line.value}</dd>
+        </div>
+      ))}
+    </dl>
+  </Panel>
+);
