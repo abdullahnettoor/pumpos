@@ -5,17 +5,14 @@ import SectionHeading from '../components/ds/SectionHeading.astro';
 import Card from '../components/ds/Card.astro';
 import Button from '../components/ds/Button.astro';
 import PricingTable from '../components/ui/PricingTable.astro';
-import { plans, planFeatures } from '../data/home';
+import { plans, planFeatures, SCALE_DISCOUNT_LINE } from '../data/home';
 import { WHATSAPP_URL } from '../config';
 import '../styles/content-pages.css';
 
 const pricingPlans = plans.map((plan) => ({
   ...plan,
-  intro:
-    plan.level === 'scale'
-      ? undefined
-      : { price: 0, label: 'first 3 months', then: 'then' },
-  href: plan.level === 'scale' ? WHATSAPP_URL : '/demo',
+  intro: { price: 0, label: 'first 3 months', then: 'then' },
+  href: '/demo',
 }));
 
 const billingQuestions = [
@@ -27,7 +24,7 @@ const billingQuestions = [
   {
     question: 'What happens after the first 3 months?',
     answer:
-      'Pilot stations pay ₹0 for the first 3 months on any plan. Before that period ends, choose whether to continue on Core or Pro and confirm monthly or yearly billing. Core is ₹999 per station per month; Pro is ₹1,599 per station per month. Scale pricing is agreed with our team.',
+      'Pilot stations pay ₹0 for the first 3 months on any plan. Before that period ends, choose whether to continue on Core, Pro or Pro+ and confirm monthly or yearly billing. Core is ₹999 per station per month, Pro is ₹1,599 and Pro+ is ₹2,099. Each additional station is 20% off on Pro and Pro+; for 10+ stations, talk to us.',
   },
   {
     question: 'How do I upgrade?',
@@ -38,7 +35,7 @@ const billingQuestions = [
 ---
 <BaseLayout
   title="Pricing | PumpOS for fuel stations"
-  description="Compare PumpOS Core, Pro and Scale plans for your fuel station. Pilot stations start at ₹0 for the first 3 months."
+  description="Compare PumpOS Core, Pro and Pro+ plans for your fuel station. Pilot stations start at ₹0 for the first 3 months."
   path="/pricing"
 >
   <Section class="pricing-intro" aria-labelledby="pricing-title">
@@ -60,10 +57,15 @@ const billingQuestions = [
         <strong>10 logins</strong>
         <p>More access for your station team as the workflow grows.</p>
       </Card>
+      <Card class="pricing-seat-rule">
+        <span class="ds-ey">Pro+</span>
+        <strong>Unlimited logins</strong>
+        <p>Plus custom permissions and the Attendant Handover Report.</p>
+      </Card>
       <Card class="pricing-seat-rule pricing-seat-rule--attendants">
         <span class="ds-ey">Attendants</span>
         <strong>Unlimited without a login</strong>
-        <p>Attendants without phone access do not use a login. Scale login limits are agreed with our team.</p>
+        <p>Attendants without phone access do not use a login.</p>
       </Card>
     </div>
   </Section>
@@ -81,12 +83,12 @@ const billingQuestions = [
     <PricingTable
       plans={pricingPlans}
       features={planFeatures}
-      levels={['core', 'pro', 'scale']}
+      levels={['core', 'pro', 'pro-plus']}
       defaultPlan="pro"
       defaultInterval="yearly"
       popularLabel="Recommended"
       yearlyBadge="2 months free"
-      note="Attendants without a login are unlimited."
+      note={`Attendants without a login are unlimited. ${SCALE_DISCOUNT_LINE}`}
       visibleRows={planFeatures.length}
     >
       <p slot="cta-helper" class="pricing-helper">

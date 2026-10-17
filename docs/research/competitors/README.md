@@ -69,24 +69,27 @@ This supersedes the per-competitor recommendations in [Petrosoft §6](./petrosof
 
 **Positioning:** the middle of the market. At or below FuelSetu and PumpOne, well below Petrosoft. Don't race PetroByte to the bottom; justify the price by money recovered: _"We find ₹X lakh a year in shortages and stock loss. The software costs about ₹1,000 a month."_
 
-Plan names (decided): **Core / Pro / Scale**. Registry keys `CORE`, `PRO`, `SCALE`.
+Plan names (decided, #645): **Core / Pro / Pro+**. Registry keys `CORE`, `PRO`, `PRO_PLUS`.
 
-- **Core:** the full system, not a cut-down version.
-- **Pro:** a pump run professionally, with staff and credit customers.
-- **Scale:** groups growing to more outlets.
+Plans are defined by **features**. Station count is handled by a discount, not a plan.
 
-The order is obvious without a comparison table, and none of the names is a competitor's lowest or highest plan name.
+- **Core:** the full system for one owner-run pump.
+- **Pro:** several stations, Attendant handover on the phone, reports across stations.
+- **Pro+:** everything in Pro, plus staff control (custom permissions, Attendant Handover Report) and unlimited logins.
 
-|                                 | **Core**                    | **Pro** (anchor)                          | **Scale**                                            |
-| ------------------------------- | --------------------------- | ----------------------------------------- | ---------------------------------------------------- |
-| Annual (per station, excl. GST) | ₹6,999                      | ₹12,999                                   | ₹19,999 for the first station, ₹9,999 for each extra |
-| Monthly                         | ₹699                        | ₹1,299                                    | Annual only                                          |
-| 3-year term                     | 25% off                     | 25% off                                   | Custom                                               |
-| Target                          | Price-sensitive single pump | Pump with attendants and credit customers | Groups, high-volume pumps                            |
+|                                  | **Core**                    | **Pro** (anchor)                                   | **Pro+**                           |
+| -------------------------------- | --------------------------- | -------------------------------------------------- | ---------------------------------- |
+| Monthly (per station, excl. GST) | ₹999                        | ₹1,599                                             | ₹2,099                             |
+| Yearly (2 months free)           | ₹9,990                      | ₹15,990                                            | ₹20,990                            |
+| Stations                         | 1                           | Several                                            | Several                            |
+| Logins                           | 3                           | 10                                                 | Unlimited                          |
+| Target                           | Price-sensitive single pump | Pump or group with attendants and credit customers | Owners who want control over staff |
+
+**Scale is a pricing rule, not a plan.** On Pro and Pro+ the first station is full price and each additional station is **20% off**. 10+ stations: talk to us. Core has one station, so it never gets the discount. The rule changes pricing and billing only, not what the app allows. Billing is manual for now.
 
 **Every plan (never gated):**
 
-- shifts, nozzle readings, attendant handover and drawer reconciliation
+- shifts, nozzle readings, attendant handover (recorded by the manager from the office) and drawer reconciliation
 - Shift Summary and DSSR, day close
 - stock, dips, variance, density
 - purchases and suppliers
@@ -101,20 +104,26 @@ Credit statements and aging are also in every plan.
 
 **Pro adds:**
 
-- more seats (see the Limits in §4.2)
+- several stations under one login
+- Attendant handover on the phone
+- reports across stations
+- 10 logins
 - automated WhatsApp and push alerts
 - customer statement portal
 - POS settlement and bank statement matching
 - attendance, advances and shortage recovery, payroll
 
-**Scale adds:**
+**Pro+ adds (everything in Pro, plus):**
 
-- unlimited seats and users
-- consolidated reports across stations
+- unlimited logins
+- custom permissions
+- Attendant Handover Report
+- advanced analytics
 - interest on late payment, fleet tools
 - E-Invoicing / E-Way Bill
 - audit explorer
-- dedicated support
+
+Demo Organizations are created on Pro.
 
 The full gating decision for each feature is in [§4.2](#42-gating-and-plan-placement).
 
@@ -259,40 +268,42 @@ Each item is ranked by three things: how many competitors have it, its deal impa
 
 Proposed. Moving a capability between plans is a one-line registry change.
 
-| Item                                        | Gate                                    | Key / Limit                                 | Core | Pro | Scale           | Why                                                                          |
-| ------------------------------------------- | --------------------------------------- | ------------------------------------------- | ---- | --- | --------------- | ---------------------------------------------------------------------------- |
-| Tally export                                | Capability, **in every plan** (decided) | `exports.tally`                             | ✓    | ✓   | ✓               | Table stakes; the key allows a per-organisation switch-off                   |
-| GSTR-1 / 3B export                          | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Monthly compliance                                                           |
-| Excel / CSV export                          | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Refusing it reads as lock-in                                                 |
-| Credit limit enforcement, statements, aging | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Completes an existing feature                                                |
-| Manual WhatsApp share (from the phone)      | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Costs us nothing                                                             |
-| Automated WhatsApp / SMS / email            | Capability                              | `notifications.whatsapp`                    | ✗    | ✓   | ✓               | Costs us per message                                                         |
-| Balance Sheet + Trial Balance               | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Derived from our own ledger                                                  |
-| Density + decantation                       | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Oil-company compliance                                                       |
-| Customer statement portal                   | Capability                              | `crm.customer_portal`                       | ✗    | ✓   | ✓               | Separable; competitors gate it                                               |
-| Owner app (read)                            | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Already shipped                                                              |
-| Owner alerts + daily push                   | Capability                              | `notifications.push_alerts`                 | ✗    | ✓   | ✓               | Automation                                                                   |
-| Multi-language                              | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Attendant usability                                                          |
-| Attendance                                  | Capability                              | `staff.attendance`                          | ✗    | ✓   | ✓               | Separable module                                                             |
-| Advances / shortage recovery                | Capability                              | `staff.advances`                            | ✗    | ✓   | ✓               | Goes with attendance                                                         |
-| Payroll / payslips                          | Capability                              | `staff.payroll`                             | ✗    | ✓   | ✓               | Competitors gate it                                                          |
-| POS settlement matching (import)            | Capability                              | `finance.pos_matching`                      | ✗    | ✓   | ✓               | Automation; manual entry stays free                                          |
-| Bank statement reconciliation               | Capability                              | `finance.bank_reconciliation`               | ✗    | ✓   | ✓               | Automation; the manual flag stays free                                       |
-| Core registers and reports                  | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Everyday work                                                                |
-| Advanced analytics                          | Capability                              | `reports.advanced`                          | ✗    | ✗   | ✓               | Premium                                                                      |
-| Consolidated reports across stations        | Capability                              | `reports.cross_station`                     | ✗    | ✗   | ✓               | Only useful to multi-station groups                                          |
-| Expiry reminders (in-app)                   | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Push or WhatsApp delivery uses `notifications.*`                             |
-| Thermal printing, counter bill              | Ungated                                 | —                                           | ✓    | ✓   | ✓               | Forecourt work                                                               |
-| Interest on late payment                    | Capability                              | `crm.credit_interest`                       | ✗    | ✗   | ✓               | Petrosoft Max+                                                               |
-| Fleet: trade discounts, vehicles, indent    | Capability                              | `crm.fleet`                                 | ✗    | ✗   | ✓               | Larger pumps                                                                 |
-| E-Invoice / E-Way Bill                      | Capability                              | `compliance.einvoice`                       | ✗    | ✗   | ✓               | Integration cost                                                             |
-| Audit explorer UI (events always recorded)  | Capability                              | `audit.explorer`                            | ✗    | ✗   | ✓               | Only the browsing UI is gated                                                |
-| Tanker/bowser, loyalty, Zoho                | Capability each                         | `ops.bowser`, `crm.loyalty`, `exports.zoho` | ✗    | ✗   | ✓ or add-on     | Niche                                                                        |
-| **Stations**                                | Limit (exists)                          | `station_count`                             | 1    | 1   | 1 + paid extras | Already built                                                                |
-| **Users per organisation** (all roles)      | Limit (new)                             | `user_count`                                | 5    | 25  | Unlimited       | Decided: an overall user cap for each organisation                           |
-| **Attendant seats**                         | Limit (new)                             | `attendant_seats`                           | 3    | 15  | Unlimited       | Decided: attendant seats are limited separately. Counted inside `user_count` |
+| Item                                        | Gate                                    | Key / Limit                                 | Core | Pro       | Pro+      | Why                                                                                                                                                         |
+| ------------------------------------------- | --------------------------------------- | ------------------------------------------- | ---- | --------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tally export                                | Capability, **in every plan** (decided) | `exports.tally`                             | ✓    | ✓         | ✓         | Table stakes; the key allows a per-organisation switch-off                                                                                                  |
+| GSTR-1 / 3B export                          | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Monthly compliance                                                                                                                                          |
+| Excel / CSV export                          | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Refusing it reads as lock-in                                                                                                                                |
+| Credit limit enforcement, statements, aging | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Completes an existing feature                                                                                                                               |
+| Manual WhatsApp share (from the phone)      | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Costs us nothing                                                                                                                                            |
+| Automated WhatsApp / SMS / email            | Capability                              | `notifications.whatsapp`                    | ✗    | ✓         | ✓         | Costs us per message                                                                                                                                        |
+| Balance Sheet + Trial Balance               | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Derived from our own ledger                                                                                                                                 |
+| Density + decantation                       | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Oil-company compliance                                                                                                                                      |
+| Customer statement portal                   | Capability                              | `crm.customer_portal`                       | ✗    | ✓         | ✓         | Separable; competitors gate it                                                                                                                              |
+| Owner app (read)                            | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Already shipped                                                                                                                                             |
+| Owner alerts + daily push                   | Capability                              | `notifications.push_alerts`                 | ✗    | ✓         | ✓         | Automation                                                                                                                                                  |
+| Multi-language                              | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Attendant usability                                                                                                                                         |
+| Attendance                                  | Capability                              | `staff.attendance`                          | ✗    | ✓         | ✓         | Separable module                                                                                                                                            |
+| Advances / shortage recovery                | Capability                              | `staff.advances`                            | ✗    | ✓         | ✓         | Goes with attendance                                                                                                                                        |
+| Payroll / payslips                          | Capability                              | `staff.payroll`                             | ✗    | ✓         | ✓         | Competitors gate it                                                                                                                                         |
+| POS settlement matching (import)            | Capability                              | `finance.pos_matching`                      | ✗    | ✓         | ✓         | Automation; manual entry stays free                                                                                                                         |
+| Bank statement reconciliation               | Capability                              | `finance.bank_reconciliation`               | ✗    | ✓         | ✓         | Automation; the manual flag stays free                                                                                                                      |
+| Core registers and reports                  | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Everyday work                                                                                                                                               |
+| Advanced analytics                          | Capability                              | `reports.advanced`                          | ✗    | ✗         | ✓         | Premium                                                                                                                                                     |
+| Consolidated reports across stations        | Capability                              | `reports.cross_station`                     | ✗    | ✓         | ✓         | Only useful to multi-station owners; on Pro                                                                                                                 |
+| Expiry reminders (in-app)                   | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Push or WhatsApp delivery uses `notifications.*`                                                                                                            |
+| Thermal printing, counter bill              | Ungated                                 | —                                           | ✓    | ✓         | ✓         | Forecourt work                                                                                                                                              |
+| Interest on late payment                    | Capability                              | `crm.credit_interest`                       | ✗    | ✗         | ✓         | Petrosoft Max+                                                                                                                                              |
+| Fleet: trade discounts, vehicles, indent    | Capability                              | `crm.fleet`                                 | ✗    | ✗         | ✓         | Larger pumps                                                                                                                                                |
+| E-Invoice / E-Way Bill                      | Capability                              | `compliance.einvoice`                       | ✗    | ✗         | ✓         | Integration cost                                                                                                                                            |
+| Audit explorer UI (events always recorded)  | Capability                              | `audit.explorer`                            | ✗    | ✗         | ✓         | Only the browsing UI is gated                                                                                                                               |
+| Tanker/bowser, loyalty, Zoho                | Capability each                         | `ops.bowser`, `crm.loyalty`, `exports.zoho` | ✗    | ✗         | ✓         | Niche                                                                                                                                                       |
+| **Stations**                                | Limit (exists)                          | `station_count`                             | 1    | Unlimited | Unlimited | Core has one station; Scale discount applies on Pro and Pro+                                                                                                |
+| **Logins**                                  | Limit (new)                             | `login_count`                               | 3    | 10        | Unlimited | Active users with a login, Attendants with phone access included. Attendants without a login are never counted. Replaces `user_count` and `attendant_seats` |
+| Attendant handover on the phone             | Capability (new, ships last)            | `handover.attendant_phone`                  | ✗    | ✓         | ✓         | Core: the manager records the handover from the office                                                                                                      |
+| Custom permissions                          | Capability                              | `permissions.custom`                        | ✗    | ✗         | ✓         | Staff control (#550)                                                                                                                                        |
+| Attendant Handover Report                   | Capability                              | `reports.attendant`                         | ✗    | ✗         | ✓         | Staff control                                                                                                                                               |
 
-Seat numbers are proposals to validate. A typical small pump runs 2 shifts × 2 attendants.
+Login numbers are decided (#645). A typical small pump runs 2 shifts × 2 attendants. A Pro Organization that needs more logins gets a per-Organization Limit override after talking to us. Capabilities listed as later features are registered only when they ship (§4.3); "Scale" placements in earlier drafts moved to Pro+.
 
 ### 4.3 Gating rules
 
@@ -307,8 +318,8 @@ Seat numbers are proposals to validate. A typical small pump runs 2 shifts × 2 
    - wrap the UI in `CapabilityGate` / `CapabilityRoute`
    - declare a write policy for each new mutating route
    - follow the `pump-access-gating` skill
-3. **Plans are `CORE`, `PRO` and `SCALE`, with `CORE` as the default.** There are no live customers yet, so `CORE` is redefined to the gated entry plan. The two existing pilot pumps are moved to their plan by hand when the plans ship. Once real customers exist, removing a capability from a plan they're on needs a migration plan.
-4. **Seat Limits block growth, not current users.** As with `station_count`: if a Limit is lowered, existing users keep working and only new invitations are refused.
+3. **Plans are `CORE`, `PRO` and `PRO_PLUS`, with `CORE` as the default.** There are no live customers yet, so `CORE` is redefined to the gated entry plan. The two existing pilot pumps are moved to their plan by hand when the plans ship. Once real customers exist, removing a capability from a plan they're on needs a migration plan.
+4. **The login Limit blocks growth, not current users.** As with `station_count`: if a Limit is lowered, existing users keep working and only new invitations are refused.
 
 **Our moat. Keep investing; no competitor markets these:**
 
