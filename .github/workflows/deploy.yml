@@ -204,6 +204,7 @@ jobs:
         run: npm run build
         working-directory: apps/marketing
         env:
+          PUBLIC_NOINDEX: ${{ needs.changes.outputs.mode != 'production' }}
           SITE: ${{ needs.changes.outputs.mode == 'production' && (vars.MARKETING_SITE || 'https://pumpos.app') || 'https://pumpos.abdullahnettoor.com' }}
           PUBLIC_CONSOLE_URL: ${{ needs.changes.outputs.mode == 'production' && (vars.CONSOLE_URL || 'https://console.pumpos.app') || 'https://console.pumpos.abdullahnettoor.com' }}
       - name: Deploy marketing

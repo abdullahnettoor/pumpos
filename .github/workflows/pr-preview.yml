@@ -146,6 +146,7 @@ jobs:
         run: npm run build
         working-directory: apps/marketing
         env:
+          PUBLIC_NOINDEX: 'true'
           SITE: https://pumpos.abdullahnettoor.com
           PUBLIC_CONSOLE_URL: https://console.pumpos.abdullahnettoor.com
       - name: Deploy marketing preview
