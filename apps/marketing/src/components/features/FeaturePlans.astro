@@ -11,10 +11,10 @@ export interface PlanFeatureItem {
 interface Props {
   coreFeatures: (PlanFeatureItem | string)[];
   proFeatures: (PlanFeatureItem | string)[];
-  scaleFeatures: (PlanFeatureItem | string)[];
+  proPlusFeatures: (PlanFeatureItem | string)[];
 }
 
-const { coreFeatures, proFeatures, scaleFeatures } = Astro.props;
+const { coreFeatures, proFeatures, proPlusFeatures } = Astro.props;
 
 const normalize = (item: PlanFeatureItem | string): PlanFeatureItem =>
   typeof item === 'string' ? { name: item } : item;
@@ -62,12 +62,12 @@ const normalize = (item: PlanFeatureItem | string): PlanFeatureItem =>
 
   <Card class="feature-plan-card">
     <div class="feature-plan-head">
-      <h3>Scale</h3>
-      <span style="font-weight: 700; color: var(--ds-primary);">Custom</span>
+      <h3>Pro+</h3>
+      <span style="font-weight: 700; color: var(--ds-primary);">₹2,099 / mo</span>
     </div>
-    <p class="plan-price">Custom logins · Multiple stations</p>
+    <p class="plan-price">Unlimited logins · Unlimited attendants without a login</p>
     <ul>
-      {scaleFeatures.map(normalize).map((f) => (
+      {proPlusFeatures.map(normalize).map((f) => (
         <li>
           <CheckIcon />
           <span>

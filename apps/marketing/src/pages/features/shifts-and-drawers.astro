@@ -53,16 +53,18 @@ const corePlanFeatures = [
 
 const proPlanFeatures = [
   'Logins: 10 on Pro',
+  'Several stations under one login',
+  { name: 'Reports across stations', note: 'Coming next' },
   'Attendant handover on the phone',
   { name: 'Attendance, advances and shortage recovery', note: 'Coming next' },
   { name: 'Owner alerts on your phone', note: 'Coming next' },
   { name: 'WhatsApp reminders and daily summary', note: 'Coming next' },
 ];
 
-const scalePlanFeatures = [
-  'Custom logins',
-  'Several stations under one login',
-  { name: 'Reports across stations', note: 'Coming next' },
+const proPlusPlanFeatures = [
+  'Unlimited logins',
+  'Custom permissions',
+  'Attendant Handover Report',
 ];
 ---
 <BaseLayout
@@ -236,7 +238,7 @@ const scalePlanFeatures = [
     <FeaturePlans
       coreFeatures={corePlanFeatures}
       proFeatures={proPlanFeatures}
-      scaleFeatures={scalePlanFeatures}
+      proPlusFeatures={proPlusPlanFeatures}
     />
   </Section>
 
