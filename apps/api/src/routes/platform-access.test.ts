@@ -207,3 +207,23 @@ describe('DELETE /platform/organizations/:orgId/limits/:key', () => {
     expect(committed).toEqual([]);
   });
 });
+
+describe('PUT /platform/organizations/:orgId/plan', () => {
+  it.each(['CORE', 'PRO', 'PRO_PLUS'])('accepts the %s plan', async (plan) => {
+    const { status, body } = await call(
+      fakeDb([[{ plan: 'SOMETHING_ELSE' }]], []),
+      'PUT',
+      '/organizations/org-1/plan',
+      { plan },
+    );
+    expect(status).toBe(200);
+    expect(body.success).toBe(true);
+  });
+
+  it('rejects a plan this build does not define', async () => {
+    const { status } = await call(fakeDb([], []), 'PUT', '/organizations/org-1/plan', {
+      plan: 'SCALE',
+    });
+    expect(status).toBe(400);
+  });
+});

@@ -654,6 +654,11 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         data: { organizationId: string; authUserId: string };
       };
       expect(calls.invited).toEqual(['prospect@demo.pumpos.invalid']);
+      const [demoOrganization] = await db
+        .select({ plan: schema.organizations.subscriptionPlan })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, data.organizationId));
+      expect(demoOrganization.plan).toBe('PRO');
       const tanksBefore = await db
         .select()
         .from(schema.tanks)

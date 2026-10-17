@@ -376,7 +376,12 @@ export async function createDemo(
       const seeded = await runInTransaction(db, async (tx) => {
         const [organization] = await tx
           .insert(schema.organizations)
-          .values({ name: organizationName, isDemo: true, demoExpiresAt: expiresAt })
+          .values({
+            name: organizationName,
+            isDemo: true,
+            subscriptionPlan: 'PRO',
+            demoExpiresAt: expiresAt,
+          })
           .returning();
         const [owner] = await tx
           .insert(schema.users)
@@ -438,7 +443,7 @@ export async function createDemo(
     // leaves an org that the demo Delete/expiry can always remove.
     await db
       .update(schema.organizations)
-      .set({ isDemo: true, demoExpiresAt: expiresAt })
+      .set({ isDemo: true, subscriptionPlan: 'PRO', demoExpiresAt: expiresAt })
       .where(eq(schema.organizations.id, owner.organizationId));
     const seeded = await runInTransaction(db, async (tx) => {
       await limitAbandonedTransaction(tx);

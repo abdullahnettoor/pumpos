@@ -11,7 +11,7 @@
  */
 
 /** Commercial package assigned to an Organization. `CORE` is the baseline. */
-export type ProductPlanKey = 'CORE';
+export type ProductPlanKey = 'CORE' | 'PRO' | 'PRO_PLUS';
 
 /**
  * Capability keys the client gates on. The *definition* (title, message,
