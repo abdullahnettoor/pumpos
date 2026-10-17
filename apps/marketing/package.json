@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev --port 4321",
     "build": "astro build",
+    "check:links": "node scripts/check-links.mjs",
     "preview": "astro preview",
     "test": "vitest run",
     "deploy": "SITE=https://pumpos.app PUBLIC_CONSOLE_URL=https://console.pumpos.app astro build && wrangler deploy",

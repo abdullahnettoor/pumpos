@@ -277,6 +277,12 @@ jobs:
       - run: npm run build
         if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
+        # Builds scheduled posts too, so their links are checked before they go live.
+        env:
+          PUBLIC_BLOG_SHOW_SCHEDULED: 'true'
+      - run: npm run check:links
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
       - name: Not affected
         if: steps.changes.outputs.affected != 'true'
         run: echo "Marketing files did not change; required check passes without rebuilding."

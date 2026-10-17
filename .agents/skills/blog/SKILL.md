@@ -61,12 +61,15 @@ draft: true
 - **`description`**: 150–160 characters, answers the query in one sentence. It
   is the snippet under the search result, so write it to be clicked.
 - **File name**: the target query in lowercase-hyphenated words, short, no date.
-- **`publishedAt`**: the day it goes live. A future date does **not** hide a
-  post; only `draft: true` does.
+- **`publishedAt`**: when it goes live. A date (`2026-10-20`) goes live that
+  morning; a time (`2026-10-20T16:15:00+05:30`) goes live within about 15
+  minutes of it. Until then the post shows on preview builds only.
 - **`updatedAt`**: set it on a refresh only when the substance changed (new
   facts, new section). A typo fix is not an update.
 - **`tags`**: reuse the tags existing posts already use before inventing one.
-- **`draft`**: `true` unless the user asked to publish now.
+- **`draft`**: `true` while the post is unfinished; it hides the post
+  everywhere, preview included. Set `false` with a future `publishedAt` to
+  schedule it.
 
 **Done when** the title and description both contain the target query and fit
 their lengths.
@@ -96,15 +99,17 @@ two to four internal links, and has been through `unslop`.
 ## 5. Build it
 
 ```bash
-cd apps/marketing && npm install && npm run build
+cd apps/marketing && npm install
+PUBLIC_BLOG_SHOW_SCHEDULED=true npm run build && npm run check:links
 ```
 
-The build validates the frontmatter against the schema. With `draft: false`,
+The build validates the frontmatter against the schema, and `check:links` fails
+on any internal link to a page that does not exist. With `draft: false`,
 confirm `dist/blog/<slug>/index.html` exists; with `draft: true`, confirm it
 does not.
 
-**Done when** the build passes and the page is present or absent as `draft`
-says.
+**Done when** the build and link check pass and the page is present or absent
+as `draft` says.
 
 ## 6. Open the PR to dev
 
@@ -116,18 +121,19 @@ git commit -m "docs(marketing): <add|update> post on <topic>"
 gh pr create --base dev --title "docs(marketing): <add|update> post on <topic>" --body "..."
 ```
 
-The PR body states the target query, the sources from step 2, whether the post
-ships as a draft, and anything to recheck before publishing (a fee, a date, a
-missing link).
+The PR body states the target query, the sources from step 2, when the post
+goes live (draft, or the `publishedAt` time), and anything to recheck before
+then (a fee, a date, a missing link).
 
-Tell the user how the post goes live, because it is not when the PR merges:
+Tell the user how the post goes live, because merging is not publishing:
 
-1. The PR gets a marketing preview build.
+1. The PR gets a marketing preview build, scheduled posts included.
 2. Merging to `dev` deploys the preview site.
-3. `pumpos.app` gets it with the **next app release** (the `release` skill's
-   `dev` → `main` promotion), which deploys every app.
-4. A draft stays hidden everywhere until a later PR sets `draft: false`, which
-   in turn reaches production with the release after it.
+3. The **Publish Blog** workflow (`.github/workflows/publish-blog.yml`) puts it
+   on `pumpos.app` within about 15 minutes of `publishedAt`, without an app
+   release. A post already past its `publishedAt` goes out on the next run.
+4. An edit to a post that is already live needs a manual run: Actions →
+   Publish Blog → Run workflow.
 
-**Done when** the PR is open against `dev` and the user knows which release will
-carry the post to `pumpos.app`.
+**Done when** the PR is open against `dev` and the user knows when the post will
+reach `pumpos.app`.
