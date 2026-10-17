@@ -21,7 +21,7 @@ export interface OrganizationAccessInputs {
   /** Active Limit overrides; each replaces the Product Plan value. */
   limitOverrides: Partial<Record<LimitKey, number>>;
   /** Current consumption per Limit, e.g. the Organization's Station count. */
-  usage: Record<LimitKey, number>;
+  usage: Partial<Record<LimitKey, number>>;
 }
 
 /** Loads the access inputs for one Organization. */

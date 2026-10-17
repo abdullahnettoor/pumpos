@@ -141,4 +141,36 @@ describe('Stations header (#615 review)', () => {
     expect(screen.getByText('2 of 3 stations on your plan')).toBeTruthy();
     expect(screen.getAllByTestId('station-card')).toHaveLength(1);
   });
+
+  it('shows logins used against the limit beside Stations (#648)', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('down', { status: 503 })),
+    );
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.access(), {
+      plan: 'CORE',
+      capabilities: {},
+      limits: {
+        station_count: { value: 3, used: 2, reached: false },
+        login_count: { value: 10, used: 4, reached: false },
+      },
+      subscription: { status: 'ACTIVE', mode: 'NORMAL' },
+    });
+    queryClient.setQueryData(queryKeys.stations(), [ONE]);
+    renderWithProviders(
+      <StationsTab
+        stations={[ONE]}
+        selectedStation={ONE}
+        canSwitchStation
+        onStationChange={() => {}}
+        onOnboard={() => {}}
+        onboardGate={{ disabled: false }}
+        onConfigure={() => {}}
+        onInviteTeam={() => {}}
+      />,
+      { queryClient },
+    );
+    expect(screen.getByText('2 of 3 stations on your plan · 4 of 10 logins')).toBeTruthy();
+  });
 });

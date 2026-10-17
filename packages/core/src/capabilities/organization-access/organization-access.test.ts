@@ -29,7 +29,7 @@ import {
 
 const testRegistry: AccessRegistry = {
   plans: {
-    CORE: { key: 'CORE', capabilities: ['reports.dealer_margin'], limits: { station_count: 1 } },
+    CORE: { key: 'CORE', capabilities: ['reports.dealer_margin'], limits: { station_count: 1, login_count: 3 } },
   },
   capabilities: {
     'reports.dealer_margin': {

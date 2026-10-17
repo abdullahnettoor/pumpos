@@ -71,8 +71,20 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId));
 
+    // `logins` is the login_count usage: active users with an auth account
+    // (Attendants with phone access included). Users without a login never
+    // count, and pending invitations are not counted: only Owner invites exist
+    // and they are not team logins. Read in the same query as the Station count.
     const [stations] = await this.db
-      .select({ value: count() })
+      .select({
+        value: count(),
+        logins: sql<number>`(
+          select count(*) from ${schema.users}
+          where ${schema.users.organizationId} = ${organizationId}
+            and ${schema.users.status} = 'ACTIVE'
+            and ${schema.users.authUserId} is not null
+        )`,
+      })
       .from(schema.stations)
       .where(eq(schema.stations.organizationId, organizationId));
 
@@ -111,6 +123,7 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
     // still applies, so the demo expiry job can cut access.
     if (organization?.isDemo) {
       limitOverrides.station_count = UNLIMITED_LIMIT;
+      limitOverrides.login_count = UNLIMITED_LIMIT;
     }
 
     return {
@@ -122,7 +135,10 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       suspendedAt: organization?.suspendedAt?.toISOString() ?? null,
       grantedCapabilities: grants.map((grant) => grant.capabilityKey),
       limitOverrides,
-      usage: { station_count: Number(stations?.value ?? 0) },
+      usage: {
+        station_count: Number(stations?.value ?? 0),
+        login_count: Number(stations?.logins ?? 0),
+      },
     };
   }
 }
