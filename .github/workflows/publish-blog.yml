@@ -1,0 +1,92 @@
+name: Publish Blog
+
+# Publishes blog posts to pumpos.app without an app release (#653).
+#
+# Builds the released marketing site from main, with the blog folder taken
+# from dev, and deploys marketing only. Production gets new posts and nothing
+# else unreleased: no tag, no desktop build, no app or page changes.
+#
+#   schedule                 -> every 15 min; deploys only when the posts that
+#                               should be live differ from pumpos.app's RSS
+#                               (a scheduled post came due, or one was pulled)
+#   Actions -> Publish Blog  -> deploys now, e.g. after editing a live post
+#
+# Posts are reviewed in their PR to dev, so this runs without an approval gate.
+# Scheduled runs use this file from the default branch (dev). A release deploy
+# builds main's own blog folder; the next scheduled run restores any post that
+# reached dev after the release was cut.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-blog
+  cancel-in-progress: false
+
+env:
+  SITE: ${{ vars.MARKETING_SITE || 'https://pumpos.app' }}
+
+jobs:
+  publish:
+    name: Publish blog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Take the blog folder from dev
+        run: |
+          git fetch --depth=1 origin dev
+          rm -rf apps/marketing/src/content/blog
+          git checkout FETCH_HEAD -- apps/marketing/src/content/blog
+
+      - name: Decide whether to deploy
+        id: decide
+        working-directory: apps/marketing
+        run: |
+          # main hides scheduled posts only once it carries src/blog.ts.
+          if [ ! -f src/blog.ts ]; then
+            echo "::notice::main cannot schedule posts yet; publishing starts after the next release."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif node scripts/blog-due.mjs "$SITE"; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.decide.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/marketing/package-lock.json
+
+      - name: Build marketing
+        if: steps.decide.outputs.run == 'true'
+        working-directory: apps/marketing
+        run: |
+          npm ci
+          npm run build
+          npm run check:links
+        env:
+          PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.app' }}
+
+      - name: Deploy marketing
+        if: steps.decide.outputs.run == 'true'
+        working-directory: apps/marketing
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Smoke-check marketing
+        if: steps.decide.outputs.run == 'true'
+        run: node scripts/smoke-deploy.mjs marketing "$SITE"

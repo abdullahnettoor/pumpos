@@ -149,6 +149,7 @@ jobs:
           PUBLIC_NOINDEX: 'true'
           SITE: https://pumpos.abdullahnettoor.com
           PUBLIC_CONSOLE_URL: https://console.pumpos.abdullahnettoor.com
+          PUBLIC_BLOG_SHOW_SCHEDULED: 'true'
       - name: Deploy marketing preview
         id: deploy
         working-directory: apps/marketing
