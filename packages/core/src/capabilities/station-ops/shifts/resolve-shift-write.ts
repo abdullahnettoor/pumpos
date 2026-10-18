@@ -1,8 +1,12 @@
 import { err, notFoundError, ok } from '../../../kernel/index.js';
 import type { ExecutionContext, Result } from '../../../kernel/index.js';
-import { checkBusinessDayWriteEligibility } from '../business-days/index.js';
+import {
+  checkBusinessDayWriteEligibility,
+  writableBusinessDayStatuses,
+} from '../business-days/index.js';
 import type {
   BusinessDay,
+  BusinessDayStatus,
   BusinessDayWriteEligibility,
   BusinessDayWriteKind,
   BusinessDayWriteRepository,
@@ -24,6 +28,8 @@ export interface ShiftWriteLockTarget {
   stationId: string;
   businessDayId: string;
   shiftId: string;
+  /** Lock the Shift only if the locked Business Day has one of these statuses. */
+  writableDayStatuses: readonly BusinessDayStatus[];
 }
 
 /**
@@ -36,8 +42,10 @@ export interface ShiftWriteLockTarget {
  * `lockForWrite` takes row locks in the canonical order Station -> Business
  * Day -> Shift (the Station and Business Day locks are organization-scoped, the
  * Shift lock is by id), and returns the Business Day and Shift as they stand
- * once locked. Every lock is attempted even when an earlier row is absent; the
- * caller revalidates both rows.
+ * once locked. The Station lock is attempted even when the Station is absent;
+ * the Shift is locked and returned only when the locked Business Day is at the
+ * target station with a status in `writableDayStatuses`, so a refused write
+ * never locks the Shift. The caller revalidates both rows.
  */
 export interface ShiftWriteGateReader {
   discover(shiftId: string): Promise<ShiftWriteGateRows>;
@@ -64,8 +72,12 @@ export function sequentialShiftWriteGate(deps: {
       await businessDays.lockStation(target.organizationId, target.stationId);
       await businessDays.lockById(target.organizationId, target.businessDayId);
       const businessDay = await businessDays.findById(target.businessDayId);
-      const shift = await shifts.findById(target.shiftId);
-      return { shift, businessDay };
+      const dayAdmitsWrite =
+        businessDay?.organizationId === target.organizationId &&
+        businessDay.stationId === target.stationId &&
+        target.writableDayStatuses.includes(businessDay.status);
+      if (!dayAdmitsWrite) return { shift: null, businessDay };
+      return { shift: await shifts.findById(target.shiftId), businessDay };
     },
   };
 }
@@ -111,6 +123,7 @@ export async function resolveShiftBusinessDayWrite(
     stationId,
     businessDayId,
     shiftId,
+    writableDayStatuses: writableBusinessDayStatuses(kind),
   });
   const day = checkBusinessDayWriteEligibility(locked.businessDay, ctx, {
     stationId,

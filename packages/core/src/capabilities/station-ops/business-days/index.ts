@@ -150,6 +150,11 @@ export async function resolveBusinessDayWrite(
   });
 }
 
+/** The Business Day statuses under which a write of `kind` is admitted. */
+export function writableBusinessDayStatuses(kind: BusinessDayWriteKind): BusinessDayStatus[] {
+  return kind === 'STOCK' ? ['OPEN'] : ['OPEN', 'CLOSED'];
+}
+
 /**
  * Validate a Business Day read under its Station -> Business Day lock: it must
  * still belong to the tenant and station, and a CLOSED day refuses STOCK writes

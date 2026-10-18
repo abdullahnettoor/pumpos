@@ -251,6 +251,9 @@ describe('ReopenShift', () => {
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
         shiftId: shift.id,
+        // The Shift is locked whatever the day's status, as before #248; the
+        // closed-day refusal is ReopenShift's own check.
+        writableDayStatuses: ['OPEN', 'CLOSED'],
       },
     ]);
   });

@@ -97,12 +97,29 @@ describe('resolveShiftBusinessDayWrite over the ShiftWriteGateReader port', () =
         stationId: 'station-1',
         businessDayId: 'day-1',
         shiftId: 'shift-1',
+        writableDayStatuses: ['OPEN'],
       },
     ]);
     expect(result).toEqual({
       success: true,
       data: { businessDay: day(), lateEntry: false, shift: shift() },
     });
+  });
+
+  it('asks the gate to lock the Shift under an open or closed day for a FINANCIAL write', async () => {
+    const gate = new FakeGate({ shift: shift(), businessDay: day() });
+    await resolveShiftBusinessDayWrite(gate, ctx, 'shift-1', 'FINANCIAL');
+    expect(gate.lockTargets[0]?.writableDayStatuses).toEqual(['OPEN', 'CLOSED']);
+  });
+
+  it('reports the closed day, not a missing Shift, when the gate withheld the Shift lock', async () => {
+    const gate = new FakeGate(
+      { shift: shift(), businessDay: day() },
+      { shift: null, businessDay: day({ status: 'CLOSED' }) },
+    );
+    const result = await resolveShiftBusinessDayWrite(gate, ctx, 'shift-1', 'STOCK');
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
   });
 
   it('returns the rows read under the lock, not the discovered ones', async () => {
@@ -279,6 +296,20 @@ describe('sequentialShiftWriteGate (repository-backed reference adapter)', () =>
       'day-lock:org-1:day-1',
       'day-find',
       'shift-lock',
+    ]);
+  });
+
+  it('stops before the Shift lock when the locked day refuses the write, as before #248', async () => {
+    const calls: string[] = [];
+    const gate = sequentialShiftWriteGate(repos(calls, day({ status: 'CLOSED' })));
+    const result = await resolveShiftBusinessDayWrite(gate, ctx, 'shift-1', 'STOCK');
+    expect(result.success).toBe(false);
+    expect(calls).toEqual([
+      'shift-discovery',
+      'day-find',
+      'station-lock:org-1:station-1',
+      'day-lock:org-1:day-1',
+      'day-find',
     ]);
   });
 

@@ -43,6 +43,7 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
       stationId: discoveredShift.stationId,
       businessDayId: discoveredShift.businessDayId,
       shiftId: input.shiftId,
+      writableDayStatuses: ['OPEN', 'CLOSED'],
     });
     const shift = locked.shift;
     if (!shift || shift.organizationId !== ctx.organizationId)

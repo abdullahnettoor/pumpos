@@ -324,11 +324,14 @@ function toShiftEntity(
  * locks plus both re-reads are one statement.
  *
  * Lock order inside that statement is forced by data dependency: each locking
- * CTE carries a pseudoconstant filter over the previous one, which Postgres
+ * CTE carries an uncorrelated filter over the previous one, which Postgres
  * evaluates as a one-time gate BEFORE scanning its own table — so the Business
  * Day is not touched until the Station lock is held, nor the Shift until the
- * Business Day lock is. The filters are always true, so every lock is still
- * attempted when an earlier row is absent, as the sequential reads did.
+ * Business Day lock is. The Station filter is always true, so the Business Day
+ * lock is attempted even when the Station row is absent, as the sequential
+ * reads did. The Shift filter admits the scan only when the locked Business
+ * Day is at the target station with a status that allows the write; otherwise
+ * the write is refused and, as before, the Shift lock is never taken.
  *
  * Rows come out of the FOR UPDATE scans themselves: under READ COMMITTED a
  * locking scan returns the latest committed version of a row it waited on, so
@@ -352,7 +355,13 @@ export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
   }
 
   async lockForWrite(target: ShiftWriteLockTarget): Promise<ShiftWriteGateRows> {
-    const { organizationId, stationId, businessDayId, shiftId } = target;
+    const { organizationId, stationId, businessDayId, shiftId, writableDayStatuses } = target;
+    const dayAdmitsWrite = writableDayStatuses.length
+      ? sql`status IN (${sql.join(
+          writableDayStatuses.map((s) => sql`${s}`),
+          sql`, `,
+        )})`
+      : sql`false`;
     const [row] = (await this.db.execute(sql`
       WITH station_lock AS (
         SELECT id FROM stations
@@ -368,7 +377,9 @@ export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
       shift_lock AS (
         SELECT * FROM shifts
         WHERE id = ${shiftId}
-          AND (SELECT count(*) FROM day_lock) >= 0
+          AND EXISTS (
+            SELECT 1 FROM day_lock WHERE station_id = ${stationId} AND ${dayAdmitsWrite}
+          )
         FOR UPDATE
       )
       SELECT

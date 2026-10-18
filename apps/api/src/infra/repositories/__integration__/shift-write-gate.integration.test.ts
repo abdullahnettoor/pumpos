@@ -34,7 +34,15 @@ const SHIFT = '00000000-0000-0000-0000-00000000e108';
 const DU = '00000000-0000-0000-0000-00000000e109';
 const MISSING = '00000000-0000-0000-0000-00000000e1ff';
 
-const TARGET = { organizationId: ORG, stationId: STATION, businessDayId: DAY, shiftId: SHIFT };
+const OTHER_STATION = '00000000-0000-0000-0000-00000000e10a';
+
+const TARGET = {
+  organizationId: ORG,
+  stationId: STATION,
+  businessDayId: DAY,
+  shiftId: SHIFT,
+  writableDayStatuses: ['OPEN'] as const,
+};
 
 const BOOTSTRAP = `
   do $$ begin
@@ -312,7 +320,10 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
       const [row] = (await tx.execute(dsql`select pg_backend_pid() as pid`)) as unknown as [
         { pid: number },
       ];
-      const locking = new DrizzleShiftWriteGateReader(tx).lockForWrite(TARGET);
+      const locking = new DrizzleShiftWriteGateReader(tx).lockForWrite({
+        ...TARGET,
+        writableDayStatuses: ['OPEN', 'CLOSED'],
+      });
       await waitUntilBlocked(row.pid);
       release();
       return locking;
@@ -337,15 +348,14 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
       async (locked) => {
         expect(await isLocked('stations', STATION)).toBe(false);
         expect(await isLocked('business_days', DAY)).toBe(false);
-        // The Shift re-read locks by id alone, exactly as ShiftRepository.findById.
-        expect(await isLocked('shifts', SHIFT)).toBe(true);
-        expect(locked.businessDay).toBeNull();
-        expect(locked.shift?.id).toBe(SHIFT);
+        // No Business Day in the organization, so the write is refused before the Shift lock.
+        expect(await isLocked('shifts', SHIFT)).toBe(false);
+        expect(locked).toEqual({ shift: null, businessDay: null });
       },
     );
   });
 
-  it('still takes the later locks when an earlier row is absent', async () => {
+  it('locks the Day without a Station row, but never the Shift without a qualifying Day', async () => {
     await inGateTransaction(
       (tx) =>
         new DrizzleShiftWriteGateReader(tx).lockForWrite({
@@ -354,7 +364,7 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
         }),
       async (locked) => {
         expect(await isLocked('business_days', DAY)).toBe(true);
-        expect(await isLocked('shifts', SHIFT)).toBe(true);
+        expect(await isLocked('shifts', SHIFT)).toBe(false);
         expect(locked.businessDay?.id).toBe(DAY);
       },
     );
@@ -366,9 +376,86 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
         }),
       async (locked) => {
         expect(await isLocked('stations', STATION)).toBe(true);
-        expect(await isLocked('shifts', SHIFT)).toBe(true);
-        expect(locked.businessDay).toBeNull();
+        expect(await isLocked('shifts', SHIFT)).toBe(false);
+        expect(locked).toEqual({ shift: null, businessDay: null });
       },
     );
+  });
+
+  async function setDayStatus(status: 'OPEN' | 'CLOSED') {
+    await db.update(schema.businessDays).set({ status }).where(eq(schema.businessDays.id, DAY));
+  }
+
+  it('locks the Shift under a closed day only when a closed day admits the write', async () => {
+    await setDayStatus('CLOSED');
+    try {
+      await inGateTransaction(
+        (tx) => new DrizzleShiftWriteGateReader(tx).lockForWrite(TARGET),
+        async (locked) => {
+          expect(await isLocked('stations', STATION)).toBe(true);
+          expect(await isLocked('business_days', DAY)).toBe(true);
+          expect(await isLocked('shifts', SHIFT)).toBe(false);
+          expect(locked.businessDay?.status).toBe('CLOSED');
+          expect(locked.shift).toBeNull();
+        },
+      );
+      await inGateTransaction(
+        (tx) =>
+          new DrizzleShiftWriteGateReader(tx).lockForWrite({
+            ...TARGET,
+            writableDayStatuses: ['OPEN', 'CLOSED'],
+          }),
+        async (locked) => {
+          expect(await isLocked('shifts', SHIFT)).toBe(true);
+          expect(locked.shift?.id).toBe(SHIFT);
+        },
+      );
+    } finally {
+      await setDayStatus('OPEN');
+    }
+  });
+
+  it('does not lock the Shift when the locked day belongs to another station', async () => {
+    await inGateTransaction(
+      (tx) =>
+        new DrizzleShiftWriteGateReader(tx).lockForWrite({ ...TARGET, stationId: OTHER_STATION }),
+      async (locked) => {
+        expect(await isLocked('business_days', DAY)).toBe(true);
+        expect(await isLocked('shifts', SHIFT)).toBe(false);
+        expect(locked.shift).toBeNull();
+      },
+    );
+  });
+
+  it('leaves the Shift unlocked when the day it waited on was closed in the meantime', async () => {
+    let release!: () => void;
+    const released = new Promise<void>((r) => (release = r));
+    let ready!: () => void;
+    const blockerReady = new Promise<void>((r) => (ready = r));
+    const closing = blocker.begin(async (t) => {
+      await t`select 1 from stations where id = ${STATION} for update`;
+      await t`update business_days set status = 'CLOSED' where id = ${DAY}`;
+      ready();
+      await released;
+    });
+    await blockerReady;
+
+    try {
+      await gateDb.transaction(async (tx) => {
+        const [row] = (await tx.execute(dsql`select pg_backend_pid() as pid`)) as unknown as [
+          { pid: number },
+        ];
+        const locking = new DrizzleShiftWriteGateReader(tx).lockForWrite(TARGET);
+        await waitUntilBlocked(row.pid);
+        release();
+        await closing;
+        const locked = await locking;
+        expect(locked.businessDay?.status).toBe('CLOSED');
+        expect(locked.shift).toBeNull();
+        expect(await isLocked('shifts', SHIFT)).toBe(false);
+      });
+    } finally {
+      await setDayStatus('OPEN');
+    }
   });
 });
