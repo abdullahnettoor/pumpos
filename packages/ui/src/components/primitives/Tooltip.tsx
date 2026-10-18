@@ -6,8 +6,10 @@ export interface TooltipProps {
   /** Text shown in the floating bubble. */
   content: React.ReactNode;
   /** Preferred side; it flips when there is no room there. */
-  placement?: 'top' | 'bottom';
+  placement?: 'top' | 'bottom' | 'left' | 'right';
   children: React.ReactElement;
+  /** Keeps the trigger mounted (so it keeps focus) but never shows the bubble. */
+  disabled?: boolean;
 }
 
 /** Hover delay before a tooltip shows, in ms. Focus shows it at once. */
@@ -33,6 +35,29 @@ export const TooltipProvider: React.FC<{ children: React.ReactNode }> = ({ child
 export const TOOLTIP_BUBBLE =
   'z-[1100] rounded-[6px] bg-ink-strong text-on-neutral shadow-(--shadow-tooltip)';
 
+const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+
+/**
+ * Radix's Trigger opens only through onPointerMove and onFocus (each wrapped in
+ * composeEventHandlers, which skips Radix's handler when ours calls
+ * preventDefault). onPointerDown only closes, so it is left alone and the
+ * trigger keeps normal pointer focus. Controlled `open={false}` alone is not
+ * enough: Radix still calls the provider's onOpen and dispatches `tooltip.open`.
+ */
+const SUPPRESS_OPEN = {
+  onPointerMove: prevent,
+  onFocus: prevent,
+};
+
+const isKeyboardFocused = (el: Element | null): boolean => {
+  if (!el) return false;
+  try {
+    return el.matches(':focus-visible');
+  } catch {
+    return document.activeElement === el;
+  }
+};
+
 /**
  * Hover / focus tooltip. Wrap a single interactive element; the bubble shows
  * above (default) or below on hover and keyboard focus, and is wired through
@@ -43,21 +68,48 @@ export const TOOLTIP_BUBBLE =
  * handling, so a trigger at the window's edge keeps its bubble on screen.
  * Needs the app's `TooltipProvider`.
  */
-export const Tooltip: React.FC<TooltipProps> = ({ content, placement = 'top', children }) => (
-  <RadixTooltip.Root>
-    <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
-    <RadixTooltip.Portal>
-      <RadixTooltip.Content
-        side={placement}
-        sideOffset={6}
-        collisionPadding={8}
-        className={cn(
-          TOOLTIP_BUBBLE,
-          'pointer-events-none whitespace-nowrap px-2 py-1 text-[12px] font-medium leading-[1.4]',
-        )}
-      >
-        {content}
-      </RadixTooltip.Content>
-    </RadixTooltip.Portal>
-  </RadixTooltip.Root>
-);
+export const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  placement = 'top',
+  children,
+  disabled = false,
+}) => {
+  const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+
+  if (disabled && open) setOpen(false);
+
+  React.useEffect(() => {
+    if (!disabled && isKeyboardFocused(triggerRef.current)) setOpen(true);
+  }, [disabled]);
+
+  // Residual: a hover open whose 150ms delay was already running when `disabled`
+  // flipped may still fire Radix's `tooltip.open` and dismiss another open tooltip.
+  return (
+    <RadixTooltip.Root
+      open={open && !disabled}
+      onOpenChange={(next) => {
+        if (!disabled || !next) setOpen(next);
+      }}
+    >
+      <RadixTooltip.Trigger asChild ref={triggerRef} {...(disabled ? SUPPRESS_OPEN : undefined)}>
+        {children}
+      </RadixTooltip.Trigger>
+      {!disabled && (
+        <RadixTooltip.Portal>
+          <RadixTooltip.Content
+            side={placement}
+            sideOffset={6}
+            collisionPadding={8}
+            className={cn(
+              TOOLTIP_BUBBLE,
+              'pointer-events-none whitespace-nowrap px-2 py-1 text-[12px] font-medium leading-[1.4]',
+            )}
+          >
+            {content}
+          </RadixTooltip.Content>
+        </RadixTooltip.Portal>
+      )}
+    </RadixTooltip.Root>
+  );
+};
