@@ -96,6 +96,22 @@ const DAY_ROW = {
   updatedAt: NOW,
 };
 
+// The gate's lock statement renders both rows as jsonb (ISO strings, numerics as text).
+const GATE_LOCK_ROW = {
+  business_day: {
+    ...DAY_ROW,
+    openedAt: NOW.toISOString(),
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+  },
+  shift: {
+    ...SHIFT_ROW,
+    openedAt: NOW.toISOString(),
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+  },
+};
+
 // A "typical" DU: 4 nozzles, 1 terminal.
 const CONTEXT_ROW = {
   attendant: {
@@ -229,18 +245,13 @@ describe('POST /shifts/handovers statement budget (#231)', () => {
     [],
     // route auth: the shift row
     [SHIFT_ROW],
-    // resolveShiftBusinessDayWrite: discover shift, day, station+day row locks,
-    // day re-read, shift re-read (core lock discipline — unchanged by #231)
-    [SHIFT_ROW],
-    [DAY_ROW],
-    [{ id: 'st-1' }],
-    [{ id: DAY_ID }],
-    [DAY_ROW],
-    [SHIFT_ROW],
+    // shift write gate discovery: the shift joined to its business day (#248)
+    [{ shift: SHIFT_ROW, businessDay: DAY_ROW }],
   ];
 
   const executeQueue = () => [
     [], // station-inventory advisory lock
+    [GATE_LOCK_ROW], // shift write gate: Station -> Day -> Shift row locks + re-read (#248)
     [CONTEXT_ROW], // consolidated handover context (was 8 selects)
     [], // handover-key advisory lock
     [UPSERT_ROW], // xmax upsert (was select + upsert)
@@ -258,12 +269,13 @@ describe('POST /shifts/handovers statement budget (#231)', () => {
     expect(body.data.terminalEntries).toHaveLength(1);
 
     // 4 access-policy reads + 1 auth read pre-transaction; inside the
-    // transaction: 6 lock-discipline reads (core Station → Day → Shift
-    // discipline, unchanged), 6 consolidated executes, and the events append —
-    // a fixed 13 statements where the old path spent ~18-25.
+    // transaction: the shift write gate's unlocked discovery select and its
+    // single Station → Day → Shift lock statement (#248, was 6 selects), 6
+    // consolidated executes, and the events append — a fixed 9 statements
+    // where the old path spent ~18-25.
     expect(counter).toEqual({
-      selects: 11,
-      executes: 6,
+      selects: 6,
+      executes: 7,
       inserts: 1, // events outbox
       updates: 0,
       deletes: 0,
@@ -285,6 +297,7 @@ describe('POST /shifts/handovers statement budget (#231)', () => {
     }));
     const { db, counter } = makeFakeDb(selectQueue(), [
       [],
+      [GATE_LOCK_ROW],
       [{ ...CONTEXT_ROW, reading_rows: readings }],
       [],
       [UPSERT_ROW],
@@ -293,6 +306,6 @@ describe('POST /shifts/handovers statement budget (#231)', () => {
     ]);
     const res = await request(db, 10);
     expect(res.status).toBe(200);
-    expect(counter).toEqual({ selects: 11, executes: 6, inserts: 1, updates: 0, deletes: 0 });
+    expect(counter).toEqual({ selects: 6, executes: 7, inserts: 1, updates: 0, deletes: 0 });
   });
 });

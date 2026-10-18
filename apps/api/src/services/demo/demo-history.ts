@@ -31,6 +31,7 @@ import {
   DrizzleNozzleReadingRepository,
   DrizzleShiftRepository,
   DrizzleShiftSummaryWriter,
+  DrizzleShiftWriteGateReader,
   DrizzleStaffDirectory,
   DrizzleFuelNameReader,
   DrizzleStockMovementWriter,
@@ -307,6 +308,7 @@ export async function seedDemoHistory(
 
   const shifts = new DrizzleShiftRepository(tx);
   const businessDays = new DrizzleBusinessDayRepository(tx);
+  const shiftWriteGate = new DrizzleShiftWriteGateReader(tx);
   const readings = new DrizzleNozzleReadingRepository(tx);
 
   // Fuel prices take effect before the first historical shift.
@@ -378,6 +380,7 @@ export async function seedDemoHistory(
     context,
     shifts,
     businessDays,
+    shiftWriteGate,
     stockMovements,
     managerId: manager.id,
     accountantId: accountant.id,
@@ -405,6 +408,7 @@ export async function seedDemoHistory(
         customers: new DrizzleCustomerRepository(tx),
         shifts,
         businessDays,
+        shiftWriteGate,
         events,
       }).execute(
         {
@@ -458,6 +462,7 @@ export async function seedDemoHistory(
       await new RecordHandover({
         shifts,
         businessDays,
+        shiftWriteGate,
         context: new DrizzleHandoverContextReader(tx),
         handovers: new DrizzleHandoverRepository(tx),
         events,

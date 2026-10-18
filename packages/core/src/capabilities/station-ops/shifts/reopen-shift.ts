@@ -8,17 +8,19 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
-import type { BusinessDayWriteRepository } from '../business-days/index.js';
+import type { Shift, ShiftSummaryWriter } from './ports.js';
+import {
+  lockShiftWriteParents,
+  lockedShiftOf,
+  type ShiftWriteDeps,
+} from './resolve-shift-write.js';
 import type { StockVarianceRepository } from '../../inventory/index.js';
 
 export interface ReopenShiftCommand {
   shiftId: string;
 }
 
-export interface ReopenShiftDeps {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+export interface ReopenShiftDeps extends ShiftWriteDeps {
   summaries: ShiftSummaryWriter;
   stockVariances: StockVarianceRepository;
   events: EventPublisher;
@@ -30,18 +32,14 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
 
   async execute(input: ReopenShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
-    const discoveredShift = await this.deps.shifts.findByIdWithoutLock(input.shiftId);
-    if (!discoveredShift || discoveredShift.organizationId !== ctx.organizationId)
-      return err(notFoundError('Shift', input.shiftId));
-
-    await this.deps.businessDays.lockStation(ctx.organizationId, discoveredShift.stationId);
-    await this.deps.businessDays.lockById(ctx.organizationId, discoveredShift.businessDayId);
-
-    // Re-read under the canonical Station -> Business Day -> Shift lock order.
-    const shift = await this.deps.shifts.findById(input.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId)
-      return err(notFoundError('Shift', input.shiftId));
-    const businessDay = await this.deps.businessDays.findById(shift.businessDayId);
+    const gate = this.deps.shiftWriteGate;
+    // Lock the Shift whatever its day's status; the closed-day refusal is below.
+    const parents = await lockShiftWriteParents(gate, ctx, input.shiftId, ['OPEN', 'CLOSED']);
+    if (!parents.success) return parents;
+    const locked = lockedShiftOf(parents.data, ctx, input.shiftId);
+    if (!locked.success) return locked;
+    const shift = locked.data;
+    const businessDay = parents.data.locked.businessDay;
     if (
       !businessDay ||
       businessDay.organizationId !== ctx.organizationId ||
@@ -91,6 +89,7 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
     const nowIso = ctx.clock.now().toISOString();
     const reopened: Shift = {
       ...shift,
+      openingCash: await gate.readOpeningCash(shift.id),
       status: 'OPEN',
       closedBy: null,
       closedAt: null,

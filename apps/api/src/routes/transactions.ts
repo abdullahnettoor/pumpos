@@ -97,6 +97,7 @@ import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
+  DrizzleShiftWriteGateReader,
 } from '../infra/repositories/station-ops-repositories.js';
 import {
   DrizzleCustomerLedgerReader,
@@ -1568,6 +1569,7 @@ transactionsRouter.post(
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
+          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
           events,
         }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success)
@@ -1585,6 +1587,7 @@ transactionsRouter.post(
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
+          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
           events,
         }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success) {
@@ -1744,6 +1747,7 @@ transactionsRouter.post(
         stations: new DrizzleStationRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         docNumbers,
         events,
       }).execute(body, ctx);
@@ -1917,6 +1921,7 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       customers: new DrizzleCustomerRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
       products: new DrizzleProductRepository(tx),
       docNumbers,
       events,
@@ -2923,6 +2928,7 @@ transactionsRouter.post(
         products: new DrizzleProductRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         docNumbers: new TimestampDocumentNumberGenerator(),
         events,
       }).execute(
@@ -3372,6 +3378,7 @@ transactionsRouter.post(
         tanks: new DrizzleTankRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         events,
         decantationMeasurement: createDecantationMeasurement(tx, events),
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock }));

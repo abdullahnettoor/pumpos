@@ -9,8 +9,11 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import {
+  resolveFinancialAnchor,
+  type ShiftRepository,
+  type ShiftWriteDeps,
+} from '../../station-ops/shifts/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 
@@ -49,11 +52,9 @@ const schema = z.object({
     .optional(),
 });
 
-export interface RecordCreditSaleDeps {
+export interface RecordCreditSaleDeps extends ShiftWriteDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -247,11 +248,9 @@ const omcSchema = z.object({
     .optional(),
 });
 
-export interface RecordOmcCardSaleDeps {
+export interface RecordOmcCardSaleDeps extends ShiftWriteDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 

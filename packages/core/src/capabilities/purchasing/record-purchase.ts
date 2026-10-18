@@ -18,8 +18,7 @@ import type {
   UseCase,
 } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import type { StationRepository } from '../station-setup/stations/index.js';
@@ -104,7 +103,7 @@ const schema = z
     },
   );
 
-export interface RecordPurchaseDeps {
+export interface RecordPurchaseDeps extends ShiftWriteDeps {
   purchases: PurchaseRepository;
   purchaseItems: PurchaseItemRepository;
   stock: StockMovementRepository;
@@ -112,8 +111,6 @@ export interface RecordPurchaseDeps {
   suppliers: SupplierRepository;
   products: ProductRepository;
   stations: StationRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }

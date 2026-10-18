@@ -8,17 +8,14 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { Shift, ShiftRepository } from './ports.js';
-import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import type { Shift } from './ports.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from './resolve-shift-write.js';
 
 export interface LockShiftCommand {
   shiftId: string;
 }
 
-export interface LockShiftDeps {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+export interface LockShiftDeps extends ShiftWriteDeps {
   events: EventPublisher;
 }
 
@@ -28,13 +25,8 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
 
   async execute(input: LockShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
-    const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
-      ctx,
-      input.shiftId,
-      'FINANCIAL',
-    );
+    const gate = this.deps.shiftWriteGate;
+    const eligibility = await resolveShiftBusinessDayWrite(gate, ctx, input.shiftId, 'FINANCIAL');
     if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'CLOSED')
@@ -55,7 +47,13 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
     }
 
     const nowIso = ctx.clock.now().toISOString();
-    const locked: Shift = { ...shift, status: 'LOCKED', lockedAt: nowIso, updatedAt: nowIso };
+    const locked: Shift = {
+      ...shift,
+      openingCash: await gate.readOpeningCash(shift.id),
+      status: 'LOCKED',
+      lockedAt: nowIso,
+      updatedAt: nowIso,
+    };
     await this.deps.shifts.save(locked);
 
     await this.deps.events.publish([

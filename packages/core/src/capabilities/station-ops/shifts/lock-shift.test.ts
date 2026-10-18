@@ -9,6 +9,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import { LockShift } from './lock-shift.js';
 import type { Shift, ShiftRepository } from './ports.js';
+import { withRepositoryShiftWriteGate } from './__tests__/repository-shift-write-gate.js';
 
 const shift: Shift = {
   id: 'shift-1',
@@ -91,11 +92,13 @@ const context: ExecutionContext = {
 describe('LockShift', () => {
   it('cannot lock a shift while its Business Day is open', async () => {
     const shifts = new ShiftRepo();
-    const result = await new LockShift({
-      shifts,
-      businessDays: new DayRepo('OPEN'),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: shift.id }, context);
+    const result = await new LockShift(
+      withRepositoryShiftWriteGate({
+        shifts,
+        businessDays: new DayRepo('OPEN'),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute({ shiftId: shift.id }, context);
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
@@ -104,13 +107,47 @@ describe('LockShift', () => {
 
   it('locks a closed shift after its Business Day closes', async () => {
     const shifts = new ShiftRepo();
-    const result = await new LockShift({
-      shifts,
-      businessDays: new DayRepo('CLOSED'),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ shiftId: shift.id }, context);
+    const result = await new LockShift(
+      withRepositoryShiftWriteGate({
+        shifts,
+        businessDays: new DayRepo('CLOSED'),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute({ shiftId: shift.id }, context);
 
     expect(result.success).toBe(true);
     expect(shifts.saved).toMatchObject({ status: 'LOCKED' });
+  });
+});
+
+describe('LockShift Opening Floats (#248)', () => {
+  it('returns the Opening Floats read after the gate took its locks', async () => {
+    const { openingCash: _stale, ...lockedShift } = shift;
+    const closedDay = await new DayRepo('CLOSED').findById();
+    const calls: string[] = [];
+    const result = await new LockShift(
+      withRepositoryShiftWriteGate({
+        shifts: new ShiftRepo(),
+        businessDays: new DayRepo('CLOSED'),
+        shiftWriteGate: {
+          async discover() {
+            return { shift: lockedShift, businessDay: closedDay };
+          },
+          async lockForWrite() {
+            calls.push('lock');
+            return { shift: lockedShift, businessDay: closedDay };
+          },
+          async readOpeningCash(shiftId) {
+            calls.push(`opening-cash:${shiftId}`);
+            return '750.00';
+          },
+        },
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute({ shiftId: shift.id }, context);
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.openingCash).toBe('750.00');
+    expect(calls).toEqual(['lock', 'opening-cash:shift-1']);
   });
 });

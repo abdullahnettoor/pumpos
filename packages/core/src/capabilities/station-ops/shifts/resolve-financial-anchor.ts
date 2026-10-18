@@ -3,9 +3,8 @@ import { ok } from '../../../kernel/index.js';
 import type { ExecutionContext, Result } from '../../../kernel/index.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { resolveBusinessDayWrite } from '../business-days/index.js';
-import type { BusinessDayWriteKind, BusinessDayWriteRepository } from '../business-days/index.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
-import type { ShiftRepository } from './ports.js';
+import type { BusinessDayWriteKind } from '../business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from './resolve-shift-write.js';
 
 /** Where a financial/stock record is anchored, plus its late-entry markers. */
 export interface FinancialAnchor {
@@ -47,7 +46,7 @@ export interface FinancialAnchorOptions {
  * non-drawer writes on a CLOSED day are allowed and flagged as late entries.
  */
 export async function resolveFinancialAnchor(
-  deps: { shifts: ShiftRepository; businessDays: BusinessDayWriteRepository },
+  deps: ShiftWriteDeps,
   ctx: ExecutionContext,
   cmd: FinancialAnchorCommand,
   opts: FinancialAnchorOptions = {},
@@ -58,8 +57,7 @@ export async function resolveFinancialAnchor(
 
   if (cmd.shiftId) {
     const eligibility = await resolveShiftBusinessDayWrite(
-      deps.shifts,
-      deps.businessDays,
+      deps.shiftWriteGate,
       ctx,
       cmd.shiftId,
       kind,

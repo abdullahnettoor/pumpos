@@ -14,6 +14,7 @@ import { RecordStockCount } from '../record-stock-count.js';
 import { DecantationMeasurementService } from './measurement.js';
 import { RecordDecantation } from './record-decantation.js';
 import type { Decantation, DecantationPurchaseLink } from './ports.js';
+import { repositoryShiftWriteGate } from '../../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 const mkDay = (id: string, date: string, status: 'OPEN' | 'CLOSED'): BusinessDay => ({
   id,
@@ -126,14 +127,16 @@ function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number 
     events,
     measurement: service,
   });
+  const shifts = {
+    findOpenByStation: async () => (opts.openShift ? ({ id: 'sh-1' } as never) : null),
+  } as never;
   const count = new RecordStockCount({
     movements: movementsRepo,
     variances: { save: async (v) => void variances.push(v), existsForShift: async () => false },
     tanks: { findByIdForUpdate: async () => tank } as never,
-    shifts: {
-      findOpenByStation: async () => (opts.openShift ? ({ id: 'sh-1' } as never) : null),
-    } as never,
+    shifts,
     businessDays,
+    shiftWriteGate: repositoryShiftWriteGate({ shifts, businessDays }),
     events,
     decantationMeasurement: service,
   });

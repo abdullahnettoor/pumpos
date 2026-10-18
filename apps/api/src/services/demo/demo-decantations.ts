@@ -64,6 +64,7 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
     context,
     shifts,
     businessDays,
+    shiftWriteGate,
     stockMovements,
     tanksOf,
     bookOf,
@@ -96,6 +97,7 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
         stations: new DrizzleStationRepository(tx),
         shifts,
         businessDays,
+        shiftWriteGate,
         docNumbers,
         events,
       }).execute(
@@ -220,6 +222,7 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
         tanks: new DrizzleTankRepository(tx),
         shifts,
         businessDays,
+        shiftWriteGate,
         events,
         decantationMeasurement: createDecantationMeasurement(tx, events),
       }).execute({ stationId, tankId, actualQuantity, reason }, context(at, managerId)),

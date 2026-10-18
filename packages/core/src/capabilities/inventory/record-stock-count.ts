@@ -16,11 +16,8 @@ import type {
   Result,
   UseCase,
 } from '../../kernel/index.js';
-import {
-  resolveBusinessDayWrite,
-  type BusinessDayWriteRepository,
-} from '../station-ops/business-days/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite } from '../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { TankRepository } from '../station-setup/tanks/index.js';
 import type { TankDipMeasurement } from './decantation/measurement.js';
 import type {
@@ -65,12 +62,10 @@ const schema = z
     }
   });
 
-export interface RecordStockCountDeps {
+export interface RecordStockCountDeps extends ShiftWriteDeps {
   movements: StockMovementRepository;
   variances: StockVarianceRepository;
   tanks: TankRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
   /** #468: resolves pending Decantation tank lines from a tank dip. */
   decantationMeasurement?: TankDipMeasurement;
@@ -131,8 +126,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     let attributedDay = null;
     if (cmd.shiftId) {
       const eligibility = await resolveShiftBusinessDayWrite(
-        this.deps.shifts,
-        this.deps.businessDays,
+        this.deps.shiftWriteGate,
         ctx,
         cmd.shiftId,
         'STOCK',

@@ -26,6 +26,7 @@ import type {
   BusinessDay,
   BusinessDayWriteRepository,
 } from '../station-ops/business-days/index.js';
+import { withRepositoryShiftWriteGate } from '../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 class PurchaseRepo implements PurchaseRepository {
   readonly rows: Purchase[] = [];
@@ -252,19 +253,23 @@ describe('RecordPurchase', () => {
     const stock = new StockRepo();
     const supplierTxns = new SupplierTxnRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordPurchase({
-      purchases,
-      purchaseItems: items,
-      stock,
-      supplierTxns,
-      suppliers: new SupplierRepo([supplier()]),
-      products: new ProductRepo([lubeProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases,
+        purchaseItems: items,
+        stock,
+        supplierTxns,
+        suppliers: new SupplierRepo([supplier()]),
+        products: new ProductRepo([lubeProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([
+          { ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' },
+        ]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         productId: 'lube-1',
@@ -289,19 +294,21 @@ describe('RecordPurchase', () => {
     const stock = new StockRepo();
     const supplierTxns = new SupplierTxnRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordPurchase({
-      purchases,
-      stock,
-      supplierTxns,
-      suppliers: new SupplierRepo([supplier()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([fuelProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases,
+        stock,
+        supplierTxns,
+        suppliers: new SupplierRepo([supplier()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products: new ProductRepo([fuelProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         lines: [{ productId: 'petrol-1', quantity: 5000, unitPrice: 90, invoiceDensity: 842.25 }],
@@ -330,19 +337,21 @@ describe('RecordPurchase', () => {
   });
 
   it('rejects a Fuel Purchase with a future Entry Date', async () => {
-    const result = await new RecordPurchase({
-      purchases: new PurchaseRepo(),
-      purchaseItems: new PurchaseItemRepo(),
-      stock: new StockRepo(),
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      products: new ProductRepo([fuelProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases: new PurchaseRepo(),
+        purchaseItems: new PurchaseItemRepo(),
+        stock: new StockRepo(),
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        products: new ProductRepo([fuelProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         stationId: 'st-1',
@@ -376,19 +385,21 @@ describe('RecordPurchase', () => {
   };
   const twoDays = () => [{ ...bday(), id: 'bd-8', businessDate: '2026-03-14' }, bday()];
   const recordWith = (cmd: Record<string, unknown>, context: ExecutionContext) =>
-    new RecordPurchase({
-      purchases: new PurchaseRepo(),
-      stock: new StockRepo(),
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([fuelProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([yesterdayShift]),
-      businessDays: new BdRepo(twoDays()),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases: new PurchaseRepo(),
+        stock: new StockRepo(),
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products: new ProductRepo([fuelProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([yesterdayShift]),
+        businessDays: new BdRepo(twoDays()),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         productId: 'petrol-1',
@@ -431,19 +442,21 @@ describe('RecordPurchase', () => {
   it('updates product cost basis as a weighted average of stock and purchase', async () => {
     const products = new ProductRepo([{ ...lubeProduct(), costBasis: '88' }]);
     const stock = new StockRepo(10000); // 10,000 L already on hand @ ₹88
-    const result = await new RecordPurchase({
-      purchases: new PurchaseRepo(),
-      stock,
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products,
-      stations: new StationRepo([station()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases: new PurchaseRepo(),
+        stock,
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products,
+        stations: new StationRepo([station()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       // Buy 5,000 L @ ₹90.50 → (10000·88 + 5000·90.50) / 15000 = 88.8333
       {
         supplierId: 'sup-1',
@@ -461,19 +474,21 @@ describe('RecordPurchase', () => {
   it('sets product cost basis to purchase price when there is no prior stock', async () => {
     const products = new ProductRepo([{ ...lubeProduct(), costBasis: '0' }]);
     const stock = new StockRepo(0);
-    const result = await new RecordPurchase({
-      purchases: new PurchaseRepo(),
-      stock,
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products,
-      stations: new StationRepo([station()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases: new PurchaseRepo(),
+        stock,
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products,
+        stations: new StationRepo([station()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         productId: 'lube-1',
@@ -488,19 +503,21 @@ describe('RecordPurchase', () => {
   });
 
   it('rejects product stock allocations that do not sum to the quantity', async () => {
-    const result = await new RecordPurchase({
-      purchases: new PurchaseRepo(),
-      stock: new StockRepo(),
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([lubeProduct()]),
-      stations: new StationRepo([station()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases: new PurchaseRepo(),
+        stock: new StockRepo(),
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products: new ProductRepo([lubeProduct()]),
+        stations: new StationRepo([station()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         productId: 'lube-1',
@@ -520,19 +537,21 @@ describe('RecordPurchase', () => {
     const stock = new StockRepo();
     const supplierTxns = new SupplierTxnRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordPurchase({
-      purchases,
-      stock,
-      supplierTxns,
-      suppliers: new SupplierRepo([supplier()]),
-      purchaseItems: items,
-      products: new ProductRepo([fuelProduct(), lubeProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases,
+        stock,
+        supplierTxns,
+        suppliers: new SupplierRepo([supplier()]),
+        purchaseItems: items,
+        products: new ProductRepo([fuelProduct(), lubeProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         invoiceNumber: 'INV-2',
@@ -557,19 +576,21 @@ describe('RecordPurchase', () => {
   it('records a product-only invoice on the Business Day and moves stock', async () => {
     const purchases = new PurchaseRepo();
     const stock = new StockRepo();
-    const result = await new RecordPurchase({
-      purchases,
-      stock,
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([lubeProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases,
+        stock,
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products: new ProductRepo([lubeProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         stationId: 'st-1',
@@ -590,19 +611,21 @@ describe('RecordPurchase', () => {
   it('keeps product purchases on the Business Day and adds product stock', async () => {
     const purchases = new PurchaseRepo();
     const stock = new StockRepo();
-    const result = await new RecordPurchase({
-      purchases,
-      stock,
-      supplierTxns: new SupplierTxnRepo(),
-      suppliers: new SupplierRepo([supplier()]),
-      purchaseItems: new PurchaseItemRepo(),
-      products: new ProductRepo([lubeProduct()]),
-      stations: new StationRepo([station()]),
-      shifts: new ShiftRepo([]),
-      businessDays: new BdRepo([bday()]),
-      docNumbers,
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordPurchase(
+      withRepositoryShiftWriteGate({
+        purchases,
+        stock,
+        supplierTxns: new SupplierTxnRepo(),
+        suppliers: new SupplierRepo([supplier()]),
+        purchaseItems: new PurchaseItemRepo(),
+        products: new ProductRepo([lubeProduct()]),
+        stations: new StationRepo([station()]),
+        shifts: new ShiftRepo([]),
+        businessDays: new BdRepo([bday()]),
+        docNumbers,
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       {
         supplierId: 'sup-1',
         stationId: 'st-1',
