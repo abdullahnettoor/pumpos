@@ -6,6 +6,7 @@ import { Icon, type IconName } from '../pump-ds/icon/index.js';
 import { guardLeave } from '../pump-ds/form/unsavedChanges.js';
 import { can, type OperatorRole, type PermissionId, Station } from '@pump/shared';
 import { principalFor } from '../access/effectivePrincipal.js';
+import { Tooltip } from './primitives/Tooltip.js';
 import { useContainerWidth } from '../hooks/useContainerWidth.js';
 import { useStationBusinessDate } from '../hooks/useStationClock.js';
 import { useSidebarBadges, type SidebarBadges } from '../query/useSidebarBadges.js';
@@ -70,7 +71,11 @@ export interface AppShellProps {
   checkingUpdates?: boolean;
 }
 
-/** Below this app (shell) width the sidebar becomes a 60px icon rail on its own. */
+/**
+ * Below this app (shell) width the sidebar becomes a 60px icon rail on its own;
+ * Expand then opens the full sidebar as an overlay above the content instead of
+ * pushing it.
+ */
 export const RAIL_BREAKPOINT = 1200;
 export const SIDEBAR_COLLAPSED_KEY = 'pump.sidebar.collapsed';
 
@@ -161,6 +166,12 @@ const BADGE_CHIP: Record<BadgeTone, string> = {
   danger: 'bg-danger-bg text-danger-fg',
 };
 
+/** Rail tooltip text: the nav label, plus the badge text when one is showing. */
+function navTooltip(label: string, path: string, b: SidebarBadges): string {
+  const badge = NAV_BADGES[path]?.read(b);
+  return badge ? `${label} · ${badge.label}` : label;
+}
+
 /** The live badge for a nav item, or null. Dot on a rail, count/dot beside the label. */
 function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.ReactNode {
   const entry = NAV_BADGES[path];
@@ -223,13 +234,17 @@ export const AppShell: React.FC<AppShellProps> = ({
   checkingUpdates,
 }) => {
   // Expanded by default. The Collapse control at the sidebar foot toggles an
-  // icon rail and the choice is remembered per device; below RAIL_BREAKPOINT
-  // the rail is forced regardless (without overwriting the saved choice).
+  // icon rail and the choice is remembered per device. Below RAIL_BREAKPOINT
+  // the rail is forced; the same control then opens the full sidebar as an
+  // overlay (`overlayOpen`), which never touches the saved choice.
   const [userCollapsed, setUserCollapsed] = useState(readCollapsed);
+  const [overlayOpen, setOverlayOpen] = useState(false);
   const [shellRef, shellWidth] = useContainerWidth<HTMLDivElement>();
   // 0 = not measured yet: stay expanded rather than flash a rail.
   const narrow = shellWidth > 0 && shellWidth < RAIL_BREAKPOINT;
-  const collapsed = userCollapsed || narrow;
+  if (!narrow && overlayOpen) setOverlayOpen(false);
+  const showOverlay = narrow && overlayOpen;
+  const collapsed = narrow ? !overlayOpen : userCollapsed;
   const toggleCollapsed = () => {
     const next = !userCollapsed;
     setUserCollapsed(next);
@@ -239,24 +254,45 @@ export const AppShell: React.FC<AppShellProps> = ({
       /* storage unavailable: the choice just won't persist */
     }
   };
+  const toggleSidebar = () => (narrow ? setOverlayOpen((open) => !open) : toggleCollapsed());
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const footToggleRef = useRef<HTMLButtonElement>(null);
 
   // The shortcut reads the latest toggle without re-binding on every render.
-  const toggleRef = useRef(toggleCollapsed);
-  const narrowRef = useRef(narrow);
+  const toggleRef = useRef(toggleSidebar);
   useEffect(() => {
-    toggleRef.current = toggleCollapsed;
-    narrowRef.current = narrow;
+    toggleRef.current = toggleSidebar;
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isSidebarShortcut(e)) return;
       e.preventDefault();
-      // Below the rail breakpoint the rail is forced: nothing to toggle.
-      if (!narrowRef.current) toggleRef.current();
+      toggleRef.current();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
+
+  // The overlay closes on Esc (unless a drawer or dialog already took it) and
+  // on a press outside the panel.
+  useEffect(() => {
+    if (!showOverlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      setOverlayOpen(false);
+      footToggleRef.current?.focus();
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) setOverlayOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [showOverlay]);
 
   const businessDate = useStationBusinessDate(selectedStation?.settings);
   const badges = useSidebarBadges(
@@ -347,80 +383,123 @@ export const AppShell: React.FC<AppShellProps> = ({
         <aside
           className="no-print relative"
           style={{
-            width: collapsed ? '60px' : '220px',
-            backgroundColor: 'var(--bg-surface-alt)',
-            borderRight: '1px solid var(--border-soft)',
-            display: 'flex',
-            flexDirection: 'column',
+            // A narrow shell always reserves the 60px rail; the overlay floats over it.
+            width: narrow || collapsed ? '60px' : '220px',
             transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
             flexShrink: 0,
           }}
         >
-          {/* Navigation links — grouped, collapsible-friendly */}
-          <nav id="app-sidebar-nav" aria-label="Main" className="flex-1 overflow-y-auto px-2 py-3">
-            {groupedNav.map((group, gi) => (
-              <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
-                {!collapsed && group.heading && (
-                  <div className="px-2 pb-1.5 font-mono text-[12px] font-medium uppercase tracking-wider text-ink-faint">
-                    {group.heading}
-                  </div>
-                )}
-                {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-border-soft" />}
-                <div className="flex flex-col gap-0.5">
-                  {group.items.map((item) => {
-                    // A detail route (`/accounts/<id>`) keeps its page active.
-                    const isActive = pageRoute(currentPath) === item.path;
-                    return (
-                      <button
-                        key={item.path}
-                        onClick={() => onNavigate(item.path)}
-                        title={collapsed ? item.label : undefined}
-                        className={cn(
-                          'relative flex w-full items-center rounded-button text-[13px] transition-colors',
-                          collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
-                          isActive
-                            ? 'bg-info-bg font-semibold text-info-fg'
-                            : 'font-medium text-ink-default hover:bg-surface-alt hover:text-ink-strong',
-                        )}
-                      >
-                        <span
+          <div
+            ref={panelRef}
+            data-testid="sidebar-panel"
+            style={{
+              ...(showOverlay
+                ? {
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: '220px',
+                    zIndex: 30,
+                    boxShadow: 'var(--shadow-drawer)',
+                  }
+                : { height: '100%' }),
+              backgroundColor: 'var(--bg-surface-alt)',
+              borderRight: '1px solid var(--border-soft)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {/* Navigation links — grouped, collapsible-friendly */}
+            <nav
+              id="app-sidebar-nav"
+              aria-label="Main"
+              className="flex-1 overflow-y-auto px-2 py-3"
+            >
+              {groupedNav.map((group, gi) => (
+                <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
+                  {!collapsed && group.heading && (
+                    <div className="px-2 pb-1.5 font-mono text-[12px] font-medium uppercase tracking-wider text-ink-faint">
+                      {group.heading}
+                    </div>
+                  )}
+                  {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-border-soft" />}
+                  <div className="flex flex-col gap-0.5">
+                    {group.items.map((item) => {
+                      // A detail route (`/accounts/<id>`) keeps its page active.
+                      const isActive = pageRoute(currentPath) === item.path;
+                      const button = (
+                        <button
+                          onClick={() => {
+                            onNavigate(item.path);
+                            setOverlayOpen(false);
+                          }}
+                          aria-label={collapsed ? item.label : undefined}
                           className={cn(
-                            'flex items-center',
-                            isActive ? 'text-info-fg' : 'text-ink-muted',
+                            'relative flex w-full items-center rounded-button text-[13px] transition-colors',
+                            collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
+                            isActive
+                              ? 'bg-info-bg font-semibold text-info-fg'
+                              : 'font-medium text-ink-default hover:bg-surface-alt hover:text-ink-strong',
                           )}
                         >
-                          <Icon name={item.icon} size="md" />
-                        </span>
-                        {!collapsed && <span className="truncate">{item.label}</span>}
-                        {renderBadge(item.path, badges, collapsed)}
-                      </button>
-                    );
-                  })}
+                          <span
+                            className={cn(
+                              'flex items-center',
+                              isActive ? 'text-info-fg' : 'text-ink-muted',
+                            )}
+                          >
+                            <Icon name={item.icon} size="md" />
+                          </span>
+                          {!collapsed && <span className="truncate">{item.label}</span>}
+                          {renderBadge(item.path, badges, collapsed)}
+                        </button>
+                      );
+                      return (
+                        <React.Fragment key={item.path}>
+                          {collapsed ? (
+                            <Tooltip
+                              placement="right"
+                              content={navTooltip(item.label, item.path, badges)}
+                            >
+                              {button}
+                            </Tooltip>
+                          ) : (
+                            button
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </nav>
-          {/* Sidebar foot: same row style as the nav items above (prototype). */}
-          <div className="px-2 pb-2 pt-1">
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              disabled={narrow}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-expanded={!collapsed}
-              aria-controls="app-sidebar-nav"
-              aria-keyshortcuts={'Meta+\\ Control+\\'}
-              title={`${collapsed ? 'Expand' : 'Collapse'} sidebar (${SIDEBAR_SHORTCUT_LABEL})`}
-              className={cn(
-                'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt hover:text-ink-strong disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent',
-                collapsed ? 'justify-center px-0' : 'gap-3 px-3',
-              )}
-            >
-              <span className="flex items-center text-ink-muted">
-                <Icon name={collapsed ? 'panel-left-open' : 'panel-left-close'} size="md" />
-              </span>
-              {!collapsed && <span>Collapse</span>}
-            </button>
+              ))}
+            </nav>
+            {/* Sidebar foot: same row style as the nav items above (prototype). */}
+            <div className="px-2 pb-2 pt-1">
+              <Tooltip
+                placement={collapsed ? 'right' : 'top'}
+                content={`${collapsed ? 'Expand' : 'Collapse'} sidebar (${SIDEBAR_SHORTCUT_LABEL})`}
+              >
+                <button
+                  type="button"
+                  ref={footToggleRef}
+                  onClick={toggleSidebar}
+                  aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  aria-expanded={!collapsed}
+                  aria-controls="app-sidebar-nav"
+                  aria-keyshortcuts={'Meta+\\ Control+\\'}
+                  className={cn(
+                    'flex w-full items-center rounded-button py-2 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt hover:text-ink-strong',
+                    collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                  )}
+                >
+                  <span className="flex items-center text-ink-muted">
+                    <Icon name={collapsed ? 'panel-left-open' : 'panel-left-close'} size="md" />
+                  </span>
+                  {!collapsed && <span>Collapse</span>}
+                </button>
+              </Tooltip>
+            </div>
           </div>
           {/*
             The sidebar's right edge (#604): hovering highlights it and a click

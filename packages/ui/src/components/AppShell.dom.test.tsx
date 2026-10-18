@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './primitives/ToastProvider.js';
+import { TooltipProvider } from './primitives/Tooltip.js';
 import { AppShell, SIDEBAR_COLLAPSED_KEY, isSidebarShortcut, type NavItem } from './AppShell.js';
 import type { SidebarBadges } from '../query/useSidebarBadges.js';
 import { NAV_PAGES } from '../nav-intent/routes.js';
@@ -59,7 +60,9 @@ const renderWithProviders = (ui: React.ReactElement) => {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>{ui}</ToastProvider>
+      <TooltipProvider>
+        <ToastProvider>{ui}</ToastProvider>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 };
@@ -132,10 +135,10 @@ describe('AppShell navigation and icons', () => {
     expect(toggleBtn).not.toBeNull();
     fireEvent.click(toggleBtn);
 
-    // When collapsed, title attribute holds the label and text span is not rendered
+    // When collapsed, the label is the accessible name and the text span is not rendered
     expect(screen.queryByText('Shifts')).toBeNull();
-    const collapsedBtn = screen.getByTitle('Shifts');
-    expect(collapsedBtn).not.toBeNull();
+    const collapsedBtn = screen.getByRole('button', { name: 'Shifts' });
+    expect(collapsedBtn.hasAttribute('title')).toBe(false);
   });
 
   it('renders top bar header action icons with Icon primitives', () => {
@@ -364,13 +367,129 @@ describe('AppShell collapse', () => {
     expect(screen.getByRole('button', { name: /expand sidebar/i })).not.toBeNull();
     expect(screen.queryByText('Operate')).toBeNull();
     expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
-    // The rail is forced: no edge to click, and the shortcut changes nothing.
+    // No edge to click on a forced rail.
     expect(screen.queryByTestId('sidebar-edge')).toBeNull();
-    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', metaKey: true });
-    expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
     act(() => stub.setWidth(1400));
     expect(screen.getByRole('button', { name: /collapse sidebar/i })).not.toBeNull();
     expect(screen.getByText('Operate')).not.toBeNull();
+  });
+});
+
+describe('AppShell rail tooltips (#657)', () => {
+  const collapse = () => fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
+
+  it('shows the label on focus for a collapsed rail, with no title', () => {
+    shell();
+    collapse();
+    const btn = screen.getByRole('button', { name: 'Shifts' });
+    expect(btn.hasAttribute('title')).toBe(false);
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toBe('Shifts');
+  });
+
+  it('adds the badge text to the tooltip', () => {
+    mockBadges = { shiftRunning: false, inventoryAlerts: 3, overdueCustomers: 0, openPastDays: 0 };
+    shell();
+    collapse();
+    fireEvent.focus(screen.getByRole('button', { name: 'Inventory' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('Inventory · 3 inventory alerts');
+  });
+
+  it('shows no tooltip on an expanded sidebar', () => {
+    shell();
+    fireEvent.focus(screen.getByRole('button', { name: 'Shifts' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('names the shortcut in a tooltip on the foot control instead of a title', () => {
+    shell();
+    const btn = screen.getByRole('button', { name: /collapse sidebar/i });
+    expect(btn.hasAttribute('title')).toBe(false);
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip').textContent).toMatch(/^Collapse sidebar \(.+\)$/);
+  });
+});
+
+describe('AppShell overlay sidebar below 1200px (#657)', () => {
+  beforeEach(() => {
+    stub.restore();
+    stub = stubContainerWidth(1100);
+  });
+  const expand = () => fireEvent.click(screen.getByRole('button', { name: /expand sidebar/i }));
+
+  it('enables Expand and opens the full sidebar without touching the saved choice', () => {
+    shell();
+    const btn = screen.getByRole('button', { name: /expand sidebar/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+    expect(screen.getByText('Operate')).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: /collapse sidebar/i }).getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
+  });
+
+  it('floats over the content: the rail keeps its 60px slot', () => {
+    shell();
+    const aside = screen.getByRole('complementary');
+    expect(aside.style.width).toBe('60px');
+    expand();
+    expect(aside.style.width).toBe('60px');
+    expect(screen.getByTestId('sidebar-panel').style.width).toBe('220px');
+    expect(screen.getByTestId('sidebar-panel').style.position).toBe('absolute');
+  });
+
+  it('toggles with Ctrl+\\', () => {
+    shell();
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', ctrlKey: true });
+    expect(screen.getByText('Operate')).not.toBeNull();
+    fireEvent.keyDown(document, { key: '\\', code: 'Backslash', ctrlKey: true });
+    expect(screen.queryByText('Operate')).toBeNull();
+    expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull();
+  });
+
+  it('closes on Esc and returns focus to the Expand control', () => {
+    shell();
+    expand();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('Operate')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /expand sidebar/i }));
+  });
+
+  it('leaves Esc to whoever already handled it', () => {
+    shell();
+    expand();
+    const e = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true });
+    e.preventDefault();
+    document.dispatchEvent(e);
+    expect(screen.getByText('Operate')).not.toBeNull();
+  });
+
+  it('closes after navigating', () => {
+    const onNavigate = vi.fn();
+    shell({ onNavigate });
+    expand();
+    fireEvent.click(screen.getByRole('button', { name: 'Suppliers' }));
+    expect(onNavigate).toHaveBeenCalledWith('/suppliers');
+    expect(screen.queryByText('Operate')).toBeNull();
+  });
+
+  it('closes on a pointer press outside, not inside', () => {
+    shell();
+    expand();
+    fireEvent.pointerDown(screen.getByText('Operate'));
+    expect(screen.getByText('Operate')).not.toBeNull();
+    fireEvent.pointerDown(screen.getByText('Body'));
+    expect(screen.queryByText('Operate')).toBeNull();
+  });
+
+  it('closes when the window widens past 1200px', () => {
+    shell();
+    expand();
+    act(() => stub.setWidth(1400));
+    // Wide mode follows the saved choice (expanded), no stale overlay state.
+    act(() => stub.setWidth(1100));
+    expect(screen.queryByText('Operate')).toBeNull();
   });
 });
 

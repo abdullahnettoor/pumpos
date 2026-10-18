@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { ToastProvider } from './primitives/ToastProvider.js';
+import { TooltipProvider } from './primitives/Tooltip.js';
 import { AppShell } from './AppShell.js';
 import { ReportsNav } from './reports/ReportsNav.js';
 import { NAV_PAGES } from '../nav-intent/routes.js';
@@ -72,20 +73,22 @@ function renderShell() {
   render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <AppShell
-          navItems={[...NAV_PAGES]}
-          currentPath="/dashboard"
-          onNavigate={() => {}}
-          userRole="Owner"
-          userName="Owner"
-          syncStatus="synced"
-          onLogout={() => {}}
-          stations={[station]}
-          selectedStation={station}
-          stationReady
-        >
-          <div />
-        </AppShell>
+        <TooltipProvider>
+          <AppShell
+            navItems={[...NAV_PAGES]}
+            currentPath="/dashboard"
+            onNavigate={() => {}}
+            userRole="Owner"
+            userName="Owner"
+            syncStatus="synced"
+            onLogout={() => {}}
+            stations={[station]}
+            selectedStation={station}
+            stationReady
+          >
+            <div />
+          </AppShell>
+        </TooltipProvider>
       </ToastProvider>
     </QueryClientProvider>,
   );

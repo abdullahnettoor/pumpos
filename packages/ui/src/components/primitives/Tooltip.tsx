@@ -6,7 +6,7 @@ export interface TooltipProps {
   /** Text shown in the floating bubble. */
   content: React.ReactNode;
   /** Preferred side; it flips when there is no room there. */
-  placement?: 'top' | 'bottom';
+  placement?: 'top' | 'bottom' | 'left' | 'right';
   children: React.ReactElement;
 }
 
