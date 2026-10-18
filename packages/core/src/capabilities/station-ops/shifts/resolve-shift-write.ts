@@ -105,13 +105,26 @@ export function shiftWriteGateFor(deps: {
   return deps.shiftWriteGate ?? sequentialShiftWriteGate(deps);
 }
 
-/** Discover the parent, lock Station -> Business Day -> Shift, then validate both again. */
-export async function resolveShiftBusinessDayWrite(
+/** The parents a Shift write was locked under, and the rows read under that lock. */
+export interface LockedShiftParents {
+  stationId: string;
+  businessDayId: string;
+  locked: ShiftWriteGateRows;
+}
+
+/**
+ * Discover the Shift unlocked, check it and the Business Day it names belong to
+ * the tenant (and to the context's station, when it names one), then lock
+ * Station -> Business Day -> Shift. The Shift is locked only under a day whose
+ * status is in `writableDayStatuses`; the caller judges the locked day, then
+ * the locked Shift with `lockedShiftOf`.
+ */
+export async function lockShiftWriteParents(
   gate: ShiftWriteGateReader,
   ctx: ExecutionContext,
   shiftId: string,
-  kind: BusinessDayWriteKind,
-): Promise<Result<ShiftBusinessDayWriteEligibility>> {
+  writableDayStatuses: readonly BusinessDayStatus[],
+): Promise<Result<LockedShiftParents>> {
   const discovered = await gate.discover(shiftId);
   const discoveredShift = discovered.shift;
   if (
@@ -137,8 +150,46 @@ export async function resolveShiftBusinessDayWrite(
     stationId,
     businessDayId,
     shiftId,
-    writableDayStatuses: writableBusinessDayStatuses(kind),
+    writableDayStatuses,
   });
+  return ok({ stationId, businessDayId, locked });
+}
+
+/** The locked Shift, provided it is still the discovered one: same tenant, station and day. */
+export function lockedShiftOf(
+  parents: LockedShiftParents,
+  ctx: ExecutionContext,
+  shiftId: string,
+): Result<GatedShift> {
+  const shift = parents.locked.shift;
+  if (
+    !shift ||
+    shift.organizationId !== ctx.organizationId ||
+    (ctx.stationId && shift.stationId !== ctx.stationId) ||
+    shift.stationId !== parents.stationId ||
+    shift.businessDayId !== parents.businessDayId
+  ) {
+    return err(notFoundError('Shift', shiftId));
+  }
+  return ok(shift);
+}
+
+/** Discover the parent, lock Station -> Business Day -> Shift, then validate both again. */
+export async function resolveShiftBusinessDayWrite(
+  gate: ShiftWriteGateReader,
+  ctx: ExecutionContext,
+  shiftId: string,
+  kind: BusinessDayWriteKind,
+): Promise<Result<ShiftBusinessDayWriteEligibility>> {
+  const parents = await lockShiftWriteParents(
+    gate,
+    ctx,
+    shiftId,
+    writableBusinessDayStatuses(kind),
+  );
+  if (!parents.success) return parents;
+
+  const { stationId, businessDayId, locked } = parents.data;
   const day = checkBusinessDayWriteEligibility(locked.businessDay, ctx, {
     stationId,
     kind,
@@ -146,15 +197,7 @@ export async function resolveShiftBusinessDayWrite(
   });
   if (!day.success) return day;
 
-  const shift = locked.shift;
-  if (
-    !shift ||
-    shift.organizationId !== ctx.organizationId ||
-    (ctx.stationId && shift.stationId !== ctx.stationId) ||
-    shift.stationId !== stationId ||
-    shift.businessDayId !== day.data.businessDay.id
-  ) {
-    return err(notFoundError('Shift', shiftId));
-  }
-  return ok({ ...day.data, shift });
+  const shift = lockedShiftOf(parents.data, ctx, shiftId);
+  if (!shift.success) return shift;
+  return ok({ ...day.data, shift: shift.data });
 }

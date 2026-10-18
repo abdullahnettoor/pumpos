@@ -10,7 +10,12 @@ import {
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import { shiftWriteGateFor, type ShiftWriteGateReader } from './resolve-shift-write.js';
+import {
+  lockShiftWriteParents,
+  lockedShiftOf,
+  shiftWriteGateFor,
+  type ShiftWriteGateReader,
+} from './resolve-shift-write.js';
 import type { StockVarianceRepository } from '../../inventory/index.js';
 
 export interface ReopenShiftCommand {
@@ -33,25 +38,13 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
   async execute(input: ReopenShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
     const gate = shiftWriteGateFor(this.deps);
-    const { shift: discoveredShift } = await gate.discover(input.shiftId);
-    if (!discoveredShift || discoveredShift.organizationId !== ctx.organizationId)
-      return err(notFoundError('Shift', input.shiftId));
-
-    // Re-read under the canonical Station -> Business Day -> Shift lock order.
-    const locked = await gate.lockForWrite({
-      organizationId: ctx.organizationId,
-      stationId: discoveredShift.stationId,
-      businessDayId: discoveredShift.businessDayId,
-      shiftId: input.shiftId,
-      writableDayStatuses: ['OPEN', 'CLOSED'],
-    });
-    const shift = locked.shift;
-    if (!shift || shift.organizationId !== ctx.organizationId)
-      return err(notFoundError('Shift', input.shiftId));
-    const businessDay =
-      locked.businessDay?.id === shift.businessDayId
-        ? locked.businessDay
-        : await this.deps.businessDays.findById(shift.businessDayId);
+    // Lock the Shift whatever its day's status; the closed-day refusal is below.
+    const parents = await lockShiftWriteParents(gate, ctx, input.shiftId, ['OPEN', 'CLOSED']);
+    if (!parents.success) return parents;
+    const locked = lockedShiftOf(parents.data, ctx, input.shiftId);
+    if (!locked.success) return locked;
+    const shift = locked.data;
+    const businessDay = parents.data.locked.businessDay;
     if (
       !businessDay ||
       businessDay.organizationId !== ctx.organizationId ||
