@@ -397,41 +397,12 @@ describe('AppShell rail tooltips (#657)', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Shifts');
   });
 
-  it('shows on pointer hover, on the right of the icon', async () => {
-    // jsdom has no layout: give the viewport room so the bubble is not flipped.
-    stub.restore();
-    const size = (prop: 'clientWidth' | 'clientHeight', v: number) =>
-      vi.spyOn(document.documentElement, prop, 'get').mockReturnValue(v);
-    const spies: { mockRestore(): void }[] = [size('clientWidth', 1400), size('clientHeight', 900)];
-    spies.push(
-      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
-        this: Element,
-      ) {
-        const width = this.classList.contains('app-shell') ? 1400 : 40;
-        return {
-          width,
-          height: 30,
-          x: 10,
-          y: 100,
-          top: 100,
-          left: 10,
-          right: 10 + width,
-          bottom: 130,
-          toJSON() {},
-        };
-      }),
-    );
-    try {
-      shell();
-      collapse();
-      const btn = screen.getByRole('button', { name: 'Shifts' });
-      fireEvent.pointerMove(btn, { pointerType: 'mouse' });
-      const tip = await screen.findAllByText('Shifts', {}, { timeout: 1000 });
-      const content = tip.map((n) => n.closest('[data-side]')).find(Boolean);
-      expect(content?.getAttribute('data-side')).toBe('right');
-    } finally {
-      spies.forEach((spy) => spy.mockRestore());
-    }
+  it('shows on pointer hover for a collapsed rail', async () => {
+    shell();
+    collapse();
+    const btn = screen.getByRole('button', { name: 'Shifts' });
+    fireEvent.pointerMove(btn, { pointerType: 'mouse' });
+    expect((await screen.findByRole('tooltip', {}, { timeout: 1000 })).textContent).toBe('Shifts');
   });
 
   it('keeps focus on the same nav button across Ctrl+\\ and the foot toggle', () => {

@@ -35,6 +35,20 @@ export const TooltipProvider: React.FC<{ children: React.ReactNode }> = ({ child
 export const TOOLTIP_BUBBLE =
   'z-[1100] rounded-[6px] bg-ink-strong text-on-neutral shadow-(--shadow-tooltip)';
 
+const prevent = (event: React.SyntheticEvent) => event.preventDefault();
+
+/**
+ * Radix's Trigger opens through onPointerMove, onPointerDown and onFocus, each
+ * wrapped in composeEventHandlers, which skips Radix's handler when ours calls
+ * preventDefault. `open={false}` alone is not enough: Radix still calls the
+ * provider's onOpen and dispatches `tooltip.open`, closing other tooltips.
+ */
+const SUPPRESS_OPEN = {
+  onPointerMove: prevent,
+  onPointerDown: prevent,
+  onFocus: prevent,
+};
+
 /**
  * Hover / focus tooltip. Wrap a single interactive element; the bubble shows
  * above (default) or below on hover and keyboard focus, and is wired through
@@ -51,8 +65,10 @@ export const Tooltip: React.FC<TooltipProps> = ({
   children,
   disabled = false,
 }) => (
-  <RadixTooltip.Root>
-    <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
+  <RadixTooltip.Root open={disabled ? false : undefined}>
+    <RadixTooltip.Trigger asChild {...(disabled ? SUPPRESS_OPEN : undefined)}>
+      {children}
+    </RadixTooltip.Trigger>
     {!disabled && (
       <RadixTooltip.Portal>
         <RadixTooltip.Content
