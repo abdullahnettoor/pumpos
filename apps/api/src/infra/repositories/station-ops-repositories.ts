@@ -166,17 +166,13 @@ function toBusinessDayEntity(r: BusinessDayRow): BusinessDay {
 export class DrizzleBusinessDayRepository implements BusinessDayRepository, BusinessDayLock {
   constructor(private readonly db: DbClient) {}
 
-  private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
-    return toBusinessDayEntity(r);
-  }
-
   async findById(id: string): Promise<BusinessDay | null> {
     const [r] = await this.db
       .select()
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, id))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 
   async lockById(organizationId: string, businessDayId: string): Promise<void> {
@@ -260,7 +256,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
       )
       .orderBy(desc(schema.businessDays.businessDate))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 
   async findByStationAndDate(
@@ -279,7 +275,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
         ),
       )
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 }
 
@@ -420,9 +416,6 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .limit(1);
     return Boolean(row);
   }
-  private toEntity(r: ShiftRow): Shift {
-    return toShiftEntity(r);
-  }
   async findById(id: string): Promise<Shift | null> {
     const [r] = await this.db
       .select(shiftColumns)
@@ -430,7 +423,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .where(eq(schema.shifts.id, id))
       .limit(1)
       .for('update', { of: schema.shifts });
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async findByIdWithoutLock(id: string): Promise<Shift | null> {
     const [r] = await this.db
@@ -438,7 +431,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .from(schema.shifts)
       .where(eq(schema.shifts.id, id))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async save(s: Shift): Promise<void> {
     await this.db
@@ -483,7 +476,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
         ),
       )
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async addStaffAssignments(shiftId: string, assignments: StaffAssignmentInput[]): Promise<void> {
     if (assignments.length === 0) return;
