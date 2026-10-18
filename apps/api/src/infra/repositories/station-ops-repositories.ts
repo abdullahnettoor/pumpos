@@ -272,8 +272,10 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
  */
 const shiftColumns = {
   ...getTableColumns(schema.shifts),
+  // Qualified by hand: Drizzle renders `${schema.shifts.id}` unqualified in an
+  // unjoined select, where a bare "id" resolves to `sa.id` and the sum is 0.
   openingCash: sql<string>`(SELECT COALESCE(SUM(sa.opening_float), 0)::text
-    FROM shift_staff_assignments sa WHERE sa.shift_id = ${schema.shifts.id})`,
+    FROM shift_staff_assignments sa WHERE sa.shift_id = shifts.id)`,
 };
 type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
 
