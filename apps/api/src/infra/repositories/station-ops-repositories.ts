@@ -10,6 +10,9 @@ import type {
   BusinessDayStatusItem,
   Shift,
   ShiftRepository,
+  ShiftWriteGateReader,
+  ShiftWriteGateRows,
+  ShiftWriteLockTarget,
   StaffAssignmentInput,
   TerminalLinkInput,
   NozzleReading,
@@ -133,23 +136,37 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   }
 }
 
+/** Timestamps arrive as Dates from the query builder and ISO strings from rowJson. */
+const isoOf = (v: Date | string): string => (v instanceof Date ? v.toISOString() : v);
+const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : isoOf(v));
+
+type Timestamped<T, K extends keyof T> = Omit<T, K> & { [P in K]: T[P] | string };
+type BusinessDayRow = Timestamped<
+  typeof schema.businessDays.$inferSelect,
+  'openedAt' | 'closedAt' | 'createdAt' | 'updatedAt'
+>;
+
+function toBusinessDayEntity(r: BusinessDayRow): BusinessDay {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    businessDate: r.businessDate,
+    status: r.status as BusinessDay['status'],
+    openedBy: r.openedBy,
+    openedAt: isoOf(r.openedAt),
+    closedBy: r.closedBy,
+    closedAt: isoOrNull(r.closedAt),
+    createdAt: isoOf(r.createdAt),
+    updatedAt: isoOf(r.updatedAt),
+  };
+}
+
 export class DrizzleBusinessDayRepository implements BusinessDayRepository, BusinessDayLock {
   constructor(private readonly db: DbClient) {}
 
   private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
-    return {
-      id: r.id,
-      organizationId: r.organizationId,
-      stationId: r.stationId,
-      businessDate: r.businessDate,
-      status: r.status as BusinessDay['status'],
-      openedBy: r.openedBy,
-      openedAt: r.openedAt.toISOString(),
-      closedBy: r.closedBy,
-      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    };
+    return toBusinessDayEntity(r);
   }
 
   async findById(id: string): Promise<BusinessDay | null> {
@@ -279,6 +296,95 @@ const shiftColumns = {
 };
 type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
 
+function toShiftEntity(
+  r: Timestamped<ShiftRow, 'openedAt' | 'closedAt' | 'lockedAt' | 'createdAt' | 'updatedAt'>,
+): Shift {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    businessDayId: r.businessDayId,
+    shiftTemplateId: r.shiftTemplateId,
+    status: r.status as Shift['status'],
+    openedBy: r.openedBy,
+    openedAt: isoOf(r.openedAt),
+    closedBy: r.closedBy,
+    closedAt: isoOrNull(r.closedAt),
+    lockedAt: isoOrNull(r.lockedAt),
+    openingCash: r.openingCash,
+    closingCash: r.closingCash,
+    createdAt: isoOf(r.createdAt),
+    updatedAt: isoOf(r.updatedAt),
+  };
+}
+
+/**
+ * The Shift-write gate in two statements (#248), where the repositories spent
+ * six: discovery is one unlocked join, and the Station -> Business Day -> Shift
+ * locks plus both re-reads are one statement.
+ *
+ * Lock order inside that statement is forced by data dependency: each locking
+ * CTE carries a pseudoconstant filter over the previous one, which Postgres
+ * evaluates as a one-time gate BEFORE scanning its own table — so the Business
+ * Day is not touched until the Station lock is held, nor the Shift until the
+ * Business Day lock is. The filters are always true, so every lock is still
+ * attempted when an earlier row is absent, as the sequential reads did.
+ *
+ * Rows come out of the FOR UPDATE scans themselves: under READ COMMITTED a
+ * locking scan returns the latest committed version of a row it waited on, so
+ * the re-reads see whatever the transaction they queued behind committed.
+ */
+export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async discover(shiftId: string): Promise<ShiftWriteGateRows> {
+    const [r] = await this.db
+      .select({ shift: shiftColumns, businessDay: schema.businessDays })
+      .from(schema.shifts)
+      .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+      .where(eq(schema.shifts.id, shiftId))
+      .limit(1);
+    if (!r) return { shift: null, businessDay: null };
+    return {
+      shift: toShiftEntity(r.shift),
+      businessDay: r.businessDay ? toBusinessDayEntity(r.businessDay) : null,
+    };
+  }
+
+  async lockForWrite(target: ShiftWriteLockTarget): Promise<ShiftWriteGateRows> {
+    const { organizationId, stationId, businessDayId, shiftId } = target;
+    const [row] = (await this.db.execute(sql`
+      WITH station_lock AS (
+        SELECT id FROM stations
+        WHERE id = ${stationId} AND organization_id = ${organizationId}
+        FOR UPDATE
+      ),
+      day_lock AS (
+        SELECT * FROM business_days
+        WHERE id = ${businessDayId} AND organization_id = ${organizationId}
+          AND (SELECT count(*) FROM station_lock) >= 0
+        FOR UPDATE
+      ),
+      shift_lock AS (
+        SELECT * FROM shifts
+        WHERE id = ${shiftId}
+          AND (SELECT count(*) FROM day_lock) >= 0
+        FOR UPDATE
+      )
+      SELECT
+        (SELECT ${rowJson(schema.businessDays, 'd')} FROM day_lock d) AS business_day,
+        (SELECT ${rowJson(schema.shifts, 's')} || jsonb_build_object('openingCash',
+            (SELECT COALESCE(SUM(sa.opening_float), 0)::text
+              FROM shift_staff_assignments sa WHERE sa.shift_id = s.id))
+          FROM shift_lock s) AS shift
+    `)) as unknown as [{ business_day: BusinessDayRow | null; shift: ShiftRow | null }];
+    return {
+      shift: row?.shift ? toShiftEntity(row.shift) : null,
+      businessDay: row?.business_day ? toBusinessDayEntity(row.business_day) : null,
+    };
+  }
+}
+
 export class DrizzleShiftRepository implements ShiftRepository {
   constructor(private readonly db: DbExecutor) {}
   async hasOpenShift(businessDayId: string): Promise<boolean> {
@@ -290,23 +396,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
     return Boolean(row);
   }
   private toEntity(r: ShiftRow): Shift {
-    return {
-      id: r.id,
-      organizationId: r.organizationId,
-      stationId: r.stationId,
-      businessDayId: r.businessDayId,
-      shiftTemplateId: r.shiftTemplateId,
-      status: r.status as Shift['status'],
-      openedBy: r.openedBy,
-      openedAt: r.openedAt.toISOString(),
-      closedBy: r.closedBy,
-      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
-      lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
-      openingCash: r.openingCash,
-      closingCash: r.closingCash,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    };
+    return toShiftEntity(r);
   }
   async findById(id: string): Promise<Shift | null> {
     const [r] = await this.db

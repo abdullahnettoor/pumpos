@@ -45,6 +45,7 @@ import {
   DrizzleBusinessDayRepository,
   DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
+  DrizzleShiftWriteGateReader,
   DrizzleNozzleReadingRepository,
   DrizzleCloseShiftContextReader,
   DrizzleStockMovementWriter,
@@ -1440,6 +1441,7 @@ shiftsRouter.post(
       return new RecordHandover({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         context: new DrizzleHandoverContextReader(tx),
         handovers: new DrizzleHandoverRepository(tx),
         events,
@@ -1561,6 +1563,7 @@ shiftsRouter.put(
       return new RecordNozzleReadings({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
         events,
       }).execute(
@@ -1705,6 +1708,7 @@ shiftsRouter.post(
       const r = await new ReopenShift({
         shifts: new DrizzleShiftRepository(tx),
         businessDays,
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         summaries: new DrizzleShiftSummaryWriter(tx),
         stockVariances: new DrizzleStockVarianceRepository(tx),
         events,
@@ -1773,6 +1777,7 @@ shiftsRouter.post(
       new LockShift({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         events,
       }).execute(body, buildContext(user, shift)),
     );
