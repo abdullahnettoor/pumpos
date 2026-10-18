@@ -101,6 +101,7 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
     const nowIso = ctx.clock.now().toISOString();
     const reopened: Shift = {
       ...shift,
+      openingCash: await gate.readOpeningCash(shift.id),
       status: 'OPEN',
       closedBy: null,
       closedAt: null,

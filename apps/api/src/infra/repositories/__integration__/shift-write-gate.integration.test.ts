@@ -249,12 +249,16 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
   it('discovers the shift and its business day exactly as the repositories read them', async () => {
     const gate = new DrizzleShiftWriteGateReader(db);
     const discovered = await gate.discover(SHIFT);
+    const { openingCash, ...shift } = (await new DrizzleShiftRepository(db).findByIdWithoutLock(
+      SHIFT,
+    ))!;
     expect(discovered).toEqual({
-      shift: await new DrizzleShiftRepository(db).findByIdWithoutLock(SHIFT),
+      shift,
       businessDay: await new DrizzleBusinessDayRepository(db).findById(DAY),
     });
-    expect(discovered.shift?.openingCash).toBe('1000.00');
     expect(discovered.shift?.closingCash).toBe('125.50');
+    expect(await gate.readOpeningCash(SHIFT)).toBe(openingCash);
+    expect(openingCash).toBe('1000.00');
     expect(await gate.discover(MISSING)).toEqual({ shift: null, businessDay: null });
   });
 
@@ -276,8 +280,11 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
         expect(await isLocked('stations', STATION)).toBe(true);
         expect(await isLocked('business_days', DAY)).toBe(true);
         expect(await isLocked('shifts', SHIFT)).toBe(true);
+        const { openingCash: _derived, ...shift } = (await new DrizzleShiftRepository(
+          db,
+        ).findByIdWithoutLock(SHIFT))!;
         expect(locked).toEqual({
-          shift: await new DrizzleShiftRepository(db).findByIdWithoutLock(SHIFT),
+          shift,
           businessDay: await new DrizzleBusinessDayRepository(db).findById(DAY),
         });
       },
@@ -338,6 +345,42 @@ describe.skipIf(!CONNECTION)('DrizzleShiftWriteGateReader against real Postgres'
         .set({ status: 'OPEN' })
         .where(eq(schema.businessDays.id, DAY));
       await db.update(schema.shifts).set({ status: 'OPEN' }).where(eq(schema.shifts.id, SHIFT));
+    }
+  });
+
+  it('reads the Opening Floats as committed by the transaction the gate waited behind', async () => {
+    let release!: () => void;
+    const released = new Promise<void>((r) => (release = r));
+    let ready!: () => void;
+    const blockerReady = new Promise<void>((r) => (ready = r));
+    const reassigning = blocker.begin(async (t) => {
+      await t`select 1 from stations where id = ${STATION} for update`;
+      await t`update shift_staff_assignments set opening_float = 1500 where shift_id = ${SHIFT}`;
+      ready();
+      await released;
+    });
+    await blockerReady;
+
+    try {
+      await gateDb.transaction(async (tx) => {
+        const [row] = (await tx.execute(dsql`select pg_backend_pid() as pid`)) as unknown as [
+          { pid: number },
+        ];
+        const gate = new DrizzleShiftWriteGateReader(tx);
+        const locking = gate.lockForWrite(TARGET);
+        await waitUntilBlocked(row.pid);
+        release();
+        await reassigning;
+        const locked = await locking;
+        // The lock statement's snapshot predates the wait, so it carries no Opening Floats.
+        expect(locked.shift).not.toHaveProperty('openingCash');
+        expect(await gate.readOpeningCash(SHIFT)).toBe('1500.00');
+      });
+    } finally {
+      await db
+        .update(schema.shiftStaffAssignments)
+        .set({ openingFloat: '1000' })
+        .where(eq(schema.shiftStaffAssignments.shiftId, SHIFT));
     }
   });
 

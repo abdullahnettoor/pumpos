@@ -114,3 +114,33 @@ describe('LockShift', () => {
     expect(shifts.saved).toMatchObject({ status: 'LOCKED' });
   });
 });
+
+describe('LockShift Opening Floats (#248)', () => {
+  it('returns the Opening Floats read after the gate took its locks', async () => {
+    const { openingCash: _stale, ...lockedShift } = shift;
+    const closedDay = await new DayRepo('CLOSED').findById();
+    const calls: string[] = [];
+    const result = await new LockShift({
+      shifts: new ShiftRepo(),
+      businessDays: new DayRepo('CLOSED'),
+      shiftWriteGate: {
+        async discover() {
+          return { shift: lockedShift, businessDay: closedDay };
+        },
+        async lockForWrite() {
+          calls.push('lock');
+          return { shift: lockedShift, businessDay: closedDay };
+        },
+        async readOpeningCash(shiftId) {
+          calls.push(`opening-cash:${shiftId}`);
+          return '750.00';
+        },
+      },
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: shift.id }, context);
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.openingCash).toBe('750.00');
+    expect(calls).toEqual(['lock', 'opening-cash:shift-1']);
+  });
+});

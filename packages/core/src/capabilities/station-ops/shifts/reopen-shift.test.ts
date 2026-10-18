@@ -236,6 +236,10 @@ describe('ReopenShift', () => {
         targets.push(target);
         return { shift, businessDay: openDay };
       },
+      async readOpeningCash() {
+        calls.push('gate-opening-cash');
+        return shift.openingCash;
+      },
     };
 
     const result = await new ReopenShift({ ...deps, shiftWriteGate: gate }).execute(
@@ -244,7 +248,7 @@ describe('ReopenShift', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(calls).toEqual(['gate-discover', 'gate-lock']);
+    expect(calls).toEqual(['gate-discover', 'gate-lock', 'gate-opening-cash']);
     expect(targets).toEqual([
       {
         organizationId: 'org-1',
@@ -256,6 +260,28 @@ describe('ReopenShift', () => {
         writableDayStatuses: ['OPEN', 'CLOSED'],
       },
     ]);
+  });
+
+  it('returns the Opening Floats read after the gate took its locks (#248)', async () => {
+    const { openingCash: _stale, ...gatedShift } = shift;
+    const { deps } = dependencies();
+    const result = await new ReopenShift({
+      ...deps,
+      shiftWriteGate: {
+        async discover() {
+          return { shift: gatedShift, businessDay: openDay };
+        },
+        async lockForWrite() {
+          return { shift: gatedShift, businessDay: openDay };
+        },
+        async readOpeningCash() {
+          return '750.00';
+        },
+      },
+    }).execute({ shiftId: shift.id }, context);
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.openingCash).toBe('750.00');
   });
 
   it('reopens a legacy locked Shift while its Business Day is open', async () => {

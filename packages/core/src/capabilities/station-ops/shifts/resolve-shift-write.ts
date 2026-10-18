@@ -13,13 +13,20 @@ import type {
 } from '../business-days/index.js';
 import type { Shift, ShiftRepository } from './ports.js';
 
+/**
+ * A Shift as the gate reads it: every field but `openingCash`. That is a sum
+ * over the Shift's Drawers, which the lock statement cannot read fresh (its
+ * snapshot predates any lock wait); callers that need it use `readOpeningCash`.
+ */
+export type GatedShift = Omit<Shift, 'openingCash'>;
+
 export interface ShiftBusinessDayWriteEligibility extends BusinessDayWriteEligibility {
-  shift: Shift;
+  shift: GatedShift;
 }
 
 /** A Shift and the Business Day it names, as one read returned them. */
 export interface ShiftWriteGateRows {
-  shift: Shift | null;
+  shift: GatedShift | null;
   businessDay: BusinessDay | null;
 }
 
@@ -46,10 +53,14 @@ export interface ShiftWriteLockTarget {
  * the Shift is locked and returned only when the locked Business Day is at the
  * target station with a status in `writableDayStatuses`, so a refused write
  * never locks the Shift. The caller revalidates both rows.
+ *
+ * `readOpeningCash` sums the Shift's Opening Floats in a fresh statement, so
+ * it sees whatever committed while `lockForWrite` waited.
  */
 export interface ShiftWriteGateReader {
   discover(shiftId: string): Promise<ShiftWriteGateRows>;
   lockForWrite(target: ShiftWriteLockTarget): Promise<ShiftWriteGateRows>;
+  readOpeningCash(shiftId: string): Promise<string>;
 }
 
 /**
@@ -78,6 +89,9 @@ export function sequentialShiftWriteGate(deps: {
         target.writableDayStatuses.includes(businessDay.status);
       if (!dayAdmitsWrite) return { shift: null, businessDay };
       return { shift: await shifts.findById(target.shiftId), businessDay };
+    },
+    async readOpeningCash(shiftId) {
+      return (await shifts.findByIdWithoutLock(shiftId))?.openingCash ?? '0';
     },
   };
 }

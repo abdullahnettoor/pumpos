@@ -10,6 +10,7 @@ import type {
   BusinessDayStatusItem,
   Shift,
   ShiftRepository,
+  GatedShift,
   ShiftWriteGateReader,
   ShiftWriteGateRows,
   ShiftWriteLockTarget,
@@ -296,9 +297,10 @@ const shiftColumns = {
 };
 type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
 
-function toShiftEntity(
-  r: Timestamped<ShiftRow, 'openedAt' | 'closedAt' | 'lockedAt' | 'createdAt' | 'updatedAt'>,
-): Shift {
+type ShiftTimestamps = 'openedAt' | 'closedAt' | 'lockedAt' | 'createdAt' | 'updatedAt';
+type GatedShiftRow = Timestamped<typeof schema.shifts.$inferSelect, ShiftTimestamps>;
+
+function toGatedShift(r: GatedShiftRow): GatedShift {
   return {
     id: r.id,
     organizationId: r.organizationId,
@@ -311,11 +313,14 @@ function toShiftEntity(
     closedBy: r.closedBy,
     closedAt: isoOrNull(r.closedAt),
     lockedAt: isoOrNull(r.lockedAt),
-    openingCash: r.openingCash,
     closingCash: r.closingCash,
     createdAt: isoOf(r.createdAt),
     updatedAt: isoOf(r.updatedAt),
   };
+}
+
+function toShiftEntity(r: ShiftRow): Shift {
+  return { ...toGatedShift(r), openingCash: r.openingCash };
 }
 
 /**
@@ -335,21 +340,23 @@ function toShiftEntity(
  *
  * Rows come out of the FOR UPDATE scans themselves: under READ COMMITTED a
  * locking scan returns the latest committed version of a row it waited on, so
- * the re-reads see whatever the transaction they queued behind committed.
+ * the re-reads see whatever the transaction they queued behind committed. Any
+ * other read in that statement would still see its pre-wait snapshot, which is
+ * why the Opening Floats sum is a separate `readOpeningCash` statement.
  */
 export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
   constructor(private readonly db: DbExecutor) {}
 
   async discover(shiftId: string): Promise<ShiftWriteGateRows> {
     const [r] = await this.db
-      .select({ shift: shiftColumns, businessDay: schema.businessDays })
+      .select({ shift: schema.shifts, businessDay: schema.businessDays })
       .from(schema.shifts)
       .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
       .where(eq(schema.shifts.id, shiftId))
       .limit(1);
     if (!r) return { shift: null, businessDay: null };
     return {
-      shift: toShiftEntity(r.shift),
+      shift: toGatedShift(r.shift),
       businessDay: r.businessDay ? toBusinessDayEntity(r.businessDay) : null,
     };
   }
@@ -384,15 +391,22 @@ export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
       )
       SELECT
         (SELECT ${rowJson(schema.businessDays, 'd')} FROM day_lock d) AS business_day,
-        (SELECT ${rowJson(schema.shifts, 's')} || jsonb_build_object('openingCash',
-            (SELECT COALESCE(SUM(sa.opening_float), 0)::text
-              FROM shift_staff_assignments sa WHERE sa.shift_id = s.id))
-          FROM shift_lock s) AS shift
-    `)) as unknown as [{ business_day: BusinessDayRow | null; shift: ShiftRow | null }];
+        (SELECT ${rowJson(schema.shifts, 's')} FROM shift_lock s) AS shift
+    `)) as unknown as [{ business_day: BusinessDayRow | null; shift: GatedShiftRow | null }];
     return {
-      shift: row?.shift ? toShiftEntity(row.shift) : null,
+      shift: row?.shift ? toGatedShift(row.shift) : null,
       businessDay: row?.business_day ? toBusinessDayEntity(row.business_day) : null,
     };
+  }
+
+  async readOpeningCash(shiftId: string): Promise<string> {
+    const [r] = await this.db
+      .select({
+        openingCash: sql<string>`COALESCE(SUM(${schema.shiftStaffAssignments.openingFloat}), 0)::text`,
+      })
+      .from(schema.shiftStaffAssignments)
+      .where(eq(schema.shiftStaffAssignments.shiftId, shiftId));
+    return r?.openingCash ?? '0';
   }
 }
 

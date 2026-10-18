@@ -33,12 +33,8 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
 
   async execute(input: LockShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
-    const eligibility = await resolveShiftBusinessDayWrite(
-      shiftWriteGateFor(this.deps),
-      ctx,
-      input.shiftId,
-      'FINANCIAL',
-    );
+    const gate = shiftWriteGateFor(this.deps);
+    const eligibility = await resolveShiftBusinessDayWrite(gate, ctx, input.shiftId, 'FINANCIAL');
     if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'CLOSED')
@@ -59,7 +55,13 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
     }
 
     const nowIso = ctx.clock.now().toISOString();
-    const locked: Shift = { ...shift, status: 'LOCKED', lockedAt: nowIso, updatedAt: nowIso };
+    const locked: Shift = {
+      ...shift,
+      openingCash: await gate.readOpeningCash(shift.id),
+      status: 'LOCKED',
+      lockedAt: nowIso,
+      updatedAt: nowIso,
+    };
     await this.deps.shifts.save(locked);
 
     await this.deps.events.publish([
