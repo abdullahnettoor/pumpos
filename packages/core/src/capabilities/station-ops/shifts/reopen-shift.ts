@@ -10,6 +10,7 @@ import {
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
+import { shiftWriteGateFor, type ShiftWriteGateReader } from './resolve-shift-write.js';
 import type { StockVarianceRepository } from '../../inventory/index.js';
 
 export interface ReopenShiftCommand {
@@ -19,6 +20,7 @@ export interface ReopenShiftCommand {
 export interface ReopenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   summaries: ShiftSummaryWriter;
   stockVariances: StockVarianceRepository;
   events: EventPublisher;
@@ -30,18 +32,25 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
 
   async execute(input: ReopenShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
-    const discoveredShift = await this.deps.shifts.findByIdWithoutLock(input.shiftId);
+    const gate = shiftWriteGateFor(this.deps);
+    const { shift: discoveredShift } = await gate.discover(input.shiftId);
     if (!discoveredShift || discoveredShift.organizationId !== ctx.organizationId)
       return err(notFoundError('Shift', input.shiftId));
 
-    await this.deps.businessDays.lockStation(ctx.organizationId, discoveredShift.stationId);
-    await this.deps.businessDays.lockById(ctx.organizationId, discoveredShift.businessDayId);
-
     // Re-read under the canonical Station -> Business Day -> Shift lock order.
-    const shift = await this.deps.shifts.findById(input.shiftId);
+    const locked = await gate.lockForWrite({
+      organizationId: ctx.organizationId,
+      stationId: discoveredShift.stationId,
+      businessDayId: discoveredShift.businessDayId,
+      shiftId: input.shiftId,
+    });
+    const shift = locked.shift;
     if (!shift || shift.organizationId !== ctx.organizationId)
       return err(notFoundError('Shift', input.shiftId));
-    const businessDay = await this.deps.businessDays.findById(shift.businessDayId);
+    const businessDay =
+      locked.businessDay?.id === shift.businessDayId
+        ? locked.businessDay
+        : await this.deps.businessDays.findById(shift.businessDayId);
     if (
       !businessDay ||
       businessDay.organizationId !== ctx.organizationId ||

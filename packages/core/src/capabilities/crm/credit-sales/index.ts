@@ -9,7 +9,11 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import {
+  resolveFinancialAnchor,
+  type ShiftRepository,
+  type ShiftWriteGateReader,
+} from '../../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
@@ -54,6 +58,7 @@ export interface RecordCreditSaleDeps {
   customers: CustomerRepository;
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   events: EventPublisher;
 }
 
@@ -252,6 +257,7 @@ export interface RecordOmcCardSaleDeps {
   customers: CustomerRepository;
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   events: EventPublisher;
 }
 

@@ -10,7 +10,11 @@ import {
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
 import type { NozzleReadingRepository, ShiftRepository } from './ports.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import {
+  resolveShiftBusinessDayWrite,
+  shiftWriteGateFor,
+  type ShiftWriteGateReader,
+} from './resolve-shift-write.js';
 
 export interface RecordNozzleReadingsCommand {
   shiftId: string;
@@ -27,6 +31,7 @@ const schema = z.object({
 export interface RecordNozzleReadingsDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   nozzleReadings: NozzleReadingRepository;
   events: EventPublisher;
 }
@@ -55,8 +60,7 @@ export class RecordNozzleReadings implements UseCase<
       );
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      shiftWriteGateFor(this.deps),
       ctx,
       p.data.shiftId,
       'STOCK',

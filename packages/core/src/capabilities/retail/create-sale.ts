@@ -16,7 +16,12 @@ import type {
   Result,
   UseCase,
 } from '../../kernel/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import {
+  resolveShiftBusinessDayWrite,
+  shiftWriteGateFor,
+  type ShiftRepository,
+  type ShiftWriteGateReader,
+} from '../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { CustomerLedgerRepository } from '../crm/collections/index.js';
@@ -92,6 +97,7 @@ export interface CreateSaleDeps {
   customers: CustomerRepository;
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   /** Optional (T5): resolves each line's tax category + rates to freeze the split. */
   products?: ProductRepository;
   docNumbers: DocumentNumberGenerator;
@@ -127,8 +133,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
     }
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      shiftWriteGateFor(this.deps),
       ctx,
       cmd.shiftId,
       'STOCK',

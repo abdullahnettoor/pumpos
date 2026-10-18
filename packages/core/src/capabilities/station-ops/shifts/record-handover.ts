@@ -11,7 +11,11 @@ import {
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import {
+  resolveShiftBusinessDayWrite,
+  shiftWriteGateFor,
+  type ShiftWriteGateReader,
+} from './resolve-shift-write.js';
 import type {
   AcceptedHandoverReading,
   AttendantHandover,
@@ -47,6 +51,7 @@ export interface RecordHandoverCommand {
 export interface RecordHandoverDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   context: HandoverContextReader;
   handovers: HandoverRepository;
   events: EventPublisher;
@@ -135,8 +140,7 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     }
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      shiftWriteGateFor(this.deps),
       ctx,
       cmd.shiftId,
       'STOCK',

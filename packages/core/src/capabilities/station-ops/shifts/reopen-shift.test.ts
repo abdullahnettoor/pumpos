@@ -13,6 +13,7 @@ import type {
 } from '../business-days/index.js';
 import { ReopenShift } from './reopen-shift.js';
 import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
+import type { ShiftWriteGateReader, ShiftWriteLockTarget } from './resolve-shift-write.js';
 
 class ShiftRepo implements ShiftRepository {
   saved: Shift | null = null;
@@ -210,12 +211,47 @@ describe('ReopenShift', () => {
     const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
 
     expect(result.success).toBe(true);
-    expect(calls.slice(0, 5)).toEqual([
+    expect(calls.slice(0, 6)).toEqual([
       'shift-discovery',
+      'day-read',
       'station-lock',
       'day-lock',
-      'shift-lock',
       'day-read',
+      'shift-lock',
+    ]);
+  });
+
+  it('takes its locks through a wired ShiftWriteGateReader (#248)', async () => {
+    const calls: string[] = [];
+    const shifts = new ShiftRepo(shift, null, calls);
+    const { deps } = dependencies(shifts, openDay, calls);
+    const targets: ShiftWriteLockTarget[] = [];
+    const gate: ShiftWriteGateReader = {
+      async discover() {
+        calls.push('gate-discover');
+        return { shift, businessDay: openDay };
+      },
+      async lockForWrite(target) {
+        calls.push('gate-lock');
+        targets.push(target);
+        return { shift, businessDay: openDay };
+      },
+    };
+
+    const result = await new ReopenShift({ ...deps, shiftWriteGate: gate }).execute(
+      { shiftId: shift.id },
+      context,
+    );
+
+    expect(result.success).toBe(true);
+    expect(calls).toEqual(['gate-discover', 'gate-lock']);
+    expect(targets).toEqual([
+      {
+        organizationId: 'org-1',
+        stationId: shift.stationId,
+        businessDayId: shift.businessDayId,
+        shiftId: shift.id,
+      },
     ]);
   });
 

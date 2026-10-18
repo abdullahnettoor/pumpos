@@ -10,7 +10,11 @@ import {
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { Shift, ShiftRepository } from './ports.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import {
+  resolveShiftBusinessDayWrite,
+  shiftWriteGateFor,
+  type ShiftWriteGateReader,
+} from './resolve-shift-write.js';
 
 export interface LockShiftCommand {
   shiftId: string;
@@ -19,6 +23,7 @@ export interface LockShiftCommand {
 export interface LockShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
+  shiftWriteGate?: ShiftWriteGateReader;
   events: EventPublisher;
 }
 
@@ -29,8 +34,7 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
   async execute(input: LockShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      shiftWriteGateFor(this.deps),
       ctx,
       input.shiftId,
       'FINANCIAL',

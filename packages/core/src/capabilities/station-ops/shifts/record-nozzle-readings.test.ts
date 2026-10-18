@@ -229,7 +229,8 @@ describe('RecordNozzleReadings', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
-    expect(calls).toEqual(['shift-discovery']);
+    // Discovery reads the Shift and its Business Day unlocked (#248); no lock is taken.
+    expect(calls).toEqual(['shift-discovery', 'day-find']);
     expect(readings.updates).toEqual([]);
     expect(store.events).toEqual([]);
   });
