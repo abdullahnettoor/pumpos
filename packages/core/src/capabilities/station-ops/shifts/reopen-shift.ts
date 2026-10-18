@@ -8,13 +8,11 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
-import type { BusinessDayWriteRepository } from '../business-days/index.js';
+import type { Shift, ShiftSummaryWriter } from './ports.js';
 import {
   lockShiftWriteParents,
   lockedShiftOf,
-  shiftWriteGateFor,
-  type ShiftWriteGateReader,
+  type ShiftWriteDeps,
 } from './resolve-shift-write.js';
 import type { StockVarianceRepository } from '../../inventory/index.js';
 
@@ -22,10 +20,7 @@ export interface ReopenShiftCommand {
   shiftId: string;
 }
 
-export interface ReopenShiftDeps {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
-  shiftWriteGate?: ShiftWriteGateReader;
+export interface ReopenShiftDeps extends ShiftWriteDeps {
   summaries: ShiftSummaryWriter;
   stockVariances: StockVarianceRepository;
   events: EventPublisher;
@@ -37,7 +32,7 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
 
   async execute(input: ReopenShiftCommand, ctx: ExecutionContext): Promise<Result<Shift>> {
     if (!input?.shiftId) return err(validationError('shiftId is required'));
-    const gate = shiftWriteGateFor(this.deps);
+    const gate = this.deps.shiftWriteGate;
     // Lock the Shift whatever its day's status; the closed-day refusal is below.
     const parents = await lockShiftWriteParents(gate, ctx, input.shiftId, ['OPEN', 'CLOSED']);
     if (!parents.success) return parents;

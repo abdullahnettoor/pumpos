@@ -19,6 +19,7 @@ import type {
   Shift,
   ShiftRepository,
 } from './ports.js';
+import { withRepositoryShiftWriteGate } from './__tests__/repository-shift-write-gate.js';
 
 class ShiftRepo implements ShiftRepository {
   constructor(
@@ -230,13 +231,15 @@ function setup(
   const handovers = new HandoverRepo();
   const store = new InMemoryEventStore();
   const calls: string[] = [];
-  const useCase = new RecordHandover({
-    shifts: new ShiftRepo(shiftRow, calls),
-    businessDays: new BusinessDayRepo(dayStatus, calls),
-    context: new ContextReader(source),
-    handovers,
-    events: new InProcessEventDispatcher({ store }),
-  });
+  const useCase = new RecordHandover(
+    withRepositoryShiftWriteGate({
+      shifts: new ShiftRepo(shiftRow, calls),
+      businessDays: new BusinessDayRepo(dayStatus, calls),
+      context: new ContextReader(source),
+      handovers,
+      events: new InProcessEventDispatcher({ store }),
+    }),
+  );
   return { useCase, handovers, store, calls };
 }
 

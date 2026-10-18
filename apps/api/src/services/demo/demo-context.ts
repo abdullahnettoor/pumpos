@@ -9,6 +9,7 @@ import type {
 import type {
   DrizzleBusinessDayRepository,
   DrizzleShiftRepository,
+  DrizzleShiftWriteGateReader,
 } from '../../infra/repositories/station-ops-repositories.js';
 import type { DrizzleStockMovementRepository } from '../../infra/repositories/inventory-repositories.js';
 
@@ -30,6 +31,7 @@ export interface DemoContext {
   context: DemoContextFactory;
   shifts: DrizzleShiftRepository;
   businessDays: DrizzleBusinessDayRepository;
+  shiftWriteGate: DrizzleShiftWriteGateReader;
   stockMovements: DrizzleStockMovementRepository;
   managerId: string;
   accountantId: string;

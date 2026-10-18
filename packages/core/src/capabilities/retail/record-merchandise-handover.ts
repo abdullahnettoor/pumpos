@@ -16,13 +16,7 @@ import type {
   Result,
   UseCase,
 } from '../../kernel/index.js';
-import {
-  resolveShiftBusinessDayWrite,
-  shiftWriteGateFor,
-  type ShiftRepository,
-  type ShiftWriteGateReader,
-} from '../station-ops/shifts/index.js';
-import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import { computeLineTax } from '../finance/tax/index.js';
@@ -44,14 +38,11 @@ export interface RecordMerchandiseHandoverCommand {
   nonCashAmount?: number | string;
 }
 
-export interface RecordMerchandiseHandoverDeps {
+export interface RecordMerchandiseHandoverDeps extends ShiftWriteDeps {
   sales: SaleRepository;
   handovers: MerchandiseHandoverRepository;
   stock: StockMovementRepository;
   products: ProductRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
-  shiftWriteGate?: ShiftWriteGateReader;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
@@ -98,7 +89,7 @@ export class RecordMerchandiseHandover implements UseCase<
     const cmd = p.data;
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      shiftWriteGateFor(this.deps),
+      this.deps.shiftWriteGate,
       ctx,
       cmd.shiftId,
       'STOCK',

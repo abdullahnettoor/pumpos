@@ -29,7 +29,10 @@ import {
   DrizzleStockMovementRepository,
   DrizzleStockVarianceRepository,
 } from '../inventory-repositories.js';
-import { DrizzleShiftRepository } from '../station-ops-repositories.js';
+import {
+  DrizzleShiftRepository,
+  DrizzleShiftWriteGateReader,
+} from '../station-ops-repositories.js';
 import { DrizzleTankRepository } from '../setup-repositories.js';
 import { DrizzleBusinessDayRepository } from '../station-ops-repositories.js';
 
@@ -208,6 +211,7 @@ describe.skipIf(!CONNECTION)(
           tanks: new DrizzleTankRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
+          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
           events,
           decantationMeasurement: createDecantationMeasurement(tx, events),
         }).execute({ stationId: STATION, tankId, actualQuantity }, c),

@@ -140,13 +140,15 @@ describe('RecordCreditSale', () => {
   it('records a receivable on the customer ledger, business-day anchored, no shift link', async () => {
     const ledger = new LedgerRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordCreditSale({
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store }),
-    }).execute(
+    const result = await new RecordCreditSale(
+      withRepositoryShiftWriteGate({
+        ledger,
+        customers: new CustomerRepo([customer()]),
+        shifts: new ShiftRepo([shift()]),
+        businessDays: new BdRepo([bday()]),
+        events: new InProcessEventDispatcher({ store }),
+      }),
+    ).execute(
       {
         customerId: 'cust-1',
         amount: 4500,
@@ -172,21 +174,23 @@ describe('RecordCreditSale', () => {
 
   it('a back-office (station-anchored) credit sale has no attendant attribution', async () => {
     const ledger = new LedgerRepo();
-    const result = await new RecordCreditSale({
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([
-        {
-          id: 'bd-1',
-          organizationId: 'org-1',
-          stationId: 'st-1',
-          businessDate: '2026-03-15',
-          status: 'OPEN',
-        } as BusinessDay,
-      ]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute(
+    const result = await new RecordCreditSale(
+      withRepositoryShiftWriteGate({
+        ledger,
+        customers: new CustomerRepo([customer()]),
+        shifts: new ShiftRepo([shift()]),
+        businessDays: new BdRepo([
+          {
+            id: 'bd-1',
+            organizationId: 'org-1',
+            stationId: 'st-1',
+            businessDate: '2026-03-15',
+            status: 'OPEN',
+          } as BusinessDay,
+        ]),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute(
       { customerId: 'cust-1', amount: 1000, stationId: 'st-1', attendantId: 'att-9' },
       ctx(),
     );
@@ -201,13 +205,15 @@ describe('RecordCreditSale', () => {
     const ledger = new LedgerRepo();
     const closedShift = { ...shift(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:00:00Z' };
     const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:30:00Z' };
-    const result = await new RecordCreditSale({
-      ledger,
-      customers: new CustomerRepo([customer()]),
-      shifts: new ShiftRepo([closedShift]),
-      businessDays: new BdRepo([closedDay]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ customerId: 'cust-1', amount: 1000, shiftId: 'sh-1' }, ctx());
+    const result = await new RecordCreditSale(
+      withRepositoryShiftWriteGate({
+        ledger,
+        customers: new CustomerRepo([customer()]),
+        shifts: new ShiftRepo([closedShift]),
+        businessDays: new BdRepo([closedDay]),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute({ customerId: 'cust-1', amount: 1000, shiftId: 'sh-1' }, ctx());
 
     expect(result.success).toBe(true);
     if (result.success)
@@ -215,13 +221,15 @@ describe('RecordCreditSale', () => {
   });
 
   it('rejects an unknown customer', async () => {
-    const result = await new RecordCreditSale({
-      ledger: new LedgerRepo(),
-      customers: new CustomerRepo([]),
-      shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([]),
-      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ customerId: 'nope', amount: 100, shiftId: 'sh-1' }, ctx());
+    const result = await new RecordCreditSale(
+      withRepositoryShiftWriteGate({
+        ledger: new LedgerRepo(),
+        customers: new CustomerRepo([]),
+        shifts: new ShiftRepo([shift()]),
+        businessDays: new BdRepo([]),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }),
+    ).execute({ customerId: 'nope', amount: 100, shiftId: 'sh-1' }, ctx());
     expect(result.success).toBe(false);
   });
 });
@@ -230,6 +238,7 @@ describe('RecordCreditSale', () => {
 // Tenant-scoped voids: shiftless entries must not be deletable cross-tenant.
 // ---------------------------------------------------------------------------
 import { VoidCreditSale, VoidOmcCardSale } from './index.js';
+import { withRepositoryShiftWriteGate } from '../../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 class ScopedLedgerRepo implements CustomerLedgerRepository {
   constructor(readonly rows: Array<CustomerLedgerEntry & { organizationId: string }>) {}

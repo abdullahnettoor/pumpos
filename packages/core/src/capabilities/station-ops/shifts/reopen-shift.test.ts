@@ -14,6 +14,7 @@ import type {
 import { ReopenShift } from './reopen-shift.js';
 import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
 import type { ShiftWriteGateReader, ShiftWriteLockTarget } from './resolve-shift-write.js';
+import { withRepositoryShiftWriteGate } from './__tests__/repository-shift-write-gate.js';
 
 class ShiftRepo implements ShiftRepository {
   saved: Shift | null = null;
@@ -148,7 +149,10 @@ describe('ReopenShift', () => {
     const shifts = new ShiftRepo(shift);
     const { deps, summaries } = dependencies(shifts);
 
-    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: shift.id },
+      context,
+    );
 
     expect(result.success).toBe(true);
     expect(shifts.saved).toMatchObject({
@@ -168,7 +172,10 @@ describe('ReopenShift', () => {
     };
     const { deps } = dependencies(new ShiftRepo(shift), closedDay);
 
-    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: shift.id },
+      context,
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -188,7 +195,10 @@ describe('ReopenShift', () => {
     };
     const { deps } = dependencies(new ShiftRepo(shift, otherOpenShift));
 
-    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: shift.id },
+      context,
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.message).toContain('another shift is currently open');
@@ -197,7 +207,10 @@ describe('ReopenShift', () => {
   it('rejects reopening when the Shift has an attributed Tank Dip', async () => {
     const { deps } = dependencies(new ShiftRepo(shift), openDay, undefined, true);
 
-    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: shift.id },
+      context,
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.message).toContain('attributed Tank Dip');
@@ -208,7 +221,10 @@ describe('ReopenShift', () => {
     const shifts = new ShiftRepo(shift, null, calls);
     const { deps } = dependencies(shifts, openDay, calls);
 
-    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: shift.id },
+      context,
+    );
 
     expect(result.success).toBe(true);
     expect(calls.slice(0, 6)).toEqual([
@@ -242,10 +258,9 @@ describe('ReopenShift', () => {
       },
     };
 
-    const result = await new ReopenShift({ ...deps, shiftWriteGate: gate }).execute(
-      { shiftId: shift.id },
-      context,
-    );
+    const result = await new ReopenShift(
+      withRepositoryShiftWriteGate({ ...deps, shiftWriteGate: gate }),
+    ).execute({ shiftId: shift.id }, context);
 
     expect(result.success).toBe(true);
     expect(calls).toEqual(['gate-discover', 'gate-lock', 'gate-opening-cash']);
@@ -265,20 +280,22 @@ describe('ReopenShift', () => {
   it('returns the Opening Floats read after the gate took its locks (#248)', async () => {
     const { openingCash: _stale, ...gatedShift } = shift;
     const { deps } = dependencies();
-    const result = await new ReopenShift({
-      ...deps,
-      shiftWriteGate: {
-        async discover() {
-          return { shift: gatedShift, businessDay: openDay };
+    const result = await new ReopenShift(
+      withRepositoryShiftWriteGate({
+        ...deps,
+        shiftWriteGate: {
+          async discover() {
+            return { shift: gatedShift, businessDay: openDay };
+          },
+          async lockForWrite() {
+            return { shift: gatedShift, businessDay: openDay };
+          },
+          async readOpeningCash() {
+            return '750.00';
+          },
         },
-        async lockForWrite() {
-          return { shift: gatedShift, businessDay: openDay };
-        },
-        async readOpeningCash() {
-          return '750.00';
-        },
-      },
-    }).execute({ shiftId: shift.id }, context);
+      }),
+    ).execute({ shiftId: shift.id }, context);
 
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.openingCash).toBe('750.00');
@@ -289,7 +306,10 @@ describe('ReopenShift', () => {
     const shifts = new ShiftRepo(locked);
     const { deps } = dependencies(shifts);
 
-    const result = await new ReopenShift(deps).execute({ shiftId: locked.id }, context);
+    const result = await new ReopenShift(withRepositoryShiftWriteGate(deps)).execute(
+      { shiftId: locked.id },
+      context,
+    );
 
     expect(result.success).toBe(true);
     expect(shifts.saved).toMatchObject({ status: 'OPEN', lockedAt: null });

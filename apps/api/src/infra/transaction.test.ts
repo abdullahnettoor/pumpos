@@ -16,6 +16,7 @@ import {
   type HandoverTerminalEntry,
   type Shift,
   type ShiftRepository,
+  type ShiftWriteGateReader,
 } from '@pump/core';
 import type { DbClient } from '@pump/db';
 import { runInTransaction } from './transaction.js';
@@ -231,6 +232,18 @@ class HandoverRepo implements HandoverRepository {
   }
 }
 
+const shiftWriteGate: ShiftWriteGateReader = {
+  async discover() {
+    return { shift, businessDay };
+  },
+  async lockForWrite() {
+    return { shift, businessDay };
+  },
+  async readOpeningCash() {
+    return shift.openingCash;
+  },
+};
+
 const ctx: ExecutionContext = {
   organizationId: 'org-1',
   stationId: 'station-1',
@@ -253,6 +266,7 @@ describe('runInTransaction Handover atomicity', () => {
           const useCase = new RecordHandover({
             shifts: new ShiftRepo(),
             businessDays: new BusinessDayRepo(),
+            shiftWriteGate,
             context: new ContextReader(),
             handovers: new HandoverRepo(stateFor(tx)),
             events,

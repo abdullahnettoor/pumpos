@@ -3,11 +3,8 @@ import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import type { Shift, ShiftRepository } from './ports.js';
-import {
-  resolveShiftBusinessDayWrite,
-  sequentialShiftWriteGate,
-  shiftWriteGateFor,
-} from './resolve-shift-write.js';
+import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import { repositoryShiftWriteGate } from './__tests__/repository-shift-write-gate.js';
 import type {
   ShiftWriteGateReader,
   ShiftWriteGateRows,
@@ -77,6 +74,9 @@ class FakeGate implements ShiftWriteGateReader {
     this.calls.push('lock');
     this.lockTargets.push(target);
     return this.locked;
+  }
+  async readOpeningCash() {
+    return '0';
   }
 }
 
@@ -241,7 +241,7 @@ describe('resolveShiftBusinessDayWrite over the ShiftWriteGateReader port', () =
   });
 });
 
-describe('sequentialShiftWriteGate (repository-backed reference adapter)', () => {
+describe('repositoryShiftWriteGate (the in-memory gate the use-case tests run on)', () => {
   function repos(calls: string[], dayRow: BusinessDay | null = day()) {
     const shifts: ShiftRepository = {
       async findById() {
@@ -286,7 +286,7 @@ describe('sequentialShiftWriteGate (repository-backed reference adapter)', () =>
 
   it('reproduces the original discover -> lock -> re-read statement sequence', async () => {
     const calls: string[] = [];
-    const gate = sequentialShiftWriteGate(repos(calls));
+    const gate = repositoryShiftWriteGate(repos(calls));
     const result = await resolveShiftBusinessDayWrite(gate, ctx, 'shift-1', 'STOCK');
     expect(result.success).toBe(true);
     expect(calls).toEqual([
@@ -301,7 +301,7 @@ describe('sequentialShiftWriteGate (repository-backed reference adapter)', () =>
 
   it('stops before the Shift lock when the locked day refuses the write, as before #248', async () => {
     const calls: string[] = [];
-    const gate = sequentialShiftWriteGate(repos(calls, day({ status: 'CLOSED' })));
+    const gate = repositoryShiftWriteGate(repos(calls, day({ status: 'CLOSED' })));
     const result = await resolveShiftBusinessDayWrite(gate, ctx, 'shift-1', 'STOCK');
     expect(result.success).toBe(false);
     expect(calls).toEqual([
@@ -321,21 +321,12 @@ describe('sequentialShiftWriteGate (repository-backed reference adapter)', () =>
       return null;
     };
     const result = await resolveShiftBusinessDayWrite(
-      sequentialShiftWriteGate(deps),
+      repositoryShiftWriteGate(deps),
       ctx,
       'shift-1',
       'STOCK',
     );
     expect(result).toEqual(notFound('Shift', 'shift-1'));
     expect(calls).toEqual(['shift-discovery']);
-  });
-
-  it('shiftWriteGateFor prefers a consolidated gate over the repositories', async () => {
-    const calls: string[] = [];
-    const consolidated = new FakeGate({ shift: shift(), businessDay: day() });
-    expect(shiftWriteGateFor({ ...repos(calls), shiftWriteGate: consolidated })).toBe(consolidated);
-    const fallback = shiftWriteGateFor(repos(calls));
-    await fallback.discover('shift-1');
-    expect(calls).toEqual(['shift-discovery', 'day-find']);
   });
 });

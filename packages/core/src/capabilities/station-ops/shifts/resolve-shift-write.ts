@@ -63,46 +63,11 @@ export interface ShiftWriteGateReader {
   readOpeningCash(shiftId: string): Promise<string>;
 }
 
-/**
- * The gate composed from the repositories, one statement per read: shift and
- * day discovery, station lock, day lock, day re-read, shift re-read under lock.
- * Used where no consolidated gate is wired.
- */
-export function sequentialShiftWriteGate(deps: {
+/** The repositories and gate every Shift-anchored write is resolved through. */
+export interface ShiftWriteDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
-}): ShiftWriteGateReader {
-  const { shifts, businessDays } = deps;
-  return {
-    async discover(shiftId) {
-      const shift = await shifts.findByIdWithoutLock(shiftId);
-      if (!shift) return { shift: null, businessDay: null };
-      return { shift, businessDay: await businessDays.findById(shift.businessDayId) };
-    },
-    async lockForWrite(target) {
-      await businessDays.lockStation(target.organizationId, target.stationId);
-      await businessDays.lockById(target.organizationId, target.businessDayId);
-      const businessDay = await businessDays.findById(target.businessDayId);
-      const dayAdmitsWrite =
-        businessDay?.organizationId === target.organizationId &&
-        businessDay.stationId === target.stationId &&
-        target.writableDayStatuses.includes(businessDay.status);
-      if (!dayAdmitsWrite) return { shift: null, businessDay };
-      return { shift: await shifts.findById(target.shiftId), businessDay };
-    },
-    async readOpeningCash(shiftId) {
-      return (await shifts.findByIdWithoutLock(shiftId))?.openingCash ?? '0';
-    },
-  };
-}
-
-/** The consolidated gate when one is wired, else the repository-backed one. */
-export function shiftWriteGateFor(deps: {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
-  shiftWriteGate?: ShiftWriteGateReader;
-}): ShiftWriteGateReader {
-  return deps.shiftWriteGate ?? sequentialShiftWriteGate(deps);
+  shiftWriteGate: ShiftWriteGateReader;
 }
 
 /** The parents a Shift write was locked under, and the rows read under that lock. */
