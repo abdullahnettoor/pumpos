@@ -209,6 +209,9 @@ function renderBadge(path: string, b: SidebarBadges, collapsed: boolean): React.
   );
 }
 
+/** Open modal layers that own Esc before the overlay sidebar does. */
+const OPEN_LAYER = '.drawer-container, [aria-modal="true"]';
+
 export const AppShell: React.FC<AppShellProps> = ({
   children,
   navItems,
@@ -243,6 +246,12 @@ export const AppShell: React.FC<AppShellProps> = ({
   // 0 = not measured yet: stay expanded rather than flash a rail.
   const narrow = shellWidth > 0 && shellWidth < RAIL_BREAKPOINT;
   if (!narrow && overlayOpen) setOverlayOpen(false);
+  // Any navigation (sidebar, palette, top bar) dismisses the overlay.
+  const [seenPath, setSeenPath] = useState(currentPath);
+  if (seenPath !== currentPath) {
+    setSeenPath(currentPath);
+    if (overlayOpen) setOverlayOpen(false);
+  }
   const showOverlay = narrow && overlayOpen;
   const collapsed = narrow ? !overlayOpen : userCollapsed;
   const toggleCollapsed = () => {
@@ -274,12 +283,14 @@ export const AppShell: React.FC<AppShellProps> = ({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  // The overlay closes on Esc (unless a drawer or dialog already took it) and
+  // The overlay closes on Esc (unless a drawer or dialog is open) and
   // on a press outside the panel.
   useEffect(() => {
     if (!showOverlay) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // A drawer or dialog above takes this Esc; the overlay waits for the next.
+      if (document.querySelector(OPEN_LAYER)) return;
       setOverlayOpen(false);
       footToggleRef.current?.focus();
     };
@@ -392,17 +403,10 @@ export const AppShell: React.FC<AppShellProps> = ({
           <div
             ref={panelRef}
             data-testid="sidebar-panel"
+            className={showOverlay ? 'z-30 shadow-(--shadow-drawer)' : undefined}
             style={{
               ...(showOverlay
-                ? {
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: '220px',
-                    zIndex: 30,
-                    boxShadow: 'var(--shadow-drawer)',
-                  }
+                ? { position: 'absolute', left: 0, top: 0, bottom: 0, width: '220px' }
                 : { height: '100%' }),
               backgroundColor: 'var(--bg-surface-alt)',
               borderRight: '1px solid var(--border-soft)',
@@ -457,16 +461,13 @@ export const AppShell: React.FC<AppShellProps> = ({
                       );
                       return (
                         <React.Fragment key={item.path}>
-                          {collapsed ? (
-                            <Tooltip
-                              placement="right"
-                              content={navTooltip(item.label, item.path, badges)}
-                            >
-                              {button}
-                            </Tooltip>
-                          ) : (
-                            button
-                          )}
+                          <Tooltip
+                            placement="right"
+                            disabled={!collapsed}
+                            content={navTooltip(item.label, item.path, badges)}
+                          >
+                            {button}
+                          </Tooltip>
                         </React.Fragment>
                       );
                     })}

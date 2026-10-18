@@ -6,6 +6,7 @@ import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from './primitives/ToastProvider.js';
 import { TooltipProvider } from './primitives/Tooltip.js';
+import { Drawer } from './Drawer.js';
 import { AppShell, SIDEBAR_COLLAPSED_KEY, isSidebarShortcut, type NavItem } from './AppShell.js';
 import type { SidebarBadges } from '../query/useSidebarBadges.js';
 import { NAV_PAGES } from '../nav-intent/routes.js';
@@ -58,13 +59,15 @@ const renderWithProviders = (ui: React.ReactElement) => {
       queries: { retry: false },
     },
   });
-  return render(
+  const wrap = (node: React.ReactElement) => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ToastProvider>{ui}</ToastProvider>
+        <ToastProvider>{node}</ToastProvider>
       </TooltipProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const result = render(wrap(ui));
+  return { ...result, rerender: (node: React.ReactElement) => result.rerender(wrap(node)) };
 };
 
 describe('AppShell navigation and icons', () => {
@@ -173,21 +176,28 @@ describe('AppShell navigation and icons', () => {
 
 const station = (id: string, name: string) => ({ id, name }) as any;
 
-const shell = (props: Partial<React.ComponentProps<typeof AppShell>> = {}) =>
-  renderWithProviders(
-    <AppShell
-      navItems={[...NAV_PAGES]}
-      currentPath="/shifts"
-      onNavigate={() => {}}
-      userRole="Owner"
-      userName="Admin User"
-      syncStatus="synced"
-      onLogout={() => {}}
-      {...props}
-    >
-      <div>Body</div>
-    </AppShell>,
-  );
+const shellEl = (
+  props: Partial<React.ComponentProps<typeof AppShell>> = {},
+  body: React.ReactNode = <div>Body</div>,
+) => (
+  <AppShell
+    navItems={[...NAV_PAGES]}
+    currentPath="/shifts"
+    onNavigate={() => {}}
+    userRole="Owner"
+    userName="Admin User"
+    syncStatus="synced"
+    onLogout={() => {}}
+    {...props}
+  >
+    {body}
+  </AppShell>
+);
+
+const shell = (
+  props: Partial<React.ComponentProps<typeof AppShell>> = {},
+  body?: React.ReactNode,
+) => renderWithProviders(shellEl(props, body));
 
 const sidebar = () => screen.getByRole('navigation').textContent!;
 
@@ -387,6 +397,56 @@ describe('AppShell rail tooltips (#657)', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Shifts');
   });
 
+  it('shows on pointer hover, on the right of the icon', async () => {
+    // jsdom has no layout: give the viewport room so the bubble is not flipped.
+    stub.restore();
+    const size = (prop: 'clientWidth' | 'clientHeight', v: number) =>
+      vi.spyOn(document.documentElement, prop, 'get').mockReturnValue(v);
+    const spies: { mockRestore(): void }[] = [size('clientWidth', 1400), size('clientHeight', 900)];
+    spies.push(
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: Element,
+      ) {
+        const width = this.classList.contains('app-shell') ? 1400 : 40;
+        return {
+          width,
+          height: 30,
+          x: 10,
+          y: 100,
+          top: 100,
+          left: 10,
+          right: 10 + width,
+          bottom: 130,
+          toJSON() {},
+        };
+      }),
+    );
+    try {
+      shell();
+      collapse();
+      const btn = screen.getByRole('button', { name: 'Shifts' });
+      fireEvent.pointerMove(btn, { pointerType: 'mouse' });
+      const tip = await screen.findAllByText('Shifts', {}, { timeout: 1000 });
+      const content = tip.map((n) => n.closest('[data-side]')).find(Boolean);
+      expect(content?.getAttribute('data-side')).toBe('right');
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+  });
+
+  it('keeps focus on the same nav button across Ctrl+\\ and the foot toggle', () => {
+    shell();
+    const btn = screen.getByRole('button', { name: 'Shifts' });
+    btn.focus();
+    fireEvent.keyDown(btn, { key: '\\', code: 'Backslash', ctrlKey: true });
+    expect(document.activeElement).toBe(btn);
+    expect(screen.getByRole('button', { name: 'Shifts' })).toBe(btn);
+    const foot = screen.getByRole('button', { name: /expand sidebar/i });
+    foot.focus();
+    fireEvent.click(foot);
+    expect(document.activeElement).toBe(foot);
+  });
+
   it('adds the badge text to the tooltip', () => {
     mockBadges = { shiftRunning: false, inventoryAlerts: 3, overdueCustomers: 0, openPastDays: 0 };
     shell();
@@ -456,13 +516,64 @@ describe('AppShell overlay sidebar below 1200px (#657)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /expand sidebar/i }));
   });
 
-  it('leaves Esc to whoever already handled it', () => {
+  it('leaves Esc to an open Drawer, then closes the overlay on the next one', () => {
+    const onClose = vi.fn();
+    shell(
+      {},
+      <Drawer isOpen onClose={onClose} title="Edit">
+        <div>Drawer body</div>
+      </Drawer>,
+    );
+    expand();
+    const expandBtn = screen.getByRole('button', { name: /collapse sidebar/i });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Operate')).not.toBeNull();
+    expect(document.activeElement).not.toBe(expandBtn);
+  });
+
+  it('closes the overlay on Esc once no Drawer is open', () => {
+    const { rerender } = shell(
+      {},
+      <Drawer isOpen onClose={() => {}} title="Edit">
+        <div>Drawer body</div>
+      </Drawer>,
+    );
+    expand();
+    rerender(shellEl());
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByText('Operate')).toBeNull();
+  });
+
+  it('closes when the page changes from elsewhere (palette, top bar)', () => {
+    const { rerender } = shell();
+    expand();
+    rerender(shellEl({ currentPath: '/suppliers' }));
+    expect(screen.queryByText('Operate')).toBeNull();
+  });
+
+  it('closes via the foot Collapse button', () => {
     shell();
     expand();
-    const e = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true });
-    e.preventDefault();
-    document.dispatchEvent(e);
-    expect(screen.getByText('Operate')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /collapse sidebar/i }));
+    expect(screen.queryByText('Operate')).toBeNull();
+  });
+
+  it.each(['0', '1'])(
+    'leaves a saved preference of %s alone when the overlay opens and closes',
+    (v) => {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, v);
+      shell();
+      expand();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe(v);
+    },
+  );
+
+  it('shows the rail tooltip on the forced narrow rail', () => {
+    shell();
+    fireEvent.focus(screen.getByRole('button', { name: 'Shifts' }));
+    expect(screen.getByRole('tooltip').textContent).toBe('Shifts');
   });
 
   it('closes after navigating', () => {

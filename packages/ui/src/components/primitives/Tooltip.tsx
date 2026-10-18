@@ -8,6 +8,8 @@ export interface TooltipProps {
   /** Preferred side; it flips when there is no room there. */
   placement?: 'top' | 'bottom' | 'left' | 'right';
   children: React.ReactElement;
+  /** Keeps the trigger mounted (so it keeps focus) but never shows the bubble. */
+  disabled?: boolean;
 }
 
 /** Hover delay before a tooltip shows, in ms. Focus shows it at once. */
@@ -43,21 +45,28 @@ export const TOOLTIP_BUBBLE =
  * handling, so a trigger at the window's edge keeps its bubble on screen.
  * Needs the app's `TooltipProvider`.
  */
-export const Tooltip: React.FC<TooltipProps> = ({ content, placement = 'top', children }) => (
+export const Tooltip: React.FC<TooltipProps> = ({
+  content,
+  placement = 'top',
+  children,
+  disabled = false,
+}) => (
   <RadixTooltip.Root>
     <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
-    <RadixTooltip.Portal>
-      <RadixTooltip.Content
-        side={placement}
-        sideOffset={6}
-        collisionPadding={8}
-        className={cn(
-          TOOLTIP_BUBBLE,
-          'pointer-events-none whitespace-nowrap px-2 py-1 text-[12px] font-medium leading-[1.4]',
-        )}
-      >
-        {content}
-      </RadixTooltip.Content>
-    </RadixTooltip.Portal>
+    {!disabled && (
+      <RadixTooltip.Portal>
+        <RadixTooltip.Content
+          side={placement}
+          sideOffset={6}
+          collisionPadding={8}
+          className={cn(
+            TOOLTIP_BUBBLE,
+            'pointer-events-none whitespace-nowrap px-2 py-1 text-[12px] font-medium leading-[1.4]',
+          )}
+        >
+          {content}
+        </RadixTooltip.Content>
+      </RadixTooltip.Portal>
+    )}
   </RadixTooltip.Root>
 );
