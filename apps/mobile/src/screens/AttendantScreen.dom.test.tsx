@@ -20,7 +20,13 @@ const assignment: {
   refetch: () => Promise<unknown>;
 } = { data: null, isLoading: false, isFetching: false, isError: false, refetch };
 const merchHandovers: { data: unknown[] } = { data: [] };
-const access: { data: unknown } = { data: undefined };
+const accessRefetch = vi.fn(() => Promise.resolve());
+const access: { data: unknown; isError: boolean; isFetching: boolean; refetch: () => unknown } = {
+  data: undefined,
+  isError: false,
+  isFetching: false,
+  refetch: accessRefetch,
+};
 const withHandover = (enabled: boolean) => ({
   plan: 'PRO',
   capabilities: {
@@ -177,6 +183,18 @@ const makeAssignment = (
   };
 };
 
+const RECORDED_NOZZLE = {
+  nozzleId: NOZZLE,
+  nozzleName: 'N1',
+  productId: 'prod-1',
+  productName: 'Petrol',
+  unit: 'L',
+  unitPrice: 100,
+  openingReading: 1000,
+  closingReading: 1100,
+  testingVolume: 0,
+  netVolume: 100,
+};
 const RECORDED_HANDOVER = {
   cashHandedOver: '12254',
   cardHandedOver: '0',
@@ -211,6 +229,8 @@ describe('AttendantScreen', () => {
     Object.assign(assignment, { data: null, isLoading: false, isFetching: false, isError: false });
     merchHandovers.data = [];
     access.data = withHandover(true);
+    access.isError = false;
+    accessRefetch.mockClear();
   });
   afterEach(cleanup);
 
@@ -223,12 +243,37 @@ describe('AttendantScreen', () => {
       expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
     });
 
-    it('offers nothing before the Access Document is known', () => {
+    it('shows loading, not the refusal, while the Access Document loads', () => {
       access.data = undefined;
+      access.isError = false;
       assignment.data = makeAssignment();
       renderScreen();
-      expect(screen.queryByText('No shift assigned')).toBeNull();
+      expect(screen.getByText('Loading your shift…')).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
       expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+    });
+
+    it('offers retry, not the refusal, when the Access Document fails to load', () => {
+      access.data = undefined;
+      access.isError = true;
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.getByText("Couldn't load your shift")).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      expect(accessRefetch).toHaveBeenCalled();
+    });
+
+    it('keeps an already recorded handover visible, read-only', () => {
+      access.data = withHandover(false);
+      assignment.data = makeAssignment({
+        du: { handover: RECORDED_HANDOVER, nozzles: [RECORDED_NOZZLE] },
+      });
+      renderScreen();
+      expect(screen.getByText('Handover recorded')).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Edit before shift closes' })).toBeNull();
     });
   });
 
@@ -345,20 +390,7 @@ describe('AttendantScreen', () => {
       assignment.data = makeAssignment({
         du: {
           handover: RECORDED_HANDOVER,
-          nozzles: [
-            {
-              nozzleId: NOZZLE,
-              nozzleName: 'N1',
-              productId: 'prod-1',
-              productName: 'Petrol',
-              unit: 'L',
-              unitPrice: 100,
-              openingReading: 1000,
-              closingReading: 1100,
-              testingVolume: 0,
-              netVolume: 100,
-            },
-          ],
+          nozzles: [RECORDED_NOZZLE],
         },
       });
       merchHandovers.data = [

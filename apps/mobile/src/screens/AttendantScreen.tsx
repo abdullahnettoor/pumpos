@@ -39,11 +39,14 @@ export const AttendantScreen: React.FC<{
   /** The org's stations: the Shift's station gives the timezone times are shown in. */
   stations?: readonly Station[];
 }> = ({ userName, onSignOut, stations = [] }) => {
-  // Own handover is a Product Capability (#649). Unknown access reads as not
-  // offered; the server refuses the write regardless.
+  // Own handover is a Product Capability (#649). Unknown access (loading or
+  // failed) hides the form but is not "not entitled"; the server refuses the
+  // write regardless. History stays readable on every plan.
+  const accessQ = useAccess();
+  const accessKnown = Boolean(accessQ.data);
   const offered =
-    capabilityState(useAccess().data, ATTENDANT_PHONE_HANDOVER_CAPABILITY).status === 'enabled';
-  const assignmentQ = useMyAssignment({ enabled: offered });
+    capabilityState(accessQ.data, ATTENDANT_PHONE_HANDOVER_CAPABILITY).status === 'enabled';
+  const assignmentQ = useMyAssignment();
   const assignment: MyAssignment | null | undefined = assignmentQ.data;
   const dus: AssignedDu[] = useMemo(
     () => assignment?.dispenserUnits ?? [],
@@ -89,12 +92,22 @@ export const AttendantScreen: React.FC<{
 
   // The form has its own sticky save bar at the foot of the scroller; the
   // other states just need breathing room.
-  const isForm = offered && !assignmentQ.isLoading && hasWork && !recap;
+  const isForm = accessKnown && offered && !assignmentQ.isLoading && hasWork && !recap;
   let body: React.ReactNode;
-  if (!offered) {
-    body = <HandoverNotOfferedState />;
+  if (!accessKnown) {
+    body = accessQ.isError ? (
+      <NoShiftState
+        refreshing={accessQ.isFetching}
+        failed
+        onRefresh={() => runTask(accessQ.refetch(), (e: unknown) => console.error(e))}
+      />
+    ) : (
+      <p className="py-16 text-center text-sm text-text-muted">Loading your shift…</p>
+    );
   } else if (assignmentQ.isLoading) {
     body = <p className="py-16 text-center text-sm text-text-muted">Loading your shift…</p>;
+  } else if (!hasWork && !offered) {
+    body = <HandoverNotOfferedState />;
   } else if (!hasWork) {
     body = (
       <NoShiftState
@@ -109,12 +122,18 @@ export const AttendantScreen: React.FC<{
         recap={recap}
         shiftName={assignment?.shift?.templateName}
         timeZone={timeZone}
-        onEdit={() => {
-          setAccepted(null);
-          setEditing(true);
-        }}
+        onEdit={
+          offered
+            ? () => {
+                setAccepted(null);
+                setEditing(true);
+              }
+            : undefined
+        }
       />
     );
+  } else if (!offered) {
+    body = <HandoverNotOfferedState />;
   } else {
     body = (
       <>
