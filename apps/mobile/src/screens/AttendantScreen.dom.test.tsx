@@ -20,12 +20,26 @@ const assignment: {
   refetch: () => Promise<unknown>;
 } = { data: null, isLoading: false, isFetching: false, isError: false, refetch };
 const merchHandovers: { data: unknown[] } = { data: [] };
+const accessRefetch = vi.fn(() => Promise.resolve());
+const access: { data: unknown; isError: boolean; isFetching: boolean; refetch: () => unknown } = {
+  data: undefined,
+  isError: false,
+  isFetching: false,
+  refetch: accessRefetch,
+};
+const withHandover = (enabled: boolean) => ({
+  plan: 'PRO',
+  capabilities: {
+    'handover.attendant_phone': { enabled, title: 'Attendant phone handover' },
+  },
+});
 
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     useMyAssignment: () => assignment,
+    useAccess: () => access,
     useStations: () => ({
       data: [
         { id: 'station-0', name: 'Wrong Station' },
@@ -169,6 +183,18 @@ const makeAssignment = (
   };
 };
 
+const RECORDED_NOZZLE = {
+  nozzleId: NOZZLE,
+  nozzleName: 'N1',
+  productId: 'prod-1',
+  productName: 'Petrol',
+  unit: 'L',
+  unitPrice: 100,
+  openingReading: 1000,
+  closingReading: 1100,
+  testingVolume: 0,
+  netVolume: 100,
+};
 const RECORDED_HANDOVER = {
   cashHandedOver: '12254',
   cardHandedOver: '0',
@@ -202,8 +228,54 @@ describe('AttendantScreen', () => {
     refetch.mockClear();
     Object.assign(assignment, { data: null, isLoading: false, isFetching: false, isError: false });
     merchHandovers.data = [];
+    access.data = withHandover(true);
+    access.isError = false;
+    accessRefetch.mockClear();
   });
   afterEach(cleanup);
+
+  describe('on a plan without Attendant phone handover (#649)', () => {
+    it('offers no handover form and points to the manager', () => {
+      access.data = withHandover(false);
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.getByText('Your manager records your handover')).toBeDefined();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+    });
+
+    it('shows loading, not the refusal, while the Access Document loads', () => {
+      access.data = undefined;
+      access.isError = false;
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.getByText('Loading your shift…')).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+    });
+
+    it('offers retry, not the refusal, when the Access Document fails to load', () => {
+      access.data = undefined;
+      access.isError = true;
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.getByText("Couldn't load your shift")).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      expect(accessRefetch).toHaveBeenCalled();
+    });
+
+    it('keeps an already recorded handover visible, read-only', () => {
+      access.data = withHandover(false);
+      assignment.data = makeAssignment({
+        du: { handover: RECORDED_HANDOVER, nozzles: [RECORDED_NOZZLE] },
+      });
+      renderScreen();
+      expect(screen.getByText('Handover recorded')).toBeDefined();
+      expect(screen.queryByText('Your manager records your handover')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Edit before shift closes' })).toBeNull();
+    });
+  });
 
   it('names the Station and the attendant in the header', () => {
     assignment.data = makeAssignment();
@@ -318,20 +390,7 @@ describe('AttendantScreen', () => {
       assignment.data = makeAssignment({
         du: {
           handover: RECORDED_HANDOVER,
-          nozzles: [
-            {
-              nozzleId: NOZZLE,
-              nozzleName: 'N1',
-              productId: 'prod-1',
-              productName: 'Petrol',
-              unit: 'L',
-              unitPrice: 100,
-              openingReading: 1000,
-              closingReading: 1100,
-              testingVolume: 0,
-              netVolume: 100,
-            },
-          ],
+          nozzles: [RECORDED_NOZZLE],
         },
       });
       merchHandovers.data = [

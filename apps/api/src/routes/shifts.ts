@@ -8,6 +8,7 @@ import {
   can,
   compareByDispenserThenNozzle,
   dispenserLabel,
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
   isAttendant,
   isAuthorizedForStation,
   isHandoverSelfScoped,
@@ -28,6 +29,7 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
@@ -1354,6 +1356,9 @@ shiftsRouter.get('/handovers', async (c) => {
 shiftsRouter.post(
   '/handovers',
   writePolicyGuard('POST /shifts/handovers'),
+  requireCapabilityGuard(ATTENDANT_PHONE_HANDOVER_CAPABILITY, {
+    appliesTo: (u) => isAttendant(u.role),
+  }),
   validateJson(shiftIdBody),
   async (c) => {
     const db = c.var.db;

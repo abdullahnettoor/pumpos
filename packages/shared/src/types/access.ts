@@ -20,6 +20,9 @@ export type ProductPlanKey = 'CORE' | 'PRO' | 'PRO_PLUS';
  */
 export const ATTENDANT_REPORT_CAPABILITY = 'reports.attendant';
 
+/** An Attendant recording their own handover from the phone (#649). */
+export const ATTENDANT_PHONE_HANDOVER_CAPABILITY = 'handover.attendant_phone';
+
 /** Per-user Permission changes on top of Role defaults (ADR 0013). */
 export const CUSTOM_PERMISSIONS_CAPABILITY = 'permissions.custom';
 

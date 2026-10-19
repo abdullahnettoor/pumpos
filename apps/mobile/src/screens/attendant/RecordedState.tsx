@@ -14,7 +14,8 @@ export const RecordedState: React.FC<{
   shiftName: string | null | undefined;
   /** The station's timezone: the recorded time reads in it. */
   timeZone: string;
-  onEdit: () => void;
+  /** Absent when the plan no longer offers Attendant handover: the summary is read-only. */
+  onEdit?: () => void;
 }> = ({ recap, shiftName, timeZone, onEdit }) => {
   const badge = varianceBadge(recap.variance);
   const time = formatRecordedTime(recap.recordedAt, timeZone);
@@ -94,13 +95,15 @@ export const RecordedState: React.FC<{
         />
       </ListGroup>
 
-      <button
-        type="button"
-        onClick={onEdit}
-        className="mx-3 h-12 rounded-xl border border-line-strong bg-card text-sm font-semibold text-text-high"
-      >
-        Edit before shift closes
-      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="mx-3 h-12 rounded-xl border border-line-strong bg-card text-sm font-semibold text-text-high"
+        >
+          Edit before shift closes
+        </button>
+      )}
       <p className="m-0 px-9 text-center text-[11px] text-text-muted">
         {shiftName ? `Your manager closes ${shiftName}.` : 'Your manager closes the shift.'} You can
         sign out now.

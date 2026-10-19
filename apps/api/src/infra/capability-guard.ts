@@ -26,9 +26,14 @@ type Variables = {
  */
 export function requireCapabilityGuard(
   capabilityKey: string,
-  options: { registry?: AccessRegistry } = {},
+  options: {
+    registry?: AccessRegistry;
+    /** Gate only the callers this returns true for; others pass untouched. */
+    appliesTo?: (user: AuthenticatedPrincipal) => boolean;
+  } = {},
 ): MiddlewareHandler<{ Variables: Variables }> {
   return async (c, next) => {
+    if (options.appliesTo && !options.appliesTo(c.var.user)) return next();
     const result = await requireCapability(
       { access: new DrizzleOrganizationAccessReader(c.var.db), registry: options.registry },
       c.var.user.organizationId,

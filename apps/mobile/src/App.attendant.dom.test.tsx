@@ -23,6 +23,9 @@ vi.mock('@pump/ui', async (importOriginal) => {
     Login: () => <p>login</p>,
     useStations: () => ({ data: [{ id: 's1', name: 'Highway Fuels' }], isLoading: false }),
     useMyAssignment: (options?: { enabled?: boolean }) => useMyAssignment(options),
+    useAccess: () => ({
+      data: { capabilities: { 'handover.attendant_phone': { enabled: true, title: 'x' } } },
+    }),
     useMerchandiseHandovers: () => ({ data: [] }),
     runTask: (p: Promise<unknown>) => p.catch(() => {}),
   };
