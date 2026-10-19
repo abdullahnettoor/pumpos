@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { UNLIMITED_LIMIT } from '@pump/shared';
-import { ATTENDANT_REPORT_CAPABILITY, CUSTOM_PERMISSIONS_CAPABILITY } from '@pump/shared';
+import {
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+  ATTENDANT_REPORT_CAPABILITY,
+  CUSTOM_PERMISSIONS_CAPABILITY,
+} from '@pump/shared';
 import type { OrganizationAccessInputs } from './ports.js';
 import { buildAccessDocument } from './resolve-access.js';
 import { resolveProductPlan } from './registry.js';
@@ -37,7 +41,7 @@ describe('Product Plans in the Access Document', () => {
   });
 
   it('Pro: several Stations, no Pro+ capability', () => {
-    expect(enabled({ plan: 'PRO' })).toEqual([]);
+    expect(enabled({ plan: 'PRO' })).toEqual([ATTENDANT_PHONE_HANDOVER_CAPABILITY]);
     expect(
       doc({ plan: 'PRO', usage: { station_count: 5 } }).limits.station_count.value,
     ).toBeGreaterThanOrEqual(UNLIMITED_LIMIT);
@@ -45,7 +49,11 @@ describe('Product Plans in the Access Document', () => {
 
   it('Pro+: several Stations, Custom permissions and the Attendant report', () => {
     expect(enabled({ plan: 'PRO_PLUS' })).toEqual(
-      [CUSTOM_PERMISSIONS_CAPABILITY, ATTENDANT_REPORT_CAPABILITY].sort(),
+      [
+        ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+        CUSTOM_PERMISSIONS_CAPABILITY,
+        ATTENDANT_REPORT_CAPABILITY,
+      ].sort(),
     );
     expect(doc({ plan: 'PRO_PLUS' }).limits.station_count.value).toBeGreaterThanOrEqual(
       UNLIMITED_LIMIT,
@@ -59,9 +67,9 @@ describe('Product Plans in the Access Document', () => {
   });
 
   it('platform grants and Limit overrides still win', () => {
-    expect(enabled({ plan: 'PRO', grantedCapabilities: [CUSTOM_PERMISSIONS_CAPABILITY] })).toEqual([
-      CUSTOM_PERMISSIONS_CAPABILITY,
-    ]);
+    expect(enabled({ plan: 'PRO', grantedCapabilities: [CUSTOM_PERMISSIONS_CAPABILITY] })).toEqual(
+      [ATTENDANT_PHONE_HANDOVER_CAPABILITY, CUSTOM_PERMISSIONS_CAPABILITY].sort(),
+    );
     expect(
       doc({ plan: 'PRO', limitOverrides: { station_count: 2 } }).limits.station_count.value,
     ).toBe(2);

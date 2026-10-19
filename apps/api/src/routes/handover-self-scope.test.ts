@@ -7,13 +7,13 @@ import { shiftsRouter } from './shifts.js';
  * Drawer. Naming another Drawer holder is refused before anything is read,
  * instead of being silently rewritten to the caller.
  */
-function db() {
-  // The access guard's four reads, then any further read means the request got
+function db(passes: number) {
+  // The access guard's four reads (twice for an Attendant: the capability guard re-reads), then any further read means the request got
   // past the self-scope check.
-  const accessReads: unknown[][] = [
+  const accessRows: unknown[][] = [
     [
       {
-        subscriptionPlan: 'CORE',
+        subscriptionPlan: 'PRO',
         subscriptionStatus: 'ACTIVE',
         accessUntil: null,
         suspendedAt: null,
@@ -23,6 +23,7 @@ function db() {
     [],
     [],
   ];
+  const accessReads = Array.from({ length: passes }, () => accessRows).flat();
   const chain = (rows: unknown[]): any => {
     const c: any = {
       from: () => c,
@@ -44,7 +45,7 @@ function db() {
 function app(role: string) {
   const instance = new Hono<{ Variables: { db: any; user: any } }>();
   instance.use('*', async (c, next) => {
-    c.set('db', db());
+    c.set('db', db(role === 'Attendant' ? 2 : 1));
     c.set('user', {
       id: '00000000-0000-0000-0000-0000000000a1',
       email: 'x@example.com',

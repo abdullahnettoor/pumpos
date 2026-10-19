@@ -20,12 +20,20 @@ const assignment: {
   refetch: () => Promise<unknown>;
 } = { data: null, isLoading: false, isFetching: false, isError: false, refetch };
 const merchHandovers: { data: unknown[] } = { data: [] };
+const access: { data: unknown } = { data: undefined };
+const withHandover = (enabled: boolean) => ({
+  plan: 'PRO',
+  capabilities: {
+    'handover.attendant_phone': { enabled, title: 'Attendant phone handover' },
+  },
+});
 
 vi.mock('@pump/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     useMyAssignment: () => assignment,
+    useAccess: () => access,
     useStations: () => ({
       data: [
         { id: 'station-0', name: 'Wrong Station' },
@@ -202,8 +210,27 @@ describe('AttendantScreen', () => {
     refetch.mockClear();
     Object.assign(assignment, { data: null, isLoading: false, isFetching: false, isError: false });
     merchHandovers.data = [];
+    access.data = withHandover(true);
   });
   afterEach(cleanup);
+
+  describe('on a plan without Attendant phone handover (#649)', () => {
+    it('offers no handover form and points to the manager', () => {
+      access.data = withHandover(false);
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.getByText('Your manager records your handover')).toBeDefined();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+    });
+
+    it('offers nothing before the Access Document is known', () => {
+      access.data = undefined;
+      assignment.data = makeAssignment();
+      renderScreen();
+      expect(screen.queryByText('No shift assigned')).toBeNull();
+      expect(screen.queryByRole('button', { name: /save handover/i })).toBeNull();
+    });
+  });
 
   it('names the Station and the attendant in the header', () => {
     assignment.data = makeAssignment();

@@ -1,7 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { businessDateSettings, type Station } from '@pump/shared';
+import {
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+  businessDateSettings,
+  capabilityState,
+  type Station,
+} from '@pump/shared';
 import {
   runTask,
+  useAccess,
   useMerchandiseHandovers,
   useMyAssignment,
   type RecordHandoverResult,
@@ -12,6 +18,7 @@ import { scrollEdgeClass, useScrolled } from '../ui/index.js';
 import { AccountSheet } from './attendant/AccountSheet.js';
 import { AttendantHeader } from './attendant/AttendantHeader.js';
 import { DuStrip } from './attendant/DuStrip.js';
+import { HandoverNotOfferedState } from './attendant/HandoverNotOfferedState.js';
 import { NoShiftState } from './attendant/NoShiftState.js';
 import { RecordedState } from './attendant/RecordedState.js';
 import { buildRecap, type MerchandiseHandoverRecord } from '../lib/handover/recap.js';
@@ -32,7 +39,11 @@ export const AttendantScreen: React.FC<{
   /** The org's stations: the Shift's station gives the timezone times are shown in. */
   stations?: readonly Station[];
 }> = ({ userName, onSignOut, stations = [] }) => {
-  const assignmentQ = useMyAssignment();
+  // Own handover is a Product Capability (#649). Unknown access reads as not
+  // offered; the server refuses the write regardless.
+  const offered =
+    capabilityState(useAccess().data, ATTENDANT_PHONE_HANDOVER_CAPABILITY).status === 'enabled';
+  const assignmentQ = useMyAssignment({ enabled: offered });
   const assignment: MyAssignment | null | undefined = assignmentQ.data;
   const dus: AssignedDu[] = useMemo(
     () => assignment?.dispenserUnits ?? [],
@@ -78,9 +89,11 @@ export const AttendantScreen: React.FC<{
 
   // The form has its own sticky save bar at the foot of the scroller; the
   // other states just need breathing room.
-  const isForm = !assignmentQ.isLoading && hasWork && !recap;
+  const isForm = offered && !assignmentQ.isLoading && hasWork && !recap;
   let body: React.ReactNode;
-  if (assignmentQ.isLoading) {
+  if (!offered) {
+    body = <HandoverNotOfferedState />;
+  } else if (assignmentQ.isLoading) {
     body = <p className="py-16 text-center text-sm text-text-muted">Loading your shift…</p>;
   } else if (!hasWork) {
     body = (

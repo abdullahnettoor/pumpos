@@ -4,6 +4,7 @@ import { schema, type DbClient } from '@pump/db';
 import {
   can,
   hasOrganizationWideStationAccess,
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
   isAttendant,
   isAuthorizedForStation,
   isHandoverSelfScoped,
@@ -93,6 +94,7 @@ import {
 import { onCustomerLedger } from '../infra/customer-ledger-sql.js';
 import { supplierSignedAmount } from '../infra/supplier-ledger-sql.js';
 import { sendResult } from '../infra/send-result.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleShiftRepository,
@@ -2877,6 +2879,9 @@ transactionsRouter.get('/sales', async (c) => {
 transactionsRouter.post(
   '/shifts/:id/merchandise-handover',
   writePolicyGuard('POST /transactions/shifts/:id/merchandise-handover'),
+  requireCapabilityGuard(ATTENDANT_PHONE_HANDOVER_CAPABILITY, {
+    appliesTo: (u) => isAttendant(u.role),
+  }),
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;

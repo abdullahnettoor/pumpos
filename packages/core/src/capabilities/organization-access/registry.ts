@@ -1,4 +1,8 @@
-import { ATTENDANT_REPORT_CAPABILITY, CUSTOM_PERMISSIONS_CAPABILITY } from '@pump/shared';
+import {
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+  ATTENDANT_REPORT_CAPABILITY,
+  CUSTOM_PERMISSIONS_CAPABILITY,
+} from '@pump/shared';
 import { UNLIMITED_LIMIT } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, ResolutionCode } from '@pump/shared';
 
@@ -51,7 +55,7 @@ export { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
  * Production registry. `CORE` is the ungated baseline: all existing PumpOS
  * behaviour, one Station.
  *
- * `PRO` adds several Stations; `PRO_PLUS` adds Custom permissions and the
+ * `PRO` adds several Stations and Attendant phone handover; `PRO_PLUS` adds Custom permissions and the
  * Attendant Handover Report on top (#645). A platform grant or Limit override
  * still wins over any plan.
  */
@@ -64,16 +68,28 @@ export const PRODUCT_ACCESS_REGISTRY: AccessRegistry = {
     },
     PRO: {
       key: 'PRO',
-      capabilities: [],
+      capabilities: [ATTENDANT_PHONE_HANDOVER_CAPABILITY],
       limits: { station_count: UNLIMITED_LIMIT, login_count: 10 },
     },
     PRO_PLUS: {
       key: 'PRO_PLUS',
-      capabilities: [CUSTOM_PERMISSIONS_CAPABILITY, ATTENDANT_REPORT_CAPABILITY],
+      capabilities: [
+        ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+        CUSTOM_PERMISSIONS_CAPABILITY,
+        ATTENDANT_REPORT_CAPABILITY,
+      ],
       limits: { station_count: UNLIMITED_LIMIT, login_count: UNLIMITED_LIMIT },
     },
   },
   capabilities: {
+    [ATTENDANT_PHONE_HANDOVER_CAPABILITY]: {
+      key: ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+      title: 'Attendant phone handover',
+      unavailableMessage:
+        'Handing over from the Attendant app is not part of your current plan. Your manager records the handover from the office.',
+      resolution: 'CONTACT_PUMPOS',
+      upgradable: true,
+    },
     [CUSTOM_PERMISSIONS_CAPABILITY]: {
       key: CUSTOM_PERMISSIONS_CAPABILITY,
       title: 'Custom permissions',
