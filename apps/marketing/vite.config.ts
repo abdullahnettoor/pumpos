@@ -192,9 +192,7 @@ export default defineConfig({
         },
       },
     ],
-    options: {
-      typeAware: true,
-      typeCheck: true,
-    },
+    // Deliberately not type-aware, as under ESLint: a static site gains little
+    // from it, and CI lints before `astro build` generates the astro:content types.
   },
 });
