@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { totalCells, type TableColumn } from '../../../pump-ds/table/columns.js';
 import type { ProfitLossProductMargin } from '../../../services/cloud.js';
 import { productUnits } from './productUnits.js';

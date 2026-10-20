@@ -341,7 +341,8 @@ export function invalidateAfterDssrGenerate(
  * for a supplier the Station last (`[..., stationId]`).
  */
 export type StatementKey =
-  ReturnType<typeof queryKeys.customerStatement> | ReturnType<typeof queryKeys.supplierStatement>;
+  | ReturnType<typeof queryKeys.customerStatement>
+  | ReturnType<typeof queryKeys.supplierStatement>;
 
 /** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
 export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {

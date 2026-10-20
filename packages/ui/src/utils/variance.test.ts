@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { formatStockVariance, formatVariance } from './variance.js';
 
 describe('formatVariance: the variance figure as read on every screen', () => {

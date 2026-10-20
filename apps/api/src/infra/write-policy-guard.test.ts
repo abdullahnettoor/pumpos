@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { declareWritePolicies } from '@pump/core';
 import { writePolicyGuard } from './write-policy-guard.js';

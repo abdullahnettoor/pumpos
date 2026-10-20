@@ -16,7 +16,9 @@ const YourShiftHeader: React.FC = () => {
   const { station, timeZone } = useDashboard();
   const status = useShiftStatus(station.id);
   const shift = status.data?.activeShift as
-    { shiftSequence?: number; openedAt?: string } | null | undefined;
+    | { shiftSequence?: number; openedAt?: string }
+    | null
+    | undefined;
   const subtitle = shift?.openedAt
     ? `${shift.shiftSequence ? `Shift ${shift.shiftSequence} · ` : ''}since ${formatClockInZone(shift.openedAt, timeZone)}`
     : 'no shift open';

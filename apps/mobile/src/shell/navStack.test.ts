@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { clampActive, initialNavState, navReducer, stackOf, type NavState } from './navStack.js';
 
 const entry = (id: string) => ({ id, element: id });

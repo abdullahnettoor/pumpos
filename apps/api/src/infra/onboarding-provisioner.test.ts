@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { OnboardingDraft } from '@pump/shared';
 import { createFuelVatConfig } from '@pump/shared';
 import type { DbClient } from '@pump/db';

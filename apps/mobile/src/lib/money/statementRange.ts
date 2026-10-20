@@ -21,7 +21,8 @@ import { statementWindowStart } from './statement.js';
  * Pure: pinned by `statementRange.test.ts`.
  */
 export type RangeChoice =
-  { kind: 'recent'; months: number } | { kind: 'custom'; from: string; to: string };
+  | { kind: 'recent'; months: number }
+  | { kind: 'custom'; from: string; to: string };
 
 export interface DateRange {
   /** First day, inclusive (`YYYY-MM-DD`). */

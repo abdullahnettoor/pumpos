@@ -2,7 +2,7 @@
 import React from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { createTestQueryClient } from '../test/renderWithProviders.js';
 import { queryKeys, useTankLevelSettings } from './hooks.js';
 

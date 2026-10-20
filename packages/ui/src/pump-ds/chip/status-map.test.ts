@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { statusPresentation } from '@pump/shared';
 import { STATUS_MAP, type PumpStatus } from './status-map.js';
 

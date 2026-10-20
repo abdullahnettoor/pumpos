@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vite-plus/test';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -52,15 +52,25 @@ describe('check-no-hook-disables', () => {
     expect(run().code).toBe(1);
   });
 
-  it('ignores disables for other rules, which the ratchet can still see', () => {
-    // Only react-hooks disables bypass the suppressions file; the rest are
-    // ordinary suppressions and not this script's business.
+  it('catches Oxlint disables under both the react-hooks and react names', () => {
+    probe('// oxlint-disable-next-line react-hooks/exhaustive-deps\nexport const a = 1;\n');
+    expect(run().code).toBe(1);
+    probe('/* oxlint-disable react/set-state-in-effect */\nexport const a = 1;\n');
+    expect(run().code).toBe(1);
+    probe('export const a = 1; // oxlint-disable-line react/rules-of-hooks\n');
+    expect(run().code).toBe(1);
+  });
+
+  it('ignores disables for other rules, including non-hook react rules', () => {
+    // Only hook-rule disables are this script's business.
     probe('// eslint-disable-next-line @typescript-eslint/no-explicit-any\nexport const a = 1;\n');
+    expect(run().code).toBe(0);
+    probe('/* oxlint-disable react/only-export-components */\nexport const a = 1;\n');
     expect(run().code).toBe(0);
   });
 
   it('points at the supported way to record a violation', () => {
     probe('// eslint-disable-next-line react-hooks/exhaustive-deps\nexport const a = 1;\n');
-    expect(run().output).toContain('lint:baseline');
+    expect(run().output).toContain('vite.config.ts');
   });
 });

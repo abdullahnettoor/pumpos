@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { schema } from '@pump/db';
 import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';

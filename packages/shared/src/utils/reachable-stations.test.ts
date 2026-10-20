@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { reachableStations, showStationDropdown } from './reachable-stations.js';
 
 const s = (id: string) => ({ id, name: id });

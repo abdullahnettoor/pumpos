@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach, beforeAll } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeAll } from 'vite-plus/test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Combobox } from './Combobox.js';
 

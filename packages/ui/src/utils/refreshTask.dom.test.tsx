@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders, muteExpectedConsoleErrors } from '../test/renderWithProviders.js';
 import { REFRESH_FAILED_MS, useRefreshTask } from './runTask.js';
@@ -25,7 +25,7 @@ describe('useRefreshTask', () => {
     const restore = muteExpectedConsoleErrors([/Expense recorded/]);
     try {
       const refresh = vi
-        .fn<[], Promise<unknown>>()
+        .fn<() => Promise<unknown>>()
         .mockRejectedValueOnce(new Error('offline'))
         .mockResolvedValueOnce(undefined);
       renderWithProviders(<Harness refresh={refresh} />);

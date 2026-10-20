@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { THEME_COLORS } from './config.js';
 
 const css = readFileSync(fileURLToPath(new URL('../index.css', import.meta.url)), 'utf8');

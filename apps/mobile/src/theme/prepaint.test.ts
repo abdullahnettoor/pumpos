@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { injectThemeFlags } from './prepaint.js';
 import { STATUS_BAR_STYLES, THEME_COLORS, THEME_STORAGE_KEY } from './config.js';
 import { resolveTheme, applyTheme, type ThemePreference } from './theme.js';

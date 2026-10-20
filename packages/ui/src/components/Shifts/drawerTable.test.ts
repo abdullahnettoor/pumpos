@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { cellText, totalTexts } from '../../pump-ds/index.js';
 import { drawerColumns, drawerRows, drawerTotalRow } from './DrawerReconciliationTable.js';
 

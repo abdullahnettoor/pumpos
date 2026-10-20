@@ -21,7 +21,6 @@ declare module '@tanstack/react-table' {
    * adapter from a column's kind (alignment, mono). A column without it
    * renders as before.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Body and total cells. */
     className?: string;

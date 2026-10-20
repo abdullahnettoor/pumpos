@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { DEFAULT_TANK_LEVEL_SETTINGS } from '@pump/shared';
 import { deriveMoney, deriveTanks as deriveTanksWith, deriveTiles } from './figures.js';
 

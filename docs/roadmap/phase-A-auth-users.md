@@ -40,7 +40,7 @@ is no plan/billing gating yet.
 - **Login:** `packages/ui/src/components/Auth/Login.tsx` is **email + password only**.
 - **API:** has **no Supabase service-role key**; no password/reset/deactivate endpoints.
 - **Schema:** `users` = `authUserId, organizationId, fullName, email, phone, role
-(Owner/Manager/Accountant/Staff/Attendant), status (ACTIVE/INACTIVE)`;
+  (Owner/Manager/Accountant/Staff/Attendant), status (ACTIVE/INACTIVE)`;
   `user_station_assignments` scopes station access. `userSchema` already has `phone`.
 
 ### Verified Supabase capabilities (from current docs)
@@ -106,7 +106,7 @@ Web-only onboarding wizard (existing) → Organization ▸ Team
 - `SupabaseAdmin` adapter (`apps/api/src/infra/supabase-admin.ts`).
 - Platform route `POST /platform/owners/invite` (platform-admin allowlist, **not** tenant
   `canManageUsers`): create org + Owner row, then `inviteUserByEmail(email, { data:
-{ organization_name, role: 'Owner', signup_intent: 'owner' }})`.
+  { organization_name, role: 'Owner', signup_intent: 'owner' }})`.
 
 **UI / operator surface**
 
@@ -470,7 +470,7 @@ authenticates (platform-admin password grant → JWT) and calls it. A richer sta
   `ORGANIZATION_DEACTIVATED`, `ORGANIZATION_REACTIVATED` (carry the acting platform-admin email
   in metadata). The platform middleware stashes that email on the context.
 - **CLI:** `packages/db/platform.mjs` — `owners list | invite | resend | revoke | deactivate |
-reactivate`. `invite` supports `--no-email [--password …]` (no-SMTP fallback that prints the
+  reactivate`. `invite` supports `--no-email [--password …]` (no-SMTP fallback that prints the
   credentials to hand over). Auth via `SUPABASE_URL` + `SUPABASE_ANON_KEY` +
   `PLATFORM_ADMIN_EMAIL/PASSWORD`; target API via `PUMP_API_URL`. Replaces the removed
   `invite-owner.mjs`.

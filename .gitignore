@@ -49,8 +49,6 @@ dist-ssr/
 
 # Vite local logs and cache directories
 *.local
-.eslintcache
-.prettiercache
 .vite/
 npm-debug.log*
 yarn-debug.log*
@@ -107,3 +105,4 @@ coverage/
 # local scratch
 /tmp/
 /.scratch/
+.vitest/

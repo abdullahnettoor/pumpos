@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Station } from '@pump/shared';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import {

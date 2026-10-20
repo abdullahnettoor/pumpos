@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { Station } from '@pump/shared';
 import { stubContainerWidth } from '../testing/containerWidth.js';
 
@@ -209,6 +209,7 @@ describe('open-days notice', () => {
 });
 
 describe('DashboardCard', () => {
+  const now = new Date();
   const Probe: React.FC<{
     role: 'Owner' | 'Staff';
     q: CardQuery;
@@ -218,7 +219,7 @@ describe('DashboardCard', () => {
         station: STATION,
         role,
         userName: 'A',
-        now: new Date(),
+        now,
         timeZone: 'Asia/Kolkata',
         dayStartsAt: '00:00',
         businessDate: '2026-10-12',

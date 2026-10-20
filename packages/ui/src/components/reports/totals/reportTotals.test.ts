@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { attendantTotals, salesTaxTotals } from './reportTotals.js';
 
 describe('salesTaxTotals (#531)', () => {

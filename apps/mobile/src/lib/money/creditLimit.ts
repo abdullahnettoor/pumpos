@@ -57,7 +57,9 @@ export function previewStanding(
 }
 
 export type CreditLimitAccess =
-  { status: 'hidden' } | { status: 'enabled' } | { status: 'disabled'; reason: string };
+  | { status: 'hidden' }
+  | { status: 'enabled' }
+  | { status: 'disabled'; reason: string };
 
 /**
  * May this user change this Customer's limit from here?

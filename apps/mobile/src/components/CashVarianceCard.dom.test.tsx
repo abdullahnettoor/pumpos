@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { dayCashVariance, shiftCashVariance } from '../lib/cashVariance.js';
 import { deriveShiftVariance } from '../lib/shifts/variance.js';
 import { CashVarianceCard } from './CashVarianceCard.js';

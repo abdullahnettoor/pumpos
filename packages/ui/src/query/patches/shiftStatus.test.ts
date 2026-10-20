@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { RecordHandoverResult } from '../../services/cloud.js';
 import { cachedStatus, ravisHandover } from './shiftStatus.fixtures.js';
 import {

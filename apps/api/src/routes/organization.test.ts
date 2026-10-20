@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
 import type { OrganizationPayload, Role } from '@pump/shared';
 import { getOrganizationHandler, organizationRouter } from './organization.js';

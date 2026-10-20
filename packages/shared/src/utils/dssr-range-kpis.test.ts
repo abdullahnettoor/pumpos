@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveDssrRangeKpis, readDssrCashSales, readDssrNetVolume } from './dssr-range-kpis.js';
 
 /** A closed day as `composeDssr` freezes it (#516). */

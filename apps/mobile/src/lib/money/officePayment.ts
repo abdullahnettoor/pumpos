@@ -136,7 +136,9 @@ export function applyPaymentToParties<T extends { id: string; currentBalance?: u
 }
 
 export type OfficePaymentAccess =
-  { status: 'hidden' } | { status: 'enabled' } | { status: 'disabled'; reason: string };
+  | { status: 'hidden' }
+  | { status: 'enabled' }
+  | { status: 'disabled'; reason: string };
 
 /**
  * May this user record a payment from here? `allowed` is the server's Role

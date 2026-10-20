@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveAlerts, type AlertSources } from './derive.js';
 import { ALERT_KINDS, groupAlerts, homeAlerts } from './groups.js';
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { seedStaffAssignments } from './seedStaffAssignments.js';
 
 const dus = [{ id: 'du-1' }, { id: 'du-2' }, { id: 'du-3' }];

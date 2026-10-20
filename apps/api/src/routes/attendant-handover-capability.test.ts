@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { shiftsRouter } from './shifts.js';
 import { transactionsRouter } from './transactions.js';
 import { handoverApp } from './handover-route-fixture.js';

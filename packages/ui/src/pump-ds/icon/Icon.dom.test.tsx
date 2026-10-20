@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, afterEach, vi } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vite-plus/test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Icon } from './Icon.js';
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Station } from '@pump/shared';
 import type { MobileAlert } from '../lib/alerts.js';

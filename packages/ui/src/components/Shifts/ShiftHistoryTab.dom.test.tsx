@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
@@ -11,7 +11,7 @@ import { renderWithProviders } from '../../test/renderWithProviders.js';
  * the API never sends renders its fallback for every row and looks like real
  * data ("Custom", "Closed", "Unknown", "₹0"). These pin the field names (#224).
  */
-const summaries = vi.fn<[], unknown[]>(() => []);
+const summaries = vi.fn<() => unknown[]>(() => []);
 
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

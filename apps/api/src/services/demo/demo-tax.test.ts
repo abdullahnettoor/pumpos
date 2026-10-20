@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { DEMO_DECANTATION_SETTINGS, DEMO_FUEL_TAX, demoFuelTax } from '@pump/db';
 
 describe('demo station tax and decantation settings', () => {

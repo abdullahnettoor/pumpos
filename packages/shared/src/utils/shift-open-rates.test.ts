@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { fuelsWithoutRate, noRateInEffectMessage } from './shift-open-rates.js';
 
 describe('fuelsWithoutRate (#630)', () => {

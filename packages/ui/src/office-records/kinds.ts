@@ -9,7 +9,11 @@ import { ROUTES, type RoutePath } from '../nav-intent/routes.js';
  * a single title, icon and confirmation, whichever screen opens the drawer.
  */
 export type OfficeRecordKind =
-  'expense' | 'income' | 'collection' | 'purchase' | 'supplier-payment';
+  | 'expense'
+  | 'income'
+  | 'collection'
+  | 'purchase'
+  | 'supplier-payment';
 
 /** Where the drawer was opened from; it changes the context line, never the form. */
 export type OfficeRecordOrigin = 'page' | 'new' | 'statement' | 'shifts';

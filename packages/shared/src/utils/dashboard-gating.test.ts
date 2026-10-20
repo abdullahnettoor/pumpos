@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Role } from '../types/core.js';
 import {
   DASHBOARD_CARDS,

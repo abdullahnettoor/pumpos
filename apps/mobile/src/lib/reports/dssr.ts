@@ -135,7 +135,9 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
 }
 
 export type StepTarget =
-  { kind: 'day'; date: string } | { kind: 'live'; tab: LiveTab } | { kind: 'load' };
+  | { kind: 'day'; date: string }
+  | { kind: 'live'; tab: LiveTab }
+  | { kind: 'load' };
 
 export interface StepTargets {
   /** Previous (older) day. `load`: not in the loaded months yet, fetch the next older month. */

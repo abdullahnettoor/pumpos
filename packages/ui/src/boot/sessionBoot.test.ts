@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { startSessionBoot } from './sessionBoot.js';
 
 /** A promise plus the handle to settle it, so a test can hold a request open. */

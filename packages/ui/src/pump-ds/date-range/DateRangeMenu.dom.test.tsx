@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DateRangeMenu } from './DateRangeMenu.js';
 import { calendarDay, datePicker, pickDate, pickedDate } from '../../test/datePicker.js';
@@ -117,7 +117,9 @@ describe('DateRangeMenu', () => {
     expect(datePicker('To').textContent).toContain('Wed 14 Oct 2026');
   });
 
-  it('offers no custom date after the station today or before 2000', () => {
+  // Pages the calendar back ~320 months one click at a time (~3s alone), so the
+  // default 5s budget is too tight when the whole suite runs in parallel.
+  it('offers no custom date after the station today or before 2000', { timeout: 15_000 }, () => {
     render(<Harness />);
     fireEvent.click(trigger());
     fireEvent.click(datePicker('To'));

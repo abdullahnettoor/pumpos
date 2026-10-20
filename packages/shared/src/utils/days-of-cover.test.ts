@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { daysOfCoverLeft, formatDaysOfCover } from './days-of-cover.js';
 
 describe('formatDaysOfCover', () => {

@@ -4,7 +4,12 @@
  */
 
 export type LedgerAccountType =
-  'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+  | 'CASH_IN_HAND'
+  | 'PETTY_CASH'
+  | 'BANK'
+  | 'MERCHANT_CLEARING'
+  | 'CMS'
+  | 'OWNER';
 
 /** Display order: office cash first, then banks, clearing, CMS, owner. */
 export const ACCOUNT_TYPE_ORDER: LedgerAccountType[] = [

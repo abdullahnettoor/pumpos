@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { UNLIMITED_LIMIT, isUnlimitedLimit, limitUsageText } from './access.js';
 
 // #603: the demo "no limit" sentinel must never print as a number.

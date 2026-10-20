@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { schema } from '@pump/db';
 import { projectShiftSummary, type ProjectableShift } from './shift-summary-projection.js';
 import { netNozzleVolume, shiftSummaryNetVolume } from './shift-summary-sql.js';

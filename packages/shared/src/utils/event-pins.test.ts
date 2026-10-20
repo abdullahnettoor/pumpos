@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { groupEventPins, PIN_MERGE_MINUTES, type PinEvent } from './event-pins.js';
 
 const base = Date.parse('2026-10-09T06:00:00Z');

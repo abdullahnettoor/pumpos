@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { Hono } from 'hono';
 
 // The station clock is resolved right AFTER the role/station guard, so a 404

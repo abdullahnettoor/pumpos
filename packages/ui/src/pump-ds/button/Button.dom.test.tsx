@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Button } from './Button.js';
 

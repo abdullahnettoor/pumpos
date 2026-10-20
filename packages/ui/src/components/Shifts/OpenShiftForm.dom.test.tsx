@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   renderWithProviders,
@@ -29,7 +29,6 @@ const seedStatus = (
   data: unknown,
 ) => client.setQueryData(queryKeys.businessDayStatus(STATION, businessDate), data);
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
     lastShift: null,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { Tabs, tabPanelProps, type TabItem } from './Tabs.js';
 import { scrollToReveal, tabsOverflow } from './overflow.js';

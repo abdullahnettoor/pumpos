@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vite-plus/test';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { stubContainerWidth } from './Dashboard/testing/containerWidth.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { POPOVER_GAP, anchoredPosition } from './anchoredPopover.js';
 
 const viewport = { width: 1366, height: 768 };

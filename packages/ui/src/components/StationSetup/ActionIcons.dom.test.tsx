@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vite-plus/test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Drawer } from '../Drawer.js';
 import { Step3FuelsCatalog } from './OnboardingSteps/Step3FuelsCatalog.js';

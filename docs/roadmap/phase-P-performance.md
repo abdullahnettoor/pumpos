@@ -113,7 +113,7 @@ Tasks:
 - Migrate call sites to the hooks; in `App.tsx` (needs list synchronously for routing) use
   `queryClient.fetchQuery(key, fn, { staleTime })` so repeat session resolves hit cache.
 - Note: `ShiftsManagement` loads lookups imperatively on drawer-open — convert to `queryClient
-.ensureQueryData` or prefetch so they reuse cache.
+  .ensureQueryData` or prefetch so they reuse cache.
 
 ---
 

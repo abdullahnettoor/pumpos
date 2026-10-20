@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vite-plus/test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { CategoryManagerDrawer } from '../categories/CategoryManagerDrawer.js';
 import { MerchandiseSaleEntryForm } from '../transactions/MerchandiseSaleEntryForm.js';

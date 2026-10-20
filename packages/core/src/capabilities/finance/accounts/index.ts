@@ -17,7 +17,12 @@ const entryDateOf = (ctx: ExecutionContext): string =>
   resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
 
 export type FinancialAccountType =
-  'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+  | 'CASH_IN_HAND'
+  | 'PETTY_CASH'
+  | 'BANK'
+  | 'MERCHANT_CLEARING'
+  | 'CMS'
+  | 'OWNER';
 export type LedgerDirection = 'in' | 'out';
 export type LedgerSourceType =
   | 'OPENING'

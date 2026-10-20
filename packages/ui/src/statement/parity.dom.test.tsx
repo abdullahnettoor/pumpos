@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { RangedPartyLedger } from '@pump/shared';
 import { ledgerDocTable, type LedgerDocProps } from '../services/reports/ledgerDoc.js';
 import { partyLedgerStatement, partyStatementDoc } from '../services/reports/partyStatement.js';

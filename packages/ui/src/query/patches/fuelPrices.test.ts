@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { buildFuelPriceRows } from '../../components/StationSetup/fuelPriceRows.js';
 import {
   withRecordedCurrentPrice,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { faqs, planFeatures, plans, SCALE_DISCOUNT_LINE } from './home';
 import { billingQuestions } from './billing-faq';
 import { CORE_PLAN_BASE, PRO_PLAN_BASE, PRO_PLUS_PLAN_FEATURES } from './feature-plans';

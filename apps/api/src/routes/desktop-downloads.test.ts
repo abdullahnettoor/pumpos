@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import type { GithubReleaseLike } from '@pump/shared';
 import { createDesktopDownloadsService } from '../services/desktop-downloads.js';
 import { createDesktopDownloadsRouter } from './desktop-downloads.js';

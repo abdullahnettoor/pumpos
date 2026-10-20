@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deltaOf, fullDayLabel, type LedgerRow } from '@pump/ui';
 import { buildStatement, statementWindowStart } from './statement.js';
 

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -12,7 +12,7 @@ import tailwindcss from '@tailwindcss/vite';
  * rejected by the browser as a "network error".
  */
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: lazyPlugins(() => [react(), tailwindcss()]),
   server: {
     host: '127.0.0.1',
     port: 5173,

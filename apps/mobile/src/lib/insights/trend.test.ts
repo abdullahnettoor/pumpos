@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { INSIGHTS_RANGE_DAYS } from '@pump/shared';
 import {
   barGap,

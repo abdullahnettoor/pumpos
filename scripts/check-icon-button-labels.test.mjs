@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { findUnlabelledIconButtons } from './check-icon-button-labels.mjs';
 
 const find = (src) => findUnlabelledIconButtons('probe.tsx', src);

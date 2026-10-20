@@ -59,7 +59,7 @@
   `INV/{FY}/{00001}` via `InvoiceSequenceRepository.nextNumber` atomic upsert; invoice-level round-off; emits
   `INVOICE_GENERATED`) + `InvoiceRepository`/`InvoiceSequenceRepository` ports + `financialYear()` helper. Drizzle
   adapters. Routes: `POST /transactions/sales/:id/invoice` (issue, Owner/Manager/Accountant), `GET
-/transactions/invoices`, `GET /transactions/invoices/:id`, `GET /transactions/sales/:id/invoice`.
+  /transactions/invoices`, `GET /transactions/invoices/:id`, `GET /transactions/sales/:id/invoice`.
 - **Part 2 (PDF + UI) ✅ done + deployed**: `services/reports/invoiceDoc.tsx` (`InvoiceDoc`) reuses the Phase-R
   react-pdf kit (letterhead band, generic table) — line items + CGST/SGST-or-IGST summary + round-off + **amount
   in words** (Indian numbering), supplier identity read from the snapshot. Backend `GET /transactions/sales`

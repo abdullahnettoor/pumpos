@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { BusinessEvents } from '../../../kernel/index.js';
 import { RecordIncome, VoidIncome, computeIncomeTax } from './index.js';
 import type {

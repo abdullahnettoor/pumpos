@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { moneyEntries, officeRecords, partyDateBasis, partyEntries } from './adapters.js';
 import { buildLedgerStatement } from './model.js';
 import type { DailyCashBookAccount } from '../services/cloud.js';

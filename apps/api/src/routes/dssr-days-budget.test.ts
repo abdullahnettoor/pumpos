@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { dssrRouter } from './dssr.js';
 import { makeFakeDb } from './test-fakes.js';

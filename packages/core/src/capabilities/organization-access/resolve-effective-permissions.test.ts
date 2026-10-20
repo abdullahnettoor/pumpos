@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { resolveEffectivePermissions, defaultPermissionsFor, PERMISSIONS } from '@pump/shared';
 import type { PermissionId } from '@pump/shared';
 import { resolveUserPermissions } from './resolve-effective-permissions.js';

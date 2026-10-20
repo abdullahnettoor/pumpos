@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { clearJwtKeyCache, verifySupabaseJwt } from './supabase-jwt.js';
 
 const TRUSTED_URL = 'https://project.supabase.co';

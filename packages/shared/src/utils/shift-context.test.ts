@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { resolveBusinessDate } from './business-date.js';
 import { formatStationDateTime, historicalShiftMessage } from './shift-context.js';
 

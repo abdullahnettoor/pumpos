@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { DensityTodayProductSummary } from '@pump/shared';
 import { deriveDensityState, formatDensityReading, type DensityState } from './densityModel.js';
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { classifyCommit, highestBump, incrementVersion, releaseBump } from './release-version.mjs';
 
 describe('release version derivation', () => {

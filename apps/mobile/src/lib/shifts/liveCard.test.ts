@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveLiveShiftCard, isHandoverDue } from './liveCard.js';
 
 const tz = 'Asia/Kolkata';

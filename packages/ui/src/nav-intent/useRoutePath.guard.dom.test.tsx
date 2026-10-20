@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useEffect } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useRoutePath } from './useRoutePath.js';
 import { ConfirmProvider } from '../components/primitives/ConfirmDialog.js';

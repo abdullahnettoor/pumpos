@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { resolveOfficeEntry } from './office-entry.js';
 import { AccountRepo, account, officeCtx, terminal, TerminalLookup } from './__tests__/office.js';
 import { OFFICE_ACCOUNT_TYPES, accountTypesForPaymentMethod } from './office-entry.js';

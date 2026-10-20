@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveLiveShift, elapsedLabel, sinceLabel } from './live.js';
 
 const opened = '2026-10-09T08:30:00.000Z'; // 2:00 pm IST
