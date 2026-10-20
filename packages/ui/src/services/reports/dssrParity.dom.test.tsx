@@ -50,7 +50,13 @@ const renderBoth = (fixture: DssrRow) => {
   renderWithProviders(
     <DailyDssrView dailyDssr={fixture} station={station} userRole="Owner" onBack={() => {}} />,
   );
-  return readPdf(<DssrDoc dssr={fixture} config={DEFAULT_DSSR_CONFIG} />);
+  return readPdf(
+    <DssrDoc
+      dssr={fixture}
+      config={DEFAULT_DSSR_CONFIG}
+      printedAt={new Date('2026-10-09T06:00:00.000Z')}
+    />,
+  );
 };
 
 const NOTE = /^Total: /;

@@ -137,11 +137,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   userName,
 }) => {
   const runTask = useRunTask();
-  const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
-  const [currentStep, setCurrentStep] = useState(1);
+  const [stored] = useState(() => loadStoredOnboardingDraft());
+  const [draft, setDraft] = useState<OnboardingDraft>(
+    () => stored?.draft ?? createEmptyOnboardingDraft(),
+  );
+  const [currentStep, setCurrentStep] = useState(() =>
+    stored?.draft ? Math.min(Math.max(stored.currentStep || 1, 1), steps.length) : 1,
+  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [showIntro, setShowIntro] = useState(false);
+  // Resuming a stored draft goes straight to the steps; a fresh start shows the intro.
+  const [showIntro, setShowIntro] = useState(() => !stored?.draft);
   const confirm = useConfirm();
 
   // Modal Drawers
@@ -170,23 +175,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [provisionedStation, setProvisionedStation] = useState<Station | null>(null);
 
   useEffect(() => {
-    const stored = loadStoredOnboardingDraft();
-    if (stored?.draft) {
-      setDraft(stored.draft);
-      setCurrentStep(Math.min(Math.max(stored.currentStep || 1, 1), steps.length));
-      // Resuming an existing draft — go straight to the steps.
-      setShowIntro(false);
-    } else {
-      // Fresh start — show the prep/intro screen first.
-      setShowIntro(true);
-    }
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated) return;
     saveStoredOnboardingDraft({ draft, currentStep });
-  }, [draft, currentStep, isHydrated]);
+  }, [draft, currentStep]);
 
   const validationIssues = useMemo(() => validateOnboardingDraft(draft), [draft]);
   const hasQuickMs = draft.products.some((product) => product.code.toUpperCase() === 'MS');
@@ -594,14 +584,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       }));
     }
   };
-
-  if (!isHydrated) {
-    return (
-      <div className="flex min-h-[100vh] items-center justify-center text-[13px] text-ink-muted">
-        Preparing onboarding workspace…
-      </div>
-    );
-  }
 
   const setupBar = (subtitle: string, middle: React.ReactNode, right: React.ReactNode) => (
     <header className="relative flex h-[68px] shrink-0 items-center justify-between gap-4 border-b border-border-soft bg-surface px-6">

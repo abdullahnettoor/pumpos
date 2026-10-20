@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vite-plus/test';
+import { describe, it, expect, beforeAll } from 'vite-plus/test';
 import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -77,6 +77,8 @@ function assertPdfContainsVectorMark(pdfBuffer: Buffer) {
     'Generated PDF stream must contain cubic bezier curves for the mark artwork',
   ).toBeGreaterThan(20);
 }
+
+const PRINTED_AT = new Date('2026-10-09T06:00:00.000Z');
 
 describe('Reports PDF with PumpOS Mark in Letterhead', () => {
   beforeAll(() => {
@@ -216,7 +218,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       letterhead: mockLetterhead,
     };
 
-    const doc = React.createElement(ShiftSummaryDoc, { snapshot, config });
+    const doc = React.createElement(ShiftSummaryDoc, { snapshot, config, printedAt: PRINTED_AT });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
@@ -244,11 +246,15 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       ...base,
       purchases: [{ supplierName: 'IOCL Depot', documentNumber: 'PUR-7', amount: 450000 }],
     };
-    const oldText = texts((ShiftSummaryDoc as any)({ snapshot: old, config })).join(' ');
+    const oldText = texts(
+      (ShiftSummaryDoc as any)({ snapshot: old, config, printedAt: PRINTED_AT }),
+    ).join(' ');
     expect(oldText).toContain('SUPPLIER FUEL INTAKES');
     expect(oldText).toContain('Total of 1 stored purchase');
     expect(oldText).toContain('IOCL Depot');
-    const newText = texts((ShiftSummaryDoc as any)({ snapshot: base, config })).join(' ');
+    const newText = texts(
+      (ShiftSummaryDoc as any)({ snapshot: base, config, printedAt: PRINTED_AT }),
+    ).join(' ');
     expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
   });
 
@@ -265,7 +271,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       letterhead: { ...mockLetterhead, showLogo: false },
     };
 
-    const doc = React.createElement(DssrDoc, { dssr, config });
+    const doc = React.createElement(DssrDoc, { dssr, config, printedAt: PRINTED_AT });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
@@ -278,18 +284,20 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     // A layout that prints no header at all must still carry the draft mark.
     const config = { sections: ['meta'] as DssrSection[], paper: 'A4' as const };
     const base = { businessDate: '2026-10-08', snapshotData: { shiftsIncluded: 2 } };
-    const draft = readPdf(<DssrDoc dssr={{ ...base, draft: true }} config={config} />).lines.join(
-      ' ',
-    );
+    const draft = readPdf(
+      <DssrDoc dssr={{ ...base, draft: true }} config={config} printedAt={PRINTED_AT} />,
+    ).lines.join(' ');
     expect(draft).toContain('DRAFT \u2014 DAY NOT CLOSED');
-    const sealed = readPdf(<DssrDoc dssr={base} config={config} />).lines.join(' ');
+    const sealed = readPdf(
+      <DssrDoc dssr={base} config={config} printedAt={PRINTED_AT} />,
+    ).lines.join(' ');
     expect(sealed).not.toContain('DRAFT');
   });
 
   it('titles the DSR PDF "Daily Station Sales Report" and names the file DSR-<date> (#570)', () => {
     const config = { sections: ['header'] as DssrSection[], paper: 'A4' as const };
     const text = readPdf(
-      <DssrDoc dssr={{ businessDate: '2026-10-08' }} config={config} />,
+      <DssrDoc dssr={{ businessDate: '2026-10-08' }} config={config} printedAt={PRINTED_AT} />,
     ).lines.join(' ');
     expect(text).toContain('DAILY STATION SALES REPORT');
     expect(text).not.toMatch(/DSSR|SALES SUMMARY RECORD/);
@@ -307,6 +315,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
             snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
           }}
           config={config}
+          printedAt={PRINTED_AT}
         />,
       ).lines;
     const withOmc = render({ omcCard: { total: 2000, count: 1 } });
@@ -326,29 +335,25 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
    * so they are replaced by a placeholder; the footer's print time too.
    */
   it('prints the DSR as the screen reads it (#580)', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-09T06:00:00.000Z'));
-    try {
-      const snap = DSSR_PARITY_FIXTURE.snapshotData;
-      const times: Record<string, string> = {
-        [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
-        [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
-        [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
-        [formatDateTime(new Date())]: '<printed at>',
-      };
-      const doc = (
-        <DssrDoc
-          dssr={DSSR_PARITY_FIXTURE}
-          config={{ ...DEFAULT_DSSR_CONFIG, stationName: 'Apex Fuels' }}
-        />
-      );
-      const lines = readPdf(doc).lines.map((line) =>
-        Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
-      );
-      expect(lines).toMatchSnapshot();
-    } finally {
-      vi.useRealTimers();
-    }
+    const printedAt = new Date('2026-10-09T06:00:00.000Z');
+    const snap = DSSR_PARITY_FIXTURE.snapshotData;
+    const times: Record<string, string> = {
+      [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
+      [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
+      [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
+      [formatDateTime(printedAt)]: '<printed at>',
+    };
+    const doc = (
+      <DssrDoc
+        dssr={DSSR_PARITY_FIXTURE}
+        config={{ ...DEFAULT_DSSR_CONFIG, stationName: 'Apex Fuels' }}
+        printedAt={printedAt}
+      />
+    );
+    const lines = readPdf(doc).lines.map((line) =>
+      Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
+    );
+    expect(lines).toMatchSnapshot();
   });
 
   /*
@@ -358,27 +363,23 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
    * in the footer is replaced by a placeholder.
    */
   it('prints the Shift Summary as the screen reads it (#595)', () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-08T10:00:00.000Z'));
-    try {
-      const record = SHIFT_FULL_FIXTURE;
-      const doc = (
-        <ShiftSummaryDoc
-          snapshot={{
-            ...record.snapshotData,
-            businessDate: record.businessDate,
-            shiftSequence: record.shiftSequence,
-          }}
-          config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: 'Apex Fuels' }}
-          clock={{ timeZone: 'Asia/Kolkata' }}
-        />
-      );
-      const printed = formatDateTime(new Date());
-      const lines = readPdf(doc).lines.map((line) => line.split(printed).join('<printed at>'));
-      expect(lines).toMatchSnapshot();
-    } finally {
-      vi.useRealTimers();
-    }
+    const printedAt = new Date('2026-10-08T10:00:00.000Z');
+    const record = SHIFT_FULL_FIXTURE;
+    const doc = (
+      <ShiftSummaryDoc
+        snapshot={{
+          ...record.snapshotData,
+          businessDate: record.businessDate,
+          shiftSequence: record.shiftSequence,
+        }}
+        config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: 'Apex Fuels' }}
+        clock={{ timeZone: 'Asia/Kolkata' }}
+        printedAt={printedAt}
+      />
+    );
+    const printed = formatDateTime(printedAt);
+    const lines = readPdf(doc).lines.map((line) => line.split(printed).join('<printed at>'));
+    expect(lines).toMatchSnapshot();
   });
 
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
