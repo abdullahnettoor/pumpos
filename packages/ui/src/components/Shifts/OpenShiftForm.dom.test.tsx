@@ -29,7 +29,6 @@ const seedStatus = (
   data: unknown,
 ) => client.setQueryData(queryKeys.businessDayStatus(STATION, businessDate), data);
 
-/* oxlint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
     lastShift: null,

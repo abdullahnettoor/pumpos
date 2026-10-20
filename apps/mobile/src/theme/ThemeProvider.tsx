@@ -1,4 +1,4 @@
-/* oxlint-disable react-refresh/only-export-components */
+/* oxlint-disable react/only-export-components */
 export {
   ThemeProvider,
   useTheme,

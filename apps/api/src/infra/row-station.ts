@@ -10,7 +10,7 @@ import type { AuthenticatedPrincipal } from './authenticated-principal.js';
  */
 // The drizzle table types do not share a structural supertype that keeps both
 // columns typed, so this is the one place the looseness is admitted.
-/* oxlint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 export type BusinessDayAnchoredTable = any;
 
 /**

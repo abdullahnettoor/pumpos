@@ -92,7 +92,6 @@ const nozzle = (id: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/* oxlint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
     isOpen: true,

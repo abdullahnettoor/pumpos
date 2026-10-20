@@ -520,7 +520,6 @@ export default defineConfig({
       '*.umd.js',
       '*.min.js',
       'package-lock.json',
-      'eslint-suppressions.json',
       'scripts/fixtures/updater/release-body-*.md',
       'packages/db/migrations/meta',
       'packages/shared/src/permissions/permission-matrix.generated.md',

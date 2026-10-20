@@ -211,8 +211,8 @@ jobs:
         run: npm run lint
 
   # Marketing is a standalone install with its own lockfile (Astro 7 / Vite 8),
-  # so it cannot share the workspace install above. It carries its own ESLint
-  # config and suppression baseline for the same reason.
+  # so it cannot share the workspace install above. It carries its own Vite+
+  # config (apps/marketing/vite.config.ts) for the same reason.
   marketing:
     name: marketing
     runs-on: ubuntu-latest
