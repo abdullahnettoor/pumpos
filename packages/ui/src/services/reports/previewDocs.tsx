@@ -50,11 +50,18 @@ export function templatePreviewDoc(input: TemplatePreviewInput): ReactElement {
           }}
           config={shiftSummaryDocConfig(station, over)}
           clock={{ timeZone }}
+          printedAt={new Date()}
         />
       );
     }
     case 'dssr':
-      return <DssrDoc dssr={DSSR_PARITY_FIXTURE} config={dssrDocConfig(station, over)} />;
+      return (
+        <DssrDoc
+          dssr={DSSR_PARITY_FIXTURE}
+          config={dssrDocConfig(station, over)}
+          printedAt={new Date()}
+        />
+      );
     case 'attendantReport':
       return (
         <AttendantReportDoc

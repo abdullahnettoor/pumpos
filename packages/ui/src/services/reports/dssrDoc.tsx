@@ -243,7 +243,9 @@ const DraftBanner = () => (
 export const DssrDoc: React.FC<{
   dssr: (DssrRow & { draft?: boolean }) | null | undefined;
   config?: DssrReportConfig;
-}> = ({ dssr, config = DEFAULT_DSSR_CONFIG }) => {
+  /** When the PDF is made; printed in the footer. */
+  printedAt: Date;
+}> = ({ dssr, config = DEFAULT_DSSR_CONFIG, printedAt }) => {
   const day = readDssrDay(dssr ?? {});
   const draft = dssr?.draft === true;
   return (
@@ -253,7 +255,7 @@ export const DssrDoc: React.FC<{
         {config.sections.map((key) => builders[key]?.(day, config))}
         <View style={s.foot} fixed>
           <Text>
-            Generated {formatDateTime(new Date())}
+            Generated {formatDateTime(printedAt)}
             {draft ? ` \u2022 ${DSSR_DRAFT_MARK}` : ''}
           </Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />

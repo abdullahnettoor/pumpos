@@ -720,7 +720,9 @@ export const ShiftSummaryDoc: React.FC<{
   snapshot: any;
   config?: ReportConfig;
   clock?: ShiftSummaryClock;
-}> = ({ snapshot, config = DEFAULT_SHIFT_SUMMARY_CONFIG, clock = {} }) => {
+  /** When the PDF is made; printed in the footer. */
+  printedAt: Date;
+}> = ({ snapshot, config = DEFAULT_SHIFT_SUMMARY_CONFIG, clock = {}, printedAt }) => {
   const ctx: Ctx = { summary: readSnapshot(snapshot ?? {}), clock, config };
   return (
     <Document>
@@ -737,7 +739,7 @@ export const ShiftSummaryDoc: React.FC<{
         )}
         {!config.sections.includes('signatures') && legacyPurchasesSection(snapshot)}
         <View style={s.foot} fixed>
-          <Text>Generated {formatDateTime(new Date())}</Text>
+          <Text>Generated {formatDateTime(printedAt)}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

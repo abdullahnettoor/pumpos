@@ -36,7 +36,7 @@ export async function generateDssrPdf(
   const doc = await import('./dssrDoc.js');
   const config = dssrDocConfig(station);
   await outputReactPdf(
-    React.createElement(doc.DssrDoc, { dssr, config }),
+    React.createElement(doc.DssrDoc, { dssr, config, printedAt: new Date() }),
     dsrFileName(dssr?.businessDate, dssr?.draft === true),
     output,
   );
@@ -69,6 +69,7 @@ export async function generateShiftSummaryPdf(
       snapshot: { ...snapshot, businessDate, shiftSequence },
       config,
       clock: { timeZone },
+      printedAt: new Date(),
     }),
     // File names stay ASCII: the display fallback carries an ellipsis.
     `Shift_Summary_${formatShiftLabel(businessDate, shiftSequence) ?? String(shiftId).slice(0, 8)}`,

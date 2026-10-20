@@ -55,7 +55,7 @@ export function isMenuOpeningClick(
 }
 
 /** Timestamp of the current content's mount; null outside a MenuContent. */
-const MenuOpenedAtContext = React.createContext<React.MutableRefObject<number> | null>(null);
+const MenuOpenedAtContext = React.createContext<number | null>(null);
 
 export interface MenuContentProps extends React.ComponentPropsWithoutRef<typeof RadixMenu.Content> {
   /** Portal container; defaults to document.body. */
@@ -68,7 +68,7 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
     ref,
   ) {
     // Mount == open, so the first render of the content is the open instant.
-    const openedAt = React.useRef(Date.now());
+    const [openedAt] = React.useState(() => Date.now());
     return (
       <RadixMenu.Portal container={container ?? undefined}>
         <RadixMenu.Content
@@ -115,7 +115,7 @@ export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, Menu
     const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
       onClick?.(event);
       if (event.defaultPrevented) return;
-      if (openedAt && isMenuOpeningClick(openedAt.current)) {
+      if (openedAt !== null && isMenuOpeningClick(openedAt)) {
         event.preventDefault();
       }
     };

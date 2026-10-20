@@ -232,22 +232,6 @@ export default defineConfig({
         },
       },
       {
-        // Oxlint's port of the React Compiler rules flags these; the ESLint
-        // react-hooks plugin did not. Kept visible here (not as inline disables,
-        // which scripts/check-no-hook-disables.mjs forbids) until each is fixed.
-        files: [
-          'packages/ui/src/components/StationSetup/OnboardingWizard.tsx',
-          'packages/ui/src/pump-ds/menu/Menu.tsx',
-          'packages/ui/src/services/reports/dssrDoc.tsx',
-          'packages/ui/src/services/reports/shiftSummaryDoc.tsx',
-        ],
-        rules: {
-          'react/purity': 'warn',
-          'react/set-state-in-effect': 'warn',
-        },
-        plugins: ['react'],
-      },
-      {
         files: ['apps/mobile/src/ui/**/*.{ts,tsx}'],
         rules: {
           'no-restricted-imports': [

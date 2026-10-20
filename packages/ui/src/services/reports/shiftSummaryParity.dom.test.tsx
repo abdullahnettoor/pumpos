@@ -395,6 +395,8 @@ describe('Shift Summary business day and Day Start (#595)', () => {
     expect(linesAfter(early, 'OPENED', 1)).toEqual(['8 Oct 2026, 06:00 am']);
     expect(early.lines.filter((l) => BUSINESS_DAY_LINE.test(l))).toEqual([]);
     expect(printed[0].filename).toBe('Shift_Summary_20261008-1');
+    // The footer's print time is the instant the PDF was generated.
+    expect(printed[1].element.props.printedAt).toEqual(NOW);
   });
 });
 
