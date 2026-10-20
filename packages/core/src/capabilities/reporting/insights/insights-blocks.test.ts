@@ -19,14 +19,15 @@ import type {
  * source to composition.
  */
 
-const ctx = {
+const ctx: ExecutionContext = {
   organizationId: 'org-1',
   stationId: 'st-1',
+  businessDayId: null,
   actorId: 'u-1',
-  role: 'Owner',
+  correlationId: null,
   clock: new FixedClock(new Date('2026-03-10T06:00:00.000Z')),
   ids: new SequentialIdGenerator('id'),
-} as ExecutionContext;
+};
 
 const attendant = (over: Partial<InsightsAttendantVarianceRow>): InsightsAttendantVarianceRow => ({
   attendantId: 'a-1',

@@ -11,8 +11,9 @@ export default defineConfig({
     },
     options: {
       typeAware: true,
-      // tsc -b is the type checker. Test files sit outside the build tsconfigs
-      // and were never type-checked by ESLint either.
+      // tsc is the type checker: `tsc -b` covers source and the tests inside
+      // the build tsconfigs, `npm run typecheck:tests` the rest. Oxlint's checker
+      // defaults `types` to [] and so disagrees with tsc on Node globals.
       typeCheck: false,
     },
     env: {

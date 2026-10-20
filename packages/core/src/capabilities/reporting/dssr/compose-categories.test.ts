@@ -21,7 +21,7 @@ const source = (overrides: Partial<DssrSourceData> = {}): DssrSourceData => ({
 const merch = (d: any) => d.pnl.byProduct.filter((r: any) => r.kind === 'merchandise');
 
 describe('composeDssr product categories (#392)', () => {
-  const products = {
+  const products: DssrSourceData['products'] = {
     oil: { name: 'Engine Oil', code: 'EO', unit: 'Pc', costBasis: 400, productType: 'LUBRICANT' },
     grease: { name: 'Grease', code: 'GR', unit: 'Pc', costBasis: 100, productType: 'LUBRICANT' },
     boost: { name: 'Fuel Booster', code: 'FB', unit: 'Pc', costBasis: 50, productType: 'ADDITIVE' },

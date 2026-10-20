@@ -26,7 +26,7 @@ const inputs = (over: Partial<OrganizationAccessInputs> = {}): OrganizationAcces
 });
 
 const doc = (over: Partial<OrganizationAccessInputs> = {}) =>
-  buildAccessDocument({ inputs: inputs(over), role: 'OWNER' });
+  buildAccessDocument({ inputs: inputs(over), role: 'Owner' });
 
 const enabled = (over: Partial<OrganizationAccessInputs> = {}) =>
   Object.entries(doc(over).capabilities)

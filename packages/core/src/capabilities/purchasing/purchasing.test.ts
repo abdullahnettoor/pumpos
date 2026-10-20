@@ -333,7 +333,11 @@ describe('RecordPurchase', () => {
     expect(supplierTxns.rows[0].entryDate).toBe('2026-03-14');
     expect(store.events.map((e) => e.eventType)).not.toContain(BusinessEvents.GOODS_RECEIVED);
     expect(store.events.every((event) => event.businessDayId === null)).toBe(true);
-    expect(store.events.every((event) => event.payload.entryDate === '2026-03-14')).toBe(true);
+    expect(
+      store.events.every(
+        (event) => (event.payload as { entryDate?: string }).entryDate === '2026-03-14',
+      ),
+    ).toBe(true);
   });
 
   it('rejects a Fuel Purchase with a future Entry Date', async () => {

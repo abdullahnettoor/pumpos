@@ -77,8 +77,9 @@ class InMemoryDensityRepo implements DensityReadingRepository {
 const baseCtx: ExecutionContext = {
   organizationId: 'org-1',
   stationId: 'st-1',
+  businessDayId: null,
   actorId: 'usr-1',
-  userId: 'usr-1',
+  correlationId: null,
   timeZone: 'Asia/Kolkata',
   businessDayStartsAt: '06:00',
   clock: new FixedClock(new Date('2026-10-11T08:00:00Z')),
