@@ -37,6 +37,7 @@
     "brand:icons": "node scripts/brand-icons.mjs",
     "icons:desktop": "npm exec --workspace=apps/desktop -- tauri icon ../../brand/pumpos-icon-1024.png",
     "version:derive": "node scripts/next-version.mjs",
+    "typecheck:tests": "tsc -p packages/core/tsconfig.test.json",
     "lint": "npm run format:check && node scripts/check-no-hook-disables.mjs && node scripts/check-icon-button-labels.mjs && vp lint .",
     "lint:no-hook-disables": "node scripts/check-no-hook-disables.mjs",
     "test:scripts": "vp test run --config vitest.scripts.config.ts",

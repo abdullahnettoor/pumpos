@@ -154,8 +154,8 @@ function source(): DssrSourceData {
       },
     ],
     products: {
-      p1: { name: 'Petrol', code: 'MS', costBasis: 88 },
-      p2: { name: 'Engine Oil', code: 'EO', costBasis: 400 },
+      p1: { name: 'Petrol', code: 'MS', unit: 'L', costBasis: 88 },
+      p2: { name: 'Engine Oil', code: 'EO', unit: 'Pc', costBasis: 400 },
     },
     nozzles: { n1: 'N1' },
   };

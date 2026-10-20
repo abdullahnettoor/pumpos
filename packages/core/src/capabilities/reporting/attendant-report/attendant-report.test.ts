@@ -64,6 +64,7 @@ function creditRow(over: Partial<AttendantCreditSaleSourceRow> = {}): AttendantC
     vehicleRegistration: 'KL-07-AB-1234',
     productName: 'Diesel',
     quantity: 20,
+    unit: 'L',
     unitPrice: 40,
     amount: 800,
     ...over,

@@ -11,8 +11,10 @@ import type {
   Decantation,
   DecantationLinkRepository,
   DecantationLinkView,
+  DensityReadingRepository,
   LinkableFuelPurchase,
 } from './ports.js';
+import { partialFake } from '../../../__tests__/partial-fake.js';
 import {
   DecantationLinker,
   LinkDecantationPurchase,
@@ -313,7 +315,7 @@ describe('RecordDecantation with links (#469)', () => {
         replace: async (d: Decantation) => void rows.set(d.id, d),
         updateMeasurement: async () => {},
       } as never,
-      densityReadings: { saveMany: async () => {} },
+      densityReadings: partialFake<DensityReadingRepository>({ saveMany: async () => {} }),
       tanks: {
         findById: async () => ({
           id: 't-ms',

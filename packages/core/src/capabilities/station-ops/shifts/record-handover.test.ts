@@ -515,6 +515,9 @@ describe('RecordHandover', () => {
         creditHandedOver: '25',
         testingVolume: '1',
         expectedSales: '975',
+        openingFloat: '0',
+        cashDrops: '0',
+        expectedCash: '800',
         varianceAmount: '0',
         createdAt: '2026-09-12T07:00:00.000Z',
       };

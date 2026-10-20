@@ -12,7 +12,13 @@ import type { Tank } from '../../station-setup/tanks/index.js';
 import { GetDecantation, ListDecantations } from './queries.js';
 import { RecordDecantation } from './record-decantation.js';
 import { DiscardDecantation } from './discard-decantation.js';
-import type { Decantation, DensityReading } from './ports.js';
+import type {
+  Decantation,
+  DecantationRepository,
+  DensityReading,
+  DensityReadingRepository,
+} from './ports.js';
+import { partialFake } from '../../../__tests__/partial-fake.js';
 
 const day = (status: 'OPEN' | 'CLOSED' = 'OPEN'): BusinessDay => ({
   id: 'bd-1',
@@ -47,7 +53,7 @@ function setup(opts: { day?: BusinessDay; tanks?: Tank[] } = {}) {
   const bd = opts.day ?? day();
   const tanks = opts.tanks ?? [tank('t-ms', 'ms'), tank('t-hsd', 'hsd')];
   const useCase = new RecordDecantation({
-    decantations: {
+    decantations: partialFake<DecantationRepository>({
       findById: async (org, id) => {
         const r = rows.get(id);
         return r && r.organizationId === org ? r : null;
@@ -63,8 +69,10 @@ function setup(opts: { day?: BusinessDay; tanks?: Tank[] } = {}) {
         rows.set(d.id, d);
       },
       list: async () => [...rows.values()],
-    },
-    densityReadings: { saveMany: async (r) => void readings.push(...r) },
+    }),
+    densityReadings: partialFake<DensityReadingRepository>({
+      saveMany: async (r) => void readings.push(...r),
+    }),
     tanks: {
       findById: async (id: string) => tanks.find((t) => t.id === id) ?? null,
     } as never,

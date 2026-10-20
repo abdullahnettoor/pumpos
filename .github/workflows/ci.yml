@@ -40,6 +40,11 @@ jobs:
       - name: Typecheck
         run: npx tsc -b
 
+      # Test files the build tsconfigs exclude (packages/core) are checked here,
+      # with no emit.
+      - name: Typecheck tests
+        run: npm run typecheck:tests
+
       # Style-check ratchet over packages/ui/src (#517): dead classes, undefined
       # CSS variables, raw colours, default-palette classes and mismatched
       # fill/text pairs. A file may not gain violations, and a fixed one must
@@ -249,6 +254,11 @@ jobs:
         # Builds scheduled posts too, so their links are checked before they go live.
         env:
           PUBLIC_BLOG_SHOW_SCHEDULED: 'true'
+      # After the build: tsc needs the astro:content types it generates.
+      - name: Typecheck
+        run: npm run typecheck
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
       - run: npm run check:links
         if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing

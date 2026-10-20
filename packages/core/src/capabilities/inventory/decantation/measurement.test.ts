@@ -13,7 +13,13 @@ import type { StockMovement } from '../ports.js';
 import { RecordStockCount } from '../record-stock-count.js';
 import { DecantationMeasurementService } from './measurement.js';
 import { RecordDecantation } from './record-decantation.js';
-import type { Decantation, DecantationPurchaseLink } from './ports.js';
+import type {
+  Decantation,
+  DecantationPurchaseLink,
+  DecantationRepository,
+  DensityReadingRepository,
+} from './ports.js';
+import { partialFake } from '../../../__tests__/partial-fake.js';
 import { repositoryShiftWriteGate } from '../../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 const mkDay = (id: string, date: string, status: 'OPEN' | 'CLOSED'): BusinessDay => ({
@@ -66,7 +72,7 @@ function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number 
   const product = { id: 'ms', organizationId: 'org-1', costBasis: '90' as string | null };
   const variances: unknown[] = [];
 
-  const decantations = {
+  const decantations = partialFake<DecantationRepository>({
     findById: async (_o: string, id: string) => rows.get(id) ?? null,
     insert: async (d: Decantation) => void rows.set(d.id, structuredClone(d)),
     replace: async (d: Decantation) => void rows.set(d.id, structuredClone(d)),
@@ -79,7 +85,7 @@ function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number 
         )
         .map((d) => structuredClone(d)),
     updateMeasurement: async (d: Decantation) => void rows.set(d.id, structuredClone(d)),
-  };
+  });
   const movementsRepo = {
     save: async (m: StockMovement) => void movements.push(m),
     saveMany: async (ms: StockMovement[]) => void movements.push(...ms),
@@ -120,7 +126,7 @@ function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number 
   } as never;
   const record = new RecordDecantation({
     decantations,
-    densityReadings: { saveMany: async () => {} },
+    densityReadings: partialFake<DensityReadingRepository>({ saveMany: async () => {} }),
     tanks: { findById: async () => tank } as never,
     businessDays,
     docNumbers: { next: async () => 'DEC-000001' },
