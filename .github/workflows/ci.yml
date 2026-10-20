@@ -254,6 +254,11 @@ jobs:
         # Builds scheduled posts too, so their links are checked before they go live.
         env:
           PUBLIC_BLOG_SHOW_SCHEDULED: 'true'
+      # After the build: tsc needs the astro:content types it generates.
+      - name: Typecheck
+        run: npm run typecheck
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
       - run: npm run check:links
         if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
