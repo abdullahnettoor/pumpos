@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { splitSaleLineTax } from './sale-tax.js';
 
 const gstProduct = (cfg: Record<string, unknown> | null) => ({

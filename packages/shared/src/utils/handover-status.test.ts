@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveDuHandoverStatuses, handoverStatus, isHandoverDue } from './handover-status.js';
 
 const tz = 'Asia/Kolkata';

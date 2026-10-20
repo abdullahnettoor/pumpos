@@ -2044,7 +2044,12 @@ export class CloudEventsService {
 }
 
 export type FundingAccountType =
-  'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+  | 'CASH_IN_HAND'
+  | 'PETTY_CASH'
+  | 'BANK'
+  | 'MERCHANT_CLEARING'
+  | 'CMS'
+  | 'OWNER';
 
 export interface FundingAccount {
   id: string;

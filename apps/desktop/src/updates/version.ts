@@ -94,7 +94,7 @@ export function sanitizeReleaseNotes(raw: string | null | undefined, maxLength =
   const text = raw
     .replace(/\r\n?/g, '\n')
     // Strip control characters other than newline and tab.
-    // eslint-disable-next-line no-control-regex
+    // oxlint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
     .trim();
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;

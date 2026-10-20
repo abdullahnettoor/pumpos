@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vite-plus/test';
 import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';

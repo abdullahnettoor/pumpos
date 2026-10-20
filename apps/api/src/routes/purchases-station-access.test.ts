@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { PgDialect } from 'drizzle-orm/pg-core';
 

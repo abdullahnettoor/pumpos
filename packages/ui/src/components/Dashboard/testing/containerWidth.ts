@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi } from 'vite-plus/test';
 
 /**
  * Test helper: make every element report `width` px to `useContainerWidth`

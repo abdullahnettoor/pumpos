@@ -45,7 +45,10 @@ export interface DecantationReportTankLine {
  * measured but the invoice waits on a sibling Decantation / pending lines.
  */
 export type DecantationReportInvoiceStatus =
-  'LINKED' | 'NOT_LINKED' | 'PENDING_MEASUREMENT' | 'SETTLING';
+  | 'LINKED'
+  | 'NOT_LINKED'
+  | 'PENDING_MEASUREMENT'
+  | 'SETTLING';
 
 export type DecantationReportVarianceType = 'EXCESS' | 'SHORT' | 'EXACT';
 

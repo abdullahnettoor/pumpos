@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { computeDecantationFlags } from './decantation-flags.js';
 
 const base = { densityToleranceKgM3: 3, settlingTimeMinutes: 30 };

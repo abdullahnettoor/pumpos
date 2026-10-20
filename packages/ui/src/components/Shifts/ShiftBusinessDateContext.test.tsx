@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { LiveShiftBar } from './LiveShiftBar.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';

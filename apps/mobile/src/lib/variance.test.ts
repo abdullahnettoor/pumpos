@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { byLargestVariance, offLabel, varianceBadge, varianceTone } from './variance.js';
 
 describe('varianceTone', () => {

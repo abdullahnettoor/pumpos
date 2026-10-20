@@ -7,7 +7,8 @@ export type CheckState = 'done' | 'warn' | 'pending';
 
 /** Where an item's link goes: a Drawer's Handover, or the close flow. */
 export type CheckAction =
-  { kind: 'handover'; groupKey: string; label: string } | { kind: 'close'; label: string };
+  | { kind: 'handover'; groupKey: string; label: string }
+  | { kind: 'close'; label: string };
 
 export interface CheckItem {
   id: 'readings' | 'handovers' | 'drops' | 'variances' | 'office-count';

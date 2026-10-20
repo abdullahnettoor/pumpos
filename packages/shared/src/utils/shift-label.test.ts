@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { formatShiftLabel, deriveShiftSequences, shiftDisplayLabel } from './shift-label.js';
 
 const shift = (id: string, openedAt: string | null) => ({ id, openedAt });

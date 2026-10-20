@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { deriveForecourt, liveHeadline, liveSubtitle } from './derive.js';
 
 const TZ = 'Asia/Kolkata';

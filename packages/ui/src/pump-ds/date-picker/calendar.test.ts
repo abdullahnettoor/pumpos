@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { formatPickerDate, monthCaption, monthWeeks, shiftDate, shiftMonth } from './calendar.js';
 
 describe('date picker calendar (#603)', () => {

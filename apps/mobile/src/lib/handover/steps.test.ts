@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { seedForm, type AssignedDu, type CreditLine, type DuFormState } from './model.js';
 import {
   cashErrors,

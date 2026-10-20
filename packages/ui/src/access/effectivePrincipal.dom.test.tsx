@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, focusManager } from '@tanstack/react-query';
 import { can, defaultPermissionsFor, type AccessDocument, type Role } from '@pump/shared';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { DASHBOARD_TREND_DAYS, INSIGHTS_RANGE_DAYS } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';

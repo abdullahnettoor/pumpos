@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { MAX_HELD_KEYS_PER_SCOPE, OfficeSubmitKeys, sendKeyed } from './submitKeys.js';
 
 const network = Object.assign(new Error('offline'), { code: 'NETWORK' });

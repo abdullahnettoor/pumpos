@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { APPEARANCE_ENABLED, isDevSwitchEnabled } from '@pump/ui/theme';
@@ -48,7 +48,7 @@ export default defineConfig(({ command }) => {
   const devSwitch = isDevSwitchEnabled(command, process.env.VITE_THEME_DEV_SWITCH);
 
   return {
-    plugins: [react(), tailwindcss(), themePrepaint(devSwitch)],
+    plugins: lazyPlugins(() => [react(), tailwindcss(), themePrepaint(devSwitch)]),
     define: {
       __PUMP_THEME_DEV_SWITCH__: JSON.stringify(devSwitch),
     },
@@ -66,8 +66,8 @@ export default defineConfig(({ command }) => {
     build: {
       // Tauri supports es2021
       target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
-      // don't minify for debug builds
-      minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+      // don't minify for debug builds (Oxc, the Vite+ default minifier)
+      minify: !process.env.TAURI_DEBUG ? 'oxc' : false,
       // produce sourcemaps for debug builds
       sourcemap: !!process.env.TAURI_DEBUG,
     },

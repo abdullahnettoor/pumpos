@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { APPEARANCE_ENABLED, isDevSwitchEnabled } from '@pump/ui/theme';
@@ -19,7 +19,7 @@ export default defineConfig(({ command }) => {
   const devSwitch = isDevSwitchEnabled(command, process.env.VITE_THEME_DEV_SWITCH);
 
   return {
-    plugins: [react(), tailwindcss(), themePrepaint(devSwitch)],
+    plugins: lazyPlugins(() => [react(), tailwindcss(), themePrepaint(devSwitch)]),
     // The web console has no in-app updater, but the status bar still shows the
     // installed version (#263). Bake it in from package.json at build time.
     define: {

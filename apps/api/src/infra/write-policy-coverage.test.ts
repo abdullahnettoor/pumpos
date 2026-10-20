@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono, type Handler } from 'hono';
 import { declareWritePolicies, undeclaredOperations, type WritePolicyRegistry } from '@pump/core';
 import { registeredRoutes } from '../index.js';

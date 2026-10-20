@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { BusinessEvents } from '../../../kernel/index.js';
 import type { DocumentNumberGenerator } from '../../../kernel/index.js';
 import { RecordCollection } from './index.js';

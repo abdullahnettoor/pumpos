@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { APPEARANCE_ENABLED, isDevSwitchEnabled } from './src/theme/config.ts';
@@ -27,7 +27,7 @@ export default defineConfig(({ command, mode }) => {
       // package.json at build time (same as the console's status bar).
       __APP_VERSION__: JSON.stringify(pkg.version),
     },
-    plugins: [react(), tailwindcss(), themePrepaint(devSwitch)],
+    plugins: lazyPlugins(() => [react(), tailwindcss(), themePrepaint(devSwitch)]),
     server: {
       port: 3100,
     },

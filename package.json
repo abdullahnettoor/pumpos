@@ -37,31 +37,26 @@
     "brand:icons": "node scripts/brand-icons.mjs",
     "icons:desktop": "npm exec --workspace=apps/desktop -- tauri icon ../../brand/pumpos-icon-1024.png",
     "version:derive": "node scripts/next-version.mjs",
-    "lint": "npm run format:check && node scripts/check-no-hook-disables.mjs && node scripts/check-icon-button-labels.mjs && eslint . --pass-on-unpruned-suppressions",
+    "lint": "npm run format:check && node scripts/check-no-hook-disables.mjs && node scripts/check-icon-button-labels.mjs && vp lint .",
     "lint:no-hook-disables": "node scripts/check-no-hook-disables.mjs",
-    "test:scripts": "vitest run --config vitest.scripts.config.ts",
+    "test:scripts": "vp test run --config vitest.scripts.config.ts",
     "lint:fix": "npm run lint -- --fix",
-    "lint:warnings": "eslint . --suppressions-location .eslint-empty-suppressions.json",
-    "lint:baseline": "eslint . --suppress-all",
-    "lint:prune": "eslint . --prune-suppressions",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "prepare": "vp config"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/node": "^26.0.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "eslint": "^10.10.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
-    "prettier": "^3.9.6",
     "sharp": "^0.35.4",
     "typescript": "^5.4.5",
-    "typescript-eslint": "^8.70.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
+    "vite-plus": "1.3.0"
   },
   "overrides": {
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0"
   }
 }

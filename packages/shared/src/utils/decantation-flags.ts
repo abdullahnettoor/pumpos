@@ -4,7 +4,10 @@
  * save — they only mark the record for review.
  */
 export type DecantationFlagCode =
-  'DENSITY_OUT_OF_TOLERANCE' | 'TANKER_SHORT' | 'CHAMBER_NOT_EMPTIED' | 'EARLY_AFTER_DIP';
+  | 'DENSITY_OUT_OF_TOLERANCE'
+  | 'TANKER_SHORT'
+  | 'CHAMBER_NOT_EMPTIED'
+  | 'EARLY_AFTER_DIP';
 
 export interface DecantationFlag {
   code: DecantationFlagCode;

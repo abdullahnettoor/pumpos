@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 
 /**
  * Root-level tests for the repository's guard scripts.

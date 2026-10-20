@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { formatCalendarDate, formatCalendarRange, formatInstantDate } from './display-date.js';
 import { formatStationDateTime } from './shift-context.js';
 

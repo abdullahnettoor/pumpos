@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { computeRange } from '../../pump-ds/index.js';
 import { collectionFigures, countByMethod, creditSaleFigures } from './ledgerKpis.js';
 

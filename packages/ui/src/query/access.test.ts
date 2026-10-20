@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { QueryClient } from '@tanstack/react-query';
 import { capabilityEnabled, type AccessDocument } from '@pump/shared';
 import { queryKeys, TIER } from './hooks.js';

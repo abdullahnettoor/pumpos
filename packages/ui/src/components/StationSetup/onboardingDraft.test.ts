@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { OnboardingProductDraft, OnboardingTankDraft } from '@pump/shared';
 import { createFuelDraft, createTankDraft, standardOnboardingNozzles } from './onboardingDraft.js';
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { withBilledSale, withHandoverProductSale, withoutSale } from './productSales.js';
 
 const row = (id: string, attendantId: string, createdAt: string) => ({

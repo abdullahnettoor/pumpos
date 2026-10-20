@@ -4,7 +4,13 @@
  * stock, per-product quantity). Current/book quantity is the sum of movements.
  */
 export type MovementType =
-  'Purchase' | 'Sale' | 'Adjustment' | 'Decantation' | 'Variance' | 'OpeningBalance' | 'Transfer';
+  | 'Purchase'
+  | 'Sale'
+  | 'Adjustment'
+  | 'Decantation'
+  | 'Variance'
+  | 'OpeningBalance'
+  | 'Transfer';
 
 export interface StockMovement {
   id: string;

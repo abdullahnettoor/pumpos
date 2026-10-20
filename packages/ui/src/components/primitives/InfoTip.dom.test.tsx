@@ -1,4 +1,5 @@
-import { afterEach, describe, it, expect } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, it, expect } from 'vite-plus/test';
 import React from 'react';
 import { cleanup, render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { InfoTip } from './InfoTip.js';

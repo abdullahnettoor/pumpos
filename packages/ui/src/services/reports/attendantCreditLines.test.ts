@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { AttendantReportShift } from '@pump/shared';
 import { creditChitRows, shiftShowsCreditBreakdown } from './attendantCreditLines.js';
 

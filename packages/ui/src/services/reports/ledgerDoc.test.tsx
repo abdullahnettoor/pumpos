@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import React from 'react';
 import { LedgerDoc, generatedLabel, type LedgerDocProps } from './ledgerDoc.js';
 import { C } from './shiftSummaryDoc.js';

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 // Rendering is stubbed: these tests pin where the bytes go, not how the PDF looks.
 const pdfBytes = new Uint8Array([37, 80, 68, 70]);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { drawerProductCash, productCashDrawer, productCashOwner } from './product-cash-drawer.js';
 
 const du = (duId: string, duCode: string | null, duName = duCode ?? duId) => ({

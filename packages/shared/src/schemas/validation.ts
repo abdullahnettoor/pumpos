@@ -19,7 +19,11 @@ const weekdaySchema = z.enum([
 ]);
 
 export type OpenShiftBusinessDayState =
-  'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
+  | 'OPEN'
+  | 'CLOSED'
+  | 'NOT_CREATED'
+  | 'UNKNOWN'
+  | 'UNAVAILABLE';
 
 export function createOpenShiftFormSchema(
   currentBusinessDate: string,

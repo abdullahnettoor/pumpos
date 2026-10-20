@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React, { useState } from 'react';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import {
   publishNavIntent,

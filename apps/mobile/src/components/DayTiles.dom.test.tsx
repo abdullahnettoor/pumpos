@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { principalOf } from '@pump/shared';
 import { deriveTiles } from '../lib/home/figures.js';
 import { DayTiles } from './DayTiles.js';

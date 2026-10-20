@@ -35,7 +35,12 @@ export type LimitKey = 'station_count' | 'login_count';
 
 /** The Organization's commercial access state. */
 export type SubscriptionStatus =
-  'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'RESTRICTED' | 'CANCELED' | 'SUSPENDED';
+  | 'TRIALING'
+  | 'ACTIVE'
+  | 'PAST_DUE'
+  | 'RESTRICTED'
+  | 'CANCELED'
+  | 'SUSPENDED';
 
 /**
  * What the Organization may currently do, derived from Subscription Status.

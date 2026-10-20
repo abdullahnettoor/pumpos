@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { muteExpectedConsoleErrors, renderWithProviders } from '../../test/renderWithProviders.js';
 import { CloseShiftPage, type CloseShiftPageProps, type CloseStep } from './CloseShiftPage.js';

@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { previousRoute, useRoutePath } from './useRoutePath.js';
 import { LEGACY_ROUTES } from './routes.js';
 

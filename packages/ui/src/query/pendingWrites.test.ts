@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { latestOf, latestWrites, type MutationSnapshot } from './pendingWrites.js';
 
 type V = { drawer: string; shiftId: string };

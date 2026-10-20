@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vite-plus/test';
 import React from 'react';
 import path from 'node:path';
 import { Font, pdf } from '@react-pdf/renderer';

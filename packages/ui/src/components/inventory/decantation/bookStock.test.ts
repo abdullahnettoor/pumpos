@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { bookStock } from './bookStock.js';
 
 const tank = { id: 't', name: 'Tank 2', productId: 'p', productName: 'Diesel' };

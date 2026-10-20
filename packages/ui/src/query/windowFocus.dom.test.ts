@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { QueryObserver } from '@tanstack/react-query';
 import { createQueryClient } from './queryClient.js';
 import { windowFocusListener } from './windowFocus.js';

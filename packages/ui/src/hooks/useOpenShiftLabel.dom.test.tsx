@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { cleanup, render, screen, act } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 // Drive the hook through a faked shift-status query so no QueryClient/network
 // is involved: this test is about the mapping + ticker, not the fetch.

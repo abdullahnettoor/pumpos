@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';
 import { decantationsRouter } from './decantations.js';

@@ -501,6 +501,29 @@ Do not introduce additional state libraries unless justified.
 
 ---
 
+# Toolchain (Vite+)
+
+The workspace runs on Vite+ (`vp`): Vite, Vitest, Oxlint and Oxfmt behind one
+CLI, configured in the root `vite.config.ts` (`lint`, `fmt`, `staged` blocks)
+and each package's `vite.config.ts` / `vitest.config.ts`.
+
+```text
+npm test                 every workspace's tests (each runs `vp test run`)
+npm run test:scripts     the guard-script tests in scripts/
+npm run lint             format check + guard scripts + `vp lint .`
+npx vp check             format + lint in one pass (`--fix` to apply)
+npx vp fmt .             format
+npx tsc -b               type check (also builds packages/*/dist)
+```
+
+- Import test APIs from `vite-plus/test`, and config helpers from `vite-plus`.
+- `vp dev` / `vp build` / `vp test` are built-ins; `vp run <script>` runs a
+  package.json script.
+- The pre-commit hook runs `vp staged` (`vp check --fix` on staged files).
+- `apps/marketing` is a standalone install with its own `vite.config.ts`.
+
+---
+
 # Backend Stack
 
 Use:

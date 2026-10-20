@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { toTimelineEvent } from './activityPins.js';
 
 const item = (eventType: string, tone = 'info', aggregateId = 'agg-1') =>

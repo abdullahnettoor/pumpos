@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { handleCloseRequest, shouldCloseWindow } from './closeGuard.js';
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));

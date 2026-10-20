@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { readDssrOmcCard } from './dssr-omc-card.js';
 
 describe('readDssrOmcCard', () => {

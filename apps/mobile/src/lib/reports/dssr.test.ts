@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { BusinessDayListStatus } from '@pump/shared';
 import { deriveShiftRows, deriveTankMovement, stepTargets } from './dssr.js';
 

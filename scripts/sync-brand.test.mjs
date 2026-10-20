@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { BRAND_FILES, TARGET_DIRS, planBrandSync, syncBrandAssets } from './sync-brand.mjs';
 
 /** In-memory stand-in for the fs calls the sync makes, so tests touch no disk. */

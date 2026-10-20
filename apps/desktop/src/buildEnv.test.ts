@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { environmentTagFor, resolveBuildEnvironment, showsDeveloperSurfaces } from './buildEnv.js';
 
 describe('resolveBuildEnvironment', () => {

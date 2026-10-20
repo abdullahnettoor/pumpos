@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render as rtlRender, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '../primitives/Tooltip.js';
 import { NozzleReadingsTable } from './NozzleReadingsTable.js';

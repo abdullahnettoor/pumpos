@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Station } from '@pump/shared';
 import { renderWithProviders } from '../test/renderWithProviders.js';

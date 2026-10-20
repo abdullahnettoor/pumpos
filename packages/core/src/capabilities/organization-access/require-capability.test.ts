@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { requireCapability } from './require-capability.js';
 import type { OrganizationAccessInputs, OrganizationAccessReader } from './ports.js';
 import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';

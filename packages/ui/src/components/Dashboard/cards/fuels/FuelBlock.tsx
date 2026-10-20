@@ -22,7 +22,9 @@ import {
 
 /** Part state: each of density / tanks loads (and fails) on its own. */
 export type Part<T> =
-  { status: 'loading' } | { status: 'error'; retry: () => void } | { status: 'ready'; value: T };
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'ready'; value: T };
 
 export interface FuelBlockProps {
   name: string;

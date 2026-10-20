@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { composeDecantationReport, weightedInvoiceDensity } from './compose.js';
 import { GetDecantationReport } from './get-decantation-report.js';
 import type { DecantationReportReader, DecantationReportSource } from './ports.js';

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ProductLine } from '../lib/home/sales.js';
 import { SalesByProduct } from './SalesByProduct.js';

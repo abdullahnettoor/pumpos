@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useLayoutEffect } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 

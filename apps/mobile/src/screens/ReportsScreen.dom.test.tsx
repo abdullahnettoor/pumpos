@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Role, Station } from '@pump/shared';
 import type { TabKey } from '../lib/tabKey.js';
@@ -252,7 +252,8 @@ describe('ReportsScreen', () => {
     const fill = (name: RegExp) =>
       (
         screen.getByRole('button', { name }).querySelector('[aria-hidden="true"] > div') as
-          HTMLElement | undefined
+          | HTMLElement
+          | undefined
       )?.style.width;
     expect(fill(/^Tue 6 Oct/)).toBe('50%');
     expect(fill(/^Wed 30 Sep/)).toBe('100%');

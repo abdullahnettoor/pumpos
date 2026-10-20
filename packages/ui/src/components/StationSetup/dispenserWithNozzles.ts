@@ -18,7 +18,8 @@ export const NOZZLE_READING_MESSAGE = 'Enter the opening reading for every nozzl
 export const AUTO_FILL_NEEDS_TANK = 'Add a tank for a fuel first.';
 
 export type DispenserWithNozzlesDraft =
-  { ok: true; body: DispenserWithNozzlesBody } | { ok: false; message: string };
+  | { ok: true; body: DispenserWithNozzlesBody }
+  | { ok: false; message: string };
 
 /**
  * The one request that creates a dispenser and its nozzles (#591), or the

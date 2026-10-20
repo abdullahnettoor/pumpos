@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { ColumnDef } from '@tanstack/react-table';
 import { renderWithProviders as render } from '../../test/renderWithProviders.js';
 import { DataTable } from './DataTable.js';

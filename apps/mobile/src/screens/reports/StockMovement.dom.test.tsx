@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { StockMovement } from './StockMovement.js';
 import type { TankMovementRow } from '../../lib/reports/dssr.js';
 

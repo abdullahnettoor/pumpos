@@ -64,7 +64,12 @@ export interface PreviewMove {
 }
 
 export type PreviewCheckCode =
-  'repeat' | 'negative' | 'advance' | 'backdated' | 'pay-now' | 'no-stock';
+  | 'repeat'
+  | 'negative'
+  | 'advance'
+  | 'backdated'
+  | 'pay-now'
+  | 'no-stock';
 
 export interface PreviewCheck {
   code: PreviewCheckCode;

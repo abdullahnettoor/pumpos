@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReceivablesSummary } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';

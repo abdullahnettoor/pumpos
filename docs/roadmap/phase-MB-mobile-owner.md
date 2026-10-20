@@ -257,7 +257,7 @@ never touch the SPA.
 **Domain / roles (decided)**
 
 - Introduce a **first-class `Attendant`** role (`Owner | Manager | Accountant |
-Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
+  Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
   active shift it is assigned to at its own station, and can write only **its
   own** handover. Requires updating `Role` (`packages/shared`), the user role
   enum (create/update schemas), and `guards.ts`.
@@ -338,7 +338,7 @@ to have mobile data. No offline/queued handover in scope.
   rollup, cap client fan-out concurrency and introduce `GET /rollup` when N
   stations makes latency bite. Charts stay dependency-light.
 - **Role gating:** extend `TABS_BY_ROLE` — Owner full; Manager `Shifts/Reports/
-Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
+  Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
   Staff still none.
 - **Design system:** compact, light-first, information-dense per
   `pump-erp-design-system`; reuse `Kpi`, tokens, and the existing shell.

@@ -1,17 +1,13 @@
 #!/usr/bin/env node
 /**
- * Fail the build on inline `eslint-disable` comments for `react-hooks/*`.
+ * Fail the build on inline `oxlint-disable` / `eslint-disable` comments for
+ * React hook rules (`react-hooks/*`, or Oxlint's `react/rules-of-hooks`,
+ * `react/exhaustive-deps` and the React Compiler rules).
  *
- * ESLint here is a ratchet: pre-existing violations live in
- * eslint-suppressions.json, CI fails on new ones, and the number in that file
- * is the honest record of what is left. An inline disable bypasses all of that
- * — it is invisible to `--prune-suppressions`, so the file can read `{}` while
- * violations remain in the source. That is exactly the gap this check closes
- * (see #75), and the reason it is a separate check rather than a lint rule:
- * ESLint cannot be asked to police its own disable comments without a plugin.
- *
- * If a hook genuinely cannot satisfy the rule, record it in the suppressions
- * file with `npm run lint:baseline` so it stays counted.
+ * An inline disable hides a hook violation where no one reviews it (see #75).
+ * Oxlint has no suppressions file, so the honest record of what is left is the
+ * `lint` block in vite.config.ts: a hook that genuinely cannot satisfy a rule
+ * gets a reviewed per-file override there, where it stays visible.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +15,25 @@ import { join } from 'node:path';
 const ROOTS = ['packages', 'apps'];
 const SKIP = new Set(['node_modules', 'dist', 'build', '.next', 'coverage', 'src-tauri']);
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
-const DISABLE = /eslint-disable(?:-next-line|-line)?[^\n]*\breact-hooks\//;
+const HOOK_RULES = [
+  'rules-of-hooks',
+  'exhaustive-deps',
+  'static-components',
+  'use-memo',
+  'preserve-manual-memoization',
+  'incompatible-library',
+  'immutability',
+  'globals',
+  'refs',
+  'set-state-in-effect',
+  'error-boundaries',
+  'purity',
+  'set-state-in-render',
+  'unsupported-syntax',
+];
+const DISABLE = new RegExp(
+  String.raw`(?:eslint|oxlint)-disable(?:-next-line|-line)?[^\n]*\b(?:react-hooks\/|react\/(?:${HOOK_RULES.join('|')})\b)`,
+);
 
 /** @param {string} dir @param {string[]} out */
 function walk(dir, out) {
@@ -51,21 +65,20 @@ for (const root of ROOTS) {
 
 if (offenders.length > 0) {
   console.error(
-    `\nFound ${offenders.length} inline eslint-disable comment(s) for react-hooks rules:\n`,
+    `\nFound ${offenders.length} inline lint disable comment(s) for React hook rules:\n`,
   );
   for (const offender of offenders) console.error(`  ${offender}`);
   console.error(
     [
       '',
-      'These bypass the lint ratchet: `--prune-suppressions` cannot see them, so',
-      'eslint-suppressions.json under-reports what is actually left.',
+      'These hide a hook violation inline, where no one reviews it.',
       '',
-      'Fix the hook, or — if it genuinely cannot satisfy the rule — record it with',
-      '`npm run lint:baseline` so it stays counted.',
+      'Fix the hook, or — if it genuinely cannot satisfy the rule — add a reviewed',
+      'per-file override to the `lint` block in vite.config.ts so it stays visible.',
       '',
     ].join('\n'),
   );
   process.exit(1);
 }
 
-console.log('No inline react-hooks disables. The suppressions file is the whole picture.');
+console.log('No inline React hook rule disables.');

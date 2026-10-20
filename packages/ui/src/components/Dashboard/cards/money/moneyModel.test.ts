@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { DailyCashBook } from '../../../../services/cloud.js';
 import { bestDayIndex, buildTrendChart, deriveCashInHand } from './moneyModel.js';
 

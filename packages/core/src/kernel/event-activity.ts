@@ -4,7 +4,14 @@ import { BusinessEvents, type BusinessEventType } from './event-catalog.js';
 
 export type EventTone = 'info' | 'success' | 'warning' | 'danger' | 'default';
 export type EventValueFormat =
-  'text' | 'integer' | 'decimal' | 'inr' | 'date' | 'volume-litres' | 'quantity' | 'percentage';
+  | 'text'
+  | 'integer'
+  | 'decimal'
+  | 'inr'
+  | 'date'
+  | 'volume-litres'
+  | 'quantity'
+  | 'percentage';
 export type EventGroupingRole = 'primary' | 'related';
 export type EventActorKind = 'tenant_user' | 'platform_admin' | 'system';
 export type ActivityValue = string | number | boolean;
@@ -532,7 +539,7 @@ function formatValue(value: ActivityValue, format: EventValueFormat): string | n
       String(value)
         // Deliberate: activity text is rendered in a UI and in PDFs, so control
         // characters from upstream payloads are stripped rather than escaped.
-        // eslint-disable-next-line no-control-regex
+        // oxlint-disable-next-line no-control-regex
         .replace(/[\u0000-\u001F\u007F]/g, ' ')
         .trim() || null
     );

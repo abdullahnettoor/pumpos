@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { buildCashBankSummary } from '../../components/reports/cash-bank/cashBankSummary.js';
 import { cashBankDocTables } from './cashBankDoc.js';
 

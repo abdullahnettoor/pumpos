@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PageFrame } from './PageFrame.js';
 import { NAV_PAGES, ROUTES } from '../../nav-intent/routes.js';

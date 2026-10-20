@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { UNLIMITED_LIMIT, type AccessDocument, type Role } from '@pump/shared';
 import { accessRouter } from './access.js';

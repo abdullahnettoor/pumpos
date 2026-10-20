@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
 
@@ -147,7 +147,7 @@ describe('DispensersList — taking a pump out of service', () => {
     const toggle = () =>
       fireEvent.click(card('Pump One').getByRole('button', { name: /maintenance/i }));
     const keyOf = (n: number) =>
-      (updateDispenser.mock.calls[n]?.[2] as { idempotencyKey: string }).idempotencyKey;
+      (updateDispenser.mock.calls[n]![2] as { idempotencyKey: string }).idempotencyKey;
 
     toggle();
     await waitFor(() => expect(updateDispenser).toHaveBeenCalledTimes(1));

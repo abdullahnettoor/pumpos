@@ -42,7 +42,10 @@ export type PurchaseStatusState = 'awaiting-decantation';
  * are states of the book stock.
  */
 export type TankStatusState =
-  'tank-critical' | 'tank-low' | 'tank-over-capacity' | 'tank-waiting-decantation';
+  | 'tank-critical'
+  | 'tank-low'
+  | 'tank-over-capacity'
+  | 'tank-waiting-decantation';
 /** A product's on-hand stock (merchandise): none left, or sold below zero. */
 export type StockStatusState = 'out-of-stock' | 'oversold';
 /** A Decantation (tanker visit) and a tank line without its Fuel Purchase (ADR 0007). */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { __resetUnsavedChangesForTests } from '../../pump-ds/form/unsavedChanges.js';
 import { renderWithProviders } from '../../test/renderWithProviders.js';

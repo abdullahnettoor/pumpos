@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 const hooks = vi.hoisted(() => ({
   useTankLevelSettings: vi.fn(() => ({ criticalBelowPct: 25, lowBelowPct: 40 })),

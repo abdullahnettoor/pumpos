@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { queryKeys } from '../../query/hooks.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
 

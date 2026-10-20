@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders, muteExpectedConsoleErrors } from '../../test/renderWithProviders.js';
 import { handoverResultFor } from '../../test/handoverResult.js';
@@ -92,7 +92,7 @@ const nozzle = (id: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
     isOpen: true,

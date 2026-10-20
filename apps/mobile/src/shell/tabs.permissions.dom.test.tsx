@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { cleanup, renderHook } from '@testing-library/react';
 import { QueryClient } from '@tanstack/react-query';
 import { defaultPermissionsFor, type AccessDocument, type Role } from '@pump/shared';

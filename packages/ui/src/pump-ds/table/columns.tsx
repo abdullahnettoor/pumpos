@@ -74,7 +74,11 @@ export interface StatusColumn<T> extends ColumnBase<T> {
  * interactive `InteractiveTable` and the read-only `StatementTable`.
  */
 export type TableColumn<T> =
-  MoneyColumn<T> | QtyColumn<T> | DateColumn<T> | TextColumn<T> | StatusColumn<T>;
+  | MoneyColumn<T>
+  | QtyColumn<T>
+  | DateColumn<T>
+  | TextColumn<T>
+  | StatusColumn<T>;
 
 /**
  * The closing row. `true` sums every money and qty column under a "Total"
