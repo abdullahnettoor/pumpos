@@ -206,7 +206,7 @@ business day (shift only when it lands in the drawer as cash). One extensible
 1. **`tax_config` on the category** (not per entry) so categories stay minimal yet
    GST-extensible.
 2. **`received_into` symmetric** with expenses' `paid_from`: `SHIFT_CASH | BANK |
-OWNER`; a chosen account overrides it by account type so drawer reconciliation
+   OWNER`; a chosen account overrides it by account type so drawer reconciliation
    stays correct (only shift Cash-in-Hand touches the drawer).
 3. **Single "Other Income" bucket** (one `other_income` table), not a per-type
    schema.
@@ -229,7 +229,7 @@ OWNER`; a chosen account overrides it by account type so drawer reconciliation
 
 - DSSR income block (`{ drawer, business, total, byCategory }`) composed from the
   business day's `other_income` (excl. voided). P&L: **`netProfit = grossMargin −
-expenses + otherIncome`**; `pnl.otherIncome` surfaced. Rendered in
+  expenses + otherIncome`**; `pnl.otherIncome` surfaced. Rendered in
   `DailyDssrView`, `ProfitLossView` (KPI + statement line) and the DSSR PDF.
 
 ### FI3 — Entry + management UI ✅

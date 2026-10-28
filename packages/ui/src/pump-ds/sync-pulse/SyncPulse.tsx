@@ -58,7 +58,7 @@ export const SyncPulse = forwardRef<HTMLSpanElement, SyncPulseProps>(function Sy
       role="status"
       aria-label={`Sync: ${meta.label}`}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full border border-border-soft bg-surface text-[11px]',
+        'inline-flex h-7 items-center gap-1.5 rounded-full border border-border-soft bg-surface text-[12px]',
         compact ? 'w-7 justify-center px-0' : 'px-2',
         className,
       )}

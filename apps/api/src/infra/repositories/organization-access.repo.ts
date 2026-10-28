@@ -12,10 +12,8 @@ import type {
   StationCapacityPort,
 } from '@pump/core';
 import { isLimitKey } from '@pump/core';
+import { UNLIMITED_LIMIT } from '@pump/shared';
 import type { LimitKey, ProductPlanKey, SubscriptionStatus } from '@pump/shared';
-
-/** Limit value used for demo Organizations, which are not metered. */
-const DEMO_UNLIMITED = 1_000_000;
 
 type GrantRow = typeof schema.organizationCapabilityGrants.$inferSelect;
 type OverrideRow = typeof schema.organizationLimitOverrides.$inferSelect;
@@ -73,8 +71,21 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId));
 
+    // `logins` is the login_count usage: active users with an auth account
+    // (Attendants with phone access included). Users without a login never
+    // count. A pending Owner invite already has an ACTIVE row with an auth
+    // account (see the invite triggers), so it takes a login before it is
+    // accepted. Read in the same query as the Station count.
     const [stations] = await this.db
-      .select({ value: count() })
+      .select({
+        value: count(),
+        logins: sql<number>`(
+          select count(*) from ${schema.users}
+          where ${schema.users.organizationId} = ${organizationId}
+            and ${schema.users.status} = 'ACTIVE'
+            and ${schema.users.authUserId} is not null
+        )`,
+      })
       .from(schema.stations)
       .where(eq(schema.stations.organizationId, organizationId));
 
@@ -112,7 +123,8 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
     // as ACTIVE with no paid-through date, and every Limit is lifted. Suspension
     // still applies, so the demo expiry job can cut access.
     if (organization?.isDemo) {
-      limitOverrides.station_count = DEMO_UNLIMITED;
+      limitOverrides.station_count = UNLIMITED_LIMIT;
+      limitOverrides.login_count = UNLIMITED_LIMIT;
     }
 
     return {
@@ -124,7 +136,10 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       suspendedAt: organization?.suspendedAt?.toISOString() ?? null,
       grantedCapabilities: grants.map((grant) => grant.capabilityKey),
       limitOverrides,
-      usage: { station_count: Number(stations?.value ?? 0) },
+      usage: {
+        station_count: Number(stations?.value ?? 0),
+        login_count: Number(stations?.logins ?? 0),
+      },
     };
   }
 }

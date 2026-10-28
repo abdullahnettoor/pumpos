@@ -47,6 +47,8 @@ export interface ComboboxOption {
   label: string;
   /** Optional secondary line shown under the label (e.g. code / balance). */
   sublabel?: string;
+  /** Marks the secondary line as a problem (e.g. a product with no price, #638). */
+  sublabelTone?: 'warning';
 }
 
 /** An action (e.g. “＋ New customer”) shown only when the search has no matches. */
@@ -264,7 +266,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-soft)',
               borderRadius: 'var(--radius-card)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+              boxShadow: 'var(--shadow-popover)',
               overflow: 'hidden',
             }}
           >
@@ -319,7 +321,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
                         {a.label}
                       </span>
                       {a.sublabel && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                           {a.sublabel}
                         </span>
                       )}
@@ -360,7 +362,12 @@ export const Combobox: React.FC<ComboboxProps> = ({
                         {opt.label}
                       </span>
                       {opt.sublabel && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span
+                          className={cx(
+                            'text-[12px]',
+                            opt.sublabelTone === 'warning' ? 'text-warning-fg' : 'text-ink-muted',
+                          )}
+                        >
                           {opt.sublabel}
                         </span>
                       )}

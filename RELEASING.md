@@ -339,14 +339,17 @@ steps already exist and are **skipped until `R2_BUCKET` is set**.
 
 - [ ] Create an R2 bucket + public access (custom domain e.g.
       `downloads.pumpos.app`, or the `r2.dev` URL).
-- [ ] Add a **CORS** rule allowing `GET` from the marketing origin.
 - [ ] Ensure `CLOUDFLARE_API_TOKEN` includes **R2 read/write**.
-- [ ] Repo variables: `R2_BUCKET`, `R2_PUBLIC_BASE`,
-      `DOWNLOAD_MANIFEST_URL=<R2_PUBLIC_BASE>/downloads/manifest.json`.
+- [ ] Repo variables: `R2_BUCKET`, `R2_PUBLIC_BASE`.
+- [ ] Point the console's desktop download (`GET /api/desktop-downloads`,
+      which today reads GitHub Releases) at the R2 installers, and the desktop
+      updater at the R2 `latest.json`.
 
-Then every release uploads installers + refreshes the public manifest the
-download page reads. (While the repo is **public**, GitHub Release assets are
-already publicly downloadable, so R2 isn't urgent.)
+Then every release also uploads installers + a `downloads/manifest.json` to R2.
+Nothing reads that manifest today: the marketing site no longer lists
+installers, and the console's desktop download comes from GitHub Releases.
+(While the repo is **public**, GitHub Release assets are already publicly
+downloadable, so R2 isn't urgent.)
 
 ---
 

@@ -1,26 +1,59 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
-import { queryKeys, useStations } from '../../query/hooks.js';
-import { Station } from '@pump/shared';
+import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
+import {
+  can,
+  resolveTankLevelSettings,
+  Station,
+  TANK_LEVEL_SETTINGS_KEY,
+  type TankLevelSettings,
+} from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
-import { Tabs } from '../primitives/Tabs.js';
-import { Field, TextInput, Select } from '../primitives/Field.js';
+import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
+import { PageFrame } from '../page-frame/index.js';
+import { ROUTES } from '../../nav-intent/routes.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
-import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
-import { Building2 } from 'lucide-react';
+import {
+  Button,
+  EmptyState,
+  DataSection,
+  Icon,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  UnsavedSectionsBar,
+  UnsavedSectionsProvider,
+  guardLeave,
+  useHasUnsavedChanges,
+} from '../../pump-ds/index.js';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
+import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
+import { StationDetailsForm } from './StationDetailsForm.js';
+import { StationBrandingForm } from './StationBrandingForm.js';
+import { DecantationGuidanceForm } from './DecantationGuidanceForm.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
+import { newerStation } from './stationForms.js';
+import {
+  officeSubmitKeys,
+  sendKeyed,
+  type SubmitKeySession,
+} from '../../office-records/submitKeys.js';
 
 const stationService = new CloudStationService();
 
 export interface StationOverviewProps {
   onStationSelected: (station: Station | null) => void;
   selectedStation: Station | null;
+  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
 /**
@@ -37,49 +70,44 @@ export const StationOverview: React.FC<StationOverviewProps> = (props) => (
 const StationOverviewBody: React.FC<StationOverviewProps> = ({
   onStationSelected,
   selectedStation,
+  userRole,
 }) => {
   // Read through the shared static-tier hook rather than fetching into local
   // state from an effect declared above its loader.
   const stationsQ = useStations();
+  const productsQ = useProducts();
   const stationsList = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
-  const loading = stationsQ.isLoading;
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const [editing, setEditing] = useState(false);
-  const [editingBusiness, setEditingBusiness] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'
-  >('general');
-
-  // General tab form states
-  const [name, setName] = useState(selectedStation?.name ?? '');
-  const [code, setCode] = useState(selectedStation?.code ?? '');
-  const [address, setAddress] = useState(selectedStation?.address || '');
-  const [phone, setPhone] = useState(selectedStation?.phone || '');
-  const [graceMinutes, setGraceMinutes] = useState(
-    selectedStation?.settings?.shift_grace_minutes || 15,
-  );
-  const [timezone, setTimezone] = useState(selectedStation?.settings?.timezone || 'Asia/Kolkata');
-  const [businessDayStartsAt, setBusinessDayStartsAt] = useState(
-    selectedStation?.settings?.business_day_starts_at || '06:00',
-  );
-  // Legal / branding (letterhead for reports & invoices)
-  const [legalName, setLegalName] = useState(selectedStation?.settings?.legal?.legalName || '');
-  const [gstin, setGstin] = useState(selectedStation?.settings?.legal?.gstin || '');
-  const [stateCode, setStateCode] = useState(selectedStation?.settings?.legal?.stateCode || '');
-  const [legalAddress, setLegalAddress] = useState(
-    selectedStation?.settings?.legal?.addressLine || '',
-  );
-  const [pincode, setPincode] = useState(selectedStation?.settings?.legal?.pincode || '');
-  const [roCode, setRoCode] = useState(selectedStation?.settings?.legal?.roCode || '');
-  const [fuelBrand, setFuelBrand] = useState(selectedStation?.settings?.fuel_brand || '');
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(
-    selectedStation?.settings?.logo_data_url || null,
-  );
-  const [onboardingStatus, setOnboardingStatus] = useState<string>(
-    selectedStation?.onboardingStatus || 'NOT_STARTED',
-  );
+  const [activeTab, setActiveTab] = useState<StationTab>('general');
+  // The Add ▾ menu picks a tab and asks it to open its add drawer (#537 review).
+  const [addRequest, setAddRequest] = useState<{ kind: AddKind; at: number } | null>(null);
+  const requestAdd = (kind: AddKind) =>
+    guardLeave(() => {
+      setActiveTab(ADD_TAB[kind]);
+      setAddRequest({ kind, at: Date.now() });
+    });
+  const requestFor = (kind: AddKind) => ({
+    createRequest: addRequest?.kind === kind ? addRequest.at : undefined,
+    onCreateHandled: () => setAddRequest(null),
+  });
+  /**
+   * Every station save sends one Idempotency-Key per logical submit (#537),
+   * through the shared store. A session renews its key after each decided
+   * save; Discard opens a new session (#604), so an edit started over never
+   * inherits the key of one left unsettled.
+   */
+  const sessions = useRef(new Map<string, SubmitKeySession>());
+  const openSession = (form: string) => {
+    const s = officeSubmitKeys.session(`setup:stations:${selectedStation?.id ?? 'none'}:${form}`);
+    sessions.current.set(form, s);
+    return s;
+  };
+  const updateStation = (form: string, id: string, body: unknown) =>
+    sendKeyed(sessions.current.get(form) ?? openSession(form), body, (idempotencyKey) =>
+      stationService.updateStation(id, body, { idempotencyKey }),
+    );
 
   // Selecting a default station is a genuine side effect on the parent, not
   // local state being synced, so it stays an effect — but it is now honest
@@ -93,710 +121,282 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     await qc.invalidateQueries({ queryKey: queryKeys.stations() });
   }, [qc]);
 
-  const handleSaveGeneral = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStation) return;
-
-    try {
-      const updated = await stationService.updateStation(selectedStation.id, {
-        name,
-        code: code.toUpperCase(),
-        address,
-        phone,
-        settings: {
-          ...(selectedStation.settings || {}),
-          shift_grace_minutes: graceMinutes,
-          timezone,
-          business_day_starts_at: businessDayStartsAt,
-          shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
-          offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
-          offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
-        },
-        onboardingStatus,
-      });
-      onStationSelected(updated);
-      setEditing(false);
-      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
-      toast.success('Station details saved.');
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+  /**
+   * One in-page form's save (#604): its body under the form's key, the parent
+   * told of the saved station, and the station list refreshed in the
+   * background. A failure rejects, so the form's section shows it and stays
+   * changed.
+   */
+  // The last station the server returned: every section's body is built on it,
+  // so saving several sections in a row never sends stale settings back.
+  const latestStation = useRef(selectedStation);
+  useEffect(() => {
+    // A prop older than what a save just returned (the station list not yet
+    // refetched) must not replace it.
+    latestStation.current = newerStation(latestStation.current, selectedStation);
+  }, [selectedStation]);
+  const saveForm = async (
+    form: string,
+    build: (saved: Station) => unknown,
+    saved: string,
+  ): Promise<Station> => {
+    const base = latestStation.current;
+    if (!base) throw new Error('Select a station first.');
+    const updated = await updateStation(form, base.id, build(base));
+    // The next section in the same Save builds on this one (#604 review).
+    latestStation.current = updated;
+    onStationSelected(updated);
+    runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
+    toast.success(saved);
+    return updated;
   };
 
-  const handleSaveBusiness = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStation) return;
-
-    try {
-      const updated = await stationService.updateStation(selectedStation.id, {
-        settings: {
-          ...(selectedStation.settings || {}),
-          legal: {
-            legalName: legalName || null,
-            gstin: gstin || null,
-            stateCode: stateCode || null,
-            addressLine: legalAddress || null,
-            pincode: pincode || null,
-            roCode: roCode || null,
-          },
-          fuel_brand: fuelBrand || null,
-          logo_data_url: logoDataUrl || null,
-        },
-      });
-      onStationSelected(updated);
-      setEditingBusiness(false);
-      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
-      toast.success('Business details saved.');
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+  /**
+   * Tank levels colour every tank on every screen (#520). The server refuses
+   * anyone but an Owner or Manager; the station list is invalidated (not
+   * awaited) so the Dashboard, alerts and Inventory pick the change up.
+   */
+  const handleSaveTankLevels = async (tankLevels: TankLevelSettings) => {
+    await saveForm(
+      'tank-levels',
+      (saved) => ({
+        settings: { ...(saved.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
+      }),
+      'Tank levels saved.',
+    );
   };
 
-  if (loading) {
-    return <LoadingSpinner text="Loading station overview..." />;
-  }
+  // Leaving a tab with unsaved changes asks first (#604).
+  const changeTab = (tab: StationTab) => guardLeave(() => setActiveTab(tab));
+  // While a form is changed, its bar's Save is the page's one primary.
+  const formChanged = useHasUnsavedChanges();
+
+  const canRules = can(principalFor(userRole), 'station.manage');
+  const fuelProducts = (productsQ.data ?? []).filter((product) => product.productType === 'FUEL');
+  const canAddInfrastructure = can(principalFor(userRole), 'station.infrastructure');
+  const canAddProduct = can(principalFor(userRole), 'products.manage');
+  // The one page primary, the same on every tab (#537 review): Add ▾.
+  const actions =
+    selectedStation && (canAddInfrastructure || canAddProduct) ? (
+      <Menu>
+        <MenuTrigger asChild>
+          <Button
+            variant={formChanged ? 'secondary' : 'primary'}
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
+            rightIcon={<Icon name="chevron-down" size="sm" />}
+          >
+            Add
+          </Button>
+        </MenuTrigger>
+        <MenuContent align="end">
+          {canAddInfrastructure && (
+            <>
+              <MenuItem icon={<ConceptIcon concept="tanks" />} onSelect={() => requestAdd('tank')}>
+                Tank
+              </MenuItem>
+              <MenuItem
+                icon={<ConceptIcon concept="dispensers" />}
+                onSelect={() => requestAdd('dispenser')}
+              >
+                Dispenser
+              </MenuItem>
+            </>
+          )}
+          {canAddProduct && (
+            <MenuItem
+              icon={<ConceptIcon concept="products" />}
+              onSelect={() => requestAdd('product')}
+            >
+              Product
+            </MenuItem>
+          )}
+          {canAddInfrastructure && (
+            <>
+              <MenuItem
+                icon={<ConceptIcon concept="payment-terminals" />}
+                onSelect={() => requestAdd('terminal')}
+              >
+                Payment terminal
+              </MenuItem>
+              <MenuItem
+                icon={<ConceptIcon concept="shift-templates" />}
+                onSelect={() => requestAdd('shift')}
+              >
+                Shift template
+              </MenuItem>
+            </>
+          )}
+          {canAddProduct && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon={<Icon name="upload" size="sm" />}
+                onSelect={() => requestAdd('import')}
+              >
+                Import products (CSV)
+              </MenuItem>
+            </>
+          )}
+        </MenuContent>
+      </Menu>
+    ) : undefined;
 
   return (
-    <div
-      style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
-      className="animate-fade-in"
-    >
-      <PageHeader
-        title="Station Setup & Administration"
-        subtitle="Review and modify station components, products, tanks, nozzles, and settings."
-      />
-
-      {selectedStation ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Tabs bar */}
-          <Tabs
-            variant="underline"
-            aria-label="Station setup"
-            activeId={activeTab}
-            onChange={(id) => setActiveTab(id as any)}
-            tabs={[
-              { id: 'general', label: 'General Info' },
-              { id: 'business', label: 'Business & Branding' },
-              { id: 'products', label: 'Products Catalog' },
-              { id: 'tanks', label: 'Storage Tanks' },
-              { id: 'dispensers', label: 'Dispenser Units' },
-              { id: 'terminals', label: 'Payment Terminals' },
-              { id: 'shifts', label: 'Shift Templates' },
-            ]}
-          />
-
-          {/* Tab Content Panels */}
-          <Panel style={{ minHeight: '350px' }}>
-            {activeTab === 'general' && (
-              <div>
-                {editing ? (
-                  <Form
-                    onSubmit={handleSaveGeneral}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      maxWidth: '600px',
-                    }}
-                  >
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <Field label="Station Name" required>
-                        <TextInput
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
-                      </Field>
-                      <Field label="Station Code" required>
-                        <TextInput
-                          value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          required
-                        />
-                      </Field>
-                    </div>
-
-                    <Field label="Physical Address">
-                      <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
-                    </Field>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <Field label="Contact Phone">
-                        <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
-                      </Field>
-                      <Field label="Shift Grace Period (Minutes)">
-                        <TextInput
-                          type="number"
-                          min="0"
-                          className="mono-num"
-                          value={graceMinutes}
-                          onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
-                        />
-                      </Field>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <Field
-                        label="Timezone"
-                        hint="Used to decide which calendar day operations belong to."
-                      >
-                        <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-                          <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                          <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                          <option value="Asia/Colombo">Asia/Colombo</option>
-                          <option value="Asia/Kathmandu">Asia/Kathmandu</option>
-                          <option value="Asia/Dhaka">Asia/Dhaka</option>
-                          <option value="UTC">UTC</option>
-                        </Select>
-                      </Field>
-                      <Field
-                        label="Business Day Starts At"
-                        hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day."
-                      >
-                        <TextInput
-                          type="time"
-                          className="mono-num"
-                          value={businessDayStartsAt}
-                          onChange={(e) => setBusinessDayStartsAt(e.target.value)}
-                        />
-                      </Field>
-                    </div>
-
-                    <Field label="Onboarding Readiness Status" style={{ maxWidth: '300px' }}>
-                      <Select
-                        value={onboardingStatus}
-                        onChange={(e) => setOnboardingStatus(e.target.value)}
-                      >
-                        <option value="NOT_STARTED">NOT STARTED</option>
-                        <option value="IN_PROGRESS">IN PROGRESS</option>
-                        <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
-                      </Select>
-                    </Field>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '8px',
-                        justifyContent: 'flex-end',
-                        marginTop: '12px',
-                        borderTop: '1px solid var(--border-soft)',
-                        paddingTop: '12px',
-                      }}
-                    >
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setEditing(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" variant="primary" size="sm">
-                        Save Configuration
-                      </Button>
-                    </div>
-                  </Form>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <div>
-                        <h3
-                          style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}
-                        >
-                          {selectedStation.name}
-                        </h3>
-                        <p
-                          style={{
-                            fontSize: '12px',
-                            color: 'var(--text-muted)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            marginTop: '4px',
-                          }}
-                        >
-                          Status:
-                          <Chip
-                            tone={
-                              onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'
-                            }
-                            size="sm"
-                          >
-                            {onboardingStatus.replace(/_/g, ' ')}
-                          </Chip>
-                        </p>
-                      </div>
-                      <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
-                        Edit General Parameters
-                      </Button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                        gap: '16px',
-                        borderTop: '1px solid var(--border-soft)',
-                        paddingTop: '16px',
-                      }}
-                    >
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Location Code
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '14px',
-                            fontWeight: 600,
-                            marginTop: '4px',
-                            color: 'var(--text-strong)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {selectedStation.code}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Contact
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          {selectedStation.phone || '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Grace Period
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {selectedStation.settings?.shift_grace_minutes || 15} min
-                        </p>
-                      </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Address
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          {selectedStation.address || '—'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+    <UnsavedSectionsProvider>
+      <PageFrame
+        route={ROUTES.station}
+        subtitle={SUBTITLE}
+        actions={actions}
+        tabs={
+          selectedStation ? (
+            <Tabs
+              id="station-setup"
+              aria-label="Station setup"
+              activeId={activeTab}
+              onChange={(id) => changeTab(id as StationTab)}
+              tabs={[
+                { id: 'general', label: 'General', concept: 'general' },
+                { id: 'business', label: 'Branding', concept: 'branding' },
+                { id: 'products', label: 'Products', concept: 'products' },
+                { id: 'tanks', label: 'Tanks', concept: 'tanks' },
+                { id: 'dispensers', label: 'Dispensers', concept: 'dispensers' },
+                { id: 'terminals', label: 'Payment terminals', concept: 'payment-terminals' },
+                { id: 'shifts', label: 'Shift templates', concept: 'shift-templates' },
+                ...(canRules
+                  ? [{ id: 'rules', label: 'Rules', concept: 'rules' } satisfies TabItem]
+                  : []),
+                ...(can(principalFor(userRole), 'station.reportTemplates')
+                  ? [
+                      {
+                        id: 'report-templates',
+                        label: 'Report templates',
+                        concept: 'report-templates',
+                      } satisfies TabItem,
+                    ]
+                  : []),
+              ]}
+            />
+          ) : undefined
+        }
+      >
+        {selectedStation ? (
+          <div {...tabPanelProps('station-setup', activeTab)}>
+            {/* The station list drives the default station: its failure shows Retry here. */}
+            <DataSection
+              title="station"
+              query={stationsQ}
+              placeholderHeight={240}
+              shape="cards"
+              className="flex flex-col gap-6"
+            >
+              {/* Report templates carry their own panels (moved from Reports, #540). */}
+              {activeTab === 'report-templates' &&
+                can(principalFor(userRole), 'station.reportTemplates') && (
+                  <ReportTemplatesPanel selectedStation={selectedStation} />
                 )}
-              </div>
-            )}
 
-            {activeTab === 'business' && (
-              <div>
-                {editingBusiness ? (
-                  <Form
-                    onSubmit={handleSaveBusiness}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      maxWidth: '600px',
-                    }}
-                  >
-                    <div>
-                      <h3
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: 'var(--text-strong)',
-                          marginBottom: '10px',
-                        }}
-                      >
-                        Legal &amp; Tax (Report Letterhead)
-                      </h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <Field label="Legal / Trade Name">
-                          <TextInput
-                            value={legalName}
-                            onChange={(e) => setLegalName(e.target.value)}
-                            placeholder="e.g. Sri Lakshmi Fuels"
-                          />
-                        </Field>
-                        <Field label="GSTIN">
-                          <TextInput
-                            className="mono-num"
-                            value={gstin}
-                            onChange={(e) => setGstin(e.target.value.toUpperCase())}
-                            placeholder="29ABCDE1234F1Z5"
-                            maxLength={15}
-                          />
-                        </Field>
-                        <Field label="State Code (place of supply)">
-                          <TextInput
-                            className="mono-num"
-                            value={stateCode}
-                            onChange={(e) => setStateCode(e.target.value)}
-                            placeholder="e.g. 29 (Karnataka)"
-                            maxLength={2}
-                          />
-                        </Field>
-                        <Field label="Retail Outlet / Dealer Code">
-                          <TextInput
-                            value={roCode}
-                            onChange={(e) => setRoCode(e.target.value)}
-                            placeholder="RO / dealership code"
-                          />
-                        </Field>
-                        <Field label="Address Line">
-                          <TextInput
-                            value={legalAddress}
-                            onChange={(e) => setLegalAddress(e.target.value)}
-                            placeholder="Street, area, city"
-                          />
-                        </Field>
-                        <Field label="Pincode">
-                          <TextInput
-                            className="mono-num"
-                            value={pincode}
-                            onChange={(e) => setPincode(e.target.value)}
-                            placeholder="560001"
-                            maxLength={6}
-                          />
-                        </Field>
-                      </div>
-                    </div>
+              {activeTab === 'general' && (
+                <>
+                  <StationDetailsForm
+                    station={selectedStation}
+                    onSave={(build) => saveForm('general', build, 'Station details saved.')}
+                    onDiscard={() => openSession('general')}
+                  />
+                  <UnsavedSectionsBar />
+                </>
+              )}
 
-                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <h3
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: 'var(--text-strong)',
-                          marginBottom: '10px',
-                        }}
-                      >
-                        Branding
-                      </h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <Field label="Fuel Company / Brand">
-                          <Select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)}>
-                            <option value="">— Select —</option>
-                            <option value="Indian Oil">Indian Oil (IOCL)</option>
-                            <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
-                            <option value="Hindustan Petroleum">Hindustan Petroleum (HPCL)</option>
-                            <option value="Nayara Energy">Nayara Energy</option>
-                            <option value="Jio-bp">Jio-bp (Reliance)</option>
-                            <option value="Shell">Shell</option>
-                            <option value="Other">Other</option>
-                          </Select>
-                        </Field>
-                        <Field
-                          label="Logo (optional, your own)"
-                          hint="Upload your outlet's own logo. Used on report letterheads."
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            {logoDataUrl && (
-                              <img
-                                src={logoDataUrl}
-                                alt="logo"
-                                style={{
-                                  width: 36,
-                                  height: 36,
-                                  objectFit: 'contain',
-                                  border: '1px solid var(--border-soft)',
-                                  borderRadius: 4,
-                                }}
-                              />
-                            )}
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                const reader = new FileReader();
-                                reader.onload = () =>
-                                  setLogoDataUrl(
-                                    typeof reader.result === 'string' ? reader.result : null,
-                                  );
-                                reader.readAsDataURL(file);
-                              }}
-                              style={{ fontSize: '12px' }}
-                            />
-                            {logoDataUrl && (
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="xs"
-                                onClick={() => setLogoDataUrl(null)}
-                              >
-                                Remove
-                              </Button>
-                            )}
-                          </div>
-                        </Field>
-                      </div>
-                    </div>
+              {activeTab === 'business' && (
+                <>
+                  <StationBrandingForm
+                    station={selectedStation}
+                    onSave={(build) => saveForm('branding', build, 'Business details saved.')}
+                    onDiscard={() => openSession('branding')}
+                  />
+                  <UnsavedSectionsBar />
+                </>
+              )}
 
-                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        Report paper size and which sections print on each report are set in{' '}
-                        <strong>Reports → Templates</strong>.
-                      </span>
-                    </div>
+              {activeTab === 'rules' && canRules && (
+                <>
+                  {/* Tank levels sit above the decantation tolerances (Station › Rules, #520).
+                    One bar for both: "2 sections changed" (#604). */}
+                  <TankLevelSettingsPanel
+                    key={selectedStation.id}
+                    value={resolveTankLevelSettings(selectedStation.settings)}
+                    canEdit={can(principalFor(userRole), 'station.tankLevels')}
+                    onSave={handleSaveTankLevels}
+                    onDiscard={() => openSession('tank-levels')}
+                  />
+                  <DecantationGuidanceForm
+                    station={selectedStation}
+                    fuelProducts={fuelProducts}
+                    productsQuery={productsQ}
+                    onSave={(build) =>
+                      saveForm('decantation', build, 'Decantation settings saved.')
+                    }
+                    onDiscard={() => openSession('decantation')}
+                  />
+                  <UnsavedSectionsBar />
+                </>
+              )}
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '8px',
-                        justifyContent: 'flex-end',
-                        marginTop: '12px',
-                        borderTop: '1px solid var(--border-soft)',
-                        paddingTop: '12px',
-                      }}
-                    >
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setEditingBusiness(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" variant="primary" size="sm">
-                        Save Configuration
-                      </Button>
-                    </div>
-                  </Form>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <div>
-                        <h3
-                          style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}
-                        >
-                          Business, Tax &amp; Branding
-                        </h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Legal identity and letterhead used across reports and invoices.
-                        </p>
-                      </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setEditingBusiness(true)}
-                      >
-                        Edit Business Details
-                      </Button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                        gap: '16px',
-                        borderTop: '1px solid var(--border-soft)',
-                        paddingTop: '16px',
-                      }}
-                    >
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Legal Name
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          {legalName || '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          GSTIN
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {gstin || '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          State Code
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                            fontFamily: 'var(--font-mono)',
-                          }}
-                        >
-                          {stateCode || '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Fuel Brand
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          {fuelBrand || '—'}
-                        </p>
-                      </div>
-                      <div>
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          Logo
-                        </span>
-                        <p
-                          style={{
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            marginTop: '4px',
-                            color: 'var(--text-default)',
-                          }}
-                        >
-                          {logoDataUrl ? 'Uploaded' : '—'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}
-            {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
-            {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
-            {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
-            {activeTab === 'shifts' && <ShiftTemplates />}
-          </Panel>
-        </div>
-      ) : (
-        <EmptyState
-          icon={<Building2 />}
-          title="No station selected"
-          description="Please select or initialize a station location first."
-        />
-      )}
-    </div>
+              {activeTab === 'products' && (
+                <ProductsCatalog
+                  selectedStation={selectedStation}
+                  {...requestFor('product')}
+                  importRequest={addRequest?.kind === 'import' ? addRequest.at : undefined}
+                  onImportHandled={() => setAddRequest(null)}
+                />
+              )}
+              {activeTab === 'tanks' && (
+                <TanksGrid stationId={selectedStation.id} {...requestFor('tank')} />
+              )}
+              {activeTab === 'dispensers' && (
+                <DispensersList stationId={selectedStation.id} {...requestFor('dispenser')} />
+              )}
+              {activeTab === 'terminals' && (
+                <PaymentTerminalsPanel stationId={selectedStation.id} {...requestFor('terminal')} />
+              )}
+              {activeTab === 'shifts' && <ShiftTemplates {...requestFor('shift')} />}
+            </DataSection>
+          </div>
+        ) : (
+          <DataSection title="stations" query={stationsQ} placeholderHeight={240}>
+            <EmptyState
+              icon={<ConceptIcon concept="stations" />}
+              title="No station selected"
+              description="Please select or initialize a station location first."
+            />
+          </DataSection>
+        )}
+      </PageFrame>
+    </UnsavedSectionsProvider>
   );
 };
+
+const SUBTITLE = 'Products, tanks, dispensers, terminals, shifts and station rules.';
+
+type AddKind = 'tank' | 'dispenser' | 'product' | 'terminal' | 'shift' | 'import';
+
+/** The tab each Add ▾ pick opens. */
+const ADD_TAB: Record<AddKind, StationTab> = {
+  tank: 'tanks',
+  dispenser: 'dispensers',
+  product: 'products',
+  terminal: 'terminals',
+  shift: 'shifts',
+  import: 'products',
+};
+
+type StationTab =
+  | 'general'
+  | 'business'
+  | 'rules'
+  | 'products'
+  | 'tanks'
+  | 'dispensers'
+  | 'terminals'
+  | 'shifts'
+  | 'report-templates';

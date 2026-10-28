@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
+import { isBalancedQuantity, resolveBusinessDate } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -16,12 +16,10 @@ import type {
   Result,
   UseCase,
 } from '../../kernel/index.js';
-import {
-  resolveBusinessDayWrite,
-  type BusinessDayWriteRepository,
-} from '../station-ops/business-days/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite } from '../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { TankRepository } from '../station-setup/tanks/index.js';
+import type { TankDipMeasurement } from './decantation/measurement.js';
 import type {
   StockMovement,
   StockMovementRepository,
@@ -64,13 +62,13 @@ const schema = z
     }
   });
 
-export interface RecordStockCountDeps {
+export interface RecordStockCountDeps extends ShiftWriteDeps {
   movements: StockMovementRepository;
   variances: StockVarianceRepository;
   tanks: TankRepository;
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
+  /** #468: resolves pending Decantation tank lines from a tank dip. */
+  decantationMeasurement?: TankDipMeasurement;
 }
 
 export interface RecordStockCountResult {
@@ -81,6 +79,14 @@ export interface RecordStockCountResult {
   /** True when a shift was open at the station: measurement + variance were
    * recorded but book stock was NOT reconciled (in-flight sales un-booked). */
   openShiftAtRecording: boolean;
+  /** Advisory only; never blocks the dip. */
+  warnings: StockCountWarning[];
+}
+
+export interface StockCountWarning {
+  code: 'DECANTATION_PENDING_OPEN_SHIFT';
+  message: string;
+  documentNumbers: string[];
 }
 
 /**
@@ -120,8 +126,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     let attributedDay = null;
     if (cmd.shiftId) {
       const eligibility = await resolveShiftBusinessDayWrite(
-        this.deps.shifts,
-        this.deps.businessDays,
+        this.deps.shiftWriteGate,
         ctx,
         cmd.shiftId,
         'STOCK',
@@ -164,15 +169,55 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const bd = eligibility.data.businessDay;
 
     const isBulk = !!cmd.tankId;
+    const varianceId = ctx.ids.newId();
+    const nowIso = ctx.clock.now().toISOString();
+
+    // Pending Decantation lines of this tank are measured from this dip BEFORE
+    // the expected quantity is read, so the received litres are in book stock
+    // and the dip never double counts them (D4). With a shift open the dip is
+    // not reconciled either, so the lines stay pending.
+    let decantationLinesMeasured = 0;
+    if (tank && !openShiftAtRecording && this.deps.decantationMeasurement) {
+      const measured = await this.deps.decantationMeasurement.measureFromTankDip(ctx, {
+        stationId: cmd.stationId,
+        tankId: tank.id,
+        dip: cmd.actualQuantity,
+        dipAt: nowIso,
+        refId: varianceId,
+        anchor: { businessDayId: bd.id, businessDate: bd.businessDate },
+      });
+      if (!measured.success) return measured;
+      decantationLinesMeasured = measured.data.measuredLines;
+    }
+
+    const warnings: StockCountWarning[] = [];
+    if (tank && openShiftAtRecording && this.deps.decantationMeasurement) {
+      const documentNumbers = await this.deps.decantationMeasurement.pendingDocumentNumbers(ctx, {
+        stationId: cmd.stationId,
+        tankId: tank.id,
+      });
+      if (documentNumbers.length > 0)
+        warnings.push({
+          code: 'DECANTATION_PENDING_OPEN_SHIFT',
+          message: `Decantation ${documentNumbers.join(', ')} stays pending: a Shift is open, so this dip does not measure it. Dip again after the Shift closes.`,
+          documentNumbers,
+        });
+    }
+
     const expected = isBulk
       ? await this.deps.movements.currentQuantityForTank(cmd.tankId as string)
       : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, productId);
     const actual = cmd.actualQuantity;
-    const varianceQuantity = actual - expected;
+    // One balanced rule for quantities (#556): a variance under half the
+    // recorded step (3 decimals) is float noise. It is stored as 0 and posts no
+    // Variance movement, so the stock_variance row and the ledger agree.
+    const rawVariance = actual - expected;
+    const balanced = isBalancedQuantity(rawVariance);
+    const varianceQuantity = balanced ? 0 : rawVariance;
 
     const now = ctx.clock.now().toISOString();
     const variance: StockVariance = {
-      id: ctx.ids.newId(),
+      id: varianceId,
       organizationId: ctx.organizationId,
       stationId: cmd.stationId,
       shiftId: cmd.shiftId ?? null,
@@ -189,7 +234,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     };
     await this.deps.variances.save(variance);
 
-    if (varianceQuantity !== 0 && !openShiftAtRecording) {
+    if (!balanced && !openShiftAtRecording) {
       const movement: StockMovement = {
         id: ctx.ids.newId(),
         shiftId: cmd.shiftId ?? null,
@@ -223,10 +268,11 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
           actual,
           variance: varianceQuantity,
           openShiftAtRecording,
+          decantationLinesMeasured,
         },
       }),
     ];
-    if (varianceQuantity !== 0) {
+    if (!balanced) {
       events.push(
         relatedEventFromContext(ctx, {
           eventType: BusinessEvents.VARIANCE_RECORDED,
@@ -253,6 +299,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       actualQuantity: actual,
       varianceQuantity,
       openShiftAtRecording,
+      warnings,
     });
   }
 }

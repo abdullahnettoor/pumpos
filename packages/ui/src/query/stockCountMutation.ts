@@ -1,4 +1,5 @@
 import type { RecordStockCountPayload } from '../services/cloud.js';
+import { IDEMPOTENCY_KEY_REUSED } from '@pump/shared';
 
 export interface StockCountRequestIdentity {
   fingerprint: string;
@@ -15,6 +16,8 @@ export interface PendingTankDip {
   idempotencyKey: string;
   expectedQuantity?: number;
   varianceQuantity?: number;
+  /** Advisory messages from the stock count (never blocking). */
+  warnings?: string[];
 }
 
 export interface PendingTankDipWorkflow {
@@ -30,6 +33,13 @@ export interface PendingTankDipWorkflow {
   openedAt: string;
   closedAt: string;
   timeZone?: string;
+  /** The closed shift's name ("Evening"), for the close page's final state (#534). */
+  shiftName?: string | null;
+  /**
+   * When this tab learnt the shift was closed (epoch ms, #534). A shift status
+   * read before it cannot contradict the close; one read after it can.
+   */
+  seenAt?: number;
   tankDips: PendingTankDip[];
   closeStatus?: 'submitting' | 'closed';
 }
@@ -37,6 +47,7 @@ export interface PendingTankDipWorkflow {
 interface StockCountResult {
   expectedQuantity: number;
   varianceQuantity: number;
+  warnings?: Array<{ message: string }>;
 }
 
 interface ApplyPendingTankDipsOptions {
@@ -156,6 +167,7 @@ export async function applyPendingTankDips({
         error: undefined,
         expectedQuantity: Number(accepted.expectedQuantity),
         varianceQuantity: Number(accepted.varianceQuantity),
+        warnings: accepted.warnings?.map((w) => w.message),
       });
     } catch (error: unknown) {
       const mutationError =
@@ -174,7 +186,12 @@ export async function applyPendingTankDips({
 }
 
 export function isAmbiguousMutationError(error: { code?: string } | null | undefined): boolean {
-  return error?.code === 'NETWORK' || error?.code === 'CONFLICT' || error?.code === 'BAD_RESPONSE';
+  return (
+    error?.code === 'NETWORK' ||
+    error?.code === 'CONFLICT' ||
+    error?.code === IDEMPOTENCY_KEY_REUSED ||
+    error?.code === 'BAD_RESPONSE'
+  );
 }
 
 export function createStockCountIdempotencyKey(): string {

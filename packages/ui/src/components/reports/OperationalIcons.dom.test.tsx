@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vite-plus/test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { CategoryManagerDrawer } from '../expenses/CategoryManagerDrawer.js';
+import { CategoryManagerDrawer } from '../categories/CategoryManagerDrawer.js';
 import { MerchandiseSaleEntryForm } from '../transactions/MerchandiseSaleEntryForm.js';
 import { ToastProvider } from '../primitives/ToastProvider.js';
 import { EmptyState, Button, Icon } from '../../pump-ds/index.js';
@@ -16,6 +16,7 @@ describe('Operational Icons consolidation', () => {
     render(
       <ToastProvider>
         <CategoryManagerDrawer
+          kind="expense"
           isOpen={true}
           onClose={vi.fn()}
           categories={categories}

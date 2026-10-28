@@ -1,6 +1,9 @@
 import React from 'react';
-import { OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
-import { Chip } from '../../../pump-ds/index.js';
+import { DEFAULT_TANK_LEVEL_SETTINGS, OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
+import { Chip, SectionHeader } from '../../../pump-ds/index.js';
+import { cn } from '../../../pump-ds/lib/cn.js';
+import { Field, TextInput } from '../../primitives/Field.js';
+import { OnboardingStep, STEP_PANEL } from './stepLayout.js';
 import { formatWeekday } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
 
@@ -8,18 +11,12 @@ interface Step2BusinessRulesProps {
   draft: OnboardingDraft;
   updateDraft: (updater: (prev: OnboardingDraft) => OnboardingDraft) => void;
   syncTwentyFourSeven: (enabled: boolean) => void;
-  panelStyle: React.CSSProperties;
-  fieldLabelStyle: React.CSSProperties;
-  inputStyle: React.CSSProperties;
 }
 
 export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
   draft,
   updateDraft,
   syncTwentyFourSeven,
-  panelStyle,
-  fieldLabelStyle,
-  inputStyle,
 }) => {
   const handleDayOpenChange = (dayName: OperatingDaySchedule['day'], isOpen: boolean) => {
     updateDraft((prev) => ({
@@ -55,212 +52,136 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
     }));
   };
 
+  const scheduleLocked = draft.businessRules.operatingSchedule.isTwentyFourSeven;
+  const timeControl = (
+    day: OperatingDaySchedule,
+    field: 'openTime' | 'closeTime',
+    label: string,
+  ) => (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="text-[12px] text-ink-muted">{label}</span>
+      <TextInput
+        type="time"
+        aria-label={`${formatWeekday(day.day)} ${label.toLowerCase()}`}
+        value={day[field]}
+        disabled={!day.isOpen || scheduleLocked}
+        onChange={(e) => handleDayTimeChange(day.day, field, e.target.value)}
+        className="box-border h-[26px] w-full min-w-0 px-1 text-[12px]"
+      />
+    </div>
+  );
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px' }}>
-      <div style={panelStyle}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Business Rules
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Define when the station operates and where one business day begins.
-          </p>
-        </div>
+    <OnboardingStep
+      title="Business rules"
+      subtitle="Define when the station operates and where one business day begins."
+    >
+      <div className="grid grid-cols-[1.3fr_1fr] gap-5">
+        <section className={STEP_PANEL}>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Timezone" htmlFor="onb-timezone">
+              <TextInput id="onb-timezone" value={draft.station.timezone} readOnly disabled />
+            </Field>
+            <Field label="Business day starts at" htmlFor="onb-day-start" required>
+              <TextInput
+                id="onb-day-start"
+                type="time"
+                value={draft.businessRules.businessDayStartsAt}
+                onChange={(e) =>
+                  updateDraft((prev) => ({
+                    ...prev,
+                    businessRules: { ...prev.businessRules, businessDayStartsAt: e.target.value },
+                  }))
+                }
+              />
+            </Field>
+          </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={fieldLabelStyle}>Timezone</label>
+          <Checkbox
+            label="This station operates 24 / 7"
+            checked={scheduleLocked}
+            onChange={(e) => syncTwentyFourSeven(e.target.checked)}
+          />
+
+          <section className="flex flex-col gap-2">
+            <SectionHeader title="Weekly operating schedule" />
             <div
-              style={{
-                ...inputStyle,
-                display: 'flex',
-                alignItems: 'center',
-                backgroundColor: 'var(--bg-surface-alt)',
-              }}
+              data-testid="schedule-grid"
+              className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3"
             >
-              {draft.station.timezone}
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={fieldLabelStyle}>Business Day Starts At *</label>
-            <input
-              type="time"
-              value={draft.businessRules.businessDayStartsAt}
-              onChange={(e) =>
-                updateDraft((prev) => ({
-                  ...prev,
-                  businessRules: { ...prev.businessRules, businessDayStartsAt: e.target.value },
-                }))
-              }
-              style={inputStyle}
-            />
-          </div>
-        </div>
-
-        <Checkbox
-          label="This station operates 24 / 7"
-          checked={draft.businessRules.operatingSchedule.isTwentyFourSeven}
-          onChange={(e) => syncTwentyFourSeven(e.target.checked)}
-        />
-
-        <div>
-          <span style={{ ...fieldLabelStyle, display: 'block', marginBottom: '8px' }}>
-            Weekly Operating Schedule
-          </span>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '12px',
-            }}
-          >
-            {draft.businessRules.operatingSchedule.days.map((day) => (
-              <div
-                key={day.day}
-                style={{
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-card)',
-                  padding: '12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                >
-                  <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-strong)' }}>
-                    {formatWeekday(day.day)}
-                  </span>
-                  <Checkbox
-                    label="Open"
-                    checked={day.isOpen}
-                    disabled={draft.businessRules.operatingSchedule.isTwentyFourSeven}
-                    onChange={(e) => handleDayOpenChange(day.day, e.target.checked)}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
-                    }}
-                  >
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Open</span>
-                    <input
-                      type="time"
-                      value={day.openTime}
-                      disabled={
-                        !day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven
-                      }
-                      onChange={(e) => handleDayTimeChange(day.day, 'openTime', e.target.value)}
-                      style={{
-                        ...inputStyle,
-                        width: '100%',
-                        minWidth: 0,
-                        boxSizing: 'border-box',
-                        height: '26px',
-                        fontSize: '11px',
-                        padding: '0 4px',
-                      }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
-                    }}
-                  >
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Close</span>
-                    <input
-                      type="time"
-                      value={day.closeTime}
-                      disabled={
-                        !day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven
-                      }
-                      onChange={(e) => handleDayTimeChange(day.day, 'closeTime', e.target.value)}
-                      style={{
-                        ...inputStyle,
-                        width: '100%',
-                        minWidth: 0,
-                        boxSizing: 'border-box',
-                        height: '26px',
-                        fontSize: '11px',
-                        padding: '0 4px',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={panelStyle}>
-        <div>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Policy Summary
-          </h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            These rules will drive reporting boundaries and future shift automation.
-          </p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <span style={fieldLabelStyle}>Business Day</span>
-            <div
-              style={{
-                marginTop: '4px',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--text-strong)',
-              }}
-            >
-              Starts at {draft.businessRules.businessDayStartsAt}
-            </div>
-          </div>
-          <div>
-            <span style={fieldLabelStyle}>Operating Mode</span>
-            <div style={{ marginTop: '4px' }}>
-              <Chip
-                tone={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'}
-                size="sm"
-              >
-                {draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
-              </Chip>
-            </div>
-          </div>
-          {!draft.businessRules.operatingSchedule.isTwentyFourSeven && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {draft.businessRules.operatingSchedule.days.map((day) => (
                 <div
                   key={day.day}
-                  style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}
+                  className="flex min-w-0 flex-col gap-2 rounded-card border border-border-soft bg-surface-alt p-3"
                 >
-                  <span style={{ color: 'var(--text-default)' }}>{formatWeekday(day.day)}</span>
-                  <span
-                    style={{
-                      color: day.isOpen ? 'var(--text-strong)' : 'var(--text-muted)',
-                      fontFamily: 'var(--font-mono)',
-                    }}
-                  >
-                    {day.isOpen ? `${day.openTime} - ${day.closeTime}` : 'Closed'}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-ink-strong">
+                      {formatWeekday(day.day)}
+                    </span>
+                    <Checkbox
+                      label="Open"
+                      checked={day.isOpen}
+                      disabled={scheduleLocked}
+                      onChange={(e) => handleDayOpenChange(day.day, e.target.checked)}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    {timeControl(day, 'openTime', 'Open')}
+                    {timeControl(day, 'closeTime', 'Close')}
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </section>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <SectionHeader
+            title="Policy summary"
+            subtitle="Drives reporting boundaries and shift automation."
+          />
+          <div className={STEP_PANEL}>
+            <div>
+              <span className="text-[12px] font-semibold text-ink-muted">Business day</span>
+              <div className="mt-1 text-[14px] font-semibold text-ink-strong">
+                Starts at {draft.businessRules.businessDayStartsAt}
+              </div>
+            </div>
+            <div>
+              <span className="text-[12px] font-semibold text-ink-muted">Tank levels</span>
+              <div className="mt-1 text-[12px] text-ink-default" data-testid="tank-level-defaults">
+                Critical below {DEFAULT_TANK_LEVEL_SETTINGS.criticalBelowPct}% · low below{' '}
+                {DEFAULT_TANK_LEVEL_SETTINGS.lowBelowPct}% of capacity
+              </div>
+              <div className="mt-0.5 text-[12px] text-ink-muted">
+                Change later in Station → Rules.
+              </div>
+            </div>
+            <div>
+              <span className="text-[12px] font-semibold text-ink-muted">Operating mode</span>
+              <div className="mt-1">
+                <Chip tone={scheduleLocked ? 'success' : 'info'} size="md">
+                  {scheduleLocked ? '24/7' : 'Scheduled'}
+                </Chip>
+              </div>
+            </div>
+            {!scheduleLocked && (
+              <div className="flex flex-col gap-1.5">
+                {draft.businessRules.operatingSchedule.days.map((day) => (
+                  <div key={day.day} className="flex justify-between text-[12px]">
+                    <span className="text-ink-default">{formatWeekday(day.day)}</span>
+                    <span
+                      className={cn('font-mono', day.isOpen ? 'text-ink-strong' : 'text-ink-muted')}
+                    >
+                      {day.isOpen ? `${day.openTime} - ${day.closeTime}` : 'Closed'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
-    </div>
+    </OnboardingStep>
   );
 };

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   InMemoryEventStore,
@@ -7,7 +7,7 @@ import {
   ok,
 } from '../../kernel/index.js';
 import type { ExecutionContext, Result } from '../../kernel/index.js';
-import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
+import { UNLIMITED_LIMIT, type FinalizeOnboardingResult, type OnboardingDraft } from '@pump/shared';
 import { FinalizeStationOnboarding } from '../station-setup/onboarding/index.js';
 import { ensureStationCapacity, type StationCapacityPort } from './station-capacity.js';
 import { buildAccessDocument } from './resolve-access.js';
@@ -174,6 +174,26 @@ describe('ensureStationCapacity', () => {
     const result = await ensureStationCapacity(capacityPort({ stations: 1, override: 3 }), 'org-1');
     expect(result.success).toBe(true);
     if (result.success) expect(result.data).toEqual({ value: 3, used: 1 });
+  });
+
+  // #603: the demo "no limit" sentinel is a lifted Limit, not a large number.
+  it('never refuses an unlimited plan, however many Stations exist', async () => {
+    for (const stations of [0, 1, UNLIMITED_LIMIT, UNLIMITED_LIMIT + 5]) {
+      const result = await ensureStationCapacity(
+        capacityPort({ stations, override: UNLIMITED_LIMIT }),
+        'org-1',
+      );
+      expect(result.success, `${stations} stations`).toBe(true);
+    }
+  });
+
+  it('refuses a real Limit exactly at the Limit, not before', async () => {
+    expect(
+      (await ensureStationCapacity(capacityPort({ stations: 4, override: 5 }), 'org-1')).success,
+    ).toBe(true);
+    const at = await ensureStationCapacity(capacityPort({ stations: 5, override: 5 }), 'org-1');
+    expect(at.success).toBe(false);
+    if (!at.success) expect(at.error.code).toBe('LIMIT_REACHED');
   });
 
   it('locks the Organization before reading usage', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vite-plus/test';
 import React from 'react';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -6,10 +6,20 @@ import zlib from 'node:zlib';
 import { Font, pdf, Text } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
+import { dsrFileName } from './generate.js';
 import { InvoiceDoc } from './invoiceDoc.js';
 import { LedgerDoc } from './ledgerDoc.js';
 import { AttendantReportDoc, dayPageTitle } from './attendantReportDoc.js';
 import { MARK_PATH, MARK_VIEWBOX } from '../../pump-ds/brand/Brand.js';
+import { DSSR_PARITY_FIXTURE } from '../../test/dssrFixture.js';
+import { SHIFT_FULL_FIXTURE } from '../../test/shiftSummaryFixture.js';
+import { readPdf } from '../../test/pdfTree.js';
+import { formatDateTime } from '../../utils/format.js';
+import {
+  DEFAULT_DSSR_CONFIG,
+  DEFAULT_SHIFT_SUMMARY_CONFIG,
+  type DssrSection,
+} from './reportConfig.js';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
   if (Buffer.isBuffer(stream)) return stream;
@@ -22,6 +32,11 @@ async function streamToBuffer(stream: any): Promise<Buffer> {
 
 /**
  * Extracts and decompresses all PDF content streams from a compiled PDF binary buffer.
+ *
+ * `[\r\n]+endstream` also eats a compressed stream's last byte when that byte
+ * is a CR or LF (part of its checksum). The page stream holds the print time,
+ * so about one run in 150 lost it, and a strict inflate threw (#588). The
+ * inflate tolerates the cut-off checksum: the content before it is complete.
  */
 function extractDecompressedStreams(pdfBuffer: Buffer): string[] {
   const raw = pdfBuffer.toString('latin1');
@@ -29,7 +44,9 @@ function extractDecompressedStreams(pdfBuffer: Buffer): string[] {
   const streams: string[] = [];
   for (const m of matches) {
     try {
-      const decomp = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('utf8');
+      const decomp = zlib
+        .inflateSync(Buffer.from(m[1], 'latin1'), { finishFlush: zlib.constants.Z_SYNC_FLUSH })
+        .toString('utf8');
       streams.push(decomp);
     } catch {
       // Stream is uncompressed or raw binary
@@ -60,6 +77,8 @@ function assertPdfContainsVectorMark(pdfBuffer: Buffer) {
     'Generated PDF stream must contain cubic bezier curves for the mark artwork',
   ).toBeGreaterThan(20);
 }
+
+const PRINTED_AT = new Date('2026-10-09T06:00:00.000Z');
 
 describe('Reports PDF with PumpOS Mark in Letterhead', () => {
   beforeAll(() => {
@@ -199,7 +218,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       letterhead: mockLetterhead,
     };
 
-    const doc = React.createElement(ShiftSummaryDoc, { snapshot, config });
+    const doc = React.createElement(ShiftSummaryDoc, { snapshot, config, printedAt: PRINTED_AT });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
@@ -227,14 +246,19 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       ...base,
       purchases: [{ supplierName: 'IOCL Depot', documentNumber: 'PUR-7', amount: 450000 }],
     };
-    const oldText = texts((ShiftSummaryDoc as any)({ snapshot: old, config })).join(' ');
+    const oldText = texts(
+      (ShiftSummaryDoc as any)({ snapshot: old, config, printedAt: PRINTED_AT }),
+    ).join(' ');
     expect(oldText).toContain('SUPPLIER FUEL INTAKES');
+    expect(oldText).toContain('Total of 1 stored purchase');
     expect(oldText).toContain('IOCL Depot');
-    const newText = texts((ShiftSummaryDoc as any)({ snapshot: base, config })).join(' ');
+    const newText = texts(
+      (ShiftSummaryDoc as any)({ snapshot: base, config, printedAt: PRINTED_AT }),
+    ).join(' ');
     expect(newText).not.toContain('SUPPLIER FUEL INTAKES');
   });
 
-  it('generates real PDF buffer for DSSR Report with verified vector mark and showLogo=false', async () => {
+  it('generates real PDF buffer for DSR Report with verified vector mark and showLogo=false', async () => {
     const dssr = {
       businessDate: '2026-09-18',
       generatedAt: new Date().toISOString(),
@@ -247,13 +271,115 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       letterhead: { ...mockLetterhead, showLogo: false },
     };
 
-    const doc = React.createElement(DssrDoc, { dssr, config });
+    const doc = React.createElement(DssrDoc, { dssr, config, printedAt: PRINTED_AT });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
     assertPdfContainsVectorMark(buffer);
+  });
+
+  it('marks a draft DSR as not closed, outside the configurable sections, and leaves a sealed one unmarked', () => {
+    // A layout that prints no header at all must still carry the draft mark.
+    const config = { sections: ['meta'] as DssrSection[], paper: 'A4' as const };
+    const base = { businessDate: '2026-10-08', snapshotData: { shiftsIncluded: 2 } };
+    const draft = readPdf(
+      <DssrDoc dssr={{ ...base, draft: true }} config={config} printedAt={PRINTED_AT} />,
+    ).lines.join(' ');
+    expect(draft).toContain('DRAFT \u2014 DAY NOT CLOSED');
+    const sealed = readPdf(
+      <DssrDoc dssr={base} config={config} printedAt={PRINTED_AT} />,
+    ).lines.join(' ');
+    expect(sealed).not.toContain('DRAFT');
+  });
+
+  it('titles the DSR PDF "Daily Station Sales Report" and names the file DSR-<date> (#570)', () => {
+    const config = { sections: ['header'] as DssrSection[], paper: 'A4' as const };
+    const text = readPdf(
+      <DssrDoc dssr={{ businessDate: '2026-10-08' }} config={config} printedAt={PRINTED_AT} />,
+    ).lines.join(' ');
+    expect(text).toContain('DAILY STATION SALES REPORT');
+    expect(text).not.toMatch(/DSSR|SALES SUMMARY RECORD/);
+    expect(dsrFileName('2026-10-08', false)).toBe('DSR-2026-10-08');
+    expect(dsrFileName('2026-10-08', true)).toBe('DSR-2026-10-08-DRAFT');
+  });
+
+  it('prints OMC card sales in the DSR sales summary only when the snapshot carries them', () => {
+    const config = { sections: ['financial'] as DssrSection[], paper: 'A4' as const };
+    const render = (snapshotData: Record<string, unknown>) =>
+      readPdf(
+        <DssrDoc
+          dssr={{
+            businessDate: '2026-10-10',
+            snapshotData: { credit: { normalCredit: 0, fleetCredit: 34040 }, ...snapshotData },
+          }}
+          config={config}
+          printedAt={PRINTED_AT}
+        />,
+      ).lines;
+    const withOmc = render({ omcCard: { total: 2000, count: 1 } });
+    const at = withOmc.indexOf('OMC card sales');
+    expect(at).toBeGreaterThan(withOmc.indexOf('Fleet credit sales'));
+    expect(withOmc[at + 1]).toMatch(/2,000/);
+    // Unchanged for a snapshot frozen before the field and for a day without any.
+    const legacy = render({});
+    expect(legacy).not.toContain('OMC card sales');
+    expect(render({ omcCard: { total: 0, count: 0 } })).toEqual(legacy);
+  });
+
+  /*
+   * #580: the DSR PDF prints the screen's model (`readDssrDay`): 2 decimals
+   * for volumes, Short / Surplus / Balanced, sentence case, and one total row
+   * that never adds volumes across L and kg. Times print in the runner's zone,
+   * so they are replaced by a placeholder; the footer's print time too.
+   */
+  it('prints the DSR as the screen reads it (#580)', () => {
+    const printedAt = new Date('2026-10-09T06:00:00.000Z');
+    const snap = DSSR_PARITY_FIXTURE.snapshotData;
+    const times: Record<string, string> = {
+      [formatDateTime(DSSR_PARITY_FIXTURE.generatedAt)]: '<generated at>',
+      [formatDateTime(snap.shifts[0].closedAt)]: '<shift 1 closed at>',
+      [formatDateTime(snap.shifts[1].closedAt)]: '<shift 2 closed at>',
+      [formatDateTime(printedAt)]: '<printed at>',
+    };
+    const doc = (
+      <DssrDoc
+        dssr={DSSR_PARITY_FIXTURE}
+        config={{ ...DEFAULT_DSSR_CONFIG, stationName: 'Apex Fuels' }}
+        printedAt={printedAt}
+      />
+    );
+    const lines = readPdf(doc).lines.map((line) =>
+      Object.entries(times).reduce((l, [time, mark]) => l.split(time).join(mark), line),
+    );
+    expect(lines).toMatchSnapshot();
+  });
+
+  /*
+   * #595: the Shift Summary PDF prints the screen's model (`readShiftSummary`):
+   * 2-decimal volumes, 3-decimal meter readings, stored totals labelled with
+   * what they cover, Short / Surplus / Balanced, sentence case. The print time
+   * in the footer is replaced by a placeholder.
+   */
+  it('prints the Shift Summary as the screen reads it (#595)', () => {
+    const printedAt = new Date('2026-10-08T10:00:00.000Z');
+    const record = SHIFT_FULL_FIXTURE;
+    const doc = (
+      <ShiftSummaryDoc
+        snapshot={{
+          ...record.snapshotData,
+          businessDate: record.businessDate,
+          shiftSequence: record.shiftSequence,
+        }}
+        config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: 'Apex Fuels' }}
+        clock={{ timeZone: 'Asia/Kolkata' }}
+        printedAt={printedAt}
+      />
+    );
+    const printed = formatDateTime(printedAt);
+    const lines = readPdf(doc).lines.map((line) => line.split(printed).join('<printed at>'));
+    expect(lines).toMatchSnapshot();
   });
 
   it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
@@ -314,7 +440,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const doc = React.createElement(LedgerDoc, {
       title: 'CUSTOMER LEDGER',
       entityName: 'Acme Transport',
-      periodLabel: '01 Sep 2026 — 18 Sep 2026',
+      periodLabel: '1 Sep 2026 — 18 Sep 2026',
       debitLabel: 'Debits',
       creditLabel: 'Credits',
       balanceLabel: 'Closing Balance',
@@ -337,6 +463,37 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
     assertPdfContainsVectorMark(buffer);
+  });
+
+  it('renders a long party statement (opening line, detail lines, closing line) across pages', async () => {
+    const rows = Array.from({ length: 90 }, (_, i) => ({
+      dateLabel: `${(i % 28) + 1} Oct 2026`,
+      particulars: 'Credit Sale',
+      detail: 'Shift 20261007-1 \u00b7 50 L Diesel \u00b7 KL-11-AB-4521',
+      debit: 100,
+      credit: 0,
+      balance: 5100 + i * 100,
+    }));
+    const doc = React.createElement(LedgerDoc, {
+      title: 'CUSTOMER STATEMENT',
+      entityName: 'Acme Transport',
+      periodLabel: 'October 2026',
+      debitLabel: 'Sales',
+      creditLabel: 'Received',
+      balanceLabel: 'Balance',
+      rows,
+      totals: { debit: 9000, credit: 0, balance: 14000 },
+      partyLines: ['Fleet \u00b7 FL-001'],
+      partyAccount: true,
+      opening: 5000,
+      closing: { note: 'Due from customer' },
+      stationName: 'Apex Station',
+      letterhead: mockLetterhead,
+    });
+    const buffer = await streamToBuffer(await pdf(doc as any).toBuffer());
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    const count = /\/Type\s*\/Pages[\s\S]*?\/Count\s+(\d+)/.exec(buffer.toString('latin1'));
+    expect(Number(count?.[1])).toBeGreaterThan(1);
   });
 
   /**

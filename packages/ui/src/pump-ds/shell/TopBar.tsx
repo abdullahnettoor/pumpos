@@ -13,7 +13,7 @@ import {
 
 /**
  * TopBar — the app-shell top bar. Composes pump-ds primitives into the real,
- * wired header: sidebar toggle · brand · station name · global search trigger
+ * wired header: brand · station breadcrumb · global search trigger
  * (⌘K) · + New · notifications · user menu.
  *
  * Ambient status (business day, sync, past-open-day warnings) lives in the
@@ -63,12 +63,22 @@ export interface BusinessDayOption {
 }
 
 export interface TopBarProps {
-  /** Callback to toggle sidebar collapse. Omit if shell is not collapsible. */
-  onToggleSidebar?: () => void;
   /** Brand wordmark or logo. Defaults to "PumpOS". */
   brand?: ReactNode;
-  /** Active station name, shown as quiet text next to the brand. */
+  /** Active station name, the first breadcrumb segment next to the brand. */
   stationName?: string;
+  /**
+   * Stations the user can switch between. The breadcrumb becomes a dropdown only
+   * when the caller passes `stationSwitcher` (the shared reachable-stations rule
+   * decides that, not this component); otherwise the name is plain text.
+   */
+  stationSwitcher?: {
+    stations: { id: string; name: string }[];
+    selectedId?: string | null;
+    onSelect: (id: string) => void;
+  } | null;
+  /** Current page label, the second breadcrumb segment (`Station / Page`). */
+  pageLabel?: string;
   /** Global search click/shortcut handler. Opens command palette. */
   onOpenSearch?: () => void;
   /** Search button placeholder text. Defaults to "Search customers, suppliers, products…". */
@@ -146,7 +156,12 @@ function useContainerWidth<T extends HTMLElement>(): [React.RefObject<T>, number
   return [ref, width];
 }
 
-const IconBtn = forwardRef<
+/**
+ * The top-bar icon button (notifications, window chrome): a ghost square with
+ * an optional count badge, solid danger with its paired `text-on-danger`.
+ * Exported for the Design System showcase.
+ */
+export const IconBtn = forwardRef<
   HTMLButtonElement,
   // `aria-label` is required, not optional: this control never renders text, so
   // without one it reaches a screen reader as an anonymous "button".
@@ -164,7 +179,7 @@ const IconBtn = forwardRef<
     >
       {children}
       {badge != null && badge > 0 && (
-        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
+        <span className="absolute right-0.5 top-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-danger-fg px-1 text-[12px] font-bold leading-4 text-on-danger">
           {badge > 9 ? '9+' : badge}
         </span>
       )}
@@ -229,7 +244,7 @@ const WindowControls: React.FC<{
         type="button"
         aria-label="Close window"
         onClick={() => void controls.close()}
-        className={cn(btn, 'hover:bg-danger-fg hover:text-white')}
+        className={cn(btn, 'hover:bg-danger-fg hover:text-on-danger')}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
@@ -240,9 +255,10 @@ const WindowControls: React.FC<{
 };
 
 export const TopBar: React.FC<TopBarProps> = ({
-  onToggleSidebar,
   brand,
   stationName,
+  stationSwitcher = null,
+  pageLabel,
   onOpenSearch,
   searchPlaceholder = 'Search customers, suppliers, products\u2026',
   quickCreate = [],
@@ -285,12 +301,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         className,
       )}
     >
-      {onToggleSidebar && (
-        <IconBtn onClick={onToggleSidebar} aria-label="Toggle sidebar">
-          <Icon name="menu" size="md" />
-        </IconBtn>
-      )}
-
       {brand && (
         <div
           className={cn(
@@ -309,16 +319,61 @@ export const TopBar: React.FC<TopBarProps> = ({
       {stationName && (
         <>
           <div className="mx-0.5 h-4 w-px bg-border-soft" />
-          <span
-            data-testid="topbar-station"
-            className={cn(
-              'select-none truncate text-[12.5px] font-medium text-ink-default',
-              titleBar && 'pointer-events-none',
+          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
+            {stationSwitcher ? (
+              <Menu>
+                <MenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="topbar-station"
+                    aria-label={`Station: ${stationName}. Switch station`}
+                    className="inline-flex h-7 min-w-0 items-center gap-1 rounded-button px-1.5 text-[12.5px] font-medium text-ink-default transition-colors hover:bg-surface-alt"
+                    title={stationName}
+                  >
+                    <span className="truncate">{stationName}</span>
+                    <Icon name="chevron-down" size="xs" className="text-ink-faint" />
+                  </button>
+                </MenuTrigger>
+                <MenuContent align="start">
+                  <MenuLabel>Switch station</MenuLabel>
+                  {stationSwitcher.stations.map((st) => (
+                    <MenuItem key={st.id} onSelect={() => stationSwitcher.onSelect(st.id)}>
+                      {st.name}
+                      {st.id === stationSwitcher.selectedId ? ' \u2713' : ''}
+                    </MenuItem>
+                  ))}
+                </MenuContent>
+              </Menu>
+            ) : (
+              <span
+                data-testid="topbar-station"
+                className={cn(
+                  'select-none truncate text-[12.5px] font-medium text-ink-default',
+                  titleBar && 'pointer-events-none',
+                )}
+                title={stationName}
+              >
+                {stationName}
+              </span>
             )}
-            title={stationName}
-          >
-            {stationName}
-          </span>
+            {pageLabel && (
+              <>
+                <span aria-hidden="true" className="text-ink-faint">
+                  /
+                </span>
+                <span
+                  data-testid="topbar-page"
+                  aria-current="page"
+                  className={cn(
+                    'select-none truncate text-[12.5px] text-ink-muted',
+                    titleBar && 'pointer-events-none',
+                  )}
+                >
+                  {pageLabel}
+                </span>
+              </>
+            )}
+          </nav>
         </>
       )}
 
@@ -334,10 +389,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Icon name="search" size="sm" />
           <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
           <span className="flex items-center gap-0.5">
-            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
               {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
             </kbd>
-            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
               K
             </kbd>
           </span>
@@ -354,7 +409,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {quickCreate.length > 0 && (
           <Menu>
             <MenuTrigger asChild>
-              <Button variant="primary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
+              <Button variant="secondary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
                 New
               </Button>
             </MenuTrigger>
@@ -380,7 +435,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <div className="flex items-center justify-between border-b border-border-soft px-3 py-2.5">
               <span className="text-[12px] font-semibold text-ink-strong">Notifications</span>
               {notifCount > 0 && (
-                <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-fg">
+                <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[12px] font-medium text-danger-fg">
                   {notifCount} new
                 </span>
               )}
@@ -413,10 +468,10 @@ export const TopBar: React.FC<TopBarProps> = ({
                       <span className="block text-[12.5px] font-medium text-ink-strong">
                         {n.title}
                       </span>
-                      {n.meta && <span className="block text-[11px] text-ink-muted">{n.meta}</span>}
+                      {n.meta && <span className="block text-[12px] text-ink-muted">{n.meta}</span>}
                     </span>
                     {n.actionLabel && (
-                      <span className="shrink-0 self-center font-mono text-[10px] uppercase tracking-wide text-brand">
+                      <span className="shrink-0 self-center font-mono text-[12px] uppercase tracking-wide text-brand">
                         {n.actionLabel}
                       </span>
                     )}
@@ -433,7 +488,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Menu>
           <MenuTrigger asChild>
             <button className="inline-flex h-8 items-center gap-1.5 rounded-button pl-1 pr-1.5 transition-colors hover:bg-surface-alt">
-              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[11px] font-semibold text-brand">
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[12px] font-semibold text-brand">
                 {userInitials}
               </span>
               <span className="hidden text-[12px] font-medium text-ink-strong sm:inline">
@@ -449,7 +504,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
               <div className="min-w-0">
                 <div className="truncate text-[13px] font-semibold text-ink-strong">{userName}</div>
-                <div className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">
+                <div className="font-mono text-[12px] uppercase tracking-wide text-ink-muted">
                   {userRole}
                 </div>
               </div>

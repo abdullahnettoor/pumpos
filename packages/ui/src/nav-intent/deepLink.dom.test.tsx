@@ -1,5 +1,6 @@
+// @vitest-environment jsdom
 import React, { useState } from 'react';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vite-plus/test';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import {
   publishNavIntent,
@@ -83,7 +84,7 @@ const InventoryScreen: React.FC = () => {
  * Mirrors ShiftsManagement's `openShiftSummaryId` deep link (dashboard "Last
  * closed shift" card): the intent picks the History sub-tab *and* the shift
  * whose summary opens. Dismissing the summary must leave the operator in
- * History, not bounce them back to Active Shift.
+ * History, not bounce them back to Live shift.
  */
 const ShiftsScreen: React.FC = () => {
   const [selectedSubTab, setSelectedSubTab] = useState('today');
@@ -111,7 +112,48 @@ const ShiftsScreen: React.FC = () => {
   );
 };
 
+/**
+ * Mirrors AccountsPanel (#540): the Dashboard "Daily cash book ›" link and Office
+ * Record pins now land on Accounts → Daily cash book (it moved from Reports).
+ */
+const AccountsScreen: React.FC = () => {
+  const [selectedTab, setSelectedTab] = useState('accounts');
+  const intent = useNavIntent();
+  const activeTab = intent?.openAccountsTab === 'cash-book' ? 'cash-book' : selectedTab;
+  return (
+    <div>
+      <span data-testid="tab">{activeTab}</span>
+      <button
+        onClick={() => {
+          clearNavIntent();
+          setSelectedTab('accounts');
+        }}
+      >
+        Accounts tab
+      </button>
+    </div>
+  );
+};
+
 describe('nav intent deep links', () => {
+  describe('Daily cash book deep link (#540)', () => {
+    it('opens Accounts on the Daily cash book', () => {
+      act(() => publishNavIntent({ openAccountsTab: 'cash-book' }));
+      render(<AccountsScreen />);
+      expect(tab()).toBe('cash-book');
+    });
+
+    it('lets the operator pick another tab', () => {
+      act(() => publishNavIntent({ openAccountsTab: 'cash-book' }));
+      render(<AccountsScreen />);
+      act(() => {
+        screen.getByText('Accounts tab').click();
+      });
+      expect(tab()).toBe('accounts');
+      expect(getNavIntentState().intent).toBeNull();
+    });
+  });
+
   beforeEach(() => __resetNavIntentForTests());
   afterEach(cleanup);
 
@@ -130,7 +172,7 @@ describe('nav intent deep links', () => {
         screen.getByText('Close summary').click();
       });
       // Clearing the intent without committing the tab would snap the operator
-      // back to the Active Shift ('today') sub-tab.
+      // back to the Live shift (today) sub-tab.
       expect(tab()).toBe('history');
       expect(statement()).toBe('none');
       expect(getNavIntentState().intent).toBeNull();

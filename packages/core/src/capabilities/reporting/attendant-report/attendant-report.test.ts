@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { GetAttendantHandoverReport } from './get-attendant-handover-report.js';
@@ -64,6 +64,7 @@ function creditRow(over: Partial<AttendantCreditSaleSourceRow> = {}): AttendantC
     vehicleRegistration: 'KL-07-AB-1234',
     productName: 'Diesel',
     quantity: 20,
+    unit: 'L',
     unitPrice: 40,
     amount: 800,
     ...over,

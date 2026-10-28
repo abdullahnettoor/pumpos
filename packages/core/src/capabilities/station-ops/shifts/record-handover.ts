@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { drawerProductCash, reconcileDrawer } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -9,15 +10,13 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from './resolve-shift-write.js';
 import type {
   AcceptedHandoverReading,
   AttendantHandover,
   HandoverContextReader,
   HandoverRepository,
   HandoverTerminalEntry,
-  ShiftRepository,
 } from './ports.js';
 
 export interface RecordHandoverCommand {
@@ -43,9 +42,7 @@ export interface RecordHandoverCommand {
   }>;
 }
 
-export interface RecordHandoverDeps {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+export interface RecordHandoverDeps extends ShiftWriteDeps {
   context: HandoverContextReader;
   handovers: HandoverRepository;
   events: EventPublisher;
@@ -56,6 +53,10 @@ export interface RecordHandoverResult {
   terminalEntries: HandoverTerminalEntry[];
   nozzleReadings: AcceptedHandoverReading[];
   expectedFuelSales: number;
+  /**
+   * Product cash this Drawer counts: the Attendant's whole product cash on the
+   * Drawer `productCashDrawer` names, 0 on their other Drawers (#419).
+   */
   merchandiseCash: number;
   expectedSales: number;
   expectedTotal: number;
@@ -104,8 +105,6 @@ const commandSchema = z
   })
   .strict();
 
-const roundPaise = (value: number) => Math.round(value * 100) / 100 || 0;
-
 function hasDuplicates(values: string[]): boolean {
   return new Set(values).size !== values.length;
 }
@@ -132,8 +131,7 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     }
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      this.deps.shiftWriteGate,
       ctx,
       cmd.shiftId,
       'STOCK',
@@ -315,17 +313,29 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       : Number(cmd.upiHandedOver ?? 0);
 
     const cashHandedOver = Number(cmd.cashHandedOver);
-    const expectedTotal = expectedFuelSales + source.merchandiseCash;
-    const nonCash = cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
-    const declaredTotal = cashHandedOver + nonCash;
-    // Drawer Reconciliation (ADR 0005): the pouch holds the float plus the DU's
-    // cash sales, less what was dropped. DU cash sales are the metered total not
-    // settled by card, UPI, credit or OMC card.
+    // Drawer Reconciliation (ADR 0005), shared with the mobile live preview:
+    // the pouch holds the float plus the DU's cash sales, less what was dropped.
+    // DU cash sales are the metered total not settled by card, UPI, credit or OMC card.
     const openingFloat = source.openingFloat;
     const cashDrops = Number(cmd.cashDrops ?? 0);
-    const rawExpectedCash = openingFloat + expectedTotal - nonCash - cashDrops;
-    const expectedCash = roundPaise(rawExpectedCash);
-    const varianceAmount = roundPaise(cashHandedOver - rawExpectedCash);
+    // A product sale carries no DU, so the Attendant's product cash is counted
+    // in one Drawer only: their first DU by code (#419, Fix A).
+    const merchandiseCash = drawerProductCash({
+      assignments: source.attendantDus,
+      duId: cmd.duId,
+      productCash: source.merchandiseCash,
+    });
+    const { expectedTotal, declaredTotal, expectedCash, varianceAmount } = reconcileDrawer({
+      openingFloat,
+      expectedFuelSales,
+      merchandiseCash,
+      cardHandedOver,
+      upiHandedOver,
+      creditSales: source.creditSales,
+      omcCardSales: source.omcCardSales,
+      cashHandedOver,
+      cashDrops,
+    });
     const now = ctx.clock.now().toISOString();
     const handover: AttendantHandover = {
       id: ctx.ids.newId(),
@@ -400,7 +410,7 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       terminalEntries: saved.terminalEntries,
       nozzleReadings: acceptedReadings,
       expectedFuelSales,
-      merchandiseCash: source.merchandiseCash,
+      merchandiseCash,
       expectedSales: expectedFuelSales,
       expectedTotal,
       creditSales: source.creditSales,

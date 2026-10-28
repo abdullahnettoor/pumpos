@@ -12,6 +12,7 @@ import {
   isFuelVatDraft,
   normalizeFuelTaxDraft,
 } from '@pump/shared';
+import { standardNozzleLayout } from './dispenserWithNozzles.js';
 
 export interface OnboardingValidationIssue {
   step: number;
@@ -130,6 +131,38 @@ export function createNozzleDraft(
     name: '',
     openingReading: 0,
   };
+}
+
+/**
+ * The nozzles a standard dispenser auto-fill adds: one row per draft fuel that
+ * has a tank (by product, never by code — see `fuelsWithTanks`), Dual = 1 per
+ * fuel and Quad = 2, with the opening reading left empty for the operator. Maps
+ * the wizard's draft shapes onto `standardNozzleLayout`.
+ */
+export function standardOnboardingNozzles(input: {
+  perFuel: 1 | 2;
+  dispenserDraftId: string;
+  products: readonly OnboardingProductDraft[];
+  tanks: readonly OnboardingTankDraft[];
+  existingNozzles: number;
+}): OnboardingNozzleDraft[] {
+  return standardNozzleLayout({
+    perFuel: input.perFuel,
+    products: input.products.map((product) => ({ id: product.draftId, name: product.name })),
+    tanks: input.tanks.map((tank) => ({
+      id: tank.draftId,
+      name: tank.name,
+      productId: tank.productDraftId,
+    })),
+    existingNozzles: input.existingNozzles,
+  }).map((nozzle) => ({
+    draftId: createDraftId(),
+    dispenserDraftId: input.dispenserDraftId,
+    tankDraftId: nozzle.tankId,
+    productDraftId: nozzle.productId,
+    name: nozzle.name,
+    openingReading: 0,
+  }));
 }
 
 export function createShiftTemplateDraft(): OnboardingShiftTemplateDraft {

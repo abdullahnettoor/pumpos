@@ -1,8 +1,13 @@
 export interface Purchase {
   id: string;
   documentNumber: string;
+  organizationId: string;
+  stationId: string;
   shiftId: string | null;
-  businessDayId: string;
+  /** Null for Fuel Purchases (anchored by entry date). */
+  businessDayId: string | null;
+  /** Entry Date for Fuel Purchases; null for product purchases. */
+  entryDate: string | null;
   supplierId: string;
   invoiceNumber: string | null;
   amount: string;
@@ -35,6 +40,7 @@ export interface PurchaseItem {
   cess: string;
   lineTotal: string;
   tankAllocations: { tankId: string; quantity: number }[] | null;
+  invoiceDensity: string | null;
   createdAt: string;
 }
 

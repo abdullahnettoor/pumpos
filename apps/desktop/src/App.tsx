@@ -37,8 +37,15 @@ import {
   keepSessionFresh,
   useRunTask,
   publishNavIntent,
+  useRoutePath,
+  NAV_PAGES,
+  ROUTES,
+  navTarget,
+  pageRoute,
+  type NavItem,
+  useEffectivePrincipal,
 } from '@pump/ui';
-import { REPORTS_ROLES, Station } from '@pump/shared';
+import { Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
 import { useDesktopUpdates } from './updates/useDesktopUpdates.js';
 import { UpdateNotice } from './updates/UpdateNotice.js';
@@ -61,12 +68,17 @@ const stationService = new CloudStationService();
 // which is `localhost` in every packaged desktop build (#116). See buildEnv.ts.
 
 const App: React.FC = () => {
-  const [currentPath, setCurrentPath] = useState('/dashboard');
+  const [currentPath, setCurrentPath] = useRoutePath('/dashboard');
   // Deep-link intents travel through the nav-intent store; see console/App.tsx.
-  const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
-    setCurrentPath(path);
-    publishNavIntent(intent);
-  }, []);
+  const navigate = useCallback(
+    (path: string, intent?: import('@pump/ui').NavIntent) => {
+      // `{ openAccountId }` is an address of its own: `/accounts/<id>` (#576).
+      const target = navTarget(path, intent);
+      setCurrentPath(target.path);
+      publishNavIntent(target.intent);
+    },
+    [setCurrentPath],
+  );
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
   >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');
@@ -90,6 +102,9 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(
     null,
   );
+  // Effective Permissions (Access Document), refreshed on focus and every minute;
+  // re-renders this root so every screen re-reads them (ADR 0013).
+  useEffectivePrincipal(userRole);
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -312,25 +327,19 @@ const App: React.FC = () => {
   const navAssumesReady = isStationReady || stationsLoading;
 
   // Dynamic Navigation items based on onboarding status
-  const navItems = navAssumesReady
-    ? [
-        { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
-        { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
-        { label: 'Expenses', path: '/expenses' },
-        { label: 'Income', path: '/income' },
-        { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
-        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
-        { label: 'Organization', path: '/organization', roles: ['Owner'] },
-      ]
-    : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
+  const navItems: NavItem[] = navAssumesReady
+    ? [...NAV_PAGES]
+    : [
+        {
+          label: 'Onboarding setup',
+          path: '/onboarding',
+          icon: 'onboarding',
+          permission: 'station.onboard',
+        },
+      ];
 
-  const navItemsWithDev = showDeveloperSurfaces
-    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+  const navItemsWithDev: NavItem[] = showDeveloperSurfaces
+    ? [...navItems, { label: 'Design system', path: '/design-system', icon: 'design-system' }]
     : navItems;
 
   const renderContent = () => {
@@ -376,7 +385,7 @@ const App: React.FC = () => {
             }}
           >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              {isNetworkError ? 'API Server Connection Failed' : 'User Profile Connection Error'}
+              {isNetworkError ? 'API server connection failed' : 'User profile connection error'}
             </h2>
             <div
               style={{
@@ -434,7 +443,7 @@ const App: React.FC = () => {
                 color: 'var(--text-default)',
               }}
             >
-              Sign Out & Try Again
+              Sign out and try again
             </button>
           </div>
         </div>
@@ -465,7 +474,8 @@ const App: React.FC = () => {
       );
     }
 
-    switch (currentPath) {
+    // A detail route (`/accounts/<id>`) renders its page.
+    switch (pageRoute(currentPath)) {
       case '/dashboard':
         return (
           <DashboardOverview
@@ -480,6 +490,7 @@ const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
             onStationSelected={(station: Station | null) => pickStation(station?.id ?? null)}
           />
         );
@@ -491,24 +502,44 @@ const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
+            route={currentPath}
+            onRouteChange={setCurrentPath}
           />
         );
       case '/expenses':
         return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
-      case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <IncomeList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
+      case ROUTES.suppliers:
+        return <PurchasesList selectedStation={selectedStation} onNavigate={navigate} />;
       case '/inventory':
-        return <InventoryList selectedStation={selectedStation} />;
+        return <InventoryList selectedStation={selectedStation} userRole={userRole} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
-        return <AccountsPanel selectedStation={selectedStation} />;
+        return (
+          <AccountsPanel
+            selectedStation={selectedStation}
+            route={currentPath}
+            onNavigate={setCurrentPath}
+          />
+        );
       case '/customers':
-        return <CustomersList selectedStation={selectedStation} />;
+        return <CustomersList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/reports':
-        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
+        return (
+          <ReportsOverview
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            onNavigate={navigate}
+          />
+        );
       case '/organization':
         return (
           <OrganizationOverview
@@ -588,7 +619,7 @@ const App: React.FC = () => {
       checkingUpdates={updateState?.phase === 'checking' && updateState.manual}
     >
       {renderContent()}
-      <QuickEntryHost selectedStation={selectedStation} />
+      <QuickEntryHost selectedStation={selectedStation} userRole={userRole || 'Staff'} />
       <UpdateNotice updates={updates} />
     </AppShell>
   );

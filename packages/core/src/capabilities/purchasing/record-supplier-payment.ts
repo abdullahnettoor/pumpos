@@ -18,6 +18,7 @@ import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { FinancialAccountRepository } from '../finance/accounts/index.js';
 import { resolveOfficeEntry, SUPPLIER_PAYMENT_ACCOUNT_TYPES } from '../finance/office-entry.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
+import { hasAtMostTwoDecimals, OFFICE_PAYMENT_AMOUNT_MAX } from '@pump/shared';
 
 export interface RecordSupplierPaymentCommand {
   supplierId: string;
@@ -30,7 +31,11 @@ export interface RecordSupplierPaymentCommand {
 
 const schema = z.object({
   supplierId: z.string().min(1, 'supplierId is required'),
-  amount: z.coerce.number().positive('amount must be positive'),
+  amount: z.coerce
+    .number()
+    .positive('amount must be positive')
+    .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
+    .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.'),
   stationId: z.string().min(1).optional(),
   entryDate: z.string().optional(),
   fundingAccountId: z.string().min(1, 'fundingAccountId is required'),

@@ -55,7 +55,7 @@ export function isMenuOpeningClick(
 }
 
 /** Timestamp of the current content's mount; null outside a MenuContent. */
-const MenuOpenedAtContext = React.createContext<React.MutableRefObject<number> | null>(null);
+const MenuOpenedAtContext = React.createContext<number | null>(null);
 
 export interface MenuContentProps extends React.ComponentPropsWithoutRef<typeof RadixMenu.Content> {
   /** Portal container; defaults to document.body. */
@@ -68,7 +68,7 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
     ref,
   ) {
     // Mount == open, so the first render of the content is the open instant.
-    const openedAt = React.useRef(Date.now());
+    const [openedAt] = React.useState(() => Date.now());
     return (
       <RadixMenu.Portal container={container ?? undefined}>
         <RadixMenu.Content
@@ -77,7 +77,7 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
           align={align}
           className={cn(
             'z-50 min-w-[220px] overflow-hidden rounded-card border border-border-soft bg-surface py-1',
-            'shadow-[0_8px_24px_rgba(24,32,26,0.12)]',
+            'shadow-(--shadow-popover)',
             className,
           )}
           {...props}
@@ -115,7 +115,7 @@ export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, Menu
     const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
       onClick?.(event);
       if (event.defaultPrevented) return;
-      if (openedAt && isMenuOpeningClick(openedAt.current)) {
+      if (openedAt !== null && isMenuOpeningClick(openedAt)) {
         event.preventDefault();
       }
     };
@@ -144,7 +144,7 @@ export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, Menu
         )}
         <span className="flex-1">{children}</span>
         {shortcut && (
-          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[12px] font-medium text-ink-strong">
             {shortcut}
           </kbd>
         )}
@@ -174,7 +174,7 @@ export const MenuLabel = forwardRef<
     <RadixMenu.Label
       ref={ref}
       className={cn(
-        'px-3 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint',
+        'px-3 pb-1 pt-1.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint',
         className,
       )}
       {...props}

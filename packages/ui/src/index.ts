@@ -5,6 +5,20 @@ export { openQuickEntry, closeQuickEntry, useQuickEntry } from './quick-entry/st
 export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
 export { publishNavIntent, clearNavIntent, useNavIntent } from './nav-intent/store.js';
 export type { NavIntent } from './nav-intent/store.js';
+export { useRoutePath } from './nav-intent/useRoutePath.js';
+export {
+  ROUTES,
+  LEGACY_ROUTES,
+  resolveRoute,
+  pageRoute,
+  accountRoute,
+  parseAccountRoute,
+  navTarget,
+  NAV_PAGES,
+  NAV_GROUPS,
+} from './nav-intent/routes.js';
+export type { RoutePath, NavPage, RouteRange } from './nav-intent/routes.js';
+export type { RouteNavigate } from './nav-intent/useRoutePath.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
@@ -33,7 +47,9 @@ export { PurchasesList } from './components/PurchasesList.js';
 export { CustomersList } from './components/CustomersList.js';
 export { InventoryList } from './components/InventoryList.js';
 export { AccountsPanel } from './components/finance/AccountsPanel.js';
-export { LoadingSpinner } from './components/LoadingSpinner.js';
+export { AccountStatement } from './components/finance/AccountStatement.js';
+export type { AccountStatementProps } from './components/finance/AccountStatement.js';
+export { AccountTypeChip } from './components/finance/AccountTypeChip.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export {
@@ -73,13 +89,39 @@ export {
   paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
-export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
-export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
+export {
+  generateDssrPdf,
+  generateShiftSummaryPdf,
+  generateStatementPdf,
+} from './services/reports/generate.js';
+export {
+  ADVANCE_NOTE,
+  PARTY_STATEMENT_WORDING,
+  customerStatementParty,
+  dateOf,
+  dayLabel,
+  deltaOf,
+  describeLedgerRow,
+  fullDayLabel,
+  monthLabel,
+  legacyPartyStatementDoc,
+  partyLedgerStatement,
+  partyStatementDoc,
+  statementFilePrefix,
+  supplierStatementParty,
+} from './services/reports/partyStatement.js';
 export type {
-  LedgerResolved,
-  LedgerComputed,
-  LedgerViewProps,
-} from './components/ledger/LedgerView.js';
+  LedgerRow,
+  PartyKind,
+  PartyStatementDoc,
+  PartyStatementInput,
+  StatementCustomer,
+  StatementSupplier,
+} from './services/reports/partyStatement.js';
+export { fileSlug, ledgerFileName } from './services/reports/ledgerFileName.js';
+export { ledgerQuantityLabel, unitLabel } from './utils/ledgerQuantity.js';
+export type { LedgerQuantity } from './utils/ledgerQuantity.js';
+export * from './statement/index.js';
 export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives
@@ -91,21 +133,23 @@ export * from './query/handoverMutation.js';
 export * from './query/stockCountMutation.js';
 export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
-export { PageLayout } from './components/primitives/PageLayout.js';
-export type { PageLayoutProps } from './components/primitives/PageLayout.js';
+export { PageFrame } from './components/page-frame/index.js';
+export type { PageFrameProps } from './components/page-frame/index.js';
 export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
-export { Tabs } from './components/primitives/Tabs.js';
-export type { TabsProps, TabItem } from './components/primitives/Tabs.js';
+export { Tabs, tabPanelProps } from './pump-ds/tabs/index.js';
+export type { TabsProps, TabItem, TabTone } from './pump-ds/tabs/index.js';
 export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
 export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
-export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
+export { ToastProvider, useToast, withNextStep } from './components/primitives/ToastProvider.js';
 export type {
   ToastApi,
   ToastVariant,
   ToastOptions,
+  ToastAction,
 } from './components/primitives/ToastProvider.js';
-export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
+export { Skeleton, SkeletonGrid } from './pump-ds/skeleton/index.js';
+export type { SkeletonProps, SkeletonGridProps } from './pump-ds/skeleton/index.js';
 export {
   Field,
   TextInput,
@@ -122,23 +166,14 @@ export type {
   TextareaProps,
   SelectProps,
 } from './components/primitives/Field.js';
-export { DateRangeField, computeRange } from './components/primitives/DateRangeField.js';
-export type {
-  DateRangeFieldProps,
-  DateRange,
-  RangePreset,
-  RangeClock,
-} from './components/primitives/DateRangeField.js';
+export { computeRange } from './pump-ds/date-range/index.js';
+export type { DateRange, RangePreset, RangeClock } from './pump-ds/date-range/index.js';
 export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
-export { Tooltip } from './components/primitives/Tooltip.js';
+export { Tooltip, TooltipProvider } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
 export { InfoTip } from './components/primitives/InfoTip.js';
 export type { InfoTipProps } from './components/primitives/InfoTip.js';
-export { Menu, Popover } from './components/primitives/Menu.js';
-export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
-export { Segmented } from './components/primitives/Segmented.js';
-export type { SegmentedProps, SegmentedOption } from './components/primitives/Segmented.js';
 export { Combobox } from './components/primitives/Combobox.js';
 export type {
   ComboboxProps,
@@ -150,18 +185,89 @@ export type {
   CashCountPopoverProps,
   CashBreakdown,
 } from './components/primitives/CashCountPopover.js';
+export {
+  DensityCalculatorPopover,
+  DensityCalculatorPopup,
+} from './components/primitives/DensityCalculatorPopover.js';
+export type { DensityCalculatorPopoverProps } from './components/primitives/DensityCalculatorPopover.js';
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
-export { formatMoney, inr, formatQty } from './utils/format.js';
+export {
+  formatMoney,
+  inr,
+  formatQty,
+  MINUS,
+  formatSignedMoney,
+  signedMoneyParts,
+  formatQuantity,
+  formatDensity,
+  formatTemperature,
+  formatCompactMoney,
+  formatDateSpan,
+} from './utils/format.js';
+// signedMoneyParts / FigureSign / SignedFigure: the variance vocabulary (utils/variance.ts, #518) builds on them.
+export type { FigureSign, SignedFigure } from './utils/format.js';
+export { MONEY_TERMS } from './utils/moneyTerms.js';
+export type { MoneyTerm } from './utils/moneyTerms.js';
+export { initialsOf } from './utils/initials.js';
+export {
+  collectionAccountTypes,
+  filterFundingAccounts,
+  reconcileFundingSelection,
+  SUPPLIER_PAYMENT_ACCOUNT_TYPES,
+  type CollectionMethod,
+} from './utils/fundingAccounts.js';
+export { collectionPayload, supplierPaymentPayload } from './utils/officeRecordPayloads.js';
+export { accountTypeLabel } from './utils/ledgerLabels.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
 export * from './pump-ds/boot/index.js';
+export * from './pump-ds/spinner/index.js';
 // Used by the desktop update surface: a design-system meter instead of a
 // native <progress>, and the design-system button inside its drawer.
 export * from './pump-ds/meter/index.js';
+// Tank stock as every tank card reads it (#603): `13,000 L` over `of 20,000 L · 65%`;
+// mobile's tank cards and decantation step use the same strings (#609).
+export {
+  stockOfCapacity,
+  tankQuantity,
+  type StockOfCapacity,
+} from './pump-ds/tank-gauge/stockOfCapacity.js';
+export { bookStock } from './components/inventory/decantation/bookStock.js';
+export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
+// Shared with the mobile Control Room primitives (apps/mobile/src/ui).
+export { Chip, StatusChip, VarianceChip } from './pump-ds/chip/index.js';
+export type {
+  ChipProps,
+  ChipTone,
+  StatusChipProps,
+  VarianceChipProps,
+} from './pump-ds/chip/index.js';
+export { formatVariance } from './utils/variance.js';
+export type { VarianceDisplay } from './utils/variance.js';
+export { SegmentedControl } from './pump-ds/segmented/index.js';
+export type { SegmentedControlProps, SegmentedControlOption } from './pump-ds/segmented/index.js';
+export { PageHeader } from './pump-ds/page-header/index.js';
+export type { PageHeaderProps } from './pump-ds/page-header/index.js';
+export { SectionHeader } from './pump-ds/section-header/index.js';
+export type { SectionHeaderProps } from './pump-ds/section-header/index.js';
+export { DateRangeMenu } from './pump-ds/date-range/index.js';
+export type { DateRangeMenuProps } from './pump-ds/date-range/index.js';
+export { FilterChips } from './pump-ds/filter-chips/index.js';
+export type { FilterChipsProps, FilterChipOption } from './pump-ds/filter-chips/index.js';
+export { ExportMenu } from './pump-ds/export/index.js';
+export type { ExportMenuProps } from './pump-ds/export/index.js';
+export { ControlBar } from './pump-ds/control-bar/index.js';
+export type { ControlBarProps, ControlBarSlots } from './pump-ds/control-bar/index.js';
+export { DataSection, isAccessRefusal } from './pump-ds/data-section/index.js';
+export type {
+  DataSectionProps,
+  DataSectionState,
+  SectionQuery,
+} from './pump-ds/data-section/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';
@@ -170,3 +276,25 @@ export * from './boot/useSelectedStation.js';
 export { StationOnboardingLockout } from './components/StationSetup/StationOnboardingLockout.js';
 export type { StationOnboardingLockoutProps } from './components/StationSetup/StationOnboardingLockout.js';
 export { STATION_SETUP_IN_PROGRESS } from './components/StationSetup/StationOnboardingLockout.js';
+
+export * from './components/inventory/decantation/decantationForm.js';
+export * from './components/inventory/decantation/decantationReview.js';
+export { toDecantationRow } from './components/inventory/decantation/decantationRows.js';
+export type { DecantationRow } from './components/inventory/decantation/decantationRows.js';
+export { keepsIdempotencyKey } from './utils/idempotency.js';
+export { keyForBody, newSaveKey, resetSaveKey, type SaveKey } from './utils/saveKey.js';
+export { DecantationReportPanel } from './components/reports/DecantationReportPanel.js';
+export * from './components/inventory/density/index.js';
+
+export * from './theme/index.js';
+export {
+  UnsavedChangesBar,
+  UnsavedSectionsProvider,
+  UnsavedSectionsBar,
+  useUnsavedChangesGuard,
+  useHasUnsavedChanges,
+  hasUnsavedChanges,
+  confirmDiscardUnsaved,
+  guardLeave,
+} from './pump-ds/form/index.js';
+export * from './access/effectivePrincipal.js';

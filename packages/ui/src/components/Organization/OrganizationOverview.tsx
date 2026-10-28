@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
-import { Station, stationLimitMessage } from '@pump/shared';
-import { PageLayout } from '../primitives/PageLayout.js';
-import { Tabs } from '../primitives/Tabs.js';
-import { Chip, Button } from '../../pump-ds/index.js';
+import { Station, reachableStations, showStationDropdown, stationLimitMessage } from '@pump/shared';
+import { Tabs, tabPanelProps, type TabItem } from '../../pump-ds/tabs/index.js';
+import { Button, Icon, guardLeave, useHasUnsavedChanges } from '../../pump-ds/index.js';
+import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
+import { PageFrame } from '../page-frame/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
+import { MemberDrawer } from '../StationSetup/TeamMemberDrawers.js';
+import { useAccess } from '../../query/hooks.js';
+import { activityTimeZone, onboardGate } from './organizationModel.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
-import { Check, Fuel, Users, Plus } from 'lucide-react';
-import { useAccess } from '../../query/hooks.js';
+import { StationsTab } from './StationsTab.js';
+import { DesktopAppPanel } from '../Desktop/DesktopAppPanel.js';
+import { isDesktopApp } from '../../utils/platform.js';
+import { clearNavIntent, useNavIntent } from '../../nav-intent/store.js';
+import { ROUTES } from '../../nav-intent/routes.js';
+
+type OrgTab = 'stations' | 'team' | 'activity' | 'profile' | 'desktop';
+
+const TABS_ID = 'organization';
 
 export interface OrganizationOverviewProps {
   stations: Station[];
@@ -16,34 +27,12 @@ export interface OrganizationOverviewProps {
   onNavigate: (path: string) => void;
 }
 
-const statusBadge = (status?: string) => {
-  switch (status) {
-    case 'READY_FOR_OPERATIONS':
-      return (
-        <Chip tone="success" size="sm">
-          Ready
-        </Chip>
-      );
-    case 'IN_PROGRESS':
-      return (
-        <Chip tone="warning" size="sm">
-          Setup in progress
-        </Chip>
-      );
-    default:
-      return (
-        <Chip tone="neutral" size="sm">
-          Not started
-        </Chip>
-      );
-  }
-};
-
 /**
- * Owner-only organization workspace: the org's stations (with the "set active
- * station" switch, relocated from the top bar) and the org-wide team
- * (moved out of Station Overview). Per-station configuration still lives in
- * Station Overview for whichever station is active.
+ * Owner-only organization workspace (#538): Page Frame with tabs Stations ·
+ * Team · Activity · Profile · Desktop app, and the same page actions on every
+ * tab (Add team member, Onboard station). Each tab loads in its own Data
+ * Sections. Per-station configuration still lives in Station for whichever
+ * station is active.
  */
 export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   stations,
@@ -51,241 +40,133 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   onStationChange,
   onNavigate,
 }) => {
-  const [tab, setTab] = useState<'stations' | 'team' | 'activity' | 'profile'>('stations');
+  const [chosenTab, setChosenTab] = useState<OrgTab>('stations');
+  const showDesktopTab = !isDesktopApp();
 
-  // Station capacity comes from the Access Document. The server already
-  // decided what this user may see: only Owners and Managers receive the plan
-  // key, so that is the signal for showing commercial guidance at all. The API
-  // enforces the Limit regardless of what is rendered here.
+  // Deep link from the dashboard's Desktop app step ("See options"): derived
+  // from the pending intent until the user picks a tab themselves.
+  const intent = useNavIntent();
+  const tab: OrgTab =
+    intent?.openOrganizationTab === 'desktop' && showDesktopTab ? 'desktop' : chosenTab;
+  // Leaving the Profile tab with unsaved changes asks first (#604).
+  const setTab = (next: OrgTab) =>
+    guardLeave(() => {
+      if (intent?.openOrganizationTab) clearNavIntent();
+      setChosenTab(next);
+    });
+
+  // Same rule as the top-bar breadcrumb: a switch is offered only when more than
+  // one station can be reached (this workspace is Owner-only: every station).
+  const canSwitchStation = showStationDropdown(
+    reachableStations({ role: 'Owner', assignedStationIds: [] }, stations),
+  );
+
+  // Onboarding is refused at the station Limit (Access Document); the API
+  // enforces it regardless of what is rendered here.
   const { data: access } = useAccess();
-  const stationCapacity = access?.limits?.station_count;
-  const showsCapacity = Boolean(access?.plan) && stationCapacity !== undefined;
-  const capacityReached = stationCapacity?.reached === true;
-  const capacityMessage =
-    stationCapacity && stationCapacity.reached
-      ? stationLimitMessage(stationCapacity.value)
-      : undefined;
+  const gate = onboardGate(access);
+  const onboard = () => onNavigate('/onboarding');
 
-  const hasReadyStation = stations.some(
-    (s) => (s as any).onboardingStatus === 'READY_FOR_OPERATIONS',
+  // A new member's drawer mounts fresh per open (keyed): its form and its
+  // submit key start new.
+  const [memberOpen, setMemberOpen] = useState(false);
+  const [memberKey, setMemberKey] = useState(0);
+  const addMember = () => {
+    setMemberKey((k) => k + 1);
+    setMemberOpen(true);
+  };
+
+  // While the Profile is changed, its bar's Save is the page's one primary.
+  const formChanged = useHasUnsavedChanges();
+
+  // The same page actions on every tab (#515).
+  const actions = (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<ConceptIcon concept="stations" />}
+        disabled={gate.disabled}
+        title={gate.title}
+        onClick={onboard}
+      >
+        Onboard station
+      </Button>
+      <Button
+        variant={formChanged ? 'secondary' : 'primary'}
+        size="sm"
+        leftIcon={<Icon name="plus" size="sm" />}
+        onClick={addMember}
+      >
+        Add team member
+      </Button>
+    </>
   );
 
   return (
-    <PageLayout
-      title="Organization"
-      subtitle="Manage your stations and team across the organization."
-      toolbar={
-        <Tabs
-          variant="underline"
-          aria-label="Organization"
-          activeId={tab}
-          onChange={(id) => setTab(id as 'stations' | 'team' | 'activity' | 'profile')}
-          tabs={[
-            { id: 'stations', label: 'Stations', badge: stations.length },
-            { id: 'team', label: 'Team' },
-            { id: 'activity', label: 'Activity' },
-            { id: 'profile', label: 'Profile' },
-          ]}
-        />
-      }
-    >
-      {tab === 'stations' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Getting-started welcome — shown until the first station is operational. */}
-          {!hasReadyStation && (
-            <div
-              className="card card-default"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-                padding: '20px',
-                backgroundColor: 'var(--bg-surface-alt)',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-strong)' }}>
-                  {stations.length === 0 ? 'Welcome to PumpOS' : 'Finish setting up your station'}
-                </span>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Get your station operational to unlock shifts, sales and reports. It takes a few
-                  minutes and can be done here on desktop.
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<Fuel size={14} />}
-                  disabled={capacityReached}
-                  title={capacityMessage}
-                  onClick={() => onNavigate('/onboarding')}
-                >
-                  Onboard station
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={<Users size={14} />}
-                  onClick={() => setTab('team')}
-                >
-                  Invite your team
-                </Button>
-              </div>
-            </div>
+    <>
+      <PageFrame
+        route={ROUTES.organization}
+        subtitle="Manage your stations and team across the organization."
+        actions={actions}
+        tabs={
+          <Tabs
+            id={TABS_ID}
+            aria-label="Organization"
+            activeId={tab}
+            onChange={(id) => setTab(id as OrgTab)}
+            tabs={[
+              { id: 'stations', label: 'Stations', concept: 'stations', badge: stations.length },
+              { id: 'team', label: 'Team', concept: 'team' },
+              { id: 'activity', label: 'Activity', concept: 'activity' },
+              { id: 'profile', label: 'Profile', concept: 'profile' },
+              ...(showDesktopTab
+                ? [
+                    {
+                      id: 'desktop',
+                      label: 'Desktop app',
+                      concept: 'desktop-app',
+                    } satisfies TabItem,
+                  ]
+                : []),
+            ]}
+          />
+        }
+      >
+        <div {...tabPanelProps(TABS_ID, tab)}>
+          {tab === 'stations' && (
+            <StationsTab
+              stations={stations}
+              selectedStation={selectedStation}
+              canSwitchStation={canSwitchStation}
+              onStationChange={(station) => guardLeave(() => onStationChange(station))}
+              onOnboard={onboard}
+              onboardGate={gate}
+              onConfigure={(station) =>
+                guardLeave(() => {
+                  // Station configures the current station: switch to this one first.
+                  if (station.id !== selectedStation?.id) onStationChange(station);
+                  onNavigate(ROUTES.station);
+                })
+              }
+              onInviteTeam={() => setTab('team')}
+            />
           )}
-
-          {/* Stations list header with an always-available onboard action. */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                Stations
-              </span>
-              {showsCapacity && stationCapacity && (
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {stationCapacity.used} of {stationCapacity.value} used
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {capacityReached && capacityMessage && (
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {capacityMessage}
-                </span>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Plus size={14} />}
-                disabled={capacityReached}
-                title={capacityMessage}
-                onClick={() => onNavigate('/onboarding')}
-              >
-                Onboard station
-              </Button>
-            </div>
-          </div>
-
-          {stations.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No stations yet.</div>
-          ) : (
-            stations.map((s) => {
-              const active = s.id === selectedStation?.id;
-              const details = [s.address, s.phone, (s as any).settings?.fuel_brand]
-                .filter(Boolean)
-                .join(' · ');
-              return (
-                <div
-                  key={s.id}
-                  className="card card-default"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '12px 16px',
-                  }}
-                >
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        color: 'var(--text-strong)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}
-                    >
-                      {s.name}
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '11px',
-                          color: 'var(--text-faint)',
-                        }}
-                      >
-                        {s.code}
-                      </span>
-                    </span>
-                    {details && (
-                      <span
-                        style={{
-                          fontSize: '12px',
-                          color: 'var(--text-muted)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {details}
-                      </span>
-                    )}
-                    <span>{statusBadge((s as any).onboardingStatus)}</span>
-                  </div>
-                  {active ? (
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: 'var(--state-success-fg)',
-                        }}
-                      >
-                        <Check size={14} /> Active
-                      </span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onNavigate('/setup/station')}
-                      >
-                        Configure
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      style={{ flexShrink: 0 }}
-                      onClick={() => onStationChange(s)}
-                    >
-                      Set active
-                    </Button>
-                  )}
-                </div>
-              );
-            })
+          {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
+          {tab === 'activity' && (
+            <ActivityFeed stations={stations} timeZone={activityTimeZone(selectedStation)} />
           )}
+          {tab === 'profile' && <OrgProfile />}
+          {tab === 'desktop' && showDesktopTab && <DesktopAppPanel />}
         </div>
-      )}
-
-      {tab === 'team' && <UserRolesAssignment currentStationId={selectedStation?.id ?? null} />}
-
-      {tab === 'activity' && <ActivityFeed stations={stations} />}
-
-      {tab === 'profile' && <OrgProfile />}
-    </PageLayout>
+      </PageFrame>
+      <MemberDrawer
+        key={memberKey}
+        isOpen={memberOpen}
+        editingUser={null}
+        currentStationId={selectedStation?.id ?? null}
+        onClose={() => setMemberOpen(false)}
+      />
+    </>
   );
 };

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   InMemoryEventStore,
@@ -17,6 +17,7 @@ import type {
   BusinessDay,
   BusinessDayWriteRepository,
 } from '../station-ops/business-days/index.js';
+import { withRepositoryShiftWriteGate } from '../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 class SaleRepo implements SaleRepository {
   saved: { sale: Sale; lines: SaleLine[] } | null = null;
@@ -184,7 +185,7 @@ function deps(
 describe('CreateSale', () => {
   it('a cash merchandise sale decrements item stock and emits RETAIL_SALE_CREATED', async () => {
     const d = deps();
-    const result = await new CreateSale(d).execute(
+    const result = await new CreateSale(withRepositoryShiftWriteGate(d)).execute(
       {
         shiftId: 'sh-1',
         paymentMethod: 'Cash',
@@ -208,7 +209,7 @@ describe('CreateSale', () => {
 
   it('a credit sale debits the customer ledger and emits CREDIT_SALE_CREATED', async () => {
     const d = deps();
-    const result = await new CreateSale(d).execute(
+    const result = await new CreateSale(withRepositoryShiftWriteGate(d)).execute(
       {
         shiftId: 'sh-1',
         paymentMethod: 'Credit',
@@ -229,7 +230,7 @@ describe('CreateSale', () => {
   });
 
   it('rejects a credit sale without a customer', async () => {
-    const result = await new CreateSale(deps()).execute(
+    const result = await new CreateSale(withRepositoryShiftWriteGate(deps())).execute(
       {
         shiftId: 'sh-1',
         paymentMethod: 'Credit',
@@ -242,7 +243,7 @@ describe('CreateSale', () => {
 
   it('attributes a sale to an explicit attendant when provided', async () => {
     const d = deps();
-    const result = await new CreateSale(d).execute(
+    const result = await new CreateSale(withRepositoryShiftWriteGate(d)).execute(
       {
         shiftId: 'sh-1',
         paymentMethod: 'Cash',
@@ -257,7 +258,7 @@ describe('CreateSale', () => {
 
   it('a fuel line yields saleType Fuel and emits FUEL_SALE_RECORDED', async () => {
     const d = deps();
-    const result = await new CreateSale(d).execute(
+    const result = await new CreateSale(withRepositoryShiftWriteGate(d)).execute(
       {
         shiftId: 'sh-1',
         paymentMethod: 'Cash',

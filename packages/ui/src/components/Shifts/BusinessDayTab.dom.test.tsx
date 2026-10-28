@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   renderWithProviders,
@@ -20,6 +20,9 @@ vi.mock('../../services/cloud.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CloudShiftService: class {
     closeBusinessDay = (...a: unknown[]) => closeBusinessDay(...a);
+    // A refresh after the close never answers: the close must not wait on it.
+    getDailyDssrPreview = () => new Promise(() => {});
+    getDailyDssr = () => new Promise(() => {});
   },
 }));
 
@@ -39,6 +42,12 @@ type Seed = {
   status?: string;
   businessDayId?: string;
   snapshotData?: Record<string, unknown> | null;
+  decantationWarnings?: {
+    pendingMeasurement: string[];
+    purchaseNotLinked: { documentNumber: string; products: string[] }[];
+    flagged: string[];
+    unloading: string[];
+  };
   activeShift?: unknown;
   openBusinessDays?: { businessDate: string; id?: string }[];
   recentBusinessDays?: Record<string, unknown>[];
@@ -49,6 +58,12 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     status = 'OPEN',
     businessDayId = 'bd-1',
     snapshotData = { businessDayId },
+    decantationWarnings = {
+      pendingMeasurement: [],
+      purchaseNotLinked: [],
+      flagged: [],
+      unloading: [],
+    },
     activeShift = null,
     openBusinessDays = [{ businessDate: TODAY, id: businessDayId }],
     recentBusinessDays = openBusinessDays.map((d) => ({
@@ -80,6 +95,10 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
   });
   client.setQueryData(queryKeys.shiftStatus(STATION.id, true), { activeShift });
   client.setQueryData(queryKeys.customers(true), []);
+  client.setQueryData(
+    queryKeys.decantationDayCloseWarnings(STATION.id, businessDayId),
+    decantationWarnings,
+  );
   return renderWithProviders(
     <BusinessDayTab
       selectedStation={STATION}
@@ -192,16 +211,9 @@ describe('BusinessDayTab', () => {
           { businessDate: '2026-02-27', id: 'bd-old' },
         ],
       });
-      const dayButtons = await screen.findAllByRole('button', { pressed: false });
-      const today = dayButtons.find((b) => b.textContent?.includes('01'));
-      if (today) {
-        fireEvent.click(today);
-        await waitFor(() =>
-          expect(
-            screen.getAllByRole('button').some((b) => b.getAttribute('aria-pressed') === 'true'),
-          ).toBe(true),
-        );
-      }
+      const [today] = await screen.findAllByRole('row', { name: /1 Mar 2026/i });
+      fireEvent.click(today);
+      await waitFor(() => expect(today.getAttribute('aria-current')).toBe('true'));
     });
 
     it('adopts a date requested after mount, not only the one it started with', async () => {
@@ -233,7 +245,37 @@ describe('BusinessDayTab', () => {
       expect(closeBusinessDay).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole('button', { name: 'Close day' }));
-      await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id));
+      await waitFor(() =>
+        expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id, {
+          idempotencyKey: expect.any(String),
+        }),
+      );
+    });
+
+    it('keys the close, and a retry after a lost answer reuses the key', async () => {
+      closeBusinessDay
+        .mockReset()
+        .mockRejectedValueOnce(Object.assign(new Error('Network down'), { status: undefined }))
+        .mockResolvedValueOnce(undefined);
+      renderTab();
+      for (const n of [1, 2]) {
+        await waitFor(() => expect(closeDayButton()!.disabled).toBe(false));
+        fireEvent.click(closeDayButton()!);
+        fireEvent.click(await screen.findByRole('button', { name: 'Close day' }));
+        await waitFor(() => expect(closeBusinessDay).toHaveBeenCalledTimes(n));
+      }
+      const [first, second] = closeBusinessDay.mock.calls;
+      expect(first[2].idempotencyKey).toEqual(expect.any(String));
+      expect(second[2].idempotencyKey).toBe(first[2].idempotencyKey);
+    });
+
+    it('reports the close from its answer and refreshes in the background', async () => {
+      renderTab();
+      await waitFor(() => expect(closeDayButton()).not.toBeNull());
+      fireEvent.click(closeDayButton()!);
+      fireEvent.click(await screen.findByRole('button', { name: 'Close day' }));
+      expect(await screen.findByText(/Business day closed/)).toBeDefined();
+      await waitFor(() => expect(closeDayButton()?.getAttribute('aria-busy') ?? null).toBeNull());
     });
 
     it('does not seal the day if the operator backs out', async () => {
@@ -253,7 +295,36 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(closeDayButton()).not.toBeNull());
       fireEvent.click(closeDayButton()!);
       await waitFor(() =>
-        expect(screen.getByText(new RegExp(`immutable DSSR snapshot for ${TODAY}`))).toBeDefined(),
+        expect(screen.getByText(/immutable DSR snapshot for 1 Mar 2026/)).toBeDefined(),
+      );
+    });
+
+    it('shows pending, unlinked, and flagged Decantation warnings without blocking close', async () => {
+      renderTab(
+        {},
+        {
+          decantationWarnings: {
+            pendingMeasurement: ['DEC-1'],
+            purchaseNotLinked: [{ documentNumber: 'DEC-1', products: ['Petrol'] }],
+            flagged: ['DEC-2'],
+            unloading: ['DEC-9'],
+          },
+        },
+      );
+      await waitFor(() => expect(screen.getByText(/Pending measurement.*DEC-1/i)).toBeDefined());
+      expect(screen.getByText(/Purchase not linked.*DEC-1 \(Petrol\)/i)).toBeDefined();
+      expect(screen.getByText(/Flagged: DEC-2/i)).toBeDefined();
+      expect(screen.getByText(/Tanker still unloading — finish or discard: DEC-9/i)).toBeDefined();
+      expect(closeDayButton()!.disabled).toBe(false);
+
+      fireEvent.click(closeDayButton()!);
+      await waitFor(() => expect(screen.getByText('Close this business day?')).toBeDefined());
+      expect(screen.getByText(/Decantation warnings:/i)).toBeDefined();
+      fireEvent.click(screen.getByRole('button', { name: 'Close day' }));
+      await waitFor(() =>
+        expect(closeBusinessDay).toHaveBeenCalledWith('bd-1', STATION.id, {
+          idempotencyKey: expect.any(String),
+        }),
       );
     });
   });
@@ -274,17 +345,16 @@ describe('BusinessDayTab', () => {
       // The selected date also appears in the tab's own header, so scope to
       // the list row itself.
       await waitFor(() =>
-        expect(screen.getAllByRole('button', { name: /24 Feb 2026/i }).length).toBeGreaterThan(0),
+        expect(screen.getAllByRole('row', { name: /24 Feb 2026/i }).length).toBeGreaterThan(0),
       );
     });
 
     it('marks a day’s status with a chip, distinct from its counts text', async () => {
-      // `getAllByText(/Closed/i)` would also match "3 closed · 0 open", so the
-      // chip could be deleted and the test still pass. Match the chip's own
-      // exact-cased label node instead.
+      // A closed day reads Sealed (the vocabulary's word for a sealed DSR),
+      // matched on the chip's own label node, not the "3 closed" counts text.
       renderTab({}, { recentBusinessDays: [day({ status: 'CLOSED' })] });
       await waitFor(() =>
-        expect(screen.getAllByText((_, el) => el?.textContent === 'Closed').length).toBeGreaterThan(
+        expect(screen.getAllByText((_, el) => el?.textContent === 'Sealed').length).toBeGreaterThan(
           0,
         ),
       );
@@ -295,11 +365,34 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(screen.getByText(/3 closed · 1 open/i)).toBeDefined());
     });
 
+    it('filters the list to still-open past days when requested', async () => {
+      const onConsumed = vi.fn();
+      renderTab(
+        { openPastDaysRequested: true, onOpenPastDaysConsumed: onConsumed },
+        {
+          recentBusinessDays: [
+            day({ businessDate: TODAY, status: 'OPEN' }),
+            day({ businessDate: '2026-02-27', status: 'OPEN' }),
+            day({ businessDate: '2026-02-24', status: 'CLOSED' }),
+          ],
+        },
+      );
+      const openPast = await screen.findByRole('radio', { name: 'Open past days, 1' });
+      expect(openPast.getAttribute('aria-checked')).toBe('true');
+      expect(screen.getAllByRole('row', { name: /27 Feb 2026/i }).length).toBeGreaterThan(0);
+      expect(screen.queryAllByRole('row', { name: /24 Feb 2026/i })).toHaveLength(0);
+      expect(onConsumed).toHaveBeenCalled();
+      // "All" (every recent day) is one click away.
+      expect(screen.getByRole('radio', { name: 'All, 3' }).getAttribute('aria-checked')).toBe(
+        'false',
+      );
+    });
+
     it('selecting a closed day moves the view to that date', async () => {
       renderTab({}, { recentBusinessDays: [day({ businessDate: '2026-02-24' })] });
-      const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      const [row] = await screen.findAllByRole('row', { name: /24 Feb 2026/i });
       fireEvent.click(row);
-      await waitFor(() => expect(row.getAttribute('aria-pressed')).toBe('true'));
+      await waitFor(() => expect(row.getAttribute('aria-current')).toBe('true'));
     });
 
     it('offers "See older" and sends it to the reports page', async () => {
@@ -324,7 +417,7 @@ describe('BusinessDayTab', () => {
       // whose reads refuse them — worse than not offering it.
       const onNavigate = vi.fn();
       renderTab({ onNavigate, userRole: 'Staff' }, { recentBusinessDays: [day({})] });
-      await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+      await screen.findAllByRole('row', { name: /24 Feb 2026/i });
       expect(screen.queryByRole('button', { name: /See older/i })).toBeNull();
     });
 
@@ -397,10 +490,10 @@ describe('BusinessDayTab', () => {
     // click is a real change, not a vacuous assertion.
     await waitFor(() => expect(screen.getByText(/^Live/)).toBeDefined());
 
-    const [row] = await screen.findAllByRole('button', { name: /24 Feb 2026/i });
+    const [row] = await screen.findAllByRole('row', { name: /24 Feb 2026/i });
     fireEvent.click(row);
 
-    await waitFor(() => expect(screen.getAllByText(/Closed/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Sealed/i).length).toBeGreaterThan(1));
     // A stored snapshot is never "Live".
     expect(screen.queryByText(/^Live/)).toBeNull();
     // ...and a closed day offers no close button.

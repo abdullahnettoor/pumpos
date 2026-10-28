@@ -10,15 +10,15 @@ import {
   RecordExpense,
   RecordFuelPrice,
   RecordHandover,
-  RecordPurchase,
-  RecordStockCount,
   RecordSupplierPayment,
   UuidGenerator,
   type EventPublisher,
   type ExecutionContext,
-  type Result,
 } from '@pump/core';
 import { resolveBusinessDate } from '@pump/shared';
+import { createDensityHelpers } from './demo-density.js';
+import { createDecantationHelpers } from './demo-decantations.js';
+import { DemoSeedError, must, type DemoContext } from './demo-context.js';
 import { createDispatcher } from '../../infra/events.js';
 import { LedgerPostingService } from '../../infra/ledger-posting.js';
 import { TimestampDocumentNumberGenerator } from '../../infra/doc-numbers.js';
@@ -31,25 +31,21 @@ import {
   DrizzleNozzleReadingRepository,
   DrizzleShiftRepository,
   DrizzleShiftSummaryWriter,
+  DrizzleShiftWriteGateReader,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
   DrizzleStockMovementWriter,
 } from '../../infra/repositories/station-ops-repositories.js';
 import {
   DrizzleDispenserRepository,
   DrizzleFuelPriceRepository,
   DrizzleNozzleRepository,
-  DrizzleStationRepository,
-  DrizzleTankRepository,
 } from '../../infra/repositories/setup-repositories.js';
 import {
   DrizzleDssrDataReader,
   DrizzleDssrSnapshotRepository,
 } from '../../infra/repositories/reporting-repositories.js';
-import {
-  DrizzlePurchaseItemRepository,
-  DrizzlePurchaseRepository,
-  DrizzleSupplierTransactionRepository,
-} from '../../infra/repositories/purchasing-repositories.js';
+import { DrizzleSupplierTransactionRepository } from '../../infra/repositories/purchasing-repositories.js';
 import {
   DrizzleCollectionRepository,
   DrizzleCustomerLedgerRepository,
@@ -61,11 +57,8 @@ import {
   DrizzlePaymentTerminalLookup,
 } from '../../infra/repositories/finance-account-repositories.js';
 import { DrizzleExpenseRepository } from '../../infra/repositories/finance-repositories.js';
-import {
-  DrizzleStockMovementRepository,
-  DrizzleStockVarianceRepository,
-} from '../../infra/repositories/inventory-repositories.js';
-import { DrizzleProductRepository } from '../../infra/repositories/product.repo.js';
+import { DrizzleStockMovementRepository } from '../../infra/repositories/inventory-repositories.js';
+import {} from '../../infra/repositories/decantation-repositories.js';
 
 /** Closed days of history before today. */
 export const DEMO_HISTORY_DAYS = 7;
@@ -73,6 +66,15 @@ export const DEMO_HISTORY_DAYS = 7;
 const KSRTC_CREDIT_SALES = [13_000, 14_000, 13_500, 13_500, 13_000, 14_000, 13_000];
 const PRICES = { petrol: 102.5, diesel: 89.7 } as const;
 const OPENING_FLOAT = 5_000;
+/** Litres per fuel tank at onboarding (the very first day's opening stock). */
+const OPENING_STOCK_PER_TANK = 4_000;
+/** 15 °C density of each product's tank on the morning of age 7 … 1 (kg/m³). */
+const MORNING_DENSITY = {
+  petrol: [747.4, 747.1, 747.5, 747.5, 747.3, 747.6, 748.4],
+  diesel: [833.0, 832.7, 833.1, 833.0, 834.2, 834.1, 834.0],
+} as const;
+/** Today's MS morning reading; the HSD reading is deliberately missing. */
+const TODAY_PETROL_DENSITY = 748.3;
 /** Shortage declared on today's pending evening handover (Anitha S · DU-2). */
 export const DEMO_PENDING_SHORTAGE = -350;
 /** HSD dip variance recorded today. */
@@ -93,17 +95,6 @@ export interface DemoHistoryResult {
   eveningShiftId: string;
   pendingHandoverId: string;
   closedBusinessDays: number;
-}
-
-class DemoSeedError extends Error {}
-
-function must<T>(result: Result<T>, step: string): T {
-  if (!result.success) {
-    throw new DemoSeedError(
-      `Demo history step "${step}" failed: ${result.error.code} ${result.error.message}`,
-    );
-  }
-  return result.data;
 }
 
 function shiftDate(date: string, days: number): string {
@@ -276,11 +267,14 @@ export async function seedDemoHistory(
   )
     throw new DemoSeedError('Demo station master data is incomplete');
 
-  const du2 = dispensers[Math.min(1, dispensers.length - 1)];
-  // Anitha S works DU-2; the other attendants cover the remaining DUs.
+  const du2Index = Math.min(1, dispensers.length - 1);
+  // Anitha S works DU-2; the other attendants take turns on the remaining DUs
+  // (skipping DU-2), so each of them is on duty when there are enough DUs.
   const others = attendants.length > 1 ? attendants.slice(1) : attendants;
   const attendantFor = (duIndex: number) =>
-    dispensers[duIndex].id === du2.id ? anitha : others[duIndex % others.length];
+    duIndex === du2Index
+      ? anitha
+      : others[(duIndex > du2Index ? duIndex - 1 : duIndex) % others.length];
   const terminalFor = (duIndex: number) => terminals[duIndex];
 
   const now = options.now ?? new Date();
@@ -314,6 +308,7 @@ export async function seedDemoHistory(
 
   const shifts = new DrizzleShiftRepository(tx);
   const businessDays = new DrizzleBusinessDayRepository(tx);
+  const shiftWriteGate = new DrizzleShiftWriteGateReader(tx);
   const readings = new DrizzleNozzleReadingRepository(tx);
 
   // Fuel prices take effect before the first historical shift.
@@ -338,6 +333,7 @@ export async function seedDemoHistory(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(
         {
@@ -369,48 +365,35 @@ export async function seedDemoHistory(
       ).map((reading) => [reading.nozzleId, Number(reading.openingReading)]),
     );
 
-  const purchaseFuel = async (shiftId: string, at: Date, litresPerTank: number) => {
-    for (const product of [petrol, diesel]) {
-      const productTanks = tanks.filter((tank) => tank.productId === product.id);
-      if (productTanks.length === 0) continue;
-      const quantity = litresPerTank * productTanks.length;
-      must(
-        await new RecordPurchase({
-          purchases: new DrizzlePurchaseRepository(tx),
-          purchaseItems: new DrizzlePurchaseItemRepository(tx),
-          stock: new DrizzleStockMovementRepository(tx),
-          supplierTxns: new DrizzleSupplierTransactionRepository(tx),
-          suppliers: new DrizzleSupplierRepository(tx),
-          products: new DrizzleProductRepository(tx),
-          stations: new DrizzleStationRepository(tx),
-          shifts,
-          businessDays,
-          docNumbers,
-          events,
-        }).execute(
-          {
-            supplierId: oilCompany.id,
-            stationId,
-            shiftId,
-            invoiceNumber: `IOC-${ids.newId().slice(0, 8).toUpperCase()}`,
-            lines: [
-              {
-                productId: product.id,
-                quantity,
-                unitPrice: Math.round(priceOf(product.id) * 0.96 * 100) / 100,
-                tankAllocations: productTanks.map((tank) => ({
-                  tankId: tank.id,
-                  quantity: litresPerTank,
-                })),
-              },
-            ],
-          },
-          context(at, manager.id),
-        ),
-        'purchase',
-      );
-    }
+  const stockMovements = new DrizzleStockMovementRepository(tx);
+  const bookOf = (tankId: string) => stockMovements.currentQuantityForTank(tankId);
+  const tanksOf = (productId: string) => tanks.filter((tank) => tank.productId === productId);
+  const minutes = (base: Date, delta: number) => new Date(base.getTime() + delta * 60_000);
+
+  const demo: DemoContext = {
+    tx,
+    events,
+    ids,
+    docNumbers,
+    stationId,
+    stationSettings: station.settings,
+    context,
+    shifts,
+    businessDays,
+    shiftWriteGate,
+    stockMovements,
+    managerId: manager.id,
+    accountantId: accountant.id,
+    supplierId: oilCompany.id,
+    tanksOf,
+    bookOf,
+    priceOf,
   };
+  const { recordDensity, ...densityHelpers } = createDensityHelpers(demo);
+  const { fuelInvoice, tanker, routineDip } = createDecantationHelpers(demo, {
+    recordDensity,
+    ...densityHelpers,
+  });
 
   const creditSale = async (
     shiftId: string,
@@ -425,6 +408,7 @@ export async function seedDemoHistory(
         customers: new DrizzleCustomerRepository(tx),
         shifts,
         businessDays,
+        shiftWriteGate,
         events,
       }).execute(
         {
@@ -478,6 +462,7 @@ export async function seedDemoHistory(
       await new RecordHandover({
         shifts,
         businessDays,
+        shiftWriteGate,
         context: new DrizzleHandoverContextReader(tx),
         handovers: new DrizzleHandoverRepository(tx),
         events,
@@ -535,14 +520,26 @@ export async function seedDemoHistory(
     closeAt: Date;
     volume: (nozzleIndex: number) => number;
     credit?: { customerId: string; amount: number; duIndex: number; at: Date };
-    purchaseLitresPerTank?: number;
+    /** Onboarding opening stock per fuel tank (first day only). */
+    openingStockPerTank?: number;
   }) => {
     const opened = await openShift(input.date, input.templateId, input.openAt);
-    if (input.purchaseLitresPerTank)
-      await purchaseFuel(
-        opened.shift.id,
-        new Date(input.openAt.getTime() + 15 * 60_000),
-        input.purchaseLitresPerTank,
+    if (input.openingStockPerTank)
+      // Genuine onboarding opening stock: the station's stock before PumpOS.
+      await stockMovements.saveMany(
+        tanks.map((tank) => ({
+          id: ids.newId(),
+          shiftId: null,
+          businessDayId: opened.shift.businessDayId,
+          productId: tank.productId,
+          tankId: tank.id,
+          movementType: 'OpeningBalance' as const,
+          quantity: String(input.openingStockPerTank),
+          referenceType: 'onboarding-opening-stock',
+          referenceId: null,
+          notes: 'Onboarding opening stock',
+          createdAt: minutes(input.openAt, -5).toISOString(),
+        })),
       );
     if (input.credit)
       await creditSale(
@@ -575,9 +572,44 @@ export async function seedDemoHistory(
   const ksrtcDu = 0;
 
   let closedBusinessDays = 0;
+  const pendingDips: Array<{ tankId: string; productId: string; actual: number }> = [];
   for (let age = DEMO_HISTORY_DAYS; age >= 1; age -= 1) {
     const date = shiftDate(today, -age);
     const at = (time: string) => stationInstant(date, time, timeZone);
+    const dayIndex = DEMO_HISTORY_DAYS - age;
+
+    // Ordering that keeps the −18 L dip exact: the day −4 tanker (no after dip)
+    // is resolved by a routine dip on day −3, so its tank line absorbs that
+    // delta. Today's tanker arrives only after the −18 L dip, so neither can
+    // shift the other's book stock.
+    // The morning after the HSD tanker with no after dip: a routine Tank Dip
+    // between shifts (none open) measures it.
+    if (pendingDips.length > 0 && age === 3) {
+      for (const target of pendingDips)
+        await routineDip(
+          target.tankId,
+          target.actual,
+          at('05:30'),
+          'Routine morning dip (also measures yesterday’s HSD tanker)',
+        );
+      pendingDips.length = 0;
+    }
+
+    // Morning density register, per product, before the day starts.
+    for (const [product, series, tempC] of [
+      [petrol, MORNING_DENSITY.petrol, 27.5],
+      [diesel, MORNING_DENSITY.diesel, 28.0],
+    ] as const)
+      await recordDensity({
+        productId: product.id,
+        date,
+        at: at('05:40'),
+        kind: 'MORNING',
+        density15: series[dayIndex],
+        tempC: tempC + (dayIndex % 3) * 0.5,
+        tankId: tanksOf(product.id)[0]?.id,
+      });
+
     const morningShift = await runShift({
       date,
       templateId: morning.id,
@@ -585,9 +617,7 @@ export async function seedDemoHistory(
       handoverAt: at('13:50'),
       closeAt: at('13:58'),
       volume: volumeFor(age, 0),
-      // Opening stock on the first day, then a tanker on two later days.
-      purchaseLitresPerTank:
-        age === DEMO_HISTORY_DAYS ? 14_000 : age === 4 || age === 2 ? 5_000 : undefined,
+      ...(age === DEMO_HISTORY_DAYS ? { openingStockPerTank: OPENING_STOCK_PER_TANK } : {}),
     });
     await runShift({
       date,
@@ -603,6 +633,138 @@ export async function seedDemoHistory(
         at: at('18:30'),
       },
     });
+
+    // Ad-hoc density check after a customer complaint about pickup.
+    if (age === 5)
+      await recordDensity({
+        productId: petrol.id,
+        date,
+        at: at('16:10'),
+        kind: 'ADHOC',
+        density15: 747.4,
+        tempC: 30.5,
+        tankId: tanksOf(petrol.id)[0]?.id,
+      });
+
+    // Tanker visits (ADR 0007): invoice = Office Record, Decantation = stock.
+    if (age === 6) {
+      // MS + HSD tanker, after dip taken after settling: measured, small transit loss.
+      const ms = await fuelInvoice({
+        date,
+        at: at('17:00'),
+        productId: petrol.id,
+        quantity: 12_000,
+        invoiceDensity: 746.9,
+      });
+      const hsd = await fuelInvoice({
+        date,
+        at: at('17:05'),
+        productId: diesel.id,
+        quantity: 12_000,
+        invoiceDensity: 832.6,
+      });
+      await tanker({
+        arriveAt: at('22:05'),
+        startAt: at('22:10'),
+        endAt: at('22:45'),
+        afterAt: at('23:20'),
+        recordAt: at('23:20'),
+        tankerNumber: 'KL-07-BX-4412',
+        driverName: 'Suresh Kumar',
+        loads: [
+          {
+            productId: petrol.id,
+            purchaseId: ms.id,
+            invoiceQty: 12_000,
+            invoiceDensity: 746.9,
+            variance: -32,
+            roDensity: 747.8,
+            tempC: 29.5,
+          },
+          {
+            productId: diesel.id,
+            purchaseId: hsd.id,
+            invoiceQty: 12_000,
+            invoiceDensity: 832.6,
+            variance: -24,
+            roDensity: 833.1,
+            tempC: 29.5,
+          },
+        ],
+        chambers: [
+          ...[0, 1, 2].map(() => ({ capacityL: 4_000, load: 0 })),
+          ...[0, 1, 2].map(() => ({ capacityL: 4_000, load: 1 })),
+        ],
+      });
+    }
+    if (age === 4) {
+      // HSD-only tanker, no after dip: stays pending until the next routine dip.
+      const hsd = await fuelInvoice({
+        date,
+        at: at('16:30'),
+        productId: diesel.id,
+        quantity: 6_000,
+        invoiceDensity: 834.1,
+      });
+      const visit = await tanker({
+        arriveAt: at('22:05'),
+        startAt: at('22:10'),
+        endAt: at('22:50'),
+        recordAt: at('22:55'),
+        tankerNumber: 'KL-08-CD-7731',
+        driverName: 'Babu Thomas',
+        loads: [
+          {
+            productId: diesel.id,
+            purchaseId: hsd.id,
+            invoiceQty: 6_000,
+            invoiceDensity: 834.1,
+            variance: 15,
+            roDensity: 834.6,
+            tempC: 30,
+          },
+        ],
+        chambers: [
+          { capacityL: 3_000, load: 0 },
+          { capacityL: 3_000, load: 0 },
+        ],
+      });
+      pendingDips.push(...visit.dipTargets);
+    }
+    if (age === 2) {
+      // MS tanker with a short chamber and a broken seal: flagged for the owner.
+      const ms = await fuelInvoice({
+        date,
+        at: at('17:10'),
+        productId: petrol.id,
+        quantity: 8_000,
+        invoiceDensity: 748.2,
+      });
+      await tanker({
+        arriveAt: at('22:00'),
+        startAt: at('22:10'),
+        endAt: at('22:40'),
+        afterAt: at('23:15'),
+        recordAt: at('23:15'),
+        tankerNumber: 'KL-11-AE-2093',
+        driverName: 'Joseph Mathew',
+        loads: [
+          {
+            productId: petrol.id,
+            purchaseId: ms.id,
+            invoiceQty: 8_000,
+            invoiceDensity: 748.2,
+            variance: -60,
+            roDensity: 748.9,
+            tempC: 29,
+          },
+        ],
+        chambers: [
+          { capacityL: 4_000, load: 0 },
+          { capacityL: 4_000, load: 0, sealOk: false, mark: 'SHORT' },
+        ],
+      });
+    }
 
     // Office records, dated by entry date (no shift, no business day).
     if (age === 5) {
@@ -658,7 +820,7 @@ export async function seedDemoHistory(
         events,
       }).execute(
         { businessDayId: morningShift.businessDay.id, stationId },
-        context(at('23:30'), manager.id, morningShift.businessDay.id),
+        context(at('23:55'), manager.id, morningShift.businessDay.id),
       ),
       'close business day',
     );
@@ -672,6 +834,25 @@ export async function seedDemoHistory(
   const todayVolume = (part: number) => (nozzleIndex: number) =>
     120 + ((nozzleIndex * 17 + part * 7) % 60);
 
+  // Today's density register: MS recorded, HSD still missing ("readings 1/2").
+  await recordDensity({
+    productId: petrol.id,
+    date: today,
+    at: todayAt(0.01),
+    kind: 'MORNING',
+    density15: TODAY_PETROL_DENSITY,
+    tempC: 28.5,
+    tankId: tanksOf(petrol.id)[0]?.id,
+  });
+  // This morning's IOC diesel invoice, still awaiting its tanker.
+  const todaysInvoice = await fuelInvoice({
+    date: today,
+    at: todayAt(0.02),
+    productId: diesel.id,
+    quantity: 6_000,
+    invoiceDensity: 834.3,
+  });
+
   const morningToday = await runShift({
     date: today,
     templateId: morning.id,
@@ -683,25 +864,12 @@ export async function seedDemoHistory(
   });
 
   // −18 L HSD dip, measured between shifts so book stock is reconciled.
-  const book = await new DrizzleStockMovementRepository(tx).currentQuantityForTank(dieselTank.id);
-  must(
-    await new RecordStockCount({
-      movements: new DrizzleStockMovementRepository(tx),
-      variances: new DrizzleStockVarianceRepository(tx),
-      tanks: new DrizzleTankRepository(tx),
-      shifts,
-      businessDays,
-      events,
-    }).execute(
-      {
-        stationId,
-        tankId: dieselTank.id,
-        actualQuantity: book + DEMO_DIP_VARIANCE_LITRES,
-        reason: 'Dip 18 L below book stock — evaporation and meter drift suspected',
-      },
-      context(todayAt(0.44), manager.id),
-    ),
-    'stock count',
+  const book = await bookOf(dieselTank.id);
+  await routineDip(
+    dieselTank.id,
+    book + DEMO_DIP_VARIANCE_LITRES,
+    todayAt(0.44),
+    'Dip 18 L below book stock — evaporation and meter drift suspected',
   );
 
   // Exactly one bank collection from Malabar Transports today.
@@ -733,7 +901,26 @@ export async function seedDemoHistory(
   // drawers are still on duty, so the shift stays open.
   const eveningToday = await openShift(today, evening.id, todayAt(0.5));
   const eveningOpening = await openingReadings(eveningToday.shift.id);
-  const du2Index = dispensers.findIndex((du) => du.id === du2.id);
+  // The tanker is on site and still unloading: a DRAFT linked to the invoice.
+  await tanker({
+    arriveAt: todayAt(0.66),
+    startAt: todayAt(0.68),
+    recordAt: todayAt(0.7),
+    tankerNumber: 'KL-07-BZ-9086',
+    driverName: 'Rajan Pillai',
+    draft: true,
+    loads: [
+      {
+        productId: diesel.id,
+        purchaseId: todaysInvoice.id,
+        invoiceQty: 6_000,
+        invoiceDensity: 834.3,
+        variance: 0,
+        roDensity: 834.8,
+        tempC: 29.5,
+      },
+    ],
+  });
   const pending = await handover(
     eveningToday.shift.id,
     todayAt(0.9),

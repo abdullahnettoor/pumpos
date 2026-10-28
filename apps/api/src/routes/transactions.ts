@@ -1,20 +1,15 @@
 import { Hono, type Context } from 'hono';
-import { and, desc, eq, gte, ilike, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
+  can,
+  hasOrganizationWideStationAccess,
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
+  isAttendant,
   isAuthorizedForStation,
-  canManageCustomers,
-  canManageSuppliers,
-  canArchiveParty,
-  canRecordPurchase,
-  canManageExpenseCategory,
-  canVoidExpense,
-  canCreateExpense,
-  canRecordCollection,
-  canRecordIncome,
-  canRecordStockCount,
-  canRecordHandover,
   isHandoverSelfScoped,
+  redactPurchaseCosts,
+  redactSupplierBalances,
   type Role,
 } from '@pump/shared';
 import {
@@ -24,6 +19,7 @@ import {
   CreateSupplier,
   UpdateSupplier,
   SetSupplierOpeningBalance,
+  suppliersAtStation,
   err,
   validationError,
   AddVehicle,
@@ -43,6 +39,7 @@ import {
   RecordStockCount,
   GenerateInvoice,
   RecordMerchandiseHandover,
+  GetTankDaysOfCover,
   type Result,
 } from '@pump/core';
 import { buildContext, createCommandTrace } from '../infra/context.js';
@@ -73,7 +70,9 @@ import {
 import {
   DrizzleStockMovementRepository,
   DrizzleStockVarianceRepository,
+  DrizzleTankSalesWindowReader,
 } from '../infra/repositories/inventory-repositories.js';
+import { createDecantationMeasurement } from '../infra/repositories/decantation-repositories.js';
 import {
   DrizzleSaleRepository,
   DrizzleMerchandiseHandoverRepository,
@@ -92,12 +91,21 @@ import {
   DrizzleFinancialAccountRepository,
   DrizzlePaymentTerminalLookup,
 } from '../infra/repositories/finance-account-repositories.js';
+import { onCustomerLedger } from '../infra/customer-ledger-sql.js';
+import { supplierSignedAmount } from '../infra/supplier-ledger-sql.js';
 import { sendResult } from '../infra/send-result.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
+  DrizzleShiftWriteGateReader,
 } from '../infra/repositories/station-ops-repositories.js';
+import {
+  DrizzleCustomerLedgerReader,
+  DrizzleSupplierLedgerReader,
+  parsePartyLedgerRange,
+} from '../infra/repositories/party-ledger-readers.js';
 
 type Variables = {
   db: DbClient;
@@ -274,30 +282,74 @@ const DEFAULT_INCOME_CATEGORIES = [
 // MASTER DATA — Suppliers
 // ====================================================
 
+/**
+ * The Station a supplier read is scoped to (#575) must be one of the caller's
+ * Organization and one the caller may access. Resolved under
+ * `organization_id` FIRST: `isAuthorizedForStation` waves Owners through
+ * without looking at the station, so it alone would let another
+ * Organization's Station id through (#235). Null when the read may go ahead.
+ */
+async function refuseSupplierStation(
+  c: Context<{ Variables: Variables }>,
+  stationId: string,
+): Promise<Response | null> {
+  const user = c.var.user;
+  if (!(await stationExistsInOrg(c.var.db, user.organizationId, stationId))) {
+    return stationNotFound(c);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  return null;
+}
+
+/**
+ * GET /transactions/suppliers?activeOnly=&stationId=
+ *
+ * The supplier list with each supplier's `currentBalance` (Σ purchases − Σ
+ * payments). With a `stationId` (the Suppliers page, Reports, the mobile Money
+ * tab) it is that Station's list (#575): its own and shared suppliers, plus any
+ * it has ledger entries with (`suppliersAtStation`), each balanced on the
+ * Station's own ledger only, as `/reports/payables` is. Without one it is the
+ * Organization's list and balances, for pickers and older clients.
+ */
 transactionsRouter.get('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
 
-  // Outstanding balance = Σ purchases − Σ payments, scoped to the organization.
   // Aggregated in SQL (one row per supplier) + run alongside the list query.
+  const balanceScope = [eq(schema.supplierTransactions.organizationId, user.organizationId)];
+  if (stationId) balanceScope.push(eq(schema.supplierTransactions.stationId, stationId));
   const [list, balanceRows] = await Promise.all([
     new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
     db
       .select({
         supplierId: schema.supplierTransactions.supplierId,
-        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
+        balance: sql<string>`COALESCE(SUM(${supplierSignedAmount('supplier_transactions')}), 0)`,
       })
       .from(schema.supplierTransactions)
-      .where(eq(schema.supplierTransactions.organizationId, user.organizationId))
+      .where(and(...balanceScope))
       .groupBy(schema.supplierTransactions.supplierId),
   ]);
 
-  const balances: Record<string, number> = {};
-  for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
+  const balances = new Map<string, number>();
+  for (const r of balanceRows) balances.set(r.supplierId, Number(r.balance));
+  const shown = stationId ? suppliersAtStation(list, stationId, new Set(balances.keys())) : list;
   return c.json({
     success: true,
-    data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })),
+    data: redactSupplierBalances(
+      shown.map((s) => ({ ...s, currentBalance: balances.get(s.id) ?? 0 })),
+      user,
+    ),
   });
 });
 
@@ -306,7 +358,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/suppliers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -373,7 +425,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageSuppliers(user.role)) {
+    if (!can(user, 'suppliers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -395,7 +447,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/suppliers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'suppliers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -411,10 +463,32 @@ transactionsRouter.delete(
   },
 );
 
+/**
+ * GET /transactions/suppliers/:id/ledger?stationId=&from=&to=
+ *
+ * A supplier's statement. With a `stationId` only that Station's ledger with
+ * the supplier is read (#575): its opening balance, purchases, payments and
+ * adjustments, never another Station's. With `from`/`to` it is the ranged
+ * statement; without, the legacy all-time rows.
+ */
 transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const supplierId = c.req.param('id');
+  const stationId = c.req.query('stationId') || undefined;
+  if (stationId) {
+    const refused = await refuseSupplierStation(c, stationId);
+    if (refused) return refused;
+  }
   const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
   if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json(
@@ -422,12 +496,34 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // supplier, so fine for now. When a supplier's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const parsedRange = parsePartyLedgerRange(from, to);
+  if (parsedRange && 'error' in parsedRange) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: parsedRange.error } },
+      400,
+    );
+  }
+  if (parsedRange) {
+    const statement = await new DrizzleSupplierLedgerReader(db).statement(
+      user.organizationId,
+      supplierId,
+      parsedRange.range,
+      stationId,
+    );
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: statement.periodOpeningBalance,
+        closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
+        entries: statement.entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   const list = await db
     .select({
       id: schema.supplierTransactions.id,
@@ -449,6 +545,7 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       and(
         eq(schema.supplierTransactions.supplierId, supplierId),
         eq(schema.supplierTransactions.organizationId, user.organizationId),
+        stationId ? eq(schema.supplierTransactions.stationId, stationId) : undefined,
       ),
     )
     .orderBy(schema.supplierTransactions.createdAt);
@@ -476,7 +573,7 @@ transactionsRouter.get('/customers', async (c) => {
           FROM customer_transactions ct
           JOIN business_days bd ON bd.id = ct.business_day_id
          WHERE bd.organization_id = ${user.organizationId}
-           AND ct.transaction_type NOT IN ('OMC Sale', 'Collection')
+           AND ${onCustomerLedger('ct')}
         UNION ALL
         SELECT co.customer_id, -co.amount
           FROM collections co
@@ -500,7 +597,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -567,7 +664,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -589,7 +686,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/customers/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -616,12 +713,33 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       404,
     );
   }
-  // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
-  // the client computes the period opening + in-range rows. Bounded per single
-  // customer, so fine for now. When a customer's history grows large, mirror the
-  // account-statement pattern: accept from/to, return
-  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
-  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const parsedRange = parsePartyLedgerRange(from, to);
+  if (parsedRange && 'error' in parsedRange) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: parsedRange.error } },
+      400,
+    );
+  }
+  if (parsedRange) {
+    const statement = await new DrizzleCustomerLedgerReader(db).statement(
+      user.organizationId,
+      customerId,
+      parsedRange.range,
+    );
+    return c.json({
+      success: true,
+      data: {
+        periodOpeningBalance: statement.periodOpeningBalance,
+        closingBalance: statement.closingBalance,
+        hasEarlier: statement.hasEarlier,
+        entries: statement.entries,
+      },
+    });
+  }
+
+  // Keep the legacy all-time response shape for desktop and older mobile clients.
   // Credit sales / adjustments come from the customer ledger; collections are
   // Office Records read from `collections` (ADR 0005). `businessDate` is the
   // ledger date: Business Date for a sale, Entry Date for a collection.
@@ -763,7 +881,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/customers/:id/vehicles'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -786,7 +904,7 @@ transactionsRouter.put(
   writePolicyGuard('PUT /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canManageCustomers(user.role)) {
+    if (!can(user, 'customers.manage')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -809,7 +927,7 @@ transactionsRouter.delete(
   writePolicyGuard('DELETE /transactions/vehicles/:id'),
   async (c) => {
     const user = c.var.user;
-    if (!canArchiveParty(user.role)) {
+    if (!can(user, 'customers.archive')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -903,7 +1021,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -965,7 +1083,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1079,7 +1197,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1133,7 +1251,7 @@ transactionsRouter.put(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canManageExpenseCategory(user.role)) {
+    if (!can(user, 'expenses.categories')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -1180,7 +1298,7 @@ transactionsRouter.put(
 // ---- Other income (indirect income; money IN to drawer/bank/owner) ----
 transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income'), async (c) => {
   const user = c.var.user;
-  if (!canRecordIncome(user.role)) {
+  if (!can(user, 'income.record')) {
     return c.json(
       {
         success: false,
@@ -1222,7 +1340,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/income/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1351,7 +1469,7 @@ transactionsRouter.get('/income/gst-register', async (c) => {
 
 transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expenses'), async (c) => {
   const user = c.var.user;
-  if (!canCreateExpense(user.role)) {
+  if (!can(user, 'expenses.create')) {
     return c.json(
       {
         success: false,
@@ -1380,7 +1498,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/expenses/:id/void'),
   async (c) => {
     const user = c.var.user;
-    if (!canVoidExpense(user.role)) {
+    if (!can(user, 'expenses.void')) {
       return c.json(
         {
           success: false,
@@ -1418,7 +1536,7 @@ transactionsRouter.post(
     // DU handover — Attendants may record those. True payment collections are
     // desk operations and exclude the mobile-only Attendant.
     const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
-    if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
+    if (isHandoverCreditSale ? !can(user, 'handover.record') : !can(user, 'collections.record')) {
       return c.json(
         {
           success: false,
@@ -1453,6 +1571,7 @@ transactionsRouter.post(
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
+          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
           events,
         }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success)
@@ -1470,6 +1589,7 @@ transactionsRouter.post(
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
           businessDays: new DrizzleBusinessDayRepository(tx),
+          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
           events,
         }).execute(body, buildContext(user, { stationId: shiftStation.stationId, ...clock }));
         if (r.success) {
@@ -1514,7 +1634,7 @@ async function authorizeLedgerVoid(
   c: Context<{ Variables: Variables }>,
   id: string,
 ): Promise<{ ok: true; stationId: string } | { ok: false; response: Response }> {
-  if (!canRecordHandover(c.var.user.role)) {
+  if (!can(c.var.user, 'handover.record')) {
     return {
       ok: false,
       response: c.json(
@@ -1578,7 +1698,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/purchases'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1600,11 +1720,17 @@ transactionsRouter.post(
         403,
       );
     }
-    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
-    if (!clock) return stationNotFound(c);
     // The Shift owns the station; a body stationId is only cross-checked (#243).
+    // Resolved first so the Entry Date clock below is the station's, not a UTC
+    // fallback, for a legacy request that carries only a shiftId.
     const shiftStation = await guardShiftStation(c, body);
     if (!shiftStation.ok) return shiftStation.response;
+    const clock = await loadStationClock(
+      c.var.db,
+      user.organizationId,
+      shiftStation.stationId ?? body?.stationId,
+    );
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const ctx = buildContext(user, {
@@ -1623,6 +1749,7 @@ transactionsRouter.post(
         stations: new DrizzleStationRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         docNumbers,
         events,
       }).execute(body, ctx);
@@ -1670,7 +1797,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/supplier-payments'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordPurchase(user.role)) {
+    if (!can(user, 'purchases.record')) {
       return c.json(
         {
           success: false,
@@ -1796,6 +1923,7 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       customers: new DrizzleCustomerRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
       products: new DrizzleProductRepository(tx),
       docNumbers,
       events,
@@ -1846,13 +1974,48 @@ transactionsRouter.get('/expenses', async (c) => {
   });
 });
 
+/**
+ * Station predicate for the purchase reads. A named station is authorized by
+ * the caller; an omitted one never widens to the whole organization for a user
+ * who is not authorized for every station — it narrows to their assigned ones
+ * (none assigned → no rows). Owners see the organization.
+ */
+export function purchaseStationScope(
+  user: { role: Role; assignedStationIds: string[] },
+  stationId: string | undefined,
+) {
+  if (stationId) return eq(schema.purchases.stationId, stationId);
+  if (hasOrganizationWideStationAccess(user)) return undefined;
+  return user.assignedStationIds.length
+    ? inArray(schema.purchases.stationId, user.assignedStationIds)
+    : sql`false`;
+}
+
 transactionsRouter.get('/purchases', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   const rows = await db
     .select({
       purchase: schema.purchases,
       businessDate: schema.businessDays.businessDate,
+      awaitingDecantation: sql<boolean>`(
+        ${schema.purchases.businessDayId} IS NULL
+        AND EXISTS (
+          SELECT 1 FROM purchase_items pi
+          JOIN products pr ON pr.id = pi.product_id
+          WHERE pi.purchase_id = ${schema.purchases.id} AND pr.product_type = 'FUEL'
+        )
+        AND NOT EXISTS (SELECT 1 FROM decantation_purchases dp JOIN decantations dd ON dd.id = dp.decantation_id WHERE dp.purchase_id = ${schema.purchases.id} AND dd.status <> 'DISCARDED')
+      )`,
       supplierName: schema.suppliers.name,
       // Comma-joined distinct product names on the invoice — a quick "what was
       // bought" hint for the list, without fetching each purchase's line items.
@@ -1867,19 +2030,30 @@ transactionsRouter.get('/purchases', async (c) => {
       )`,
     })
     .from(schema.purchases)
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId))
+    .where(
+      and(
+        eq(schema.purchases.organizationId, user.organizationId),
+        purchaseStationScope(user, stationId),
+      ),
+    )
     .orderBy(desc(schema.purchases.createdAt));
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.purchase,
-      businessDate: r.businessDate,
-      supplierName: r.supplierName ?? 'Unknown Supplier',
-      itemsSummary: r.itemsSummary,
-      itemCount: Number(r.itemCount || 0),
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.purchase,
+          businessDate: r.businessDate,
+          awaitingDecantation: Boolean(r.awaitingDecantation),
+          supplierName: r.supplierName ?? 'Unknown Supplier',
+          itemsSummary: r.itemsSummary,
+          itemCount: Number(r.itemCount || 0),
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -1887,32 +2061,62 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const purchaseId = c.req.param('id');
+  const [owner] = await db
+    .select({ stationId: schema.purchases.stationId })
+    .from(schema.purchases)
+    .where(
+      and(
+        eq(schema.purchases.id, purchaseId),
+        eq(schema.purchases.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    owner &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: owner.stationId,
+    })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   const rows = await db
     .select({
       item: schema.purchaseItems,
       productName: schema.products.name,
       productCode: schema.products.code,
       unit: schema.products.unit,
+      businessDate: schema.businessDays.businessDate,
+      entryDate: schema.purchases.entryDate,
     })
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
     .where(
       and(
         eq(schema.purchaseItems.purchaseId, purchaseId),
-        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.purchases.organizationId, user.organizationId),
       ),
     )
     .orderBy(schema.purchaseItems.createdAt);
   return c.json({
     success: true,
-    data: rows.map((r) => ({
-      ...r.item,
-      productName: r.productName ?? 'Product',
-      productCode: r.productCode ?? null,
-      unit: r.unit ?? null,
-    })),
+    data: rows.map((r) =>
+      redactPurchaseCosts(
+        {
+          ...r.item,
+          businessDate: r.businessDate,
+          entryDate: r.entryDate,
+          productName: r.productName ?? 'Product',
+          productCode: r.productCode ?? null,
+          unit: r.unit ?? null,
+        },
+        user,
+      ),
+    ),
   });
 });
 
@@ -1983,18 +2187,45 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!can(user, 'purchases.viewCosts')) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view purchase costs' },
+      },
+      403,
+    );
+  }
   const from = c.req.query('from');
   const to = c.req.query('to');
-  const conds = [
-    eq(schema.businessDays.organizationId, user.organizationId),
+  const stationId = c.req.query('stationId');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  const conds: SQL[] = [
+    eq(schema.purchases.organizationId, user.organizationId),
     eq(schema.purchaseItems.taxCategory, 'GST'),
   ];
-  if (from) conds.push(gte(schema.businessDays.businessDate, from));
-  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const scope = purchaseStationScope(user, stationId);
+  if (scope) conds.push(scope);
+  if (from)
+    conds.push(
+      gte(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`, from),
+    );
+  if (to)
+    conds.push(
+      lte(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`, to),
+    );
   const rows = await db
     .select({
       item: schema.purchaseItems,
       businessDate: schema.businessDays.businessDate,
+      entryDate: schema.purchases.entryDate,
       supplierName: schema.suppliers.name,
       supplierGstin: schema.suppliers.metadata,
       invoiceNumber: schema.purchases.invoiceNumber,
@@ -2004,14 +2235,17 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
     })
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
-    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
     .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
     .where(and(...conds))
-    .orderBy(desc(schema.businessDays.businessDate));
+    .orderBy(
+      desc(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`),
+    );
   const data = rows.map((r) => ({
     ...r.item,
     businessDate: r.businessDate,
+    entryDate: r.entryDate,
     supplierName: r.supplierName ?? 'Unknown Supplier',
     supplierGstin: (r.supplierGstin as Record<string, unknown> | null)?.gstin ?? null,
     invoiceNumber: r.invoiceNumber,
@@ -2020,6 +2254,76 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
     productCode: r.productCode ?? null,
   }));
   return c.json({ success: true, data });
+});
+
+/**
+ * GET /transactions/supplier-payments?stationId=&from=&to= — the Supplier
+ * Payments, newest Entry Date first, each with its supplier and the Funding
+ * Account it came from. Backs the Suppliers → Payments tab (#528). Office
+ * Records (ADR 0005): dated by Entry Date, never a shift; `from`/`to` bound the
+ * Entry Date (inclusive). Read-only; open to the Roles that record them
+ * (`purchases.record`), scoped to stations like the purchases list.
+ */
+transactionsRouter.get('/supplier-payments', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!can(user, 'purchases.record'))
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to view supplier payments' },
+      },
+      403,
+    );
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  )
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  const t = schema.supplierTransactions;
+  const stationScope = stationId
+    ? eq(t.stationId, stationId)
+    : hasOrganizationWideStationAccess(user)
+      ? undefined
+      : user.assignedStationIds.length
+        ? inArray(t.stationId, user.assignedStationIds)
+        : sql`false`;
+  const rows = await db
+    .select({
+      id: t.id,
+      stationId: t.stationId,
+      supplierId: t.supplierId,
+      entryDate: t.entryDate,
+      amount: t.amount,
+      notes: t.notes,
+      createdAt: t.createdAt,
+      supplierName: schema.suppliers.name,
+      accountName: schema.financialAccounts.name,
+      accountType: schema.financialAccounts.accountType,
+    })
+    .from(t)
+    .leftJoin(schema.suppliers, eq(schema.suppliers.id, t.supplierId))
+    .leftJoin(schema.financialAccounts, eq(schema.financialAccounts.id, t.fundingAccountId))
+    .where(
+      and(
+        eq(t.organizationId, user.organizationId),
+        eq(t.transactionType, 'Payment'),
+        stationScope,
+        from ? gte(t.entryDate, from) : undefined,
+        to ? lte(t.entryDate, to) : undefined,
+      ),
+    )
+    .orderBy(desc(t.entryDate), desc(t.createdAt));
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, supplierName: r.supplierName ?? 'Unknown Supplier' })),
+  });
 });
 
 transactionsRouter.get('/collections', async (c) => {
@@ -2291,8 +2595,6 @@ transactionsRouter.get('/money-movements', async (c) => {
 // INVOICING — GST tax invoices (Phase T4)
 // ====================================================
 
-const INVOICE_ROLES = new Set<Role>(['Owner', 'Manager', 'Accountant']);
-
 // POST /transactions/sales/:id/invoice — issue a GST tax invoice for a sale.
 // Idempotent: if the sale was already invoiced, the existing invoice is returned.
 transactionsRouter.post(
@@ -2301,7 +2603,7 @@ transactionsRouter.post(
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!INVOICE_ROLES.has(user.role)) {
+    if (!can(user, 'reports.invoice')) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
         403,
@@ -2577,6 +2879,9 @@ transactionsRouter.get('/sales', async (c) => {
 transactionsRouter.post(
   '/shifts/:id/merchandise-handover',
   writePolicyGuard('POST /transactions/shifts/:id/merchandise-handover'),
+  requireCapabilityGuard(ATTENDANT_PHONE_HANDOVER_CAPABILITY, {
+    appliesTo: (u) => isAttendant(u.role),
+  }),
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
@@ -2628,6 +2933,7 @@ transactionsRouter.post(
         products: new DrizzleProductRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         docNumbers: new TimestampDocumentNumberGenerator(),
         events,
       }).execute(
@@ -2666,6 +2972,9 @@ transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
         eq(schema.sales.shiftId, shiftId),
         eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
         eq(schema.businessDays.organizationId, user.organizationId),
+        // An Attendant sees only their own product handover: the rest of the
+        // shift's attendants are not theirs to read (#407). Office roles see all.
+        ...(isAttendant(user.role) ? [eq(schema.sales.attendantId, user.id)] : []),
       ),
     )
     .orderBy(desc(schema.sales.createdAt));
@@ -2931,6 +3240,21 @@ transactionsRouter.get('/inventory/status', async (c) => {
       productCode: schema.products.code,
       productUnit: schema.products.unit,
       total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
+      waitingOnDecantation: sql<boolean>`EXISTS (
+        SELECT 1
+        FROM decantation_tank_lines dtl
+        INNER JOIN decantations d
+          ON d.id = dtl.decantation_id
+          AND d.organization_id = dtl.organization_id
+          AND d.station_id = dtl.station_id
+        WHERE dtl.tank_id = ${schema.tanks.id}
+          AND dtl.organization_id = ${user.organizationId}
+          AND dtl.station_id = ${stationId}
+          AND d.organization_id = ${user.organizationId}
+          AND d.station_id = ${stationId}
+          AND dtl.status = 'PENDING_MEASUREMENT'
+          AND d.status NOT IN ('DRAFT', 'DISCARDED')
+      )`,
     })
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
@@ -2944,7 +3268,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     )
     .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
-  const enriched = rows.map((r) => ({
+  const levels = rows.map((r) => ({
     id: r.id,
     name: r.name,
     productId: r.productId,
@@ -2953,6 +3277,30 @@ transactionsRouter.get('/inventory/status', async (c) => {
     productUnit: r.productUnit ?? 'L',
     capacity: Number(r.capacity),
     currentVolume: Math.max(0, Number(r.total ?? 0)),
+    waitingOnDecantation: Boolean(r.waitingOnDecantation),
+  }));
+
+  // Days of cover: ONE more aggregate statement (per-tank volume sold over the
+  // last 7 closed Business Days), however many tanks the Station has. It is an
+  // enrichment: if the read fails the tank levels still go out, without cover.
+  let cover: Record<string, { avgDailyVolume7d: number | null; daysOfCover: number | null }> = {};
+  try {
+    const res = await new GetTankDaysOfCover({
+      reader: new DrizzleTankSalesWindowReader(db),
+    }).execute(
+      { stationId, tanks: levels.map((t) => ({ tankId: t.id, currentVolume: t.currentVolume })) },
+      buildContext(user, { stationId }),
+    );
+    if (res.success) cover = res.data;
+    else console.error('inventory/status: days of cover unavailable', res.error);
+  } catch (error) {
+    console.error('inventory/status: days of cover unavailable', error);
+  }
+
+  const enriched = levels.map((t) => ({
+    ...t,
+    avgDailyVolume7d: cover[t.id]?.avgDailyVolume7d ?? null,
+    daysOfCover: cover[t.id]?.daysOfCover ?? null,
   }));
   return c.json({ success: true, data: enriched });
 });
@@ -3004,7 +3352,7 @@ transactionsRouter.post(
   writePolicyGuard('POST /transactions/inventory/count'),
   async (c) => {
     const user = c.var.user;
-    if (!canRecordStockCount(user.role)) {
+    if (!can(user, 'inventory.stockCount')) {
       return c.json(
         {
           success: false,
@@ -3035,7 +3383,9 @@ transactionsRouter.post(
         tanks: new DrizzleTankRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         events,
+        decantationMeasurement: createDecantationMeasurement(tx, events),
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock }));
     });
     return sendResult(c, result);

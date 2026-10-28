@@ -1,0 +1,1 @@
+CREATE INDEX "sales_business_day_idx" ON "sales" USING btree ("business_day_id");

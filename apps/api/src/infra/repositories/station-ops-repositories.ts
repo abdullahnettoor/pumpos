@@ -10,6 +10,10 @@ import type {
   BusinessDayStatusItem,
   Shift,
   ShiftRepository,
+  GatedShift,
+  ShiftWriteGateReader,
+  ShiftWriteGateRows,
+  ShiftWriteLockTarget,
   StaffAssignmentInput,
   TerminalLinkInput,
   NozzleReading,
@@ -27,6 +31,7 @@ import type {
   CloseShiftContext,
   CloseShiftContextReader,
   StaffDirectory,
+  FuelNameReader,
 } from '@pump/core';
 import { rowJson, tsIso } from '../sql-json.js';
 import {
@@ -132,24 +137,34 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   }
 }
 
+/** Timestamps arrive as Dates from the query builder and ISO strings from rowJson. */
+const isoOf = (v: Date | string): string => (v instanceof Date ? v.toISOString() : v);
+const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : isoOf(v));
+
+type Timestamped<T, K extends keyof T> = Omit<T, K> & { [P in K]: T[P] | string };
+type BusinessDayRow = Timestamped<
+  typeof schema.businessDays.$inferSelect,
+  'openedAt' | 'closedAt' | 'createdAt' | 'updatedAt'
+>;
+
+function toBusinessDayEntity(r: BusinessDayRow): BusinessDay {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    businessDate: r.businessDate,
+    status: r.status as BusinessDay['status'],
+    openedBy: r.openedBy,
+    openedAt: isoOf(r.openedAt),
+    closedBy: r.closedBy,
+    closedAt: isoOrNull(r.closedAt),
+    createdAt: isoOf(r.createdAt),
+    updatedAt: isoOf(r.updatedAt),
+  };
+}
+
 export class DrizzleBusinessDayRepository implements BusinessDayRepository, BusinessDayLock {
   constructor(private readonly db: DbClient) {}
-
-  private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
-    return {
-      id: r.id,
-      organizationId: r.organizationId,
-      stationId: r.stationId,
-      businessDate: r.businessDate,
-      status: r.status as BusinessDay['status'],
-      openedBy: r.openedBy,
-      openedAt: r.openedAt.toISOString(),
-      closedBy: r.closedBy,
-      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    };
-  }
 
   async findById(id: string): Promise<BusinessDay | null> {
     const [r] = await this.db
@@ -157,7 +172,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, id))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 
   async lockById(organizationId: string, businessDayId: string): Promise<void> {
@@ -241,7 +256,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
       )
       .orderBy(desc(schema.businessDays.businessDate))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 
   async findByStationAndDate(
@@ -260,7 +275,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
         ),
       )
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toBusinessDayEntity(r) : null;
   }
 }
 
@@ -271,10 +286,125 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
  */
 const shiftColumns = {
   ...getTableColumns(schema.shifts),
+  // Qualified by hand: Drizzle renders `${schema.shifts.id}` unqualified in an
+  // unjoined select, where a bare "id" resolves to `sa.id` and the sum is 0.
   openingCash: sql<string>`(SELECT COALESCE(SUM(sa.opening_float), 0)::text
-    FROM shift_staff_assignments sa WHERE sa.shift_id = ${schema.shifts.id})`,
+    FROM shift_staff_assignments sa WHERE sa.shift_id = shifts.id)`,
 };
 type ShiftRow = typeof schema.shifts.$inferSelect & { openingCash: string };
+
+type ShiftTimestamps = 'openedAt' | 'closedAt' | 'lockedAt' | 'createdAt' | 'updatedAt';
+type GatedShiftRow = Timestamped<typeof schema.shifts.$inferSelect, ShiftTimestamps>;
+
+function toGatedShift(r: GatedShiftRow): GatedShift {
+  return {
+    id: r.id,
+    organizationId: r.organizationId,
+    stationId: r.stationId,
+    businessDayId: r.businessDayId,
+    shiftTemplateId: r.shiftTemplateId,
+    status: r.status as Shift['status'],
+    openedBy: r.openedBy,
+    openedAt: isoOf(r.openedAt),
+    closedBy: r.closedBy,
+    closedAt: isoOrNull(r.closedAt),
+    lockedAt: isoOrNull(r.lockedAt),
+    closingCash: r.closingCash,
+    createdAt: isoOf(r.createdAt),
+    updatedAt: isoOf(r.updatedAt),
+  };
+}
+
+function toShiftEntity(r: ShiftRow): Shift {
+  return { ...toGatedShift(r), openingCash: r.openingCash };
+}
+
+/**
+ * The Shift-write gate in two statements (#248), where the repositories spent
+ * six: discovery is one unlocked join, and the Station -> Business Day -> Shift
+ * locks plus both re-reads are one statement.
+ *
+ * Lock order inside that statement is forced by data dependency: each locking
+ * CTE carries an uncorrelated filter over the previous one, which Postgres
+ * evaluates as a one-time gate BEFORE scanning its own table — so the Business
+ * Day is not touched until the Station lock is held, nor the Shift until the
+ * Business Day lock is. The Station filter is always true, so the Business Day
+ * lock is attempted even when the Station row is absent, as the sequential
+ * reads did. The Shift filter admits the scan only when the locked Business
+ * Day is at the target station with a status that allows the write; otherwise
+ * the write is refused and, as before, the Shift lock is never taken.
+ *
+ * Rows come out of the FOR UPDATE scans themselves: under READ COMMITTED a
+ * locking scan returns the latest committed version of a row it waited on, so
+ * the re-reads see whatever the transaction they queued behind committed. Any
+ * other read in that statement would still see its pre-wait snapshot, which is
+ * why the Opening Floats sum is a separate `readOpeningCash` statement.
+ */
+export class DrizzleShiftWriteGateReader implements ShiftWriteGateReader {
+  constructor(private readonly db: DbExecutor) {}
+
+  async discover(shiftId: string): Promise<ShiftWriteGateRows> {
+    const [r] = await this.db
+      .select({ shift: schema.shifts, businessDay: schema.businessDays })
+      .from(schema.shifts)
+      .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+      .where(eq(schema.shifts.id, shiftId))
+      .limit(1);
+    if (!r) return { shift: null, businessDay: null };
+    return {
+      shift: toGatedShift(r.shift),
+      businessDay: r.businessDay ? toBusinessDayEntity(r.businessDay) : null,
+    };
+  }
+
+  async lockForWrite(target: ShiftWriteLockTarget): Promise<ShiftWriteGateRows> {
+    const { organizationId, stationId, businessDayId, shiftId, writableDayStatuses } = target;
+    const dayAdmitsWrite = writableDayStatuses.length
+      ? sql`status IN (${sql.join(
+          writableDayStatuses.map((s) => sql`${s}`),
+          sql`, `,
+        )})`
+      : sql`false`;
+    const [row] = (await this.db.execute(sql`
+      WITH station_lock AS (
+        SELECT id FROM stations
+        WHERE id = ${stationId} AND organization_id = ${organizationId}
+        FOR UPDATE
+      ),
+      day_lock AS (
+        SELECT * FROM business_days
+        WHERE id = ${businessDayId} AND organization_id = ${organizationId}
+          AND (SELECT count(*) FROM station_lock) >= 0
+        FOR UPDATE
+      ),
+      shift_lock AS (
+        SELECT * FROM shifts
+        WHERE id = ${shiftId}
+          AND EXISTS (
+            SELECT 1 FROM day_lock WHERE station_id = ${stationId} AND ${dayAdmitsWrite}
+          )
+        FOR UPDATE
+      )
+      SELECT
+        (SELECT ${rowJson(schema.businessDays, 'd')} FROM day_lock d) AS business_day,
+        (SELECT ${rowJson(schema.shifts, 's')} FROM shift_lock s) AS shift
+    `)) as unknown as [{ business_day: BusinessDayRow | null; shift: GatedShiftRow | null }];
+    return {
+      shift: row?.shift ? toGatedShift(row.shift) : null,
+      businessDay: row?.business_day ? toBusinessDayEntity(row.business_day) : null,
+    };
+  }
+
+  async readOpeningCash(shiftId: string): Promise<string> {
+    const [r] = await this.db
+      .select({
+        openingCash: sql<string>`COALESCE(SUM(${schema.shiftStaffAssignments.openingFloat}), 0)::text`,
+      })
+      .from(schema.shiftStaffAssignments)
+      .where(eq(schema.shiftStaffAssignments.shiftId, shiftId));
+    return r?.openingCash ?? '0';
+  }
+}
 
 export class DrizzleShiftRepository implements ShiftRepository {
   constructor(private readonly db: DbExecutor) {}
@@ -286,25 +416,6 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .limit(1);
     return Boolean(row);
   }
-  private toEntity(r: ShiftRow): Shift {
-    return {
-      id: r.id,
-      organizationId: r.organizationId,
-      stationId: r.stationId,
-      businessDayId: r.businessDayId,
-      shiftTemplateId: r.shiftTemplateId,
-      status: r.status as Shift['status'],
-      openedBy: r.openedBy,
-      openedAt: r.openedAt.toISOString(),
-      closedBy: r.closedBy,
-      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
-      lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
-      openingCash: r.openingCash,
-      closingCash: r.closingCash,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    };
-  }
   async findById(id: string): Promise<Shift | null> {
     const [r] = await this.db
       .select(shiftColumns)
@@ -312,7 +423,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .where(eq(schema.shifts.id, id))
       .limit(1)
       .for('update', { of: schema.shifts });
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async findByIdWithoutLock(id: string): Promise<Shift | null> {
     const [r] = await this.db
@@ -320,7 +431,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
       .from(schema.shifts)
       .where(eq(schema.shifts.id, id))
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async save(s: Shift): Promise<void> {
     await this.db
@@ -365,7 +476,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
         ),
       )
       .limit(1);
-    return r ? this.toEntity(r) : null;
+    return r ? toShiftEntity(r) : null;
   }
   async addStaffAssignments(shiftId: string, assignments: StaffAssignmentInput[]): Promise<void> {
     if (assignments.length === 0) return;
@@ -552,7 +663,19 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
           JOIN shifts sh ON sh.id = s.shift_id
             AND sh.organization_id = ${organizationId} AND sh.station_id = ${stationId}
           WHERE s.shift_id = ${shiftId} AND s.attendant_id = ${attendantId}
-            AND s.sale_type <> 'Fuel' AND s.payment_method = 'Cash') AS merchandise_cash
+            AND s.sale_type <> 'Fuel' AND s.payment_method = 'Cash') AS merchandise_cash,
+        -- Every DU the Attendant holds this Shift: one of them counts the
+        -- product cash above (productCashDrawer, #419).
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'duId', d.id,
+            'duCode', d.code,
+            'duName', d.name))
+          FROM shift_staff_assignments sa
+          JOIN shifts sh ON sh.id = sa.shift_id
+            AND sh.organization_id = ${organizationId} AND sh.station_id = ${stationId}
+          JOIN dispenser_units d ON d.id = sa.du_id
+            AND d.organization_id = ${organizationId}
+          WHERE sa.shift_id = ${shiftId} AND sa.user_id = ${attendantId}), '[]'::jsonb) AS attendant_dus
     `)) as unknown as [Record<string, any>];
 
     const readingRows: Array<{
@@ -583,6 +706,7 @@ export class DrizzleHandoverContextReader implements HandoverContextReader {
       creditSales: Number(row.credit_sales ?? 0),
       omcCardSales: Number(row.omc_card_sales ?? 0),
       merchandiseCash: Number(row.merchandise_cash ?? 0),
+      attendantDus: (row.attendant_dus as HandoverContext['attendantDus']) ?? [],
     };
   }
 }
@@ -843,5 +967,26 @@ export class DrizzleStaffDirectory implements StaffDirectory {
         )})
     `)) as unknown as { id: string }[];
     return new Set(rows.map((r) => r.id));
+  }
+}
+
+// ---------------- Fuel names (which fuels block a shift open, #630) ----------------
+
+/** The names of this organization's products, by id. */
+export class DrizzleFuelNameReader implements FuelNameReader {
+  constructor(private readonly db: DbClient) {}
+
+  async findNames(organizationId: string, productIds: string[]): Promise<Map<string, string>> {
+    if (productIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ id: schema.products.id, name: schema.products.name })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.organizationId, organizationId),
+          inArray(schema.products.id, productIds),
+        ),
+      );
+    return new Map(rows.map((r) => [r.id, r.name]));
   }
 }

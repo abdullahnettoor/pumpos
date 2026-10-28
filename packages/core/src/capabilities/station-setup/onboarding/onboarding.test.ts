@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   InMemoryEventStore,
@@ -48,6 +48,7 @@ function validDraft(): OnboardingDraft {
         productType: 'FUEL',
         stockTracked: true,
         isTaxable: false,
+        taxCategory: 'FUEL_VAT',
         unit: 'Liters',
         taxConfig: {},
         isActive: true,
@@ -129,6 +130,7 @@ describe('validateOnboardingDraftForProvisioning', () => {
       productType: 'FUEL',
       stockTracked: true,
       isTaxable: false,
+      taxCategory: 'FUEL_VAT',
       unit: 'Liters',
       taxConfig: {},
       isActive: true,

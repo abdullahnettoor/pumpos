@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   InMemoryEventStore,
@@ -21,6 +21,7 @@ import type {
 } from '../station-ops/business-days/index.js';
 import type { Tank, TankRepository } from '../station-setup/tanks/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
+import { withRepositoryShiftWriteGate } from '../station-ops/shifts/__tests__/repository-shift-write-gate.js';
 
 class MovementRepo implements StockMovementRepository {
   readonly rows: StockMovement[] = [];
@@ -218,7 +219,7 @@ describe('RecordStockCount', () => {
       { ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' },
     ]);
 
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 },
       ctx(),
     );
@@ -236,7 +237,7 @@ describe('RecordStockCount', () => {
       undefined,
       new ShiftRepo([closedShift()]),
     );
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950, shiftId: 'sh-1' },
       ctx(),
     );
@@ -264,20 +265,57 @@ describe('RecordStockCount', () => {
     const movements = new MovementRepo({}, { oil: 20 });
     const variances = new VarianceRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordStockCount({
-      movements,
-      variances,
-      tanks: new TankRepo([]),
-      shifts: new ShiftRepo(),
-      businessDays: new BdRepo([bday()]),
-      events: new InProcessEventDispatcher({ store }),
-    }).execute({ stationId: 'st-1', productId: 'oil', actualQuantity: 20 }, ctx());
+    const result = await new RecordStockCount(
+      withRepositoryShiftWriteGate({
+        movements,
+        variances,
+        tanks: new TankRepo([]),
+        shifts: new ShiftRepo(),
+        businessDays: new BdRepo([bday()]),
+        events: new InProcessEventDispatcher({ store }),
+      }),
+    ).execute({ stationId: 'st-1', productId: 'oil', actualQuantity: 20 }, ctx());
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.varianceQuantity).toBe(0);
     expect(movements.rows.some((m) => m.movementType === 'Variance')).toBe(false);
     const types = store.events.map((e) => e.eventType);
     expect(types).toContain(BusinessEvents.PHYSICAL_COUNT_COMPLETED);
     expect(types).not.toContain(BusinessEvents.VARIANCE_RECORDED);
+  });
+
+  it('a variance under half the recorded step is balanced: stored as 0, no movement (#556)', async () => {
+    // Float noise in the ledger sum: book reads 4999.9996 for a 5000 L dip.
+    const { deps, movements, variances, store } = stockCountDeps(
+      new MovementRepo({ 'tank-A': 4999.9996 }),
+    );
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
+      { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000 },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.varianceQuantity).toBe(0);
+    expect(variances.rows[0].varianceQuantity).toBe('0');
+    expect(movements.rows.some((m) => m.movementType === 'Variance')).toBe(false);
+    const types = store.events.map((e) => e.eventType);
+    expect(types).toContain(BusinessEvents.TANK_DIP_RECORDED);
+    expect(types).not.toContain(BusinessEvents.VARIANCE_RECORDED);
+  });
+
+  it('the smallest recorded step (1 ml) is a real variance: row and movement agree (#556)', async () => {
+    const { deps, movements, variances, store } = stockCountDeps(
+      new MovementRepo({}, { oil: 20 }),
+      new TankRepo([]),
+    );
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
+      { stationId: 'st-1', productId: 'oil', actualQuantity: 19.999 },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    const row = Number(variances.rows[0].varianceQuantity);
+    expect(row).toBeCloseTo(-0.001, 9);
+    const varMove = movements.rows.find((m) => m.movementType === 'Variance');
+    expect(Number(varMove?.quantity)).toBe(row);
+    expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.VARIANCE_RECORDED);
   });
 
   it.each([
@@ -287,7 +325,7 @@ describe('RecordStockCount', () => {
     tank({ status: 'INACTIVE' }),
   ])('hides unknown and out-of-scope Tanks', async (invalidTank) => {
     const { deps } = stockCountDeps(undefined, new TankRepo(invalidTank ? [invalidTank] : []));
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 },
       ctx(),
     );
@@ -302,7 +340,7 @@ describe('RecordStockCount', () => {
       undefined,
       new ShiftRepo([closedShift({ stationId: 'other-station' })]),
     );
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950, shiftId: 'sh-1' },
       ctx(),
     );
@@ -317,7 +355,7 @@ describe('RecordStockCount', () => {
       undefined,
       new ShiftRepo([closedShift()]),
     );
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000, shiftId: 'sh-1' },
       ctx(),
     );
@@ -337,7 +375,7 @@ describe('RecordStockCount', () => {
     deps.businessDays = new BdRepo([oldDay, currentDay]);
     const retryContext = { ...ctx(), clock: new FixedClock(new Date('2026-03-16T10:00:00Z')) };
 
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', shiftId: 'sh-1', tankId: 'tank-A', actualQuantity: 5000 },
       retryContext,
     );
@@ -353,7 +391,7 @@ describe('RecordStockCount', () => {
       undefined,
       new ShiftRepo([closedShift({ status: 'OPEN', closedAt: null, closedBy: null })]),
     );
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 },
       ctx(),
     );
@@ -374,7 +412,7 @@ describe('RecordStockCount', () => {
   it('allows attribution to an OPEN shift', async () => {
     const openShift = closedShift({ status: 'OPEN', closedAt: null, closedBy: null });
     const { deps, variances } = stockCountDeps(undefined, undefined, new ShiftRepo([openShift]));
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000, shiftId: 'sh-1' },
       ctx(),
     );
@@ -390,7 +428,7 @@ describe('RecordStockCount', () => {
       undefined,
       new ShiftRepo([closedShift()]),
     );
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 },
       ctx(),
     );
@@ -405,7 +443,7 @@ describe('RecordStockCount', () => {
 
   it('rejects a caller-supplied Product for a Tank Dip', async () => {
     const { deps } = stockCountDeps();
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', productId: 'other-product', actualQuantity: 4950 },
       ctx(),
     );
@@ -416,7 +454,7 @@ describe('RecordStockCount', () => {
 
   it('records a zero-Variance Tank Dip without a Stock Movement', async () => {
     const { deps, movements, variances, store } = stockCountDeps();
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000 },
       ctx(),
     );
@@ -431,7 +469,7 @@ describe('RecordStockCount', () => {
 
   it('records a positive Tank Dip Variance and preserves its reason', async () => {
     const { deps, movements, variances } = stockCountDeps();
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       {
         stationId: 'st-1',
         tankId: 'tank-A',
@@ -454,7 +492,7 @@ describe('RecordStockCount', () => {
 
   it('rejects a Station outside the execution context', async () => {
     const { deps } = stockCountDeps();
-    const result = await new RecordStockCount(deps).execute(
+    const result = await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'other-station', tankId: 'tank-A', actualQuantity: 5000 },
       ctx(),
     );
@@ -474,7 +512,7 @@ describe('RecordStockCount', () => {
       businessDayStartsAt: '06:00',
     };
 
-    await new RecordStockCount(deps).execute(
+    await new RecordStockCount(withRepositoryShiftWriteGate(deps)).execute(
       { stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000 },
       stationContext,
     );

@@ -257,7 +257,7 @@ never touch the SPA.
 **Domain / roles (decided)**
 
 - Introduce a **first-class `Attendant`** role (`Owner | Manager | Accountant |
-Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
+  Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
   active shift it is assigned to at its own station, and can write only **its
   own** handover. Requires updating `Role` (`packages/shared`), the user role
   enum (create/update schemas), and `guards.ts`.
@@ -313,9 +313,12 @@ shared `HandoverPanel`:
 
 - **Attendant** role → a dedicated full-screen shell (no owner tabs).
 - **Any other role** (Owner/Manager/Accountant/Staff) who is assigned to a DU on
-  an open shift → an extra **"My handover"** tab appears alongside their normal
-  tabs, rendering the same panel. A `Staff` member with no other mobile tabs but
-  an active assignment therefore gets just that one tab. The tab is driven by
+  an open shift → a pinned **"Your handover · DU2"** card at the top of Home
+  (saved or not, variance, credit slips recorded so far: only what the server
+  knows). It opens the same panel as a detail page with Save handover in the
+  bottom bar. There is no separate tab. A Manager, Accountant or Staff member
+  has no Home overview, so Home appears in their dock only while they hold an
+  assignment and shows just that card. The card is driven by
   `GET /shifts/my-assignment` returning a non-null assignment for the caller.
 
 **Connectivity:** mobile is **online-only** (confirmed) — attendants are expected
@@ -335,7 +338,7 @@ to have mobile data. No offline/queued handover in scope.
   rollup, cap client fan-out concurrency and introduce `GET /rollup` when N
   stations makes latency bite. Charts stay dependency-light.
 - **Role gating:** extend `TABS_BY_ROLE` — Owner full; Manager `Shifts/Reports/
-Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
+  Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
   Staff still none.
 - **Design system:** compact, light-first, information-dense per
   `pump-erp-design-system`; reuse `Kpi`, tokens, and the existing shell.

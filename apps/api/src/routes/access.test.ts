@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
-import type { AccessDocument, Role } from '@pump/shared';
+import { UNLIMITED_LIMIT, type AccessDocument, type Role } from '@pump/shared';
 import { accessRouter } from './access.js';
 
 /**
@@ -92,6 +92,15 @@ describe('GET /access', () => {
   it('counts every Station row against the Limit, inactive ones included', async () => {
     const doc = await getAccess('Owner', { stationCount: 3 });
     expect(doc.limits.station_count).toEqual({ value: 1, used: 3, reached: true });
+  });
+
+  // #603: a demo Organization is not metered; its lifted Limit is never reached.
+  it('reports a demo Organization as unlimited, never reached', async () => {
+    const doc = await getAccess('Owner', {
+      organization: organizationRow({ isDemo: true }),
+      stationCount: 4,
+    });
+    expect(doc.limits.station_count).toEqual({ value: UNLIMITED_LIMIT, used: 4, reached: false });
   });
 
   it('normalizes a legacy stored subscription value', async () => {

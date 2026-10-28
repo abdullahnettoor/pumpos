@@ -1,0 +1,68 @@
+/*
+ * Mobile Tailwind entry: the shared pump-ds theme + utilities, plus the
+ * semantic tokens from tokens.css exposed as utilities.
+ *
+ *   bg-background  bg-card  bg-card-alt  bg-accent  bg-accent-soft  bg-good-soft ...
+ *   border-line  border-line-strong  border-bad-line ...
+ *   text-text-high  text-text-default  text-text-muted  text-text-faint
+ *   text-accent  text-on-accent  text-good  text-bad  text-warn  text-info
+ *   text-on-bad  (text on a solid bg-bad fill)
+ *   text-bad-fg  text-warn-fg  (status text on a soft surface)
+ *   bg-chart-1 .. bg-chart-6  (categorical series; never status colours)
+ *   bg-track  bg-scrim  shadow-sheet  shadow-chip  shadow-edge  bg-dock  border-dock-line  border-hero-line  shadow-float
+ *   hero gradient: bg-[image:var(--hero)]
+ *
+ * Load order in main.tsx: @pump/ui index.css, then this file, then tokens.css
+ * (so the shared-token bridge in tokens.css overrides index.css's :root values).
+ */
+@import '@pump/ui/src/pump-ds/tailwind.css';
+
+@theme {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-card-alt: var(--card-alt);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-text-high: var(--text-high);
+  --color-text-default: var(--text-default);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-on-bad: var(--on-bad);
+  --color-bad-fg: var(--bad-fg);
+  --color-warn-fg: var(--warn-fg);
+  --color-good-soft: var(--good-soft);
+  --color-good-line: var(--good-line);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-line: var(--bad-line);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-info-soft: var(--info-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --color-hero-line: var(--hero-line);
+  --color-dock: var(--dock);
+  --color-dock-line: var(--dock-line);
+  --color-track: var(--track);
+  --color-scrim: var(--scrim);
+
+  --shadow-float: var(--shadow);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-chip: var(--shadow-chip);
+  --shadow-edge: var(--shadow-edge);
+}

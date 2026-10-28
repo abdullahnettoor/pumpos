@@ -13,6 +13,10 @@ import {
   ExpenseStatus,
   Weekday,
 } from './core.js';
+import type {
+  DecantationSettings,
+  DecantationSettingsInput,
+} from '../utils/decantation-settings.js';
 
 export interface BaseMetadata {
   id: string;
@@ -37,6 +41,39 @@ export interface Organization {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Owner-editable legal and contact details, stored in `organizations.metadata`. */
+export interface OrganizationProfileMetadata {
+  legalName?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+  stateCode?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+/**
+ * Plan and billing columns of an Organization. `GET /organization` sends them
+ * only to Owners and Managers (#616); every other Role gets the profile alone.
+ */
+export interface OrganizationCommercialDetail {
+  subscriptionPlan: string;
+  subscriptionStatus: string;
+  accessUntil: string | null;
+  isDemo: boolean;
+  demoExpiresAt: string | null;
+  suspendedAt: string | null;
+}
+
+/** The role-shaped `GET /organization` payload (#616). */
+export type OrganizationPayload = {
+  id: string;
+  name: string;
+  metadata: OrganizationProfileMetadata;
+  createdAt: string;
+  updatedAt: string;
+} & Partial<OrganizationCommercialDetail>;
 
 export interface OperatingDaySchedule {
   day: Weekday;
@@ -67,7 +104,7 @@ export interface StationLegalInfo {
   contact?: string;
 }
 
-export interface StationSettings {
+export interface StationSettings extends Omit<Partial<DecantationSettings>, 'densitySpecBands'> {
   shift_grace_minutes: number;
   shift_lock_grace_days: number;
   offline_warning_days: number;
@@ -90,6 +127,7 @@ export interface StationSettings {
     showLogo?: boolean;
     showStationLogo?: boolean;
   } | null;
+  densitySpecBands?: DecantationSettingsInput['densitySpecBands'];
 }
 
 export interface Station {
@@ -395,6 +433,9 @@ export interface NozzleReading {
   createdAt: string;
 }
 
+/** How a customer settles: a running account, or by the end of the Business Day. */
+export type SettlementCycle = 'OPEN' | 'EOD';
+
 export interface Customer {
   id: string;
   organizationId: string;
@@ -404,7 +445,7 @@ export interface Customer {
   phone?: string | null;
   creditLimit?: number | null;
   fleetCode?: string | null;
-  settlementCycle?: 'OPEN' | 'EOD';
+  settlementCycle?: SettlementCycle;
   metadata?: Record<string, any> | null;
   isActive: boolean;
   createdAt: string;

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vite-plus';
 import { workspaceSourceAliases } from '../../vitest.aliases.config';
 
 export default defineConfig({
@@ -10,6 +10,7 @@ export default defineConfig({
     // which needs a DOM. jsdom is per-file opt-in via `@vitest-environment`
     // docblocks, so the logic tests keep running at node speed.
     environment: 'node',
-    environmentMatchGlobs: [['**/*.dom.test.tsx', 'jsdom']],
+    // `tsc -b` emits compiled copies of the tests into dist/; run only the source.
+    exclude: [...configDefaults.exclude, '**/dist/**'],
   },
 });

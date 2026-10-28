@@ -1,6 +1,8 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin, lazyPlugins } from 'vite-plus';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { APPEARANCE_ENABLED, isDevSwitchEnabled } from '@pump/ui/theme';
+import { injectThemeFlags } from '@pump/ui/theme';
 
 /**
  * A packaged desktop build resolves its environment from `VITE_APP_ENV` alone
@@ -31,12 +33,25 @@ function assertPackagedBuildDeclaresEnvironment() {
   }
 }
 
+/** Fills the pre-paint theme script's placeholders in index.html. */
+function themePrepaint(devSwitch: boolean): Plugin {
+  return {
+    name: 'pump-theme-prepaint',
+    transformIndexHtml: (html) =>
+      injectThemeFlags(html, { devSwitch, appearanceEnabled: APPEARANCE_ENABLED }),
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
   if (command === 'build') assertPackagedBuildDeclaresEnvironment();
+  const devSwitch = isDevSwitchEnabled(command, process.env.VITE_THEME_DEV_SWITCH);
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: lazyPlugins(() => [react(), tailwindcss(), themePrepaint(devSwitch)]),
+    define: {
+      __PUMP_THEME_DEV_SWITCH__: JSON.stringify(devSwitch),
+    },
     // Prevent Vite from obscuring Rust errors
     clearScreen: false,
     // Tauri expects a fixed port, fail if that port is already in use
@@ -51,8 +66,8 @@ export default defineConfig(({ command }) => {
     build: {
       // Tauri supports es2021
       target: process.env.TAURI_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
-      // don't minify for debug builds
-      minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
+      // don't minify for debug builds (Oxc, the Vite+ default minifier)
+      minify: !process.env.TAURI_DEBUG ? 'oxc' : false,
       // produce sourcemaps for debug builds
       sourcemap: !!process.env.TAURI_DEBUG,
     },

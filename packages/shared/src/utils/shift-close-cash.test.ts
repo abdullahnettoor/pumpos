@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { buildCloseCashSummary, type ShiftCloseCashSummaryLines } from './shift-close-cash.js';
+import { describe, expect, it } from 'vite-plus/test';
+import {
+  buildCloseCashSummary,
+  isBalancedVariance,
+  VARIANCE_EPSILON,
+  type ShiftCloseCashSummaryLines,
+} from './shift-close-cash.js';
 
 /** The displayed summary, top to bottom, as the wizard renders it. */
 const displayedTotal = (l: ShiftCloseCashSummaryLines) =>
@@ -100,5 +105,24 @@ describe('buildCloseCashSummary (#307)', () => {
     });
     expect(after.lines.cashDeclared).toBe(14100);
     expect(displayedTotal(after.lines)).toBe(17100);
+  });
+});
+
+describe('isBalancedVariance: the one balanced rule for money (#556)', () => {
+  it('is half a paisa', () => {
+    expect(VARIANCE_EPSILON).toBe(0.005);
+  });
+  it('reads a tiny variance (under half a paisa) as balanced, either way', () => {
+    expect(isBalancedVariance(0)).toBe(true);
+    expect(isBalancedVariance(0.004)).toBe(true);
+    expect(isBalancedVariance(-0.004)).toBe(true);
+    expect(isBalancedVariance(0.1 + 0.2 - 0.3)).toBe(true);
+  });
+  it('reads a paisa or a rupee as off', () => {
+    expect(isBalancedVariance(0.005)).toBe(false);
+    expect(isBalancedVariance(0.01)).toBe(false);
+    expect(isBalancedVariance(-0.01)).toBe(false);
+    expect(isBalancedVariance(1)).toBe(false);
+    expect(isBalancedVariance(-1)).toBe(false);
   });
 });

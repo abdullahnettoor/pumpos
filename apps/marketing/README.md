@@ -16,11 +16,11 @@ npm run preview
 | --- | --- |\
 | `SITE` | Canonical origin, sitemap and sharing URLs |
 | `PUBLIC_CONSOLE_URL` | Web console destination |
-| `PUBLIC_DOWNLOAD_MANIFEST_URL` | Runtime installer availability manifest |
 | `PUBLIC_DEMO_BOOKING_URL` | Optional HTTPS Cal.com booking URL |
 
-Without a booking URL, `/demo` offers email-based scheduling. Unavailable
-installers have no download link. Final legal copy is a publication dependency.
+Without a booking URL, `/demo` offers email-based scheduling. The desktop
+installer is offered inside the console, not on this site. Final legal copy is a
+publication dependency.
 
 ## Design and content
 
@@ -48,3 +48,15 @@ JavaScript.
 node scripts/download-brand-fonts.mjs
 node scripts/generate-social-image.mjs
 ```
+
+## Publishing blog posts
+
+A post in `src/content/blog/` is live once `draft` is false and `publishedAt`
+has passed at build time (`src/blog.ts`). Preview builds set
+`PUBLIC_BLOG_SHOW_SCHEDULED=true` so scheduled posts can be reviewed early.
+
+`pumpos.app` gets posts from the Publish Blog workflow, not only from app
+releases: it builds `main` with `dev`'s blog folder every 15 minutes when a post
+has come due (`scripts/blog-due.mjs`), checks links (`npm run check:links`) and
+deploys marketing only. Run it by hand to push an edit to a live post. The
+`blog` agent skill covers writing a post.

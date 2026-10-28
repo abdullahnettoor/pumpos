@@ -1,116 +1,62 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavIntentEntry, clearNavIntent } from '../nav-intent/store.js';
-import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
-import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import { PageLayout } from './primitives/PageLayout.js';
-import { Tabs } from './primitives/Tabs.js';
-import { DataTable } from './primitives/DataTable.js';
-import { DateField } from './primitives/Field.js';
+import { DSR_LABEL } from '@pump/shared';
+import { principalFor } from '../access/effectivePrincipal.js';
+import { PageFrame } from './page-frame/index.js';
+import { ROUTES } from '../nav-intent/routes.js';
+import type { NavIntent } from '../nav-intent/store.js';
+import { DsrListPanel } from './reports/DsrListPanel.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
-import { CashBankLedger } from './reports/CashBankLedger.js';
-import { DailyCashBook } from './reports/DailyCashBook.js';
-import { UnifiedLedger } from './reports/UnifiedLedger.js';
+import { LedgersReport } from './reports/LedgersReport.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
-import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
+import { GstReport } from './reports/gst/GstReport.js';
+import { ReportsNav, type ReportsNavGroup, type ReportsNavItem } from './reports/ReportsNav.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
-import { useCapability } from '../access/CapabilityGate.js';
+import { DecantationReportPanel } from './reports/DecantationReportPanel.js';
+import { useAccess } from '../query/hooks.js';
 import {
-  ATTENDANT_REPORT_CAPABILITY,
-  canManageReportTemplates,
-  canViewAttendantReport,
-} from '@pump/shared';
-import { ReportTemplatesPanel } from './reports/templates/ReportTemplatesPanel.js';
-import { inr } from '../utils/format.js';
-import { resolveBusinessDate } from '@pump/shared';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
-import {
-  Play,
-  Zap,
-  Receipt,
-  Wallet,
-  BookOpen,
-  FileText,
-  TrendingUp,
-  Percent,
-  Users,
-  BookText,
-  LayoutTemplate,
-} from 'lucide-react';
+  lockedFeatureLocked,
+  lockedFeatureState,
+  lockedFeatureVisible,
+} from '../access/lockedFeatureState.js';
+import { ATTENDANT_REPORT_CAPABILITY, can, resolveBusinessDate } from '@pump/shared';
 import { useRunTask } from '../utils/runTask.js';
+import { officeSubmitKeys } from '../office-records/submitKeys.js';
+import { dailyDssrPreviewQuery, invalidateAfterDssrGenerate } from '../query/hooks.js';
 
 const shiftService = new CloudShiftService();
-
-const dssrColumns: ColumnDef<any, any>[] = [
-  {
-    accessorKey: 'businessDate',
-    header: 'Business Date',
-    cell: ({ getValue }) => <DateText value={getValue() as string} />,
-  },
-  {
-    id: 'shifts',
-    header: 'Shifts',
-    cell: ({ row }) => (
-      <span style={{ color: 'var(--text-default)' }}>
-        {Number(row.original.snapshotData?.shiftsIncluded || 0)}
-      </span>
-    ),
-  },
-  {
-    id: 'volume',
-    header: 'Net Volume Sold',
-    cell: ({ row }) => {
-      const snap = row.original.snapshotData || {};
-      const bp = (snap.fuel?.byProduct || []) as any[];
-      const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
-      const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
-      const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
-      return (
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-          {vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          {label ? ` ${label}` : ''}
-        </span>
-      );
-    },
-  },
-  {
-    id: 'grossMargin',
-    header: 'Gross Margin',
-    cell: ({ row }) => (
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontWeight: 600,
-          color: 'var(--state-success-fg)',
-        }}
-      >
-        {inr(row.original.snapshotData?.pnl?.grossMargin || 0)}
-      </span>
-    ),
-  },
-];
 
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  /** Leaves Reports for another page (a cash & bank row opens its account on Accounts). */
+  onNavigate?: (path: string, intent?: NavIntent) => void;
 }
 
+/**
+ * Reports, grouped (#540). The Daily cash book moved to Accounts and Report
+ * templates to Station; GST is one report (sales · purchases · income) and
+ * Ledgers holds the party ledger and the cash & bank period view.
+ */
 type ReportsTab =
   | 'daily-dssr'
+  | 'attendant-handovers'
+  | 'decantations'
   | 'pnl'
   | 'ledger'
   | 'invoices'
-  | 'tax-register'
-  | 'expense-register'
-  | 'cash-bank'
-  | 'cash-book'
-  | 'attendant-handovers'
-  | 'templates';
+  | 'gst'
+  | 'expense-register';
 
-export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
+export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
+  selectedStation,
+  userRole,
+  onNavigate,
+}) => {
   const qc = useQueryClient();
   const runTask = useRunTask();
   const stationId = selectedStation?.id ?? null;
@@ -119,21 +65,23 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
 
   const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
   // One decision drives both the tab and its panel, so they cannot disagree.
-  const attendantReport = useCapability(ATTENDANT_REPORT_CAPABILITY);
+  const { data: access } = useAccess();
+  const attendantReport = lockedFeatureState(access, ATTENDANT_REPORT_CAPABILITY);
   /*
    * Two axes, as the server checks them. The Role must allow it, or the tab
-   * would 403 on click. The capability may be `upgrade` rather than `enabled`:
-   * a Role that may be told about it still sees the tab, and the panel renders
-   * the explanatory unavailable state instead of silence. `hidden` — access
-   * unknown, or not this user's concern — shows nothing at all.
+   * would 403 on click. A locked report still shows, with a lock (#605): the
+   * panel renders the locked-feature screen — the plan and Contact us for an
+   * Owner or Manager, whom to ask for anyone else. `hidden` (access unknown)
+   * shows nothing at all.
    */
   const showAttendantReport =
-    canViewAttendantReport(userRole) && attendantReport.status !== 'hidden';
+    can(principalFor(userRole), 'reports.attendant') && lockedFeatureVisible(attendantReport);
   const { intent, token: intentToken } = useNavIntentEntry();
-  // Report layouts decide what prints for everyone, so only Owner and Manager
-  // may change them (#332). Others print with the saved layout.
-  const showTemplates = canManageReportTemplates(userRole);
-  const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
+  const activeTab: ReportsTab = intent?.openDssrDate
+    ? 'daily-dssr'
+    : intent?.openReportsTab === 'gst'
+      ? 'gst'
+      : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {
     clearNavIntent();
     setSelectedTab(tab);
@@ -144,32 +92,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   );
   const [generatingDailyDssr, setGeneratingDailyDssr] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
-
-  // Rolling 30-day window for the DSSR list, anchored to the station's business date.
-  const { from, to } = useMemo(() => {
-    const toD = resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt });
-    const d = new Date(`${toD}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 30);
-    return { from: d.toISOString().split('T')[0], to: toD };
-  }, [clock.timeZone, clock.dayStartsAt]);
-
-  const dssrQ = useDailyDssrRange(stationId, from, to, {
-    enabled: !!stationId && activeTab === 'daily-dssr',
-  } as any);
-  // Memoised so `kpis` below actually memoises: a bare `?? []` hands the
-  // dependency list a new array on every render while the query is loading.
-  const dssrList = useMemo(() => dssrQ.data ?? [], [dssrQ.data]);
-
-  const kpis = useMemo(() => {
-    let volume = 0;
-    let cash = 0;
-    for (const d of dssrList) {
-      const x = d.snapshotData || {};
-      volume += Number(x.totalVolumeSold || 0);
-      cash += Number(x.totalCashCollections || 0);
-    }
-    return { count: dssrList.length, volume, cash };
-  }, [dssrList]);
 
   // Deep-link: opening a past business day from the top-bar anchor dropdown.
   // Uses the on-the-fly preview so it works whether or not a snapshot exists.
@@ -184,47 +106,128 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
     if (handledTokenRef.current === intentToken) return;
     handledTokenRef.current = intentToken;
     let cancelled = false;
+    let settled = false;
     runTask(
       (async () => {
         try {
-          const result = await shiftService.getDailyDssrPreview(stationId, date);
+          // Through the preview key, so the DSR screen reads the same cache entry.
+          const result = await qc.fetchQuery(dailyDssrPreviewQuery(stationId, date));
           if (!cancelled) setActiveDailyDssr(result);
-        } catch {
-          // No snapshot for that day yet: fall back to selecting it so the
-          // operator can generate one.
-          if (!cancelled) setSelectedDate(date);
+        } catch (err) {
+          if (cancelled) return;
+          if ((err as { code?: unknown } | null)?.code === 'CONFLICT') {
+            // A closed day with no stored report: the DSR screen opens on the
+            // day (no figures), reads it again and shows "Report missing" (#579).
+            setActiveDailyDssr({ businessDate: date, snapshotData: null });
+          } else {
+            // Any other failure: select the day so the operator can generate it.
+            setSelectedDate(date);
+          }
         } finally {
-          clearNavIntent();
+          // Cancelled: the operator moved on (another report, another deep
+          // link) while this loaded — committing the DSSR tab would snap them
+          // back. Whoever cancelled owns the tab and the intent now.
+          if (!cancelled) {
+            // Commit the tab before dropping the intent that derived it, or a
+            // Reports page already on another report snaps back to it.
+            setSelectedTab('daily-dssr');
+            clearNavIntent();
+          }
+          settled = true;
         }
       })(),
       'Could not open the report for that day.',
     );
     return () => {
       cancelled = true;
+      // Re-run (StrictMode, a new runTask) while still loading: let the next
+      // effect pick the same intent up instead of leaving it pending forever.
+      if (!settled) handledTokenRef.current = null;
     };
-  }, [intent?.openDssrDate, intentToken, stationId, runTask]);
+  }, [intent?.openDssrDate, intentToken, stationId, runTask, qc]);
 
+  // One Idempotency-Key per logical Generate of a day, from the shared office
+  // submit keys (scope + station and date), as the DSR screen sends (#579): kept
+  // while the outcome is unknown, so a retry cannot freeze the day twice.
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
+    const stationKey = selectedStation.id as string;
+    const keys = officeSubmitKeys.session('dssr:generate');
+    const idempotencyKey = keys.next(
+      JSON.stringify({ stationId: stationKey, businessDate: selectedDate }),
+    );
     try {
       setGeneratingDailyDssr(true);
       setGenerateError(null);
-      const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate);
-      // The list is a cached query — invalidate so the new snapshot appears.
-      await qc.invalidateQueries({ queryKey: ['dssr-range'] });
+      const result = await shiftService.generateDailyDssr(stationKey, selectedDate, {
+        idempotencyKey,
+      });
+      keys.settle();
+      // The response is the DSR: open it now; the list catches up in the background.
       setActiveDailyDssr(result);
+      invalidateAfterDssrGenerate(qc, stationKey, selectedDate, result);
     } catch (err: any) {
-      setGenerateError(err.message || 'Failed to generate daily DSSR');
+      keys.settle(err);
+      setGenerateError(err.message || 'Failed to generate the DSR');
     } finally {
       setGeneratingDailyDssr(false);
     }
   };
 
+  const navGroups: ReportsNavGroup<ReportsTab>[] = [
+    {
+      heading: 'Sales',
+      items: [
+        { id: 'daily-dssr', label: DSR_LABEL, concept: 'dssr' },
+        ...(showAttendantReport
+          ? [
+              {
+                id: 'attendant-handovers',
+                label: 'Attendant handovers',
+                concept: 'attendant-handovers',
+                locked: lockedFeatureLocked(attendantReport),
+              } satisfies ReportsNavItem<ReportsTab>,
+            ]
+          : []),
+        ...(can(principalFor(userRole), 'reports.view')
+          ? [
+              {
+                id: 'decantations',
+                label: 'Decantations',
+                concept: 'decantations',
+              } satisfies ReportsNavItem<ReportsTab>,
+            ]
+          : []),
+      ],
+    },
+    {
+      heading: 'Finance',
+      items: [
+        ...(can(principalFor(userRole), 'finance.viewProfitLoss')
+          ? [
+              {
+                id: 'pnl',
+                label: 'Profit & loss',
+                concept: 'profit-loss',
+              } satisfies ReportsNavItem<ReportsTab>,
+            ]
+          : []),
+        { id: 'ledger', label: 'Ledgers', concept: 'ledgers' },
+        { id: 'invoices', label: 'Invoices', concept: 'invoices' },
+      ],
+    },
+    {
+      heading: 'Tax & registers',
+      items: [
+        { id: 'gst', label: 'GST', concept: 'gst' },
+        { id: 'expense-register', label: 'Expense register', concept: 'expense-register' },
+      ],
+    },
+  ];
+
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
-        Please select a station to view reports.
-      </div>
+      <p className="m-0 p-6 text-[13px] text-ink-muted">Select a station to see its reports.</p>
     );
   }
 
@@ -234,6 +237,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
         <DailyDssrView
           dailyDssr={activeDailyDssr}
           station={selectedStation}
+          userRole={userRole}
           onBack={() => setActiveDailyDssr(null)}
         />
       </div>
@@ -241,157 +245,70 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   }
 
   return (
-    <PageLayout
-      title="Reports"
+    <PageFrame
+      route={ROUTES.reports}
       subtitle="Daily sales summaries, profit & loss, ledgers, and tax registers."
-      toolbar={
-        <Tabs
-          variant="underline"
-          aria-label="Reports"
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as ReportsTab)}
-          tabs={[
-            { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
-            ...(userRole === 'Owner'
-              ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }]
-              : []),
-            { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
-            { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
-            { id: 'tax-register', label: 'Tax Register', icon: <Percent size={13} /> },
-            ...(userRole !== 'Staff'
-              ? [{ id: 'cash-book', label: 'Daily Cash Book', icon: <BookText size={13} /> }]
-              : []),
-            { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
-            { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
-            ...(showAttendantReport
-              ? [
-                  {
-                    id: 'attendant-handovers',
-                    label: 'Attendant Handovers',
-                    icon: <Users size={13} />,
-                  },
-                ]
-              : []),
-            ...(showTemplates
-              ? [{ id: 'templates', label: 'Templates', icon: <LayoutTemplate size={13} /> }]
-              : []),
-          ]}
-        />
-      }
     >
-      {/* Daily DSSR Tab */}
-      {activeTab === 'daily-dssr' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <KpiStrip columns="auto">
-            <KpiTile
-              dot="brand"
-              label="Generated DSSRs"
-              value={String(kpis.count)}
-              hint="last 30 days"
+      <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-4">
+        <ReportsNav groups={navGroups} activeId={activeTab} onChange={setActiveTab} />
+        <div className="min-w-0">
+          {activeTab === 'daily-dssr' && (
+            <DsrListPanel
+              stationId={stationId}
+              clock={clock}
+              enabled={activeTab === 'daily-dssr'}
+              generateDate={selectedDate}
+              onGenerateDateChange={setSelectedDate}
+              generating={generatingDailyDssr}
+              generateError={generateError}
+              onGenerate={
+                can(principalFor(userRole), 'reports.export')
+                  ? () => void handleGenerateDailyDssr()
+                  : undefined
+              }
+              onOpen={setActiveDailyDssr}
             />
-            <KpiTile
-              dot="info"
-              label="Net Volume Sold"
-              value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`}
-              hint="period"
+          )}
+
+          {activeTab === 'ledger' && (
+            <LedgersReport selectedStation={selectedStation} onNavigate={onNavigate} />
+          )}
+
+          {activeTab === 'pnl' && can(principalFor(userRole), 'finance.viewProfitLoss') && (
+            <ProfitLossView selectedStation={selectedStation} />
+          )}
+
+          {activeTab === 'invoices' && (
+            <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />
+          )}
+
+          {activeTab === 'gst' && (
+            <GstReport
+              selectedStation={selectedStation}
+              canViewPurchases={can(principalFor(userRole), 'purchases.viewCosts')}
+              initialView={intent?.openReportsTab === 'gst' ? intent.openGstView : undefined}
+              onViewChange={() => {
+                // Commit the durable half (we are on GST) before clearing the
+                // deep link that derived it — clearing alone falls back to DSSR.
+                setSelectedTab('gst');
+                clearNavIntent();
+              }}
             />
-            <KpiTile dot="success" label="Cash Collected" value={inr(kpis.cash)} hint="period" />
-          </KpiStrip>
+          )}
 
-          <Panel title="Generate a daily snapshot">
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div style={{ maxWidth: '220px' }}>
-                <label className="field-label">Business Date</label>
-                <DateField value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Play style={{ fill: 'currentColor' }} />}
-                loading={generatingDailyDssr}
-                disabled={!selectedDate}
-                onClick={handleGenerateDailyDssr}
-              >
-                Generate DSSR
-              </Button>
-            </div>
-            {generateError && (
-              <div
-                style={{
-                  marginTop: '10px',
-                  padding: '8px 12px',
-                  backgroundColor: 'var(--state-danger-bg)',
-                  color: 'var(--state-danger-fg)',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '12px',
-                }}
-              >
-                {generateError}
-              </div>
-            )}
-          </Panel>
+          {activeTab === 'expense-register' && (
+            <ExpenseRegister selectedStation={selectedStation} />
+          )}
 
-          <Panel flush title="Recent DSSRs">
-            {dssrQ.isLoading ? (
-              <div style={{ padding: '16px' }}>
-                <EmptyState
-                  compact
-                  icon={<Zap />}
-                  title="Loading…"
-                  description="Fetching recent daily snapshots."
-                />
-              </div>
-            ) : dssrList.length === 0 ? (
-              <div style={{ padding: '12px' }}>
-                <EmptyState
-                  compact
-                  icon={<Zap />}
-                  title="No daily DSSR reports"
-                  description="Generate a daily snapshot above to get started."
-                />
-              </div>
-            ) : (
-              <DataTable
-                bare
-                columns={dssrColumns}
-                data={dssrList}
-                error={dssrQ.error}
-                emptyMessage="No daily DSSR reports."
-                getRowId={(r: any) => r.id}
-                onRowClick={(r: any) => setActiveDailyDssr(r)}
-                initialSorting={[{ id: 'businessDate', desc: true }]}
-              />
-            )}
-          </Panel>
+          {activeTab === 'attendant-handovers' && showAttendantReport && (
+            <AttendantHandoverReportPanel selectedStation={selectedStation} />
+          )}
+
+          {activeTab === 'decantations' && can(principalFor(userRole), 'reports.view') && (
+            <DecantationReportPanel selectedStation={selectedStation} />
+          )}
         </div>
-      )}
-
-      {activeTab === 'ledger' && <UnifiedLedger selectedStation={selectedStation} />}
-
-      {activeTab === 'pnl' && userRole === 'Owner' && (
-        <ProfitLossView selectedStation={selectedStation} />
-      )}
-
-      {activeTab === 'invoices' && (
-        <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />
-      )}
-      {activeTab === 'tax-register' && <TaxRegisterPanel selectedStation={selectedStation} />}
-
-      {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
-
-      {activeTab === 'cash-book' && userRole !== 'Staff' && (
-        <DailyCashBook selectedStation={selectedStation} />
-      )}
-
-      {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
-
-      {activeTab === 'templates' && showTemplates && (
-        <ReportTemplatesPanel selectedStation={selectedStation} />
-      )}
-
-      {activeTab === 'attendant-handovers' && showAttendantReport && (
-        <AttendantHandoverReportPanel selectedStation={selectedStation} />
-      )}
-    </PageLayout>
+      </div>
+    </PageFrame>
   );
 };

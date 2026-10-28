@@ -1,9 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/brand/pumpos-mark.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="__THEME_COLOR_LIGHT__" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="__STATUS_BAR_LIGHT__" />
+    <!--
+      Pre-paint theme: sets the light/dark class on <html>, plus the theme-color
+      and status-bar meta, before first paint (no flash). Mirrors
+      resolveTheme/applyTheme in @pump/ui. The double-underscore placeholders are
+      filled by vite.config.ts from @pump/ui. Appearance is not shipped, so this is
+      Light unless the dev-only ?theme= switch is on.
+    -->
+    <script>
+      (function () {
+        try {
+          var theme = 'light';
+          var force = null;
+          if (__THEME_DEV_SWITCH__) {
+            var m = /[?&]theme=(light|dark)(&|$)/.exec(location.search);
+            if (m) force = m[1];
+          }
+          if (force) {
+            theme = force;
+          } else if (__APPEARANCE_ENABLED__) {
+            var p = localStorage.getItem('__THEME_STORAGE_KEY__');
+            theme =
+              p === 'light' || p === 'dark'
+                ? p
+                : matchMedia('(prefers-color-scheme: dark)').matches
+                  ? 'dark'
+                  : 'light';
+          }
+          var root = document.documentElement;
+          root.classList.remove('light', 'dark');
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          var dark = theme === 'dark';
+          if (meta)
+            meta.setAttribute('content', dark ? '__THEME_COLOR_DARK__' : '__THEME_COLOR_LIGHT__');
+          var bar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          if (bar)
+            bar.setAttribute('content', dark ? '__STATUS_BAR_DARK__' : '__STATUS_BAR_LIGHT__');
+        } catch (e) {}
+      })();
+    </script>
     <title>PumpOS Console</title>
   </head>
   <body>

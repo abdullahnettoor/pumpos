@@ -4,7 +4,7 @@ Use these sources in this order when they disagree:
 
 1. [`../AGENTS.md`](../AGENTS.md) — hard engineering, domain, security, and
    operational rules.
-2. [`../CONTEXT.md`](../CONTEXT.md) — canonical domain language.
+2. [`../GLOSSARY.md`](../GLOSSARY.md) — canonical domain language.
 3. [`adr/`](adr/) — accepted decisions and amendments.
 4. Current code, schema, and configuration — implementation truth. The database
    source is `packages/db/src/schema.ts` plus `packages/db/migrations/`.
@@ -15,6 +15,8 @@ Use these sources in this order when they disagree:
 
 - [`USER-FLOW.md`](USER-FLOW.md) — operator walkthrough; verify screen labels and
   screenshots against the current application before using it as a test script.
+- [`mobile-revamp-decisions.md`](mobile-revamp-decisions.md) — product decisions
+  and current defaults from the mobile revamp (#388), with where to change each.
 - [`PUMP-ERP-DESIGN-SYSTEM.md`](PUMP-ERP-DESIGN-SYSTEM.md) and the root
   [`DESIGN.md`](../DESIGN.md) — product design language and tokens.
 - [`DATA-CACHING.md`](DATA-CACHING.md) — current client caching practice.

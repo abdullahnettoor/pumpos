@@ -9,10 +9,15 @@ import {
   setPdfPrinter,
   ConfirmProvider,
   ToastProvider,
+  TooltipProvider,
+  ThemeProvider,
+  hasUnsavedChanges,
+  confirmDiscardUnsaved,
 } from '@pump/ui';
 import '@pump/ui/src/index.css';
 import '@pump/ui/src/pump-ds/tailwind.css';
 import { installDesktopTitleBar } from './titleBar.js';
+import { installCloseGuard } from './closeGuard.js';
 
 // Desktop: WKWebView (mac) / WebView2 (win) block browser file downloads, so
 // route generated PDF bytes through Tauri's native save dialog + filesystem.
@@ -20,6 +25,8 @@ if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
   // The app's own top bar doubles as the window title bar; register the
   // platform's window-control geometry and commands (#117).
   void installDesktopTitleBar();
+  // Closing the window with unsaved changes asks first (#604).
+  void installCloseGuard(hasUnsavedChanges, confirmDiscardUnsaved);
 
   setPdfSaver(async (bytes, filename) => {
     const [{ save }, { writeFile }] = await Promise.all([
@@ -55,13 +62,17 @@ const queryClient = createQueryClient();
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <QueryProvider client={queryClient}>
-        <ToastProvider>
-          <ConfirmProvider>
-            <App />
-          </ConfirmProvider>
-        </ToastProvider>
-      </QueryProvider>
+      <ThemeProvider>
+        <QueryProvider client={queryClient}>
+          <ToastProvider>
+            <TooltipProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </TooltipProvider>
+          </ToastProvider>
+        </QueryProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );

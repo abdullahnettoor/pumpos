@@ -1,6 +1,6 @@
 // Homepage copy and sample data. Every figure here is illustrative sample data,
 // labelled "Sample data" where it appears on the page. Keep domain terms aligned
-// with CONTEXT.md (attendant, Drawer, Handover, business day, DSR).
+// with GLOSSARY.md (attendant, Drawer, Handover, business day, DSR).
 
 export type Tone = 'danger' | 'amber';
 
@@ -80,19 +80,21 @@ export const compareRows: [string, string, string, string][] = [
 
 export const plans = [
   { name: 'Core', level: 'core', price: { monthly: 999, yearly: 9990 } },
-  { name: 'Pro', level: 'pro', price: { monthly: 1599, yearly: 15990 }, popular: true, footnote: "Pro price may vary with your station's configuration." },
-  { name: 'Scale', level: 'scale', price: { monthly: null, yearly: null } },
+  { name: 'Pro', level: 'pro', price: { monthly: 1599, yearly: 15990 }, popular: true },
+  { name: 'Pro+', level: 'pro-plus', price: { monthly: 2099, yearly: 20990 } },
 ];
+
+export const SCALE_DISCOUNT_LINE = 'Each additional station 20% off on Pro and Pro+. 10+ stations: talk to us.';
 
 // Logins are limited per plan; attendants without a login are not (issue #335 limits).
 export const planFeatures = [
   // The first PRICING_KEY_ROWS rows show by default; the rest sit behind "Compare all features".
-  { name: 'Logins: 3 on Core, 10 on Pro, custom on Scale', included: 'core', note: 'Owner, manager, accountant or attendant with phone access' },
+  { name: 'Logins: 3 on Core, 10 on Pro, unlimited on Pro+', included: 'core', note: 'Owner, manager, accountant or attendant with phone access' },
   { name: 'Attendants without a login, unlimited', included: 'core' },
   { name: 'Shifts, nozzle readings and handovers', included: 'core' },
   { name: 'Attendant handover on the phone', included: 'pro' },
   { name: 'WhatsApp reminders and daily summary', included: 'pro', note: 'Coming next' },
-  { name: 'Several stations under one login', included: 'scale' },
+  { name: 'Several stations under one login', included: 'pro' },
   { name: 'Stock, dips and purchases', included: 'core' },
   { name: 'Fuel and product sales by cash, card or UPI', included: 'core' },
   { name: 'Credit, collections and khata', included: 'core' },
@@ -102,7 +104,9 @@ export const planFeatures = [
   { name: 'Customer statement link', included: 'pro', note: 'Coming next' },
   { name: 'Owner alerts on your phone', included: 'pro', note: 'Coming next' },
   { name: 'Attendance, advances and shortage recovery', included: 'pro', note: 'Coming next' },
-  { name: 'Reports across stations', included: 'scale', note: 'Coming next' },
+  { name: 'Reports across stations', included: 'pro', note: 'Coming next' },
+  { name: 'Custom permissions', included: 'pro-plus' },
+  { name: 'Attendant Handover Report', included: 'pro-plus' },
 ];
 export const PRICING_KEY_ROWS = 6;
 
@@ -113,6 +117,6 @@ export const faqs: [string, string][] = [
   ["Will it work with my accountant's Tally?", 'Not yet. Tally export is planned. Today you can download shift summaries and the DSR as PDF and send them to your accountant.'],
   ["Is my station's data private?", 'Each station’s records are kept separate from every other customer’s, and each person sees only what their role allows. Your data is yours; you can ask us for a copy at any time.'],
   ['How long does setup take?', 'A few minutes once your tank, nozzle, product and opening-balance details are ready. We do it with you, then stay with your team for the first shift closings.'],
-  ['What does it cost after the first 3 months?', 'Pilot stations get the first 3 months free on any plan. After that, Pro is ₹1,599 a month per station, which can vary with your station’s setup. Core is ₹999 a month per station, or ₹9,990 a year (two months free). Attendants without a login are never counted.'],
+  ['What does it cost after the first 3 months?', 'Pilot stations get the first 3 months free on any plan. After that, per station and excluding GST: Core is ₹999 a month (₹9,990 a year), Pro is ₹1,599 a month (₹15,990 a year) and Pro+ is ₹2,099 a month (₹20,990 a year). Yearly billing is two months free. Each additional station is 20% off on Pro and Pro+. Logins are 3 on Core, 10 on Pro and unlimited on Pro+; attendants who sign in with their phone count as logins, and attendants without a login are never counted.'],
   ['Does it work for my oil company?', 'Yes. Shifts, readings, drawers and dues work the same at every fuel station. You set up your own tanks, nozzles, products and prices, whichever company supplies you.'],
 ];

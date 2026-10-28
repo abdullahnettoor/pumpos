@@ -36,7 +36,8 @@
   src: url('/fonts/GeistMono-Medium.ttf') format('truetype');
 }
 
-:root {
+:root,
+:root.light {
   /* Font Families */
   --font-sans:
     'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
@@ -58,6 +59,7 @@
 
   /* Brand/Accents */
   --brand-primary: #1f6a53; /* Petrol Green */
+  --text-on-brand: #ffffff; /* text and icons placed on --brand-primary */
   --brand-secondary: #2e5e88; /* Diesel Blue */
   --brand-warning: #b7811e; /* Signal Amber */
   --brand-danger: #b44a3f; /* Alert Red */
@@ -75,6 +77,15 @@
   --state-info-bg: #e8f0f7;
   --state-info-fg: #2e5e88;
 
+  /* Text on solid tone fills (#518): one per fill, each >= 4.5:1 against it in
+   * both themes (theme/tokens.test.ts). Danger covers --state-danger-fg and
+   * --brand-danger; neutral covers --text-strong (bg-ink-strong). */
+  --text-on-danger: #ffffff;
+  --text-on-warning: #ffffff;
+  --text-on-success: #ffffff;
+  --text-on-info: #ffffff;
+  --text-on-neutral: #ffffff;
+
   /* Border Radiuses */
   --radius-card: 10px;
   --radius-input: 8px;
@@ -91,6 +102,85 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
+
+  /* Elevation (#539): one shadow per layer, so a popover never looks like a dialog. */
+  --shadow-popover: 0 8px 24px rgba(24, 32, 26, 0.14);
+  --shadow-dialog: 0 12px 32px rgba(24, 32, 26, 0.18);
+  --shadow-tooltip: 0 4px 12px rgba(24, 32, 26, 0.18);
+  --shadow-drawer: -8px 0 32px rgba(24, 32, 26, 0.04);
+  /* A switch thumb's lift off its track. */
+  --shadow-control: 0 1px 2px rgba(24, 32, 26, 0.25);
+  /* The dim layer behind a modal dialog or the command palette. */
+  --overlay-scrim: rgba(24, 32, 26, 0.32);
+  /* A light blur on top of that scrim (#604): dialogs and the command palette
+     only. A drawer keeps its plain scrim, so the page beside it stays sharp. */
+  --overlay-blur: 4px;
+  /* The lighter dim layer behind a drawer: the page stays readable beside it. */
+  --overlay-drawer: rgba(24, 32, 26, 0.15);
+  /* A switch thumb: white on its track in both themes. */
+  --control-thumb: #ffffff;
+  /* Focus halo of a text input, and of an invalid one (same mix as pump-ds Input). */
+  --focus-ring: color-mix(in oklab, var(--brand-primary) 18%, transparent);
+  --focus-ring-danger: color-mix(in oklab, var(--state-danger-fg) 18%, transparent);
+
+  /* Shell dimensions */
+  --status-bar-height: 26px;
+  /* Where the toast stack sits above the screen's bottom edge (#606); mobile sets its dock. */
+  --toast-offset: var(--status-bar-height);
+}
+
+@media not print {
+  /* Dark is a screen theme: paper is white, so print and PDF keep the light ink. */
+  :root.dark {
+    /* Colors (Calm Industrial Dark Theme — built, hidden #501) */
+    --bg-canvas: #0b0f0d;
+    --bg-surface: #121815;
+    --bg-surface-alt: #161d1a;
+
+    --border-soft: #1f2925;
+    --border-strong: #2a3530;
+
+    --text-strong: #ffffff;
+    --text-default: #cfd8d2;
+    --text-muted: #8a9a91;
+    --text-faint: #5d6c64;
+
+    /* Brand/Accents */
+    --brand-primary: #2fd18d; /* Mint */
+    --text-on-brand: #06110c; /* High-contrast text placed on --brand-primary */
+    --brand-secondary: #6cb6ff;
+    --brand-warning: #f2b544;
+    --brand-danger: #ff7a6b;
+
+    /* States */
+    --state-success-bg: #10241b;
+    --state-success-fg: #2fd18d;
+
+    --state-warning-bg: #221a10;
+    --state-warning-fg: #f2b544;
+
+    --state-danger-bg: #241514;
+    --state-danger-fg: #ff7a6b;
+
+    --state-info-bg: #12263a;
+    --state-info-fg: #6cb6ff;
+
+    /* Text on solid tone fills: the light fills turn bright here, so near-black. */
+    --text-on-danger: #06110c;
+    --text-on-warning: #06110c;
+    --text-on-success: #06110c;
+    --text-on-info: #06110c;
+    --text-on-neutral: #06110c;
+
+    /* Elevation: a dark surface needs a deeper shadow to read as raised. */
+    --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.55);
+    --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.45);
+    --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --overlay-scrim: rgba(0, 0, 0, 0.55);
+    --overlay-drawer: rgba(0, 0, 0, 0.45);
+  }
 }
 
 /* Base Resets */
@@ -113,7 +203,7 @@
  *
  * These rules restore only the SAFE, spacing-neutral parts of Preflight:
  * no margins, no line-height, no heading changes — so the legacy spacing fix
- * stands. Class-level borders (.btn-*, .input, pump-ds `border-*`) all have
+ * stands. Class-level borders (.input, pump-ds `border-*`) all have
  * higher specificity and still win.
  */
 button,
@@ -167,163 +257,10 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-/* Core layouts */
-.app-container {
-  display: flex;
-  min-height: 100vh;
-  background-color: var(--bg-canvas);
-}
-
-/* ==================== Button System ==================== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  border-radius: var(--radius-button);
-  cursor: pointer;
-  transition:
-    background-color 0.1s,
-    color 0.1s,
-    border-color 0.1s;
-  white-space: nowrap;
-}
-
-/* Button Sizes */
-.btn-sm {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
-}
-
-.btn-md {
-  height: 36px;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.btn-lg {
-  height: 40px;
-  padding: 0 20px;
-  font-size: 14px;
-}
-
-/* Button Variants */
-.btn-primary {
-  background-color: var(--brand-primary);
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover {
-  background-color: #1a5a45;
-}
-
-.btn-secondary {
-  background-color: var(--bg-surface);
-  color: var(--text-strong);
-  border: 1px solid var(--border-strong);
-}
-
-.btn-secondary:hover {
-  background-color: var(--bg-surface-alt);
-}
-
-.btn-danger {
-  background-color: var(--state-danger-bg);
-  color: var(--state-danger-fg);
-  border: 1px solid var(--border-soft);
-}
-
-.btn-danger:hover {
-  background-color: var(--state-danger-fg);
-  color: white;
-}
-
-.btn-ghost {
-  background-color: transparent;
-  color: var(--text-default);
-  border: none;
-}
-
-.btn-ghost:hover {
-  background-color: var(--bg-surface-alt);
-}
-
-/* Button States */
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ==================== Card System ==================== */
-.card {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-card);
-}
-
-.card-compact {
-  padding: var(--space-4);
-}
-
-.card-default {
-  padding: var(--space-5);
-}
-
-.card-comfortable {
-  padding: var(--space-6);
-}
-
-.card-header {
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--border-soft);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-body {
-  padding: var(--space-4);
-}
-
-.card-footer {
-  padding: var(--space-4);
-  border-top: 1px solid var(--border-soft);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-}
-
 /* ==================== Form System ==================== */
-.form-group {
-  margin-bottom: var(--space-4);
-}
-
-.form-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: var(--space-2);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Legacy .form-input and bare <select> are aliased to the canonical .input
- * look below so there is exactly one input appearance across the app. */
-.form-input-sm {
-  height: 32px;
-  font-size: 13px;
-}
-
-/* Canonical input surface for all text inputs, selects and (aliased) legacy
- * .form-input / bare <select> elements. */
+/* Canonical input surface for text inputs and bare <select> elements (the
+ * pump-ds Select layers its own classes on top). */
 .input,
-.select,
-.form-input,
 select {
   width: 100%;
   height: 36px;
@@ -341,11 +278,9 @@ select {
 }
 
 .input:focus,
-.select:focus,
-.form-input:focus,
 select:focus {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 /* Compact inputs for filter bars / toolbars. */
@@ -371,13 +306,13 @@ select:focus {
 
 .textarea:focus {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
-/* Sentence-case field label (the lighter counterpart to .form-label). */
+/* Sentence-case field label. 12px is the app's smallest text (#515). */
 .field-label {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 4px;
@@ -385,7 +320,7 @@ select:focus {
 
 .field-error {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--state-danger-fg);
   margin-top: 4px;
 }
@@ -393,29 +328,27 @@ select:focus {
 /* Muted helper text under a field (the neutral counterpart to .field-error). */
 .field-hint {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   margin-top: 4px;
 }
 
-/* Required marker appended to a field label. */
+/* Required marker appended to a field label. Neutral: red means a problem. */
 .field-required {
-  color: var(--state-danger-fg);
+  color: var(--text-muted);
   margin-left: 2px;
 }
 
-/* Invalid state for the canonical .input / .select / .textarea primitives. */
+/* Invalid state for the canonical .input / .textarea primitives. */
 .input-invalid,
 .input-invalid:focus {
   border-color: var(--brand-danger);
-  box-shadow: 0 0 0 2px rgba(180, 74, 63, 0.15);
+  box-shadow: 0 0 0 2px var(--focus-ring-danger);
 }
 
 /* Disabled inputs read as inert without disappearing. */
 .input:disabled,
-.select:disabled,
 .textarea:disabled,
-.form-input:disabled,
 select:disabled {
   background-color: var(--bg-surface-alt);
   color: var(--text-muted);
@@ -426,6 +359,32 @@ select:disabled {
 .input-numeric {
   font-family: var(--font-mono);
   text-align: right;
+}
+
+/* The amount of an Office Record drawer: the figure beside its ₹, larger than the other inputs. */
+.record-amount {
+  position: relative;
+}
+
+.record-amount-symbol {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.input.record-amount-input {
+  height: 44px;
+  padding-left: 30px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
 /* ==================== Checkbox & Switch ==================== */
@@ -459,7 +418,7 @@ select:disabled {
   color: var(--text-strong);
 }
 .pump-check-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -497,8 +456,8 @@ select:disabled {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background-color: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  background-color: var(--control-thumb);
+  box-shadow: var(--shadow-control);
   transition: transform 0.15s ease-in-out;
 }
 .pump-switch-input:checked + .pump-switch-track {
@@ -510,372 +469,6 @@ select:disabled {
 .pump-switch-input:focus-visible + .pump-switch-track {
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
-}
-
-/* ==================== Segmented Control ==================== */
-.segmented {
-  display: grid;
-  gap: 8px;
-}
-.segmented-item {
-  height: 36px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-default);
-  background-color: var(--bg-surface-alt);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-input);
-  cursor: pointer;
-  transition:
-    background-color 0.1s,
-    color 0.1s,
-    border-color 0.1s;
-}
-.segmented--sm .segmented-item {
-  height: 32px;
-  font-size: 12px;
-}
-.segmented-item--active {
-  background-color: var(--brand-primary);
-  color: #fff;
-  border-color: transparent;
-}
-.segmented-item:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ==================== Table System ==================== */
-.dense-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background-color: var(--bg-surface);
-  border-radius: var(--radius-card);
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-}
-
-.dense-table th {
-  background-color: var(--bg-surface-alt);
-  color: var(--text-muted);
-  font-weight: 600;
-  text-align: left;
-  padding: var(--space-3) var(--space-4);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.dense-table td {
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-soft);
-  color: var(--text-default);
-  height: 36px;
-}
-
-.dense-table tr:last-child td {
-  border-bottom: none;
-}
-
-.dense-table tr:hover td {
-  background-color: var(--bg-surface-alt);
-}
-
-/* ==================== Shift Workspace ==================== */
-.shift-control-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-color: var(--border-strong);
-  box-shadow: 0 6px 18px rgba(24, 32, 26, 0.08);
-}
-
-/* Solid full-bleed backdrop so scrolling content is cleanly hidden behind the
-   sticky bar (covers the content-area top padding + side gutters) instead of
-   peeking around its edges. */
-.shift-control-bar::before {
-  content: '';
-  position: absolute;
-  top: calc(-1 * var(--space-6));
-  left: calc(-1 * var(--space-6));
-  right: calc(-1 * var(--space-6));
-  bottom: 0;
-  background: var(--bg-canvas);
-  z-index: -1;
-  pointer-events: none;
-}
-
-.shift-control-bar__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.shift-control-bar__inline {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.shift-control-bar__cluster {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.shift-control-bar__identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.shift-control-bar__meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.shift-control-bar__action-btn {
-  height: 26px;
-  padding: 0 9px !important;
-  font-size: 12px !important;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.shift-control-bar__hotkey {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  background-color: var(--bg-surface);
-  color: var(--text-muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  margin-left: 2px;
-}
-
-.shift-control-bar__kpis {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.shift-control-bar__close {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* ==================== Shift Sub-Tabs ==================== */
-.shift-subtabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border-bottom: 1px solid var(--border-soft);
-  margin-bottom: 12px;
-}
-
-.shift-subtab {
-  padding: 8px 14px;
-  font-size: 13px;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.shift-subtab:hover {
-  color: var(--text-default);
-}
-
-.shift-subtab--active {
-  color: var(--brand-primary);
-  border-bottom-color: var(--brand-primary);
-  font-weight: 600;
-}
-
-.shift-table-shell {
-  position: relative;
-}
-
-.shift-table-scroll-container {
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-.shift-table-shell::before,
-.shift-table-shell::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 14px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  z-index: 3;
-}
-
-.shift-table-shell::before {
-  left: var(--sticky-shadow-left, 0px);
-  background: linear-gradient(90deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
-}
-
-.shift-table-shell::after {
-  right: 0;
-  background: linear-gradient(270deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
-}
-
-.shift-table-shell[data-shadow-left='true']::before {
-  opacity: 1;
-}
-
-.shift-table-shell[data-shadow-right='true']::after {
-  opacity: 1;
-}
-
-.shift-table th,
-.shift-table td {
-  white-space: nowrap;
-}
-
-@media (max-width: 960px) {
-  .shift-control-bar {
-    top: 8px;
-  }
-
-  .shift-control-bar__kpis {
-    width: 100%;
-    justify-content: space-between;
-  }
-}
-
-.mono-num {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-/* ==================== Status Badge ==================== */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-family: var(--font-mono);
-}
-
-.badge-success {
-  background-color: var(--state-success-bg);
-  color: var(--state-success-fg);
-  border: 1px solid rgba(30, 106, 78, 0.15);
-}
-
-.badge-warning {
-  background-color: var(--state-warning-bg);
-  color: var(--state-warning-fg);
-  border: 1px solid rgba(138, 97, 22, 0.15);
-}
-
-.badge-danger {
-  background-color: var(--state-danger-bg);
-  color: var(--state-danger-fg);
-  border: 1px solid rgba(159, 63, 54, 0.15);
-}
-
-.badge-info {
-  background-color: var(--state-info-bg);
-  color: var(--state-info-fg);
-  border: 1px solid rgba(46, 94, 136, 0.15);
-}
-
-.badge-default {
-  background-color: var(--bg-surface-alt);
-  color: var(--text-muted);
-  border: 1px solid var(--border-soft);
-}
-
-/* ==================== Loading Spinner ==================== */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-8);
-  gap: var(--space-4);
-}
-
-.loading-spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border-soft);
-  border-top-color: var(--brand-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-.loading-spinner-sm {
-  width: 16px;
-  height: 16px;
-  border-width: 2px;
-}
-
-.loading-spinner-lg {
-  width: 32px;
-  height: 32px;
-  border-width: 3px;
-}
-
-.loading-text {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
 }
 
 /* ==================== Animations ==================== */
@@ -895,13 +488,17 @@ select:disabled {
 }
 
 /* Reduced motion support */
+/* Blur costs GPU time on low-end machines and some readers find it hard to
+   look through: drop it when the reader asks for less transparency (#604). */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --overlay-blur: 0px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in {
     animation: none;
-  }
-
-  .loading-spinner {
-    animation-duration: 1.5s;
   }
 }
 
@@ -912,8 +509,8 @@ select:disabled {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(24, 32, 26, 0.15);
-  backdrop-filter: blur(2px);
+  /* A plain scrim, no blur: the page beside a drawer stays sharp (#604). */
+  background-color: var(--overlay-drawer);
   z-index: 1000;
   opacity: 0;
   animation: drawerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -931,7 +528,7 @@ select:disabled {
   z-index: 1001;
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 32px rgba(24, 32, 26, 0.04);
+  box-shadow: var(--shadow-drawer);
   transform: translateX(100%);
   animation: drawerSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -972,6 +569,34 @@ select:disabled {
   color: var(--text-strong);
 }
 
+.drawer-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.drawer-heading-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.drawer-heading-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.drawer-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .drawer-close-btn {
   background: none;
   border: none;
@@ -995,6 +620,14 @@ select:disabled {
   padding: var(--space-6);
 }
 
+.drawer-body--flush {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .drawer-footer {
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--border-soft);
@@ -1006,378 +639,7 @@ select:disabled {
   flex-shrink: 0;
 }
 
-/* ==================== Close Shift Wizard ==================== */
-.close-wizard-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.close-wizard-meta {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.close-wizard-stepper {
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 8px;
-  background-color: var(--bg-surface-alt);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border-soft);
-}
-
-.close-wizard-step-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: 11px;
-  border-radius: 999px;
-  background-color: transparent;
-  color: var(--text-muted);
-}
-
-.close-wizard-step-pill[data-state='active'] {
-  background-color: var(--brand-primary);
-  color: white;
-  font-weight: 600;
-}
-
-.close-wizard-step-pill[data-state='done'] {
-  background-color: var(--state-success-bg);
-  color: var(--state-success-fg);
-  font-weight: 600;
-}
-
-.close-wizard-step-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.close-wizard-step-pill[data-state='pending'] .close-wizard-step-num {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-soft);
-}
-
-.close-wizard-step-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.close-wizard-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.close-wizard-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
-.close-wizard-helper {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.close-wizard-summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  background-color: var(--bg-surface-alt);
-  border-radius: var(--radius-input);
-  border: 1px solid var(--border-soft);
-  font-size: 13px;
-}
-
-.close-wizard-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.close-wizard-row--total {
-  padding-top: 6px;
-  margin-top: 2px;
-  border-top: 1px solid var(--border-strong);
-  font-weight: 700;
-  color: var(--text-strong);
-}
-
-.close-wizard-field-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-default);
-}
-
-.close-wizard-input {
-  width: 100%;
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-input);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  background-color: var(--bg-surface);
-  color: var(--text-strong);
-}
-
-/* Mono only for figures (#305); text inputs and selects stay sans. */
-.close-wizard-input--num,
-.close-wizard-input--small {
-  font-family: var(--font-mono);
-  text-align: right;
-}
-
-.close-wizard-input--small {
-  width: 110px;
-  height: 30px;
-  padding: 0 8px;
-  text-align: right;
-}
-
-.close-wizard-variance {
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 12px;
-  border-radius: var(--radius-input);
-  border: 1px solid var(--border-soft);
-}
-
-.close-wizard-variance[data-state='match'] {
-  color: var(--state-success-fg);
-  background-color: var(--state-success-bg);
-}
-
-.close-wizard-variance[data-state='surplus'],
-.close-wizard-variance[data-state='shortage'] {
-  color: var(--brand-danger);
-  background-color: var(--state-danger-bg);
-}
-
-.close-wizard-why {
-  margin-top: 6px;
-  font-size: 12px;
-}
-
-.close-wizard-why__toggle {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--brand-primary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.close-wizard-why__list {
-  margin: 8px 0 0;
-  padding: 10px 12px 10px 28px;
-  background-color: var(--bg-surface-alt);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-input);
-  color: var(--text-default);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.close-wizard-why__list li + li {
-  margin-top: 6px;
-}
-
-.close-wizard-why__list kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  background-color: var(--bg-surface);
-  color: var(--text-muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  margin: 0 2px;
-}
-
-.close-wizard-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-default);
-  cursor: pointer;
-  padding: 6px 0;
-}
-
-.close-wizard-toggle input[type='checkbox'] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.close-wizard-tank-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.close-wizard-tank-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background-color: var(--bg-canvas);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-input);
-}
-
-.close-wizard-tank-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
-.close-wizard-tank-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.close-wizard-banner {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: var(--radius-input);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.close-wizard-banner--success {
-  color: var(--state-success-fg);
-  background-color: var(--state-success-bg);
-  border: 1px solid var(--border-soft);
-}
-
-.close-wizard-banner--warning {
-  color: var(--state-warning-fg);
-  background-color: var(--state-warning-bg);
-  border: 1px solid var(--border-soft);
-}
-
-.close-wizard-warning-list {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 12px;
-  color: var(--text-default);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* ==================== Toggle Switch ==================== */
-.switch-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-2) 0;
-  cursor: pointer;
-}
-
-.switch-label-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.switch-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-strong);
-}
-
-.switch-description {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.switch-input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.switch-slider {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-  background-color: var(--border-strong);
-  border-radius: var(--radius-chip);
-  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  flex-shrink: 0;
-}
-
-.switch-slider::before {
-  content: '';
-  position: absolute;
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-
-.switch-input:checked + .switch-slider {
-  background-color: var(--brand-primary);
-}
-
-.switch-input:checked + .switch-slider::before {
-  transform: translateX(16px);
-}
-
 /* ==================== Utility Classes ==================== */
-.text-muted {
-  color: var(--text-muted);
-}
-.text-strong {
-  color: var(--text-strong);
-}
-.text-success {
-  color: var(--state-success-fg);
-}
-.text-warning {
-  color: var(--state-warning-fg);
-}
-.text-danger {
-  color: var(--state-danger-fg);
-}
-.text-info {
-  color: var(--state-info-fg);
-}
-
 .font-mono {
   font-family: var(--font-mono);
 }
@@ -1392,38 +654,6 @@ select:disabled {
   flex-direction: column;
 }
 
-/* Shimmer skeletons for partial/lazy loading (Phase P). */
-.pump-skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--bg-surface-alt) 25%,
-    var(--border-soft) 37%,
-    var(--bg-surface-alt) 63%
-  );
-  background-size: 400% 100%;
-  animation: pump-shimmer 1.2s ease-in-out infinite;
-}
-@keyframes pump-shimmer {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0 50%;
-  }
-}
-/* Must sit after .pump-skeleton, not up in the main reduced-motion block: a
-   media query adds no specificity, so an override written earlier in the file
-   would lose the cascade to the rule above and silently do nothing.
-   Skeletons now cover the whole shell during boot, which makes an unslowed
-   shimmer a screenful of motion at the exact moment a motion-sensitive
-   operator has nothing else to look at. Hold a flat tone instead — the
-   skeleton still reads as "not content yet" from its shape. */
-@media (prefers-reduced-motion: reduce) {
-  .pump-skeleton {
-    animation: none;
-    background: var(--bg-surface-alt);
-  }
-}
 .items-center {
   align-items: center;
 }
@@ -1483,253 +713,4 @@ select:disabled {
   @page {
     margin: 12mm;
   }
-}
-
-/* =========================================================================
- * Tabs primitive (canonical) — see packages/ui/src/components/primitives/Tabs.tsx.
- * Three visual variants (`pill`, `underline`, `card`) share the same
- * keyboard + ARIA contract; only the paint layer differs. Icons, count pills
- * and text tags are supported in every variant.
- * ========================================================================= */
-
-.pump-tabs {
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  box-shadow: inset 0 -1px 0 var(--border-soft);
-  /* Hide the horizontal scroll rail; keyboard nav is still available. */
-  scrollbar-width: none;
-}
-
-.pump-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.pump-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 120ms ease,
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-
-.pump-tab:hover:not(:disabled):not(.pump-tab--active) {
-  color: var(--text-strong);
-}
-
-.pump-tab:disabled {
-  color: var(--text-faint);
-  cursor: not-allowed;
-}
-
-.pump-tab:focus-visible {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: -2px;
-  border-radius: 4px;
-}
-
-/* Icon slot — normalizes size + vertical alignment for lucide / svg glyphs. */
-.pump-tab__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pump-tab__icon > svg {
-  width: 14px;
-  height: 14px;
-  stroke-width: 1.75;
-}
-
-/* Size — applies to all variants. */
-.pump-tabs--md .pump-tab {
-  padding: 10px 16px;
-  font-size: 13px;
-}
-.pump-tabs--sm .pump-tab {
-  padding: 7px 12px;
-  font-size: 12px;
-}
-
-/* ---- Variant: pill (default, historical PumpOS look) ------------------- */
-.pump-tabs--pill .pump-tab--active {
-  color: var(--brand-primary);
-  border-bottom-color: var(--brand-primary);
-  font-weight: 600;
-}
-
-/* ---- Variant: underline (Cloudflare / HPE operator-panel look) --------- */
-/* Span the full width of the toolbar so the baseline rule runs edge-to-edge
- * (GitHub / Stripe style); the tabs themselves stay left-aligned at their
- * natural width since they don't flex-grow. */
-.pump-tabs--underline {
-  width: 100%;
-}
-
-.pump-tabs--underline .pump-tab {
-  color: var(--text-default);
-  /* Thicker underline; sits below the container's inset baseline so the
-   * transparent bar of inactive tabs doesn't clip the baseline rule. */
-  border-bottom-width: 3px;
-  padding-bottom: calc(var(--_pt-pb, 10px) - 1px);
-}
-
-.pump-tabs--underline.pump-tabs--md .pump-tab {
-  padding: 12px 14px 11px;
-  --_pt-pb: 12px;
-}
-.pump-tabs--underline.pump-tabs--sm .pump-tab {
-  padding: 9px 10px 8px;
-  --_pt-pb: 9px;
-}
-
-.pump-tabs--underline .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
-  color: var(--text-strong);
-}
-
-.pump-tabs--underline .pump-tab--active {
-  color: var(--text-strong);
-  border-bottom-color: var(--brand-primary);
-  font-weight: 600;
-  /* Slight rounded top on the underline bar. */
-  border-top-left-radius: 2px;
-  border-top-right-radius: 2px;
-}
-
-/* ---- Variant: card (folder-tab / settings-wizard look) ---------------- */
-.pump-tabs--card {
-  gap: 2px;
-  padding: 0 4px;
-}
-
-.pump-tabs--card .pump-tab {
-  color: var(--text-muted);
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  /* Nudge the tab downward so the transparent 1px at the bottom of the
-   * active card overlaps the container's inset baseline, visually
-   * merging with the panel below. */
-  margin-bottom: -1px;
-  padding-bottom: calc(var(--_ct-pb, 10px) + 1px);
-}
-
-.pump-tabs--card.pump-tabs--md .pump-tab {
-  padding: 10px 16px 11px;
-  --_ct-pb: 10px;
-}
-.pump-tabs--card.pump-tabs--sm .pump-tab {
-  padding: 7px 12px 8px;
-  --_ct-pb: 7px;
-}
-
-.pump-tabs--card .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
-  color: var(--text-strong);
-  background: var(--bg-surface-alt);
-  border-radius: 8px 8px 0 0;
-}
-
-.pump-tabs--card .pump-tab--active {
-  color: var(--text-strong);
-  background: var(--bg-surface);
-  border-color: var(--border-soft);
-  font-weight: 600;
-}
-
-/* ---- Numeric count badge (all variants, tone-aware) ------------------- */
-.pump-tab__count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--bg-surface-alt);
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
-}
-
-/* Active count pill inherits the tab's tone. */
-.pump-tab__count--active.pump-tab__count--brand {
-  background: var(--brand-primary);
-  color: #fff;
-}
-.pump-tab__count--active.pump-tab__count--info {
-  background: var(--state-info-fg);
-  color: #fff;
-}
-.pump-tab__count--active.pump-tab__count--success {
-  background: var(--state-success-fg);
-  color: #fff;
-}
-.pump-tab__count--active.pump-tab__count--warning {
-  background: var(--state-warning-fg);
-  color: #fff;
-}
-.pump-tab__count--active.pump-tab__count--danger {
-  background: var(--state-danger-fg);
-  color: #fff;
-}
-.pump-tab__count--active.pump-tab__count--neutral {
-  background: var(--text-strong);
-  color: #fff;
-}
-
-/* ---- Text tag ("NEW" / "BETA" / "PRO", tone-aware) --------------------- */
-.pump-tab__tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 15px;
-  padding: 0 5px;
-  border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1;
-}
-
-.pump-tab__tag--brand {
-  background: color-mix(in oklab, var(--brand-primary) 12%, transparent);
-  color: var(--brand-primary);
-}
-.pump-tab__tag--info {
-  background: var(--state-info-bg);
-  color: var(--state-info-fg);
-}
-.pump-tab__tag--success {
-  background: var(--state-success-bg);
-  color: var(--state-success-fg);
-}
-.pump-tab__tag--warning {
-  background: var(--state-warning-bg);
-  color: var(--state-warning-fg);
-}
-.pump-tab__tag--danger {
-  background: var(--state-danger-bg);
-  color: var(--state-danger-fg);
-}
-.pump-tab__tag--neutral {
-  background: var(--bg-surface-alt);
-  color: var(--text-muted);
 }

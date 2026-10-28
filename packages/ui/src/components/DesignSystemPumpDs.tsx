@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import {
   Chip,
   StatusChip,
+  VarianceChip,
+  TopBarIconButton,
+  Icon,
   STATUS_MAP,
   Dot,
   Delta,
@@ -12,6 +15,7 @@ import {
   Panel,
   EmptyState,
   MeterRow,
+  TankGauge,
   BreakdownBar,
   Sparkline,
   type PumpStatus,
@@ -23,6 +27,9 @@ import {
   type ButtonVariant,
   type ButtonSize,
 } from '../pump-ds/index.js';
+import { DEFAULT_TANK_LEVEL_SETTINGS, deriveTankLevel } from '@pump/shared';
+import { TimelineNowPill } from './Dashboard/cards/timeline/TimelineStrip.js';
+import { formatMoney } from '../utils/format.js';
 import {
   Fuel,
   User,
@@ -40,6 +47,12 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+const TANK_SAMPLES: ReadonlyArray<[string, number, number | null]> = [
+  ['Tank 1 · MS', 12400, 4.2],
+  ['Tank 2 · HSD', 6800, 1.1],
+  ['Tank 3 · XP95', 3100, null],
+];
+
 /**
  * pump-ds showcase — the real design system living surface. Each pump-ds
  * primitive gets its own section here as it lands. Purely a browsing aid;
@@ -52,9 +65,9 @@ const Row: React.FC<{ label: string; children: React.ReactNode; note?: string }>
   note,
 }) => (
   <div className="grid grid-cols-[140px_1fr_auto] items-center gap-4 border-b border-border-soft py-3 last:border-b-0">
-    <div className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">{label}</div>
+    <div className="font-mono text-[12px] uppercase tracking-wider text-ink-faint">{label}</div>
     <div className="flex flex-wrap items-center gap-2">{children}</div>
-    {note && <div className="font-mono text-[10px] text-ink-faint">{note}</div>}
+    {note && <div className="font-mono text-[12px] text-ink-faint">{note}</div>}
   </div>
 );
 
@@ -157,7 +170,7 @@ const ChipAdornments: React.FC = () => {
         </Chip>
       </Row>
       <Row label="removable" note="onRemove wires a close button with its own focus ring">
-        {filters.length === 0 && <span className="text-[11px] text-ink-faint">No filters</span>}
+        {filters.length === 0 && <span className="text-[12px] text-ink-faint">No filters</span>}
         {filters.map((label) => (
           <Chip
             key={label}
@@ -182,7 +195,7 @@ const DotMatrix: React.FC = () => {
       {sizes.map((s) => (
         <Row key={s} label={`size=${s}`}>
           {tones.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <span key={t} className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
               <Dot tone={t} size={s} />
               <span>{t}</span>
             </span>
@@ -190,19 +203,19 @@ const DotMatrix: React.FC = () => {
         </Row>
       ))}
       <Row label="pulse" note="motion-safe:animate-pulse — reduced-motion users get a static dot">
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="brand" size="md" pulse /> brand
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="info" size="md" pulse /> info
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="success" size="md" pulse /> success
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="warning" size="md" pulse /> warning
         </span>
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <Dot tone="danger" size="md" pulse /> danger
         </span>
       </Row>
@@ -246,84 +259,73 @@ const DeltaMatrix: React.FC = () => (
 const KpiStripShowcase: React.FC = () => (
   <div className="space-y-6 py-2">
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        five-metric operator dashboard header (auto-fit; wraps cleanly on narrow widths)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Up to 4 tiles. Mixed periods: a period tile keeps its chip, a balance shows none. Plain
+        figures; colour only through alert.
       </div>
       <KpiStrip>
         <KpiTile
-          dot="brand"
-          label="Sales today"
+          label="Sales"
+          scope="today"
           value="₹4,82,350.00"
           delta={{ value: '12.4%', direction: 'up' }}
-          hint="vs yest."
+          hint="vs yesterday"
         />
         <KpiTile
-          dot="success"
-          label="Cash in drawer"
-          value="₹1,84,260.00"
-          delta={{ value: 'matched', direction: 'flat' }}
+          label="Spent"
+          scope={{ month: '2026-10' }}
+          value="₹31,475.00"
+          delta={{ value: '8%', direction: 'up', neutral: true }}
+          hint="vs Sep, same days"
         />
         <KpiTile
-          dot="warning"
-          label="Variance"
-          value="−₹1,240"
-          valueTone="warning"
-          hint="2 tanks over 0.5%"
+          label="Overdue"
+          scope="now"
+          alert="warning"
+          value="₹1,08,750.00"
+          hint="3 customers, oldest 41 days"
         />
         <KpiTile
-          dot="info"
-          label="Outstanding"
-          value="₹21,48,930.00"
-          delta={{ value: '3.1%', direction: 'down', invert: true }}
-          hint="7d"
+          label="Over credit limit"
+          scope="now"
+          alert="danger"
+          value="1"
+          hint="RTC Depot 4 · ₹62,000 over"
         />
-        <KpiTile dot="neutral" label="Pending sync" value="4" hint="retry in 12s" />
       </KpiStrip>
     </div>
 
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        fixed 4-column grid (drawer / detail panel header)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Fixed 4-column grid, small. One shared period, named once for the strip (none under a range
+        control, which names it already)
       </div>
-      <KpiStrip columns={4}>
-        <KpiTile
-          size="sm"
-          dot="brand"
-          label="Volume sold"
-          value="3,210.75"
-          delta={{ value: '4.8%', direction: 'up' }}
-        />
-        <KpiTile size="sm" dot="success" label="Cash collected" value="₹1,84,260" />
-        <KpiTile
-          size="sm"
-          dot="info"
-          label="UPI collected"
-          value="₹92,140"
-          delta={{ value: '18.2%', direction: 'up' }}
-        />
-        <KpiTile size="sm" dot="warning" label="Card declined" value="2" hint="₹8,420 retry" />
+      <KpiStrip columns={4} scope="today">
+        <KpiTile size="sm" label="Volume sold" value="3,210.75 L" />
+        <KpiTile size="sm" label="Cash collected" value="₹1,84,260.00" />
+        <KpiTile size="sm" label="UPI collected" value="₹92,140.00" />
+        <KpiTile size="sm" label="Card declined" value="2" hint="₹8,420 to retry" />
       </KpiStrip>
     </div>
 
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-        one prominent tile (page header / drawer opener)
+      <div className="mb-2.5 text-[12px] font-medium text-ink-muted">
+        Large (page header or drawer opener)
       </div>
       <KpiStrip columns={2}>
         <KpiTile
           size="lg"
-          dot="brand"
-          label="Business day · 09 Jul"
+          label="Net profit"
+          scope={{ range: { from: '2026-10-01', to: '2026-10-14' } }}
           value="₹18,42,000.00"
           delta={{ value: '8.6%', direction: 'up' }}
-          hint="vs 30-day avg"
+          hint="vs previous 14 days"
         />
         <KpiTile
           size="lg"
-          dot="danger"
-          label="Overdue receivables"
-          value="₹23,26,920"
-          valueTone="danger"
+          label="Receivable"
+          scope="now"
+          value="₹23,26,920.00"
           delta={{ value: '2.4%', direction: 'up', invert: true }}
           hint="12 accounts"
         />
@@ -409,7 +411,7 @@ const ButtonMatrix: React.FC = () => {
 const ButtonInContext: React.FC = () => (
   <div className="space-y-4 py-2">
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         drawer footer (one primary action, one secondary)
       </div>
       <div className="flex items-center justify-end gap-2 rounded-card border border-border-soft bg-surface px-4 py-3">
@@ -422,7 +424,7 @@ const ButtonInContext: React.FC = () => (
       </div>
     </div>
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         destructive confirm (danger primary + safe escape)
       </div>
       <div className="flex items-center justify-end gap-2 rounded-card border border-border-soft bg-surface px-4 py-3">
@@ -435,7 +437,7 @@ const ButtonInContext: React.FC = () => (
       </div>
     </div>
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         toolbar (xs ghost + icon-only cluster)
       </div>
       <div className="flex items-center gap-1.5 rounded-card border border-border-soft bg-surface px-3 py-2">
@@ -461,8 +463,28 @@ const STATUS_GROUPS: { label: string; statuses: PumpStatus[] }[] = [
     statuses: ['open', 'closed', 'locked', 'draft', 'active', 'inactive', 'archived'],
   },
   { label: 'sync', statuses: ['synced', 'syncing', 'pending', 'offline', 'sync-failed'] },
-  { label: 'financial', statuses: ['paid', 'partial', 'unpaid', 'overdue', 'settled', 'overpaid'] },
-  { label: 'variance', statuses: ['balanced', 'excess', 'shortage', 'variance'] },
+  {
+    label: 'financial',
+    statuses: [
+      'paid',
+      'partial',
+      'unpaid',
+      'overdue',
+      'over-limit',
+      'voided',
+      'adjustment',
+      'awaiting-decantation',
+      'settled',
+      'overpaid',
+    ],
+  },
+  {
+    label: 'variance',
+    statuses: ['balanced', 'surplus', 'short', 'variance'],
+  },
+  { label: 'handover', statuses: ['handover-pending', 'handover-due', 'handover-recorded'] },
+  { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
+  { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
 ];
 
 const StatusVocabulary: React.FC = () => (
@@ -481,7 +503,7 @@ const StatusInContext: React.FC = () => (
   <div className="space-y-6 py-2">
     {/* A short shift-list row using StatusChip and Chip together. */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         shift list row
       </div>
       <div className="divide-y divide-border-soft rounded-card border border-border-soft bg-surface">
@@ -519,7 +541,7 @@ const StatusInContext: React.FC = () => (
             key={r.id}
             className="grid grid-cols-[120px_1fr_auto_auto_120px] items-center gap-4 px-4 py-2.5 text-[13px]"
           >
-            <span className="font-mono text-[11px] text-ink-muted">{r.id}</span>
+            <span className="font-mono text-[12px] text-ink-muted">{r.id}</span>
             <span className="text-ink-strong">{r.operator}</span>
             <StatusChip status={r.status} size="xs" />
             <StatusChip status={r.sync} size="xs" showIcon={false} />
@@ -531,7 +553,7 @@ const StatusInContext: React.FC = () => (
 
     {/* A customers-list row showing overdue + partial payment states. */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         receivables row
       </div>
       <div className="divide-y divide-border-soft rounded-card border border-border-soft bg-surface">
@@ -571,14 +593,14 @@ const StatusInContext: React.FC = () => (
           >
             <div className="min-w-0">
               <div className="truncate text-ink-strong">{r.name}</div>
-              <div className="truncate font-mono text-[11px] text-ink-muted">{r.code}</div>
+              <div className="truncate font-mono text-[12px] text-ink-muted">{r.code}</div>
             </div>
             <StatusChip
               status={r.status}
               size="xs"
               label={r.status === 'overdue' ? `Overdue ${r.days}` : undefined}
             />
-            <span className="w-16 text-right font-mono text-[11px] text-ink-muted">{r.days}</span>
+            <span className="w-16 text-right font-mono text-[12px] text-ink-muted">{r.days}</span>
             <span className="text-right font-mono font-medium text-ink-strong">{r.balance}</span>
           </div>
         ))}
@@ -593,7 +615,7 @@ const DashboardBlocks: React.FC = () => (
   <div className="space-y-6">
     {/* PageHeader */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         PageHeader · title + subtitle + actions + meta
       </div>
       <div className="rounded-card border border-border-soft bg-surface p-4">
@@ -624,7 +646,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* Panel */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         Panel · titled surface (header + body + footer)
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -638,27 +660,23 @@ const DashboardBlocks: React.FC = () => (
           }
         >
           <div className="space-y-3">
-            <MeterRow
-              label="Tank 1"
-              sublabel="XP-95"
-              value={7200}
-              max={9000}
-              valueLabel="7,200 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 2"
-              sublabel="HSD"
-              value={320}
-              max={9000}
-              valueLabel="320 / 9,000 L"
-            />
-            <MeterRow
-              label="Tank 3"
-              sublabel="MS-9"
-              value={1150}
-              max={9000}
-              valueLabel="1,150 / 9,000 L"
-            />
+            {(
+              [
+                ['Tank 1 · XP-95', 7200],
+                ['Tank 2 · HSD', 320],
+                ['Tank 3 · MS', 1150],
+              ] as const
+            ).map(([name, volume]) => (
+              <TankGauge
+                key={name}
+                name={name}
+                variant="bar"
+                level={deriveTankLevel(
+                  { capacity: 9000, currentVolume: volume },
+                  DEFAULT_TANK_LEVEL_SETTINGS,
+                )}
+              />
+            ))}
           </div>
         </Panel>
         <Panel
@@ -667,11 +685,11 @@ const DashboardBlocks: React.FC = () => (
             <span className="font-mono text-[12px] font-semibold text-ink-strong">₹3,68,540</span>
           }
           footer={
-            <span className="text-[11px] text-ink-muted">Cash reconciled at shift close.</span>
+            <span className="text-[12px] text-ink-muted">Cash reconciled at shift close.</span>
           }
         >
           <BreakdownBar
-            formatValue={(n) => `₹${n.toLocaleString('en-IN')}`}
+            formatValue={(n) => formatMoney(n, { decimals: 0 })}
             segments={[
               { label: 'Cash', value: 184260, tone: 'success' },
               { label: 'UPI', value: 92140, tone: 'info' },
@@ -685,7 +703,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* MeterRow tones */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         MeterRow · auto-tone (critical &lt;5% · low &lt;15% · else brand)
       </div>
       <div className="space-y-3 rounded-card border border-border-soft bg-surface p-4">
@@ -695,9 +713,59 @@ const DashboardBlocks: React.FC = () => (
       </div>
     </div>
 
+    {/* TankGauge (#520) */}
+    <div>
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
+        TankGauge · tube + bar · station tank levels (default critical &lt;25% · low &lt;40%)
+      </div>
+      <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {TANK_SAMPLES.map(([name, volume, cover]) => (
+            <TankGauge
+              key={name}
+              name={name}
+              variant="bar"
+              level={deriveTankLevel(
+                { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+                DEFAULT_TANK_LEVEL_SETTINGS,
+              )}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="mb-2.5 mt-4 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
+        TankGauge · tube · size=&quot;lg&quot; · Inventory → Tanks (#536)
+      </div>
+      <div className="grid gap-4 rounded-card border border-border-soft bg-surface p-4 sm:grid-cols-2">
+        {TANK_SAMPLES.map(([name, volume, cover]) => (
+          <TankGauge
+            key={name}
+            name={name}
+            size="lg"
+            level={deriveTankLevel(
+              { capacity: 20000, currentVolume: volume, daysOfCover: cover },
+              DEFAULT_TANK_LEVEL_SETTINGS,
+            )}
+          />
+        ))}
+      </div>
+    </div>
+
     {/* Sparkline */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         Sparkline · dependency-free trend (line + optional area fill)
       </div>
       <div className="flex flex-wrap items-center gap-6 rounded-card border border-border-soft bg-surface p-4">
@@ -715,7 +783,7 @@ const DashboardBlocks: React.FC = () => (
             <Sparkline data={s.data} tone={s.tone} fill={s.fill} aria-label={s.label} />
             <div>
               <div className="text-[12px] font-medium text-ink-strong">{s.label}</div>
-              <div className="flex items-center gap-1 text-[11px] text-ink-muted">
+              <div className="flex items-center gap-1 text-[12px] text-ink-muted">
                 <TrendingUp className="size-3" /> trend
               </div>
             </div>
@@ -726,7 +794,7 @@ const DashboardBlocks: React.FC = () => (
 
     {/* EmptyState */}
     <div>
-      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+      <div className="mb-2.5 font-mono text-[12px] uppercase tracking-wider text-ink-faint">
         EmptyState · compact (inline) + default (block)
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -840,6 +908,97 @@ export const PumpDsComponentsPanel: React.FC = () => (
       description="The reusable primitives behind the dashboard reframe: PageHeader, Panel, MeterRow (tank gauges), BreakdownBar (collections split), Sparkline (dependency-free trends), and EmptyState. All app-wide, not dashboard-only."
     >
       <DashboardBlocks />
+    </Group>
+  </div>
+);
+
+// ---------------- status vocabulary (#518) ----------------
+
+const SOLID_TONES = ['danger', 'warning', 'success', 'info', 'neutral'] as const;
+
+/** Every solid fill in the product, each with its paired `text-on-*`. */
+const SolidStatusRow: React.FC = () => (
+  <div>
+    <Row label="action" note="Button danger">
+      <Button variant="danger" size="sm" leftIcon={<Trash2 />}>
+        Void sale
+      </Button>
+    </Row>
+    <Row label="solid chips" note="text-on-{tone}">
+      {SOLID_TONES.map((t) => (
+        <Chip key={t} variant="solid" tone={t}>
+          {t[0].toUpperCase() + t.slice(1)}
+        </Chip>
+      ))}
+    </Row>
+    <Row label="count badge" note="TopBar bell">
+      <TopBarIconButton aria-label="Notifications (3)" badge={3}>
+        <Icon name="bell" size="md" />
+      </TopBarIconButton>
+      <TopBarIconButton aria-label="Notifications (12)" badge={12}>
+        <Icon name="bell" size="md" />
+      </TopBarIconButton>
+    </Row>
+    <Row label="now pill" note="Dashboard timeline">
+      <TimelineNowPill>2:45 pm</TimelineNowPill>
+    </Row>
+  </div>
+);
+
+const VarianceRow: React.FC = () => (
+  <div>
+    <Row label="cash" note="VarianceChip">
+      <VarianceChip amount={0} />
+      <VarianceChip amount={1200} />
+      <VarianceChip amount={-340.5} />
+      <VarianceChip amount={-1240.4} decimals={0} />
+    </Row>
+    <Row label="stock" note='kind="stock"'>
+      <VarianceChip amount={0} kind="stock" />
+      <VarianceChip amount={12.5} kind="stock" />
+      <VarianceChip amount={-3} kind="stock" />
+    </Row>
+  </div>
+);
+
+const VOCAB_ROWS: { label: string; statuses: PumpStatus[] }[] = [
+  { label: 'party', statuses: ['active', 'inactive'] },
+  { label: 'handover', statuses: ['handover-pending', 'handover-due', 'handover-recorded'] },
+  { label: 'shift', statuses: ['shift-live', 'shift-past-end', 'shift-closed'] },
+  { label: 'day', statuses: ['day-open', 'day-draft', 'day-sealed', 'day-final'] },
+  { label: 'money', statuses: ['overdue', 'over-limit', 'voided', 'adjustment'] },
+  { label: 'purchase', statuses: ['awaiting-decantation'] },
+];
+
+export const PumpDsStatusPanel: React.FC = () => (
+  <div>
+    <Group
+      title="Status vocabulary · solid fills"
+      description="Every solid status fill pairs with its own text-on token (#518): danger action, the five solid chip tones, the TopBar count badge and the timeline now pill. In dark mode the fills lighten and the text flips dark, so each pair stays at AA."
+    >
+      <SolidStatusRow />
+    </Group>
+
+    <Group
+      title="Status vocabulary · variance"
+      description="One rule for every variance: Balanced by isBalancedVariance (green), a surplus in amber with a plus, a shortage in red with a true minus. Cash in rupees, stock in litres."
+    >
+      <VarianceRow />
+    </Group>
+
+    <Group
+      title="Status vocabulary · states"
+      description="Party, handover, shift, day and money states take their word and tone from statusPresentation in @pump/shared, the same source mobile renders. One word, one colour."
+    >
+      <div>
+        {VOCAB_ROWS.map((g) => (
+          <Row key={g.label} label={g.label}>
+            {g.statuses.map((st) => (
+              <StatusChip key={st} status={st} />
+            ))}
+          </Row>
+        ))}
+      </div>
     </Group>
   </div>
 );

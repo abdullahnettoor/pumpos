@@ -1,27 +1,21 @@
+import { formatCalendarDate, formatInstantDate } from './display-date.js';
+
 function formatBusinessDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return value;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  return formatCalendarDate(value);
 }
 
+/** An instant on the station clock: `5 Oct 2026, 02:00 pm`. */
 export function formatStationDateTime(value: string | null | undefined, timeZone?: string): string {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  const zone = timeZone || 'Asia/Kolkata';
+  const time = date.toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: timeZone || 'Asia/Kolkata',
+    timeZone: zone,
   });
+  return `${formatInstantDate(date, zone)}, ${time}`;
 }
 
 export function historicalShiftMessage(

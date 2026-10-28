@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { requireCapability } from './require-capability.js';
 import type { OrganizationAccessInputs, OrganizationAccessReader } from './ports.js';
 import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';
@@ -13,7 +13,7 @@ import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';
  */
 
 const registry: AccessRegistry = {
-  plans: { CORE: { key: 'CORE', capabilities: [], limits: { station_count: 1 } } },
+  plans: { CORE: { key: 'CORE', capabilities: [], limits: { station_count: 1, login_count: 3 } } },
   capabilities: {
     'exports.tally': {
       key: 'exports.tally',
@@ -67,7 +67,11 @@ describe('requireCapability', () => {
     const planRegistry: AccessRegistry = {
       ...registry,
       plans: {
-        CORE: { key: 'CORE', capabilities: ['exports.tally'], limits: { station_count: 1 } },
+        CORE: {
+          key: 'CORE',
+          capabilities: ['exports.tally'],
+          limits: { station_count: 1, login_count: 3 },
+        },
       },
     };
     const access = reader(inputs());

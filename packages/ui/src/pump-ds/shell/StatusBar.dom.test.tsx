@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StatusBar } from './StatusBar.js';
 import type { BusinessDayOption } from './TopBar.js';
@@ -174,5 +174,22 @@ describe('StatusBar version / update', () => {
     const chip = screen.getByTestId('statusbar-update') as HTMLButtonElement;
     expect(chip.textContent).toContain('Downloading v1.5.0');
     expect(chip.disabled).toBe(true);
+  });
+});
+
+// #603: the build badge moved off the page (where it covered page actions) to
+// the status bar's right end, next to the version.
+describe('StatusBar environment badge', () => {
+  it('shows the badge after the version', () => {
+    render(<StatusBar {...baseProps} appVersion="1.4.2" environmentTag="Preview" />);
+    const badge = screen.getByTestId('statusbar-environment');
+    expect(badge.textContent).toBe('Preview');
+    const version = screen.getByTestId('statusbar-version');
+    expect(version.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no badge in production', () => {
+    render(<StatusBar {...baseProps} appVersion="1.4.2" />);
+    expect(screen.queryByTestId('statusbar-environment')).toBeNull();
   });
 });

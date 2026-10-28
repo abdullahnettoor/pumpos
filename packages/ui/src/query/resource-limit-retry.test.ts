@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { createQueryClient, shouldRetryQuery } from './queryClient.js';
 import { classifyNonJsonFailure, isResourceLimitError, RESOURCE_LIMIT } from '../services/cloud.js';
 

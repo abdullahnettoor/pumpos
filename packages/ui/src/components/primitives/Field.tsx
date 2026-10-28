@@ -2,7 +2,8 @@ import React from 'react';
 
 /**
  * Canonical form primitives. These are the single source of truth for inputs
- * across the app — they wrap the `.input` / `.select` / `.textarea` CSS classes,
+ * across the app — they wrap the `.input` / `.textarea` CSS classes (and re-export
+ * the pump-ds `Select`),
  * forward refs so they drop straight into React Hook Form's `register`, and
  * surface a consistent invalid state. Prefer these over bespoke inline-styled
  * inputs so every form looks and behaves identically.
@@ -21,6 +22,11 @@ export interface FieldProps {
   hint?: string;
   /** Validation message; when set, renders in the danger colour. */
   error?: string;
+  /**
+   * Id for the hint / error line, so a control that `htmlFor` cannot reach
+   * (a button such as `DatePickerButton`) can name it in `aria-describedby`.
+   */
+  messageId?: string;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
@@ -32,6 +38,7 @@ export const Field: React.FC<FieldProps> = ({
   required,
   hint,
   error,
+  messageId,
   children,
   className,
   style,
@@ -41,17 +48,25 @@ export const Field: React.FC<FieldProps> = ({
       <label className="field-label" htmlFor={htmlFor}>
         {label}
         {required && (
-          <span className="field-required" aria-hidden="true">
-            *
-          </span>
+          <>
+            <span className="field-required" aria-hidden="true">
+              *
+            </span>
+            {/* The asterisk is visual; a screen reader hears the word. */}
+            <span className="sr-only"> (required)</span>
+          </>
         )}
       </label>
     )}
     {children}
     {error ? (
-      <span className="field-error">{error}</span>
+      <span id={messageId} className="field-error">
+        {error}
+      </span>
     ) : hint ? (
-      <span className="field-hint">{hint}</span>
+      <span id={messageId} className="field-hint">
+        {hint}
+      </span>
     ) : null}
   </div>
 );
@@ -163,15 +178,9 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 Textarea.displayName = 'Textarea';
 
-export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  invalid?: boolean;
-}
-
-export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ invalid, className, children, ...props }, ref) => (
-    <select ref={ref} className={cx('select', invalid && 'input-invalid', className)} {...props}>
-      {children}
-    </select>
-  ),
-);
-Select.displayName = 'Select';
+/**
+ * The one `Select` is pump-ds's (`pump-ds/input/Select.tsx`). Re-exported here
+ * so a form can take its `Field` and its `Select` from one import.
+ */
+export { Select } from '../../pump-ds/input/Select.js';
+export type { SelectProps } from '../../pump-ds/input/Select.js';

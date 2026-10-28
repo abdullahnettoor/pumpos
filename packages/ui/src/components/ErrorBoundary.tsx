@@ -27,7 +27,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // eslint-disable-next-line no-console
+    // oxlint-disable-next-line no-console
     console.error('Unhandled UI error:', error, info.componentStack);
   }
 
@@ -73,7 +73,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           </p>
           <pre
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontFamily: 'var(--font-mono)',
               color: 'var(--state-danger-fg)',
               backgroundColor: 'var(--state-danger-bg)',

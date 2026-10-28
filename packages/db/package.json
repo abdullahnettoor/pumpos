@@ -16,6 +16,7 @@
     "db:check": "node scripts/check-migration-chain.mjs && node scripts/sync-supabase-migrations.mjs --check"
   },
   "dependencies": {
+    "@pump/shared": "*",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
   },

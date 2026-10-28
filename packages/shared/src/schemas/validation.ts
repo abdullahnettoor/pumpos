@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
+import { decantationSettingsSchema } from '../utils/decantation-settings.js';
+import { tankLevelSettingsSchema } from '../utils/tank-level.js';
 
 const timeStringSchema = z
   .string()
@@ -17,7 +19,11 @@ const weekdaySchema = z.enum([
 ]);
 
 export type OpenShiftBusinessDayState =
-  'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
+  | 'OPEN'
+  | 'CLOSED'
+  | 'NOT_CREATED'
+  | 'UNKNOWN'
+  | 'UNAVAILABLE';
 
 export function createOpenShiftFormSchema(
   currentBusinessDate: string,
@@ -25,7 +31,7 @@ export function createOpenShiftFormSchema(
 ) {
   return z
     .object({
-      shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
+      shiftTemplateId: z.string().min(1, 'Choose a shift template'),
       businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
     })
     .superRefine((values, ctx) => {
@@ -140,6 +146,9 @@ export const stationSchema = z.object({
         })
         .optional()
         .nullable(),
+      /** Tank-level thresholds (#520); `resolveTankLevelSettings` reads them. */
+      tankLevels: tankLevelSettingsSchema.optional(),
+      ...decantationSettingsSchema.shape,
     })
     .default({
       shift_grace_minutes: 15,
@@ -301,11 +310,33 @@ export const shiftCollectionSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+/** A numeric(12,2) money column's largest value (`credit_limit`, `collections.amount`). */
+const NUMERIC_12_2_MAX = 9_999_999_999.99;
+
+export const hasAtMostTwoDecimals = (n: number) => Math.abs(n * 100 - Math.round(n * 100)) <= 1e-6;
+
+/** `customers.credit_limit` is numeric(12,2): the largest amount it can hold. */
+export const CREDIT_LIMIT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * A Customer's credit limit: 0 or more, at most 2 decimal places, within the
+ * column's range. The one rule for the Customer form, the mobile limit sheet and
+ * the server's create/update use-cases, so none of them can accept what another
+ * refuses. `null` / absent mean "no limit".
+ */
+export const creditLimitSchema = z
+  .number()
+  .nonnegative('Enter 0 or more.')
+  .max(CREDIT_LIMIT_MAX, 'That is more than a limit can hold.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.')
+  .optional()
+  .nullable();
+
 export const customerCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().max(50).optional().nullable(),
   customerType: z.enum(['Regular', 'Credit', 'Fleet']).default('Regular'),
-  creditLimit: z.number().nonnegative().optional().nullable(),
+  creditLimit: creditLimitSchema,
   fleetCode: z.string().max(100).optional().nullable(),
   isPrepaid: z.boolean().default(false),
   settlementCycle: z.enum(['OPEN', 'EOD']).default('OPEN'),
@@ -499,7 +530,7 @@ export const attendantHandoverSchema = z
     terminalEntries: z
       .array(
         z.object({
-          terminalId: z.string().uuid('Invalid Payment Terminal ID'),
+          terminalId: z.string().uuid('Invalid payment terminal ID'),
           duId: z.string().uuid('Invalid DU ID').nullish(),
           cardAmount: handoverAmountSchema,
           upiAmount: handoverAmountSchema,
@@ -547,14 +578,29 @@ export const expenseEntryFormSchema = z.object({
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 
-/** Customer collection — an Office Record (ADR 0005). */
+/** `collections.amount` / `supplier_transactions.amount` are numeric(12,2): the largest payment they hold. */
+export const OFFICE_PAYMENT_AMOUNT_MAX = NUMERIC_12_2_MAX;
+
+/**
+ * The amount of an Office payment (a Collection or a Supplier Payment): above 0,
+ * within the column's range and at most 2 decimal places.
+ */
+const officePaymentAmountField = z.coerce
+  .number({ invalid_type_error: 'Amount is required' })
+  .positive('Amount must be positive')
+  .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
+  .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.');
+
+/**
+ * Customer collection — an Office Record (ADR 0005). The one form rule for the
+ * desktop quick entry and the mobile Record payment sheet: an amount above 0,
+ * within the column's range and at most 2 decimal places.
+ */
 export const collectionEntryFormSchema = z
   .object({
     entryDate: entryDateField,
     customerId: z.string().optional().default(''),
-    amount: z.coerce
-      .number({ invalid_type_error: 'Amount is required' })
-      .positive('Amount must be positive'),
+    amount: officePaymentAmountField,
     paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
     notes: z.string().max(500).optional().default(''),
     /** Account the money lands in. Not needed when a terminal is chosen. */
@@ -575,6 +621,21 @@ export const collectionEntryFormSchema = z
   });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
 
+/**
+ * Supplier payment — an Office Record (ADR 0005): the Entry Date and the
+ * Funding Account it is paid from, never a Shift. The mobile Record payment
+ * sheet checks its fields with this; the amount rule is the Collection's.
+ */
+export const supplierPaymentEntryFormSchema = z.object({
+  entryDate: entryDateField,
+  supplierId: z.string().optional().default(''),
+  amount: officePaymentAmountField,
+  notes: z.string().max(500).optional().default(''),
+  /** The money account it is paid from. */
+  fundingAccountId: z.string().min(1, 'Choose the account'),
+});
+export type SupplierPaymentEntryFormValues = z.infer<typeof supplierPaymentEntryFormSchema>;
+
 export const purchaseLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce
@@ -583,15 +644,16 @@ export const purchaseLineFormSchema = z.object({
   unitPrice: z.coerce
     .number({ invalid_type_error: 'Rate is required' })
     .positive('Rate must be positive'),
-  // Fuel lines may split the received quantity across destination tanks. The
-  // form injects this on submit; it is not a user-typed RHF field.
+  // Fuel invoice lines may capture the supplier's density at 15 °C.
+  invoiceDensity: z.union([z.literal(''), z.coerce.number().positive().max(99999.99)]).optional(),
+  // Legacy product clients may still send this, but fuel no longer allocates stock.
   tankAllocations: z
     .array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() }))
     .optional(),
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
-// A purchase is anchored to the business day by date, never a Shift (#308).
+// Purchase date is the Entry Date for fuel and the Business Date for products.
 export const purchaseEntryFormSchema = z.object({
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),
@@ -600,6 +662,95 @@ export const purchaseEntryFormSchema = z.object({
   lines: z.array(purchaseLineFormSchema).min(1, 'Add at least one line item'),
 });
 export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
+
+export const MIXED_PURCHASE_MESSAGE = 'Record fuel and products as separate purchases';
+
+/**
+ * One invoice is either all fuel (a Fuel Purchase, an Office Record) or all
+ * products (a Product Purchase, a forecourt stock event) — never both. Returns
+ * the message when the lines mix the two, else null. The single rule behind the
+ * form refinement and the submit handlers.
+ */
+export function mixedPurchaseError(
+  lines: ReadonlyArray<{ productId: string }>,
+  isFuelProduct: (productId: string) => boolean,
+): string | null {
+  const fuel = lines.filter((l) => isFuelProduct(l.productId)).length;
+  return fuel > 0 && fuel !== lines.length ? MIXED_PURCHASE_MESSAGE : null;
+}
+
+/** `purchaseEntryFormSchema` plus the fuel/product mix rule (needs the catalogue). */
+export const purchaseEntryFormSchemaFor = (isFuelProduct: (productId: string) => boolean) =>
+  purchaseEntryFormSchema.superRefine((data, ctx) => {
+    const message = mixedPurchaseError(data.lines, isFuelProduct);
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
+  });
+
+/**
+ * "Also record a supplier payment now" on a purchase: a separate Supplier
+ * payment (an Office Record) with its own Entry Date and Funding Account.
+ * Checked only when ticked.
+ */
+export const purchasePayNowFormSchema = z.object({
+  enabled: z.boolean().default(false),
+  fundingAccountId: z.string().optional().default(''),
+  amount: z.union([z.string(), z.number()]).optional().default(''),
+  /** The payment's Entry Date: the station's calendar date, never after today. */
+  entryDate: z.string().optional().default(''),
+});
+export type PurchasePayNowFormValues = z.infer<typeof purchasePayNowFormSchema>;
+
+/**
+ * The desktop purchase form: the invoice, what was bought, and the optional
+ * pay-now Supplier payment. `today` is the station's Entry Date, the latest a
+ * payment can be dated.
+ */
+export const purchaseWithPayNowFormSchemaFor = (
+  isFuelProduct: (productId: string) => boolean,
+  today: string,
+) =>
+  purchaseEntryFormSchema
+    .extend({
+      purchaseType: z.enum(['FUEL', 'PRODUCTS']).default('FUEL'),
+      payment: purchasePayNowFormSchema.default({}),
+    })
+    .superRefine((data, ctx) => {
+      const message = mixedPurchaseError(data.lines, isFuelProduct);
+      if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message });
+      const pay = data.payment;
+      if (!pay.enabled) return;
+      if (!pay.fundingAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'fundingAccountId'],
+          message: 'Choose the account',
+        });
+      }
+      const amount = officePaymentAmountField.safeParse(pay.amount === '' ? undefined : pay.amount);
+      if (!amount.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'amount'],
+          message: amount.error.issues[0]?.message ?? 'Amount is required',
+        });
+      }
+      if (!entryDateField.safeParse(pay.entryDate).success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'entryDate'],
+          message: 'Choose the payment date',
+        });
+      } else if (today && pay.entryDate > today) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['payment', 'entryDate'],
+          message: 'A payment cannot be dated after today',
+        });
+      }
+    });
+export type PurchaseWithPayNowFormValues = z.infer<
+  ReturnType<typeof purchaseWithPayNowFormSchemaFor>
+>;
 
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),

@@ -44,7 +44,7 @@ important domain rule (ADR 0005):
   and no shift or business day, and live in the ledger. The test is "is this
   paying for fuel or products right now?", not "which machine was used?"
 
-Office Records (entry date + Funding Account), the sales-only DSSR, the
+Office Records (entry date + Funding Account), the sales-only DSR, the
 Daily Cash Book and the per-Attendant Drawer are implemented.
 
 Operational flow:
@@ -58,7 +58,7 @@ Operations
  ↓
 Shift Summary       ← immutable snapshot, created on SHIFT close
  ↓
-DSSR                ← immutable snapshot, created on BUSINESS-DAY close
+DSR                ← immutable snapshot, created on BUSINESS-DAY close
  ↓
 Reports
 ```
@@ -70,9 +70,11 @@ Anchoring rules (target, ADR 0005):
 - **Office records** (collections, supplier payments, expenses, income, bank
   work) → **entry date only** (station-timezone calendar date, never Day
   Start), no `shift_id`, no `business_day_id`.
-- **Purchases** are forecourt stock events → `business_day_id` (sealed with
-  the day), never a `shift_id`. Paying for one is a separate supplier payment
-  (an office record).
+- **Product Purchases** are forecourt stock events → `business_day_id` (sealed
+  with the day), never a `shift_id`. A **Fuel Purchase** is an Office Record
+  (entry date, no stock); fuel stock comes only from **Decantation**
+  (`business_day_id`, no shift) — ADR 0007. Paying for a purchase is a separate
+  supplier payment (an office record).
 - **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =
@@ -240,17 +242,17 @@ Accessories
 ```
 
 Product sales are separate from fuel sales, which derive from nozzle readings.
-See `CONTEXT.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
+See `GLOSSARY.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
 
 ---
 
-## Shift Summary & DSSR
+## Shift Summary & DSR
 
 There are **two** immutable report snapshots:
 
 - **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
   Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
-- **DSSR** (Daily Station Sales Report) — created when a **business day is
+- **DSR** (Daily Station Sales Report) — created when a **business day is
   closed** / generated on demand (`dssr_snapshots`). Sales-only: composes the
   day's closed-shift summaries plus the day's sales, credit sales, purchases
   and stock. Office Records (collections, expenses, income, supplier
@@ -499,6 +501,29 @@ Do not introduce additional state libraries unless justified.
 
 ---
 
+# Toolchain (Vite+)
+
+The workspace runs on Vite+ (`vp`): Vite, Vitest, Oxlint and Oxfmt behind one
+CLI, configured in the root `vite.config.ts` (`lint`, `fmt`, `staged` blocks)
+and each package's `vite.config.ts` / `vitest.config.ts`.
+
+```text
+npm test                 every workspace's tests (each runs `vp test run`)
+npm run test:scripts     the guard-script tests in scripts/
+npm run lint             format check + guard scripts + `vp lint .`
+npx vp check             format + lint in one pass (`--fix` to apply)
+npx vp fmt .             format
+npx tsc -b               type check (also builds packages/*/dist)
+```
+
+- Import test APIs from `vite-plus/test`, and config helpers from `vite-plus`.
+- `vp dev` / `vp build` / `vp test` are built-ins; `vp run <script>` runs a
+  package.json script.
+- The pre-commit hook runs `vp staged` (`vp check --fix` on staged files).
+- `apps/marketing` is a standalone install with its own `vite.config.ts`.
+
+---
+
 # Backend Stack
 
 Use:
@@ -567,7 +592,7 @@ Tiers (see `packages/ui/src/query/hooks.ts` → `TIER`):
 ```text
 static       (stations, tanks, dispensers, nozzles, terminals, templates, users)  → 24h, persisted
 semi         (products, customers, suppliers, expense categories)                 → 10m, persisted
-operational  (shift status, sales, collections, inventory, DSSR)                  → 15s, not persisted
+operational  (shift status, sales, collections, inventory, DSR)                  → 15s, not persisted
 ```
 
 Mandatory rules:
@@ -746,7 +771,7 @@ Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning r
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one `GLOSSARY.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
 
 ### User flow
 

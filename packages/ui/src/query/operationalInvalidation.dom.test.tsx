@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { describe, expect, it } from 'vite-plus/test';
 import { renderHook } from '@testing-library/react';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -33,6 +34,10 @@ function invalidatedKeysAfterOperationalWrite(): string[] {
 }
 
 describe('useInvalidateOperational', () => {
+  it('refreshes the stations cache, which carries the tank levels (#520)', () => {
+    expect(invalidatedKeysAfterOperationalWrite()).toContain(queryKeys.stations()[0]);
+  });
+
   it('refreshes the Attendant Handover Report, which reads closed-shift handovers', () => {
     // Closing or correcting a shift changes this report; without the
     // invalidation an operator keeps seeing the pre-close variance.
@@ -41,9 +46,45 @@ describe('useInvalidateOperational', () => {
     );
   });
 
+  it('refreshes the Decantation Report', () => {
+    expect(invalidatedKeysAfterOperationalWrite()).toContain(
+      queryKeys.decantationReport('station-1', '2026-03-01', '2026-03-31')[0],
+    );
+  });
+
   it('refreshes the shift, day and summary caches a write moves', () => {
     const keys = invalidatedKeysAfterOperationalWrite();
-    for (const key of ['shift-status', 'business-day-status', 'shift-summaries', 'dssr-preview']) {
+    for (const key of [
+      'shift-status',
+      'business-day-status',
+      'shift-summaries',
+      'dssr-preview',
+      // The mobile Home's trend reads closed days' snapshots.
+      'dssr-range',
+      // Closing a Business Day (from the desktop Business Day tab too) moves the
+      // end of every mobile Insights range.
+      'insights-sales',
+      // Receivables move with every credit sale and collection, like a customer's balance.
+      'receivables',
+      'customer-statement',
+      // Payables move with every purchase and supplier payment, like a supplier's balance.
+      'payables',
+      'supplier-statement',
+      // The Suppliers → Payments tab lists every Supplier Payment.
+      'supplier-payments',
+      // Insights part 2: closed-day Shift Summaries, Tank Dips, Credit Sales and
+      // (by Entry Date) Collections all move with a write.
+      'insights-attendant-variance',
+      'insights-stock-loss',
+      'insights-credit-health',
+    ]) {
+      expect(keys).toContain(key);
+    }
+  });
+
+  it('refreshes Decantations, linkable Fuel Purchases and tank stock with a Decantation write', () => {
+    const keys = invalidatedKeysAfterOperationalWrite();
+    for (const key of ['decantations', 'linkable-purchases', 'purchases', 'inventory-status']) {
       expect(keys).toContain(key);
     }
   });

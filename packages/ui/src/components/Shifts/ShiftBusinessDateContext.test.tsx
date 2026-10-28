@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
-import { ShiftControlBar } from './ShiftControlBar.js';
+import { LiveShiftBar } from './LiveShiftBar.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -47,7 +47,6 @@ describe('ShiftBusinessDateContext', () => {
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <OpenShiftForm
-          lastShiftSummary={null}
           lastShift={{ id: 'previous' }}
           stationId="station-1"
           templates={[{ id: 'template-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }]}
@@ -60,7 +59,6 @@ describe('ShiftBusinessDateContext', () => {
           selectedTemplateId="template-1"
           businessDate="2026-09-10"
           currentBusinessDate="2026-09-12"
-          timeZone="Asia/Kolkata"
           onOpeningFloatChange={() => undefined}
           staffAssignments={[]}
           onStaffAssignmentChange={() => {}}
@@ -68,45 +66,35 @@ describe('ShiftBusinessDateContext', () => {
           onInitialReadingChange={() => {}}
           isOpening={false}
           onSubmit={() => {}}
-          onViewLastShiftSummary={() => {}}
         />
       </QueryClientProvider>,
     );
-    expect(html).toContain('Shift Business Date · 10 Sept 2026');
-    expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
-    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
-    expect(html).toContain('2026-09-10 · Open');
-    expect(html).toContain('2026-09-13 · Open · Unavailable (future)');
-    expect(html).toContain('Custom Business Date');
+    expect(html).toContain('Shift business date · 10 Sep 2026');
+    expect(html).toContain('Scheduled shift window · 06:00–14:00');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
+    expect(html).toContain('10 Sep 2026 · Open');
+    expect(html).toContain('13 Sep 2026 · Open · Unavailable (future)');
+    expect(html).not.toMatch(/\d{4}-\d{2}-\d{2} · Open/);
+    expect(html).toContain('Custom business date');
   });
 
-  it('shows the Station-local lifecycle time in the active state', () => {
+  it('shows the Station-local opened time and the historical context on the live shift', () => {
     const html = renderToStaticMarkup(
-      <ShiftControlBar
-        activeShift={{
-          ...historical,
-          templateName: 'Morning',
-          openedAt: '2026-09-12T01:30:00.000Z',
-          openingCash: 1000,
-        }}
-        shiftTotals={{
-          cashCollections: 0,
-          cashExpenses: 0,
-          cardCollections: 0,
-          upiCollections: 0,
-          creditSales: 0,
-          expenseCount: 0,
-        }}
-        handoversCompleted={0}
-        handoversAssigned={0}
-        quickActions={[]}
-        onCloseShiftClick={() => {}}
-        isPreparingClose={false}
-        currentBusinessDate="2026-09-12"
+      <LiveShiftBar
+        templateName="Morning"
+        state="shift-live"
+        openedAt="2026-09-12T01:30:00.000Z"
+        scheduledEndTime="14:00"
+        businessDate={historical.businessDate}
+        currentBusinessDate={historical.currentBusinessDate}
         timeZone="Asia/Kolkata"
+        handoversRecorded={0}
+        handoversExpected={2}
+        closing={false}
       />,
     );
-    expect(html).toContain('Shift Opened At · 12 Sept 2026, 07:00 am');
+    expect(html).toContain('7:00\u00a0am');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
   });
 
   it('keeps both lifecycle timestamps and historical context after close', () => {
@@ -127,9 +115,9 @@ describe('ShiftBusinessDateContext', () => {
         onBack={() => {}}
       />,
     );
-    expect(html).toContain('Shift Closed At · 12 Sept 2026, 03:00 pm');
-    expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
-    expect(html).toContain('Open next Shift');
-    expect(html).toContain('The Shift Summary is saved permanently.');
+    expect(html).toContain('closed 12 Sep 2026, 03:00 pm');
+    expect(html).toContain('Working on 10 Sep 2026. Actions are being recorded on 12 Sep 2026.');
+    expect(html).toContain('Open next shift');
+    expect(html).toContain('Its Shift Summary is saved and locked.');
   });
 });

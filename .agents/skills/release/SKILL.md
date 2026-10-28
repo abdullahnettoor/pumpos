@@ -95,7 +95,7 @@ Rules, in the order they bite:
   behind "What's new"; a summary longer than a short paragraph is a changelog
   wearing a disguise.
 - **Name the thing an operator names it**: shift, drawer, nozzle reading,
-  collection, credit customer. The vocabulary is in [`CONTEXT.md`](../../../CONTEXT.md).
+  collection, credit customer. The vocabulary is in [`GLOSSARY.md`](../../../GLOSSARY.md).
 - **Say when something is unchanged** if the release might look alarming: "Nothing
   changes in how you open or close a shift" is often the most useful line in it.
 - **Write no links, no version numbers, no PR references, no `@handles`.** They

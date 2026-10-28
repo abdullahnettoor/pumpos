@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { reportsRouter } from './reports.js';
 
@@ -250,5 +250,35 @@ describe('GET /reports/attendant-handovers', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.data.attendants).toEqual([]);
+  });
+});
+
+/** Every read returns no rows: an empty range for the Decantation Report. */
+function emptyDb() {
+  const builder: any = {
+    from: () => builder,
+    innerJoin: () => builder,
+    leftJoin: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: () => builder,
+    then: (resolve: (v: unknown[]) => void) => Promise.resolve([]).then(resolve),
+  };
+  return { select: () => builder };
+}
+
+describe('GET /reports/decantations (roles: Owner, Manager, Accountant)', () => {
+  const DEC_URL = '/reports/decantations?stationId=st-1&from=2026-03-01&to=2026-03-31';
+
+  it.each(['Attendant', 'Staff'])('refuses a %s with FORBIDDEN', async (role) => {
+    const res = await makeApp(fakeDb([]), role).request(DEC_URL);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as any;
+    expect(body.error.code).toBe('FORBIDDEN');
+  });
+
+  it.each(['Owner', 'Manager', 'Accountant'])('admits a %s', async (role) => {
+    const res = await makeApp(emptyDb(), role).request(DEC_URL);
+    expect(res.status).toBe(200);
   });
 });

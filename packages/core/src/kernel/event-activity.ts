@@ -1,9 +1,17 @@
+import { formatInstantDate } from '@pump/shared';
 import type { DomainEvent } from './event.js';
 import { BusinessEvents, type BusinessEventType } from './event-catalog.js';
 
 export type EventTone = 'info' | 'success' | 'warning' | 'danger' | 'default';
 export type EventValueFormat =
-  'text' | 'integer' | 'decimal' | 'inr' | 'date' | 'volume-litres' | 'quantity' | 'percentage';
+  | 'text'
+  | 'integer'
+  | 'decimal'
+  | 'inr'
+  | 'date'
+  | 'volume-litres'
+  | 'quantity'
+  | 'percentage';
 export type EventGroupingRole = 'primary' | 'related';
 export type EventActorKind = 'tenant_user' | 'platform_admin' | 'system';
 export type ActivityValue = string | number | boolean;
@@ -104,6 +112,15 @@ export const EventActivityCatalog = {
     BusinessEvents.ORGANIZATION_CREATED,
     'Organization created',
   ),
+  [BusinessEvents.ORGANIZATION_UPDATED]: info(
+    BusinessEvents.ORGANIZATION_UPDATED,
+    'Organization profile updated',
+    [
+      template('organization-updated.v1', 'Updated the organization {fields}.', {
+        fields: 'text',
+      }),
+    ],
+  ),
   [BusinessEvents.ORGANIZATION_DEACTIVATED]: danger(
     BusinessEvents.ORGANIZATION_DEACTIVATED,
     'Organization deactivated',
@@ -161,6 +178,16 @@ export const EventActivityCatalog = {
     'Team member reactivated',
   ),
   [BusinessEvents.USER_UPDATED]: info(BusinessEvents.USER_UPDATED, 'Team member updated'),
+  [BusinessEvents.USER_PERMISSIONS_CHANGED]: warning(
+    BusinessEvents.USER_PERMISSIONS_CHANGED,
+    'Team member permissions changed',
+    [
+      template('user-permissions-changed.v1', 'Changed permissions for {member}: {summary}.', {
+        member: 'text',
+        summary: 'text',
+      }),
+    ],
+  ),
   [BusinessEvents.PRODUCT_CREATED]: success(BusinessEvents.PRODUCT_CREATED, 'Product added'),
   [BusinessEvents.PRODUCT_UPDATED]: info(BusinessEvents.PRODUCT_UPDATED, 'Product updated'),
   [BusinessEvents.PRICE_CHANGED]: warning(BusinessEvents.PRICE_CHANGED, 'Price changed'),
@@ -268,6 +295,27 @@ export const EventActivityCatalog = {
   ),
   [BusinessEvents.FUEL_RECEIVED]: success(BusinessEvents.FUEL_RECEIVED, 'Fuel received'),
   [BusinessEvents.TANK_DIP_RECORDED]: info(BusinessEvents.TANK_DIP_RECORDED, 'Tank dip recorded'),
+  [BusinessEvents.DECANTATION_RECORDED]: success(
+    BusinessEvents.DECANTATION_RECORDED,
+    'Decantation recorded',
+  ),
+  [BusinessEvents.DECANTATION_DISCARDED]: info(
+    BusinessEvents.DECANTATION_DISCARDED,
+    'Decantation draft discarded',
+  ),
+  [BusinessEvents.DECANTATION_FLAGGED]: warning(
+    BusinessEvents.DECANTATION_FLAGGED,
+    'Decantation flagged',
+  ),
+  [BusinessEvents.DECANTATION_PURCHASE_LINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_LINKED,
+    'Decantation linked to purchase',
+  ),
+  [BusinessEvents.DECANTATION_PURCHASE_UNLINKED]: info(
+    BusinessEvents.DECANTATION_PURCHASE_UNLINKED,
+    'Decantation unlinked from purchase',
+  ),
+  [BusinessEvents.DENSITY_RECORDED]: info(BusinessEvents.DENSITY_RECORDED, 'Density recorded'),
   [BusinessEvents.TANK_TRANSFER_COMPLETED]: success(
     BusinessEvents.TANK_TRANSFER_COMPLETED,
     'Tank transfer completed',
@@ -491,7 +539,7 @@ function formatValue(value: ActivityValue, format: EventValueFormat): string | n
       String(value)
         // Deliberate: activity text is rendered in a UI and in PDFs, so control
         // characters from upstream payloads are stripped rather than escaped.
-        // eslint-disable-next-line no-control-regex
+        // oxlint-disable-next-line no-control-regex
         .replace(/[\u0000-\u001F\u007F]/g, ' ')
         .trim() || null
     );
@@ -509,13 +557,7 @@ function formatValue(value: ActivityValue, format: EventValueFormat): string | n
       return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(numeric);
     case 'date': {
       const date = new Date(String(value));
-      return Number.isNaN(date.valueOf())
-        ? null
-        : new Intl.DateTimeFormat('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          }).format(date);
+      return Number.isNaN(date.valueOf()) ? null : formatInstantDate(date);
     }
     case 'volume-litres':
       return `${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 }).format(numeric)} L`;

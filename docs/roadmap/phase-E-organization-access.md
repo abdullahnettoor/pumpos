@@ -10,7 +10,7 @@ baseline. Phase two adds payment delinquency and Restricted Access.
 
 Architecture rationale is recorded in
 `docs/adr/0004-organization-access-control.md`. Canonical terms live in
-`CONTEXT.md`.
+`GLOSSARY.md`.
 
 ## Decisions
 

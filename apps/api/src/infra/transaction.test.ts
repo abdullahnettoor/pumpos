@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   RecordHandover,
@@ -16,6 +16,7 @@ import {
   type HandoverTerminalEntry,
   type Shift,
   type ShiftRepository,
+  type ShiftWriteGateReader,
 } from '@pump/core';
 import type { DbClient } from '@pump/db';
 import { runInTransaction } from './transaction.js';
@@ -109,6 +110,7 @@ const handoverContext: HandoverContext = {
   creditSales: 0,
   omcCardSales: 0,
   merchandiseCash: 0,
+  attendantDus: [{ duId: 'du-1', duCode: 'DU-1', duName: 'DU 1' }],
   openingFloat: 0,
 };
 
@@ -230,6 +232,18 @@ class HandoverRepo implements HandoverRepository {
   }
 }
 
+const shiftWriteGate: ShiftWriteGateReader = {
+  async discover() {
+    return { shift, businessDay };
+  },
+  async lockForWrite() {
+    return { shift, businessDay };
+  },
+  async readOpeningCash() {
+    return shift.openingCash;
+  },
+};
+
 const ctx: ExecutionContext = {
   organizationId: 'org-1',
   stationId: 'station-1',
@@ -252,6 +266,7 @@ describe('runInTransaction Handover atomicity', () => {
           const useCase = new RecordHandover({
             shifts: new ShiftRepo(),
             businessDays: new BusinessDayRepo(),
+            shiftWriteGate,
             context: new ContextReader(),
             handovers: new HandoverRepo(stateFor(tx)),
             events,

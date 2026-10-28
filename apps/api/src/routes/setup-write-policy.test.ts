@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Role } from '@pump/shared';
 import { stationSetupRouter } from './station-setup.js';
 import { productsRouter } from './products.js';
@@ -45,8 +45,10 @@ const BLOCKED_UNDER_RESTRICTED: ReadonlyArray<[string, string, string]> = [
   ['PUT', '/setup/tanks/tank-1', 'infrastructure edits'],
   ['DELETE', '/setup/tanks/tank-1', 'infrastructure removal'],
   ['POST', '/setup/dispensers', 'infrastructure'],
+  ['POST', '/setup/dispensers/with-nozzles', 'infrastructure'],
   ['POST', '/setup/nozzles', 'infrastructure'],
   ['POST', '/setup/shift-templates', 'shift structure'],
+  ['POST', '/setup/shift-templates/batch', 'shift structure'],
   ['POST', '/setup/users', 'team invitations'],
   ['PUT', '/setup/users/user-2', 'team administration'],
   ['POST', '/setup/users/user-2/reactivate', 'team reactivation'],

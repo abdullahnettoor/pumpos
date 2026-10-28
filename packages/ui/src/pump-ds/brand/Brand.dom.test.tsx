@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { MARK_PATH, MARK_VIEWBOX, PumpOSLockup, PumpOSMark } from './index.js';
 
 /**

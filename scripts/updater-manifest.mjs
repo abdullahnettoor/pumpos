@@ -166,7 +166,7 @@ export function normalizeOperatorNotes(raw, maxLength = 4000) {
   if (typeof raw !== 'string') return '';
   const cleaned = raw
     .replace(/\r\n?/g, '\n')
-    // eslint-disable-next-line no-control-regex
+    // oxlint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
     .split('\n')
     .filter((line) => !CHANGELOG_FURNITURE.some((pattern) => pattern.test(line.trim())))

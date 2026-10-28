@@ -53,6 +53,24 @@ Auth/session and anything live are operational (or uncached); never persist them
      `refreshAfterCreditChange` (`Shifts/HandoverDrawer.tsx`), `handleCloseShift`
      (`Shifts/ShiftsManagement.tsx`).
 
+7. **Patch from the response, then revalidate (#606).** A write that changes a cached view
+   writes the server's accepted result into it with `setQueryData`, then starts the background
+   invalidation. The board updates when the save answers, not one refetch later, and stays
+   right if that refetch fails.
+   - One pure patch helper per write kind in `query/patches/*.ts`, unit-tested on a realistic
+     cached payload. Apply it through `patchQueryData` / `patchQueriesData`
+     (`query/patches/applyPatch.ts`): they skip an empty cache and mark the entry as patched
+     (`isAwaitingConfirmation`).
+   - **Never invent a figure the server didn't return.** Labels the answer lacks (a category or
+     party name) may come from the record the operator picked. Money, totals and anything the
+     server derives may not. Leave that view to the revalidation.
+   - Patch inside the synchronous `onSuccess`, before the invalidation. Invalidating right after
+     also cancels a refetch already in flight, so an older answer cannot overwrite the patch.
+   - Patched today: handover, credit / OMC card sale (+ voids), Handover and Billed Product
+     Sales, Expense / Income / Collection / Supplier payment (+ Expense / Income voids),
+     Business Day close, and a fuel price change (current price and history; a Scheduled Price joins the history only, #619). Left to revalidation: Purchase, shift open and close (their answers
+     lack the list or board fields).
+
 ## Review checklist (before merge)
 - [ ] New reads use a hook / `ensureQueryData` with a centralized key + correct tier.
 - [ ] Every create/update/delete for a cached entity invalidates its key (check ALL screens that
@@ -61,6 +79,9 @@ Auth/session and anything live are operational (or uncached); never persist them
       `useInvalidateOperational`.
 - [ ] No user-facing success feedback (spinner clear, drawer close, success card) is awaited
       behind an invalidation/refetch; `onSuccess` handlers stay synchronous.
+- [ ] A write whose answer carries a cached view's figures patches that view through a tested
+      helper in `query/patches/` before invalidating; no patch writes a figure the server did
+      not return.
 - [ ] Nothing operational/auth is added to `PERSIST_PREFIXES`.
 - [ ] No `refetchOnMount: 'always'` on tiered queries (it defeats the cache).
 - [ ] Measure with the API `Server-Timing` header; confirm fewer network calls on repeat nav.

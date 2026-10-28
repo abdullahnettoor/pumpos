@@ -8,3 +8,4 @@ export * from './close-shift.js';
 export * from './refresh-shift-summary.js';
 export * from './reopen-shift.js';
 export * from './lock-shift.js';
+export * from './compose-shift-sales.js';

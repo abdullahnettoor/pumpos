@@ -40,8 +40,21 @@ jobs:
       - name: Typecheck
         run: npx tsc -b
 
+      # Test files the build tsconfigs exclude (packages/core) are checked here,
+      # with no emit.
+      - name: Typecheck tests
+        run: npm run typecheck:tests
+
+      # Style-check ratchet over packages/ui/src (#517): dead classes, undefined
+      # CSS variables, raw colours, default-palette classes and mismatched
+      # fill/text pairs. A file may not gain violations, and a fixed one must
+      # lower its entry in class-guard/allowlist.json. Its own step so a failure
+      # is named; the Test step below excludes it so it does not run twice.
+      - name: Style check (packages/ui)
+        run: npm run test:classes -w @pump/ui
+
       - name: Test
-        run: npm run test --workspaces --if-present
+        run: npm run test --workspaces --if-present -- --exclude '**/classGuard.test.ts'
 
       # `scripts/` is not a workspace, so the line above skips it. These are the
       # lint-ratchet guards; an untested guard that quietly stops working puts
@@ -92,7 +105,10 @@ jobs:
           # The suite creates and drops its own schema, so it is safe against
           # any database; CI still gets a throwaway one.
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pumpos_test
-        run: npx vitest run apps/api/src/infra/repositories/__integration__
+        # One file at a time: every file creates shared roles (authenticated, anon)
+        # and its own schema up front, and running them in parallel races on
+        # pg_authid / pg_namespace (duplicate key on the role or schema).
+        run: npx vp test run apps/api/src/infra/repositories/__integration__ --no-file-parallelism
 
   # One migration source of truth (#270). packages/db/migrations (drizzle
   # journal) is authoritative; supabase/migrations is derived from it. Each
@@ -165,36 +181,22 @@ jobs:
   # Separate job so a lint failure is instantly distinguishable from a broken
   # test, and so lint problems never mask a real regression.
   #
-  # Formatting is Prettier's, and it is absolute: `format:check` fails on any
-  # unformatted file. Run `npm run format` to fix. The lint config carries no
-  # stylistic rules, so the two tools never disagree.
+  # Formatting is Oxfmt's (`fmt` block in vite.config.ts), and it is absolute:
+  # `format:check` fails on any unformatted file. Run `npm run format` to fix.
+  # The lint config carries no stylistic rules, so the two tools never disagree.
   #
-  # ESLint is a RATCHET, not a wall. The pre-existing violations are recorded
-  # in eslint-suppressions.json, so today's code passes. Only NEW violations of
-  # the error-level rules fail. Warnings (currently ~7.2k, mostly `any`-related)
-  # never fail the build — run `npm run lint:warnings` to see them.
-  #
-  # Two guards keep that number honest, because a ratchet is only worth having
-  # if the count cannot be quietly edited:
+  # Linting is Oxlint's (`lint` block in vite.config.ts). Error-level rules fail
+  # the build; warnings never do. Oxlint has no suppressions file, so known
+  # exceptions are reviewed per-file overrides in that `lint` block.
   #
   #   scripts/check-no-hook-disables.mjs      (run by `npm run lint`)
-  #     Inline `eslint-disable` comments for react-hooks rules are invisible to
-  #     `--prune-suppressions`, so the file could read `{}` while violations
-  #     remained in the source. That is what happened in #75.
-  #
-  #   scripts/check-suppressions-not-grown.mjs   (the step below)
-  #     Nothing stopped the file itself growing: `npm run lint:baseline` plus a
-  #     commit took the build green again (#78). Totals are compared against the
-  #     merge base, so moving a suppression is fine and only a net increase
-  #     fails. Put [ratchet] in the PR title when an increase is deliberate.
+  #     Inline disable comments for React hook rules hide violations where no
+  #     one reviews them. That is what happened in #75.
   lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Need the base branch to diff the suppression baseline against.
-          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -202,7 +204,7 @@ jobs:
       - run: npm ci
 
       # Cheap and needs no build output, so it runs first and fails fast.
-      - name: Prettier
+      - name: Format (Oxfmt)
         run: npm run format:check
 
       # Type-aware rules need the declaration output of the workspace packages.
@@ -210,29 +212,12 @@ jobs:
         run: npx tsc -b
 
       # Runs the inline-disable check first; see the note above.
-      - name: ESLint
+      - name: Lint (Oxlint)
         run: npm run lint
 
-      # Only meaningful on a pull request: on a push to dev/main the merge has
-      # already happened and there is nothing to compare against.
-      - name: Suppression baseline has not grown
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          git show "$BASE_SHA:eslint-suppressions.json" > /tmp/base-suppressions.json 2>/dev/null \
-            || echo '{}' > /tmp/base-suppressions.json
-          allow=""
-          case "$PR_TITLE" in
-            *'[ratchet]'*|*'[RATCHET]'*) allow="--allow-growth" ;;
-          esac
-          node scripts/check-suppressions-not-grown.mjs \
-            /tmp/base-suppressions.json eslint-suppressions.json $allow
-
   # Marketing is a standalone install with its own lockfile (Astro 7 / Vite 8),
-  # so it cannot share the workspace install above. It carries its own ESLint
-  # config and suppression baseline for the same reason.
+  # so it cannot share the workspace install above. It carries its own Vite+
+  # config (apps/marketing/vite.config.ts) for the same reason.
   marketing:
     name: marketing
     runs-on: ubuntu-latest
@@ -260,7 +245,21 @@ jobs:
       - run: npm run lint
         if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
+      - run: npm test
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
       - run: npm run build
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
+        # Builds scheduled posts too, so their links are checked before they go live.
+        env:
+          PUBLIC_BLOG_SHOW_SCHEDULED: 'true'
+      # After the build: tsc needs the astro:content types it generates.
+      - name: Typecheck
+        run: npm run typecheck
+        if: steps.changes.outputs.affected == 'true'
+        working-directory: apps/marketing
+      - run: npm run check:links
         if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
       - name: Not affected

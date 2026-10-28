@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
 import { cleanup, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 
 const getSession = vi.fn();

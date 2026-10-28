@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { createDb, DbClient, schema } from '@pump/db';
 import {
@@ -15,74 +15,46 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
+import { can, type PermissionId, type Role } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
   UuidGenerator,
   createEvent,
   type DomainEvent,
-  type EventTone,
 } from '@pump/core';
+import { desktopDownloadsRouter } from './routes/desktop-downloads.js';
 import { TENANT_ROUTERS } from './routes/tenant-routers.js';
 import { platformAccessRouter } from './routes/platform-access.js';
 import { expireDemoOrganizations, platformDemosRouter } from './routes/platform-demos.js';
-import { RestoreOrganization, SuspendOrganization } from '@pump/core';
+import { RestoreOrganization, SuspendOrganization, resolveUserPermissions } from '@pump/core';
 import type { AccessChangeResult } from '@pump/core';
-import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
+import {
+  DrizzleOrganizationAccessReader,
+  DrizzleOrganizationSubscriptionRepository,
+} from './infra/repositories/organization-access.repo.js';
+import { DrizzleUserPermissionChangesRepository } from './infra/repositories/user-permission-changes.repo.js';
 import { buildPlatformContext } from './infra/context.js';
 import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
+import { activityHandler } from './routes/activity-day.js';
 import { rateLimit } from './infra/rate-limit.js';
 import { resolveCorsOrigin } from './infra/cors.js';
 import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
+import { readActivityMetadata } from './infra/activity.js';
 import {
-  readActivityMetadata,
-  renderActivityFallback,
-  resolveActivityActor,
-  type ActivityActor,
-  type ActivityGroupingRole,
-} from './infra/activity.js';
+  activityEventFields,
+  activityJoins,
+  formatActivityEvent,
+  type ActivityEvent,
+  type ActivityEventRow,
+  type ActivityGroupSummary,
+} from './infra/activity-events.js';
 
-// --- Auth cache (per-isolate) --------------------------------------------
-// Cloudflare Workers reuse isolates across many requests, so a module-level
-// Map behaves as a warm per-isolate LRU. This eliminates the 2 DB round-trips
-// (users + userStationAssignments) that would otherwise fire on every
-// authenticated request — the single biggest source of Hyperdrive queries.
-// TTL is deliberately short (60s) so role / assignment changes propagate
-// promptly without any explicit invalidation.
-type CachedAuthUser = {
-  id: string;
-  email: string | null;
-  fullName: string | null;
-  organizationId: string;
-  role: Role;
-  assignedStationIds: string[];
-};
-const AUTH_CACHE_TTL_MS = 60_000;
-const AUTH_CACHE_MAX = 500;
-const authCache = new Map<string, { user: CachedAuthUser; expiresAt: number }>();
-
-function getCachedAuthUser(authId: string): CachedAuthUser | null {
-  const entry = authCache.get(authId);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    authCache.delete(authId);
-    return null;
-  }
-  return entry.user;
-}
-
-function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
-  authCache.set(authId, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
-  if (authCache.size > AUTH_CACHE_MAX) {
-    const firstKey = authCache.keys().next().value;
-    if (firstKey !== undefined) authCache.delete(firstKey);
-  }
-}
+import { getCachedAuthUser, setCachedAuthUser, type CachedAuthUser } from './infra/auth-cache.js';
 
 type Bindings = {
   HYPERDRIVE: Hyperdrive;
@@ -241,50 +213,6 @@ app.get('/health', (c) => {
 // Authenticated Routes Group
 const api = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-type ActivityEventRow = {
-  eventId: string;
-  eventType: string;
-  stationId: string | null;
-  stationName: string | null;
-  aggregateType: string;
-  aggregateId: string;
-  occurredAt: Date;
-  recordedAt: Date;
-  actorId: string | null;
-  actorName: string | null;
-  actorEmail: string | null;
-  correlationId: string | null;
-  causationId: string | null;
-  metadata: unknown;
-};
-
-interface ActivityEvent {
-  eventId: string;
-  eventType: string;
-  stationId: string | null;
-  stationName: string | null;
-  aggregateType: string;
-  aggregateId: string;
-  occurredAt: Date;
-  recordedAt: Date;
-  correlationId: string | null;
-  causationId: string | null;
-  groupingRole: ActivityGroupingRole | null;
-  actor: ActivityActor;
-  title: string;
-  description: string;
-  tone: EventTone;
-  renderStatus: 'rendered' | 'fallback';
-}
-
-interface ActivityGroupSummary {
-  groupId: string;
-  primary: ActivityEvent;
-  relatedCount: number;
-  primaryRecordedAt: Date;
-  isLegacy: boolean;
-}
-
 interface ActivityPage {
   items: ActivityGroupSummary[];
   nextCursor: string | null;
@@ -301,23 +229,6 @@ interface ActivityCursor {
 
 const ACTIVITY_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const activityEventFields = {
-  eventId: schema.events.eventId,
-  eventType: schema.events.eventType,
-  stationId: schema.events.stationId,
-  stationName: schema.stations.name,
-  aggregateType: schema.events.aggregateType,
-  aggregateId: schema.events.aggregateId,
-  occurredAt: schema.events.occurredAt,
-  recordedAt: schema.events.recordedAt,
-  actorId: schema.events.actorId,
-  actorName: schema.users.fullName,
-  actorEmail: schema.users.email,
-  correlationId: schema.events.correlationId,
-  causationId: schema.events.causationId,
-  metadata: schema.events.metadata,
-};
 
 function encodeActivityCursor(row: Pick<ActivityEventRow, 'recordedAt' | 'eventId'>): string {
   return btoa(JSON.stringify({ recordedAt: row.recordedAt.toISOString(), eventId: row.eventId }))
@@ -370,32 +281,6 @@ function isValidActivityGroupId(value: string): boolean {
   return ACTIVITY_UUID_PATTERN.test(value);
 }
 
-function formatActivityEvent(row: ActivityEventRow, isLegacy = false): ActivityEvent {
-  const metadata = readActivityMetadata(row.metadata);
-  const rendered = renderActivityFallback({ eventType: row.eventType, metadata: row.metadata });
-  return {
-    eventId: row.eventId,
-    eventType: row.eventType,
-    stationId: row.stationId,
-    stationName: row.stationName,
-    aggregateType: row.aggregateType,
-    aggregateId: row.aggregateId,
-    occurredAt: row.occurredAt,
-    recordedAt: row.recordedAt,
-    correlationId: row.correlationId,
-    causationId: row.causationId,
-    groupingRole: isLegacy ? 'primary' : metadata.groupingRole,
-    actor: resolveActivityActor(row.metadata, row.actorId, {
-      fullName: row.actorName,
-      email: row.actorEmail,
-    }),
-    title: rendered.title,
-    description: rendered.description,
-    tone: rendered.tone,
-    renderStatus: rendered.renderStatus,
-  };
-}
-
 function activityGroupFilter(
   organizationId: string,
   stationId: string | undefined,
@@ -421,19 +306,6 @@ function activityGroupFilter(
       ${stationFilter}
       ${typeFilter}
   )`;
-}
-
-function activityJoins(organizationId: string) {
-  return {
-    station: and(
-      eq(schema.stations.id, schema.events.stationId),
-      eq(schema.stations.organizationId, organizationId),
-    ),
-    actor: and(
-      eq(schema.users.id, schema.events.actorId),
-      eq(schema.users.organizationId, organizationId),
-    ),
-  };
 }
 
 // Auth Middleware (validates JWT tokens issued by Supabase Auth)
@@ -525,7 +397,21 @@ api.use('*', async (c, next) => {
       setCachedAuthUser(authId, cachedUser);
     }
 
-    c.set('user', cachedUser);
+    // Identity (Role, stations) may be served from the warm cache, but
+    // effective Permissions are resolved on every request so an Owner's change
+    // or an entitlement lapse applies immediately (ADR 0013). Fixed Roles skip
+    // the reads; others cost one indexed query (a second only when changes exist).
+    const identity = cachedUser;
+    const permissions = await runWithFallback((client) =>
+      resolveUserPermissions(
+        {
+          access: new DrizzleOrganizationAccessReader(client),
+          changes: new DrizzleUserPermissionChangesRepository(client),
+        },
+        { organizationId: identity.organizationId, userId: identity.id, role: identity.role },
+      ),
+    );
+    c.set('user', { ...identity, permissions });
 
     await next();
   } catch (err: any) {
@@ -559,70 +445,14 @@ api.get('/session', (c) => {
   });
 });
 
-// GET /api/organization - current organization profile
-api.get('/organization', async (c) => {
-  const user = c.var.user;
-  const db = c.var.db;
-  const org = await db.query.organizations.findFirst({
-    where: eq(schema.organizations.id, user.organizationId),
-  });
-  if (!org) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } },
-      404,
-    );
-  }
-  return c.json({ success: true, data: org });
-});
-
-// PUT /api/organization - update org name + profile metadata (Owner only)
-api.put('/organization', async (c) => {
-  const user = c.var.user;
-  if (!canManageUsers(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = organizationUpdateSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: parsed.error.issues[0]?.message || 'Invalid input',
-        },
-      },
-      400,
-    );
-  }
-  const db = c.var.db;
-  const [updated] = await db
-    .update(schema.organizations)
-    .set({ name: parsed.data.name, metadata: parsed.data.metadata ?? {}, updatedAt: new Date() })
-    .where(eq(schema.organizations.id, user.organizationId))
-    .returning();
-  return c.json({ success: true, data: updated });
-});
-
 // GET /api/activity - human-readable business-event activity groups (Owner only).
 // (Named /activity rather than /events so ad-blockers don't block it.)
-api.get('/activity', async (c) => {
+// `?date=` selects the role-filtered Business Day feed (routes/activity-day.ts);
+// without it this Owner-only audit feed answers. Dispatch is explicit.
+api.get('/activity', activityHandler(auditActivityFeed));
+
+async function auditActivityFeed(c: Context<{ Variables: Pick<Variables, 'db' | 'user'> }>) {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
-      },
-      403,
-    );
-  }
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');
   let limit: number;
@@ -704,12 +534,12 @@ api.get('/activity', async (c) => {
       hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]) : null,
   };
   return c.json({ success: true, data });
-});
+}
 
 // GET /api/activity/:groupId - one grouped command, including lazy siblings.
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
+  if (!can(user, 'activity.view')) {
     return c.json(
       {
         success: false,
@@ -794,6 +624,9 @@ api.use('*', idempotency);
 // Mount routes — through the shared list so every tenant router is also
 // enumerated by the station-tenancy coverage test (#235).
 for (const [prefix, router] of TENANT_ROUTERS) api.route(prefix, router);
+
+// Read-only, authenticated, not tenant data: kept out of TENANT_ROUTERS.
+api.route('/desktop-downloads', desktopDownloadsRouter);
 
 // Mount authenticated group
 app.route('/api', api);
@@ -1489,6 +1322,19 @@ platform.route('/organizations', platformAccessRouter);
 platform.route('/demos', platformDemosRouter);
 
 app.route('/platform', platform);
+
+/**
+ * The fully mounted route table, read by `write-policy-coverage.test.ts` so a
+ * mutation registered anywhere on the app — inline or in a router — has to
+ * declare its Restricted Access answer (#626).
+ */
+export function registeredRoutes(): ReadonlyArray<{
+  method: string;
+  path: string;
+  handler: unknown;
+}> {
+  return app.routes;
+}
 
 // Daily demo expiry maintenance; the handler also runs for scheduled test events.
 export async function runDemoExpiry(db: DbClient, env: Bindings, now = new Date()) {

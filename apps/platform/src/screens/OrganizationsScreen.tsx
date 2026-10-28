@@ -8,7 +8,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Banner, Button, Checkbox, DataTable, PageLayout, Select, TextInput } from '@pump/ui';
+import { Banner, Button, Checkbox, DataTable, PageFrame, Select, TextInput } from '@pump/ui';
 import { useOwners } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import type { OwnerRow } from '../api/types.js';
@@ -114,7 +114,7 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
 
   return (
     <>
-      <PageLayout
+      <PageFrame
         title="Organizations"
         subtitle={`Platform back-office — ${target.label}`}
         actions={
@@ -166,7 +166,7 @@ export const OrganizationsScreen: React.FC<OrganizationsScreenProps> = ({ target
           highlightRowId={selectedId}
           onRowClick={(row) => setSelectedId(row.organizationId)}
         />
-      </PageLayout>
+      </PageFrame>
 
       <OrganizationDrawer target={target} row={selected} onClose={() => setSelectedId(null)} />
       {inviting && <InviteOwnerDrawer target={target} onClose={() => setInviting(false)} />}

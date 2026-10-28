@@ -1,8 +1,14 @@
-import { drawerKey, isTwoLevelVarianceSnapshot } from '@pump/shared';
+import {
+  drawerKey,
+  isBalancedQuantity,
+  isTwoLevelVarianceSnapshot,
+  round2,
+  type ProductType,
+} from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const roundQty = (n: number) => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
 interface FuelAgg {
   productId: string | null;
@@ -28,6 +34,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   let netVolume = 0;
   let fuelSalesValue = 0;
   let totalCashVariance = 0;
+  // Cash the Drawers took for sales, floats excluded (Σ declared + drops − float).
+  let cashSales = 0;
   const nozzleAgg: Record<string, FuelAgg & { nozzleId: string; nozzleName: string }> = {};
   const productAgg: Record<string, FuelAgg> = {};
   const shifts: {
@@ -41,6 +49,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     /** Null for pre-#287 shifts, whose cashVariance already includes it. */
     attendantVariance: number | null;
     netVolume: number;
+    /**
+     * This shift's fuel sales (from its summary): lets a later day compare shift by shift.
+     * Null when the summary recorded none, so a comparison skips it rather than reading 0.
+     */
+    fuelSalesValue: number | null;
   }[] = [];
   // Attendant (Handover) variance per Attendant/DU across the day (#287).
   let totalAttendantVariance = 0;
@@ -59,6 +72,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     netVolume += sNet;
     fuelSalesValue += Number(snap.totalFuelSalesValue ?? 0);
     totalCashVariance += Number(snap.cashVariance ?? 0);
+    cashSales += Number(snap.payments?.cash ?? snap.reconciliation?.cashSales ?? 0);
     const twoLevel = isTwoLevelVarianceSnapshot(snap);
     let shiftAttendantVariance = 0;
     const drawerRows = twoLevel && Array.isArray(snap.drawers) ? snap.drawers : [];
@@ -88,6 +102,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       cashVariance: Number(snap.cashVariance ?? 0),
       attendantVariance: sAttendantVariance,
       netVolume: sNet,
+      fuelSalesValue: snap.totalFuelSalesValue == null ? null : Number(snap.totalFuelSalesValue),
     });
     for (const r of (snap.readings ?? []) as Record<string, any>[]) {
       const gross = Number(r.grossVolume ?? r.volumeSold ?? 0);
@@ -139,9 +154,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Merchandise sales (POS) by payment method ---
   const salesByMethod = { Cash: 0, Card: 0, UPI: 0, Credit: 0 } as Record<string, number>;
-  for (const sale of source.sales)
+  for (const sale of source.sales.filter((row) => row.saleType !== 'Fuel'))
     salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
-  const merchandiseSalesValue = sum(source.sales.map((s) => s.totalAmount));
+  const merchandiseSalesValue = sum(
+    source.sales.filter((sale) => sale.saleType !== 'Fuel').map((sale) => sale.totalAmount),
+  );
 
   // --- T5: output tax on sales, from the split frozen on each line ---
   const gstLines = source.saleItems.filter((i) => i.taxCategory === 'GST');
@@ -174,15 +191,45 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     else normalCredit += cs.amount;
   }
 
+  // --- OMC Card Sales: fuel paid by an OMC card, settled to the OMC Wallet. Not a
+  // receivable and not drawer cash; its own line beside Credit Sales (ADR 0001). ---
+  const omcCardTotal = round2(sum(source.omcCardSales.map((s) => s.amount)));
+
   // --- Purchases (forecourt stock events; paying for them is an Office Record) ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
 
   // --- Tank dip / stock variance, split by unit basis (fuel = volume in L,
   // merchandise = item count) so the two never share a confusing unit column. ---
-  const withStatus = (v: DssrSourceData['stockVariances'][number]) => ({
-    ...v,
-    status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
-  });
+  // The cost per unit is frozen with the day (the same `products` cost basis the
+  // P&L below uses), so a variance's rupee value never changes after close.
+  const withStatus = (v: DssrSourceData['stockVariances'][number]) => {
+    const { tankMovement: m, ...row } = v;
+    return {
+      ...row,
+      unitCost:
+        v.productId && source.products[v.productId]
+          ? Number(source.products[v.productId].costBasis || 0)
+          : 0,
+      // Balanced by the shared quantity rule (#556), frozen with the snapshot:
+      // an earlier snapshot keeps the status it was composed with.
+      status: isBalancedQuantity(v.varianceQuantity)
+        ? 'OK'
+        : v.varianceQuantity < 0
+          ? 'Loss'
+          : 'Gain',
+      // The tank's litres over the day (#395), additive: snapshots frozen before it lack the key.
+      ...(m
+        ? {
+            tankMovement: {
+              ...m,
+              closingQuantity: roundQty(
+                m.openingQuantity + m.receivedQuantity - m.soldQuantity + m.adjustedQuantity,
+              ),
+            },
+          }
+        : {}),
+    };
+  };
   const fuelStockVariance = source.stockVariances
     .filter((v) => v.inventoryType === 'BULK')
     .map(withStatus);
@@ -215,6 +262,12 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     name: string;
     code: string;
     kind: 'fuel' | 'merchandise';
+    /**
+     * The product's category (its `productType`), frozen with the day. Set on
+     * merchandise lines only, null for an unknown product; absent on fuel lines
+     * and on snapshots frozen before #392.
+     */
+    productType?: ProductType | null;
     quantity: number;
     revenue: number;
     cogs: number;
@@ -254,6 +307,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       name: prod?.name ?? 'Unknown',
       code: prod?.code ?? '',
       kind: 'merchandise',
+      productType: prod?.productType ?? null,
       quantity: round2(m.qty),
       revenue: rev,
       cogs: c,
@@ -280,12 +334,22 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       byPaymentMethod: salesByMethod,
     },
     salesTax,
+    /**
+     * Cash received for the day's sales by closed shifts' Drawers (#516).
+     * Additive: snapshots frozen before it lack the key (readers show no figure).
+     * Collections are Office Records, not here (ADR 0005).
+     */
+    cashSales: round2(cashSales),
     credit: {
       normalCredit,
       fleetCredit,
       total: normalCredit + fleetCredit,
+      /** Number of credit slips (customer-ledger Credit Sales) behind the total. */
+      count: source.creditSales.length,
     },
-    purchases: { total: purchasesTotal },
+    // Additive: snapshots frozen before it lack the key (readers print nothing for them).
+    omcCard: { total: omcCardTotal, count: source.omcCardSales.length },
+    purchases: { total: purchasesTotal, count: source.purchases.length },
     pnl: {
       revenueFuel,
       revenueMerch,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { composeProfitLoss } from './compose.js';
 
 describe('composeProfitLoss (ADR 0005)', () => {

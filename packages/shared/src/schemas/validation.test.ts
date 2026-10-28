@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import {
   stationSchema,
   nozzleReadingSchema,
@@ -9,6 +9,9 @@ import {
   createOpenShiftFormSchema,
   attendantHandoverSchema,
   shiftCloseSchema,
+  creditLimitSchema,
+  customerCreateSchema,
+  CREDIT_LIMIT_MAX,
 } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
@@ -84,6 +87,19 @@ describe('Validation Schemas Tests', () => {
       expect(result.success).toBe(true);
       if (!result.success) return;
       expect(result.data.settings?.report_config).toEqual(report_config);
+    });
+
+    it('round-trips tank-level thresholds and rejects a critical at or above low (#520)', () => {
+      const tankLevels = { criticalBelowPct: 15, lowBelowPct: 35 };
+      const kept = stationSchema.partial().safeParse({ settings: { tankLevels } });
+      expect(kept.success).toBe(true);
+      if (kept.success) expect(kept.data.settings?.tankLevels).toEqual(tankLevels);
+
+      expect(
+        stationSchema.partial().safeParse({
+          settings: { tankLevels: { criticalBelowPct: 40, lowBelowPct: 30 } },
+        }).success,
+      ).toBe(false);
     });
   });
 
@@ -332,6 +348,28 @@ describe('Validation Schemas Tests', () => {
       const payload = { draft: validDraft };
       const result = finalizeOnboardingSchema.safeParse(payload);
       expect(result.success).toBe(true);
+    });
+  });
+  describe('creditLimitSchema', () => {
+    const message = (n: unknown) => {
+      const r = creditLimitSchema.safeParse(n);
+      return r.success ? null : r.error.issues[0]?.message;
+    };
+
+    it('accepts none, zero, whole and 2-decimal amounts up to the column maximum', () => {
+      for (const ok of [undefined, null, 0, 50000, 1234.5, 0.01, CREDIT_LIMIT_MAX])
+        expect(creditLimitSchema.safeParse(ok).success).toBe(true);
+    });
+
+    it('rejects negatives, more than 2 decimals, and more than numeric(12,2) holds', () => {
+      expect(message(-1)).toBe('Enter 0 or more.');
+      expect(message(10.005)).toBe('Use at most 2 decimal places.');
+      expect(message(CREDIT_LIMIT_MAX + 1)).toBe('That is more than a limit can hold.');
+      expect(creditLimitSchema.safeParse(Number.NaN).success).toBe(false);
+    });
+
+    it('is the rule the Customer form uses', () => {
+      expect(customerCreateSchema.shape.creditLimit).toBe(creditLimitSchema);
     });
   });
 });

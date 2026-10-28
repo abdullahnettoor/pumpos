@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 // Rendering is stubbed: these tests pin where the bytes go, not how the PDF looks.
 const pdfBytes = new Uint8Array([37, 80, 68, 70]);
@@ -38,6 +38,31 @@ describe('Print uses the same PDF as Save PDF (#309)', () => {
     await outputReactPdf({}, 'b');
     expect(printed).toHaveLength(1);
     expect(saved).toHaveLength(1);
+  });
+});
+
+describe("'download' mode", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('writes a browser download and never touches the platform saver (mobile Share vs Download)', async () => {
+    const saved: Uint8Array[] = [];
+    setPdfSaver(async (b) => void saved.push(b));
+    URL.createObjectURL = vi.fn(() => 'blob:pdf');
+    URL.revokeObjectURL = vi.fn();
+    const clicked: { href: string; download: string }[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push({ href: this.href, download: this.download });
+    });
+
+    await outputReactPdf({}, 'Shift_Summary_1', 'download');
+
+    expect(saved).toHaveLength(0);
+    expect(clicked).toEqual([{ href: 'blob:pdf', download: 'Shift_Summary_1.pdf' }]);
   });
 });
 

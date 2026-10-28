@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { round2 } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -87,8 +88,6 @@ export function financialYear(dateYYYYMMDD: string): string {
   const endYY = String((startYear + 1) % 100).padStart(2, '0');
   return `${startYear}-${endYY}`;
 }
-
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export interface GenerateInvoiceLineInput {
   productId: string;

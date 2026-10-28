@@ -1,5 +1,7 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
+import { statementDate } from '../../statement/lines.js';
+import { formatTime } from '../../utils/format.js';
 import {
   C,
   s,
@@ -8,7 +10,6 @@ import {
   LetterheadBand,
   inr,
   inr0,
-  fmtDateTime,
   type Col,
   type Cell,
   type Letterhead,
@@ -17,8 +18,11 @@ import {
 export interface LedgerDocRow {
   dateLabel: string;
   particulars: string;
-  debit: number;
-  credit: number;
+  /** A muted second line under the particulars (a statement row's shift, vehicle, reference). */
+  detail?: string;
+  /** `null` or `0` prints a blank cell (the side the row did not move). */
+  debit: number | null;
+  credit: number | null;
   balance: number;
 }
 
@@ -34,6 +38,19 @@ export interface LedgerDocProps {
   /** Chronological (oldest→newest) rows with running balance. */
   rows: LedgerDocRow[];
   totals: { debit: number; credit: number; balance: number };
+  /** Identity and contact lines of the party, under the sub-line ("Fleet · FL-001", "GSTIN …"). */
+  partyLines?: string[];
+  /**
+   * The account of one party (a customer or supplier statement): amounts print
+   * exact (`−₹1,200.00`), and a negative balance is an advance held,
+   * not a shortfall, so it is not shown in the danger colour. Unset (the
+   * desktop Unified Ledger): whole-rupee KPIs and a negative balance in red.
+   */
+  partyAccount?: boolean;
+  /** What was owed before the first row: adds an opening balance line (and KPI). */
+  opening?: number;
+  /** Turns the totals line into a closing balance line, with `note` saying what it means. */
+  closing?: { note?: string };
   stationName?: string;
   letterhead?: Letterhead;
   showLogo?: boolean;
@@ -42,10 +59,80 @@ export interface LedgerDocProps {
 }
 
 /**
+ * When the PDF was made, in the statement's one date style plus the time:
+ * `14 Oct 2026, 02:00 pm` (on this device's clock).
+ */
+export function generatedLabel(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const day = [at.getFullYear(), at.getMonth() + 1, at.getDate()]
+    .map((n) => String(n).padStart(2, '0'))
+    .join('-');
+  return `${statementDate(day)}, ${formatTime(at)}`;
+}
+
+/**
+ * The statement table of a `LedgerDoc`, cell by cell: the columns, the opening
+ * line, the rows and the closing (or total) line. Exported so a test can read
+ * what the PDF prints next to what the screen prints (`statement/parity`).
+ */
+export function ledgerDocTable({
+  debitLabel,
+  creditLabel,
+  balanceLabel,
+  rows,
+  totals,
+  opening,
+  closing,
+}: Pick<
+  LedgerDocProps,
+  'debitLabel' | 'creditLabel' | 'balanceLabel' | 'rows' | 'totals' | 'opening' | 'closing'
+>): { cols: Col[]; cellRows: Cell[][]; totalRow: Cell[]; leadRow: Cell[] | undefined } {
+  const cols: Col[] = [
+    { header: 'Date', flex: 1.3, strong: true },
+    { header: 'Particulars', flex: 2.8 },
+    { header: debitLabel, flex: 1.4, align: 'right', mono: true },
+    { header: creditLabel, flex: 1.4, align: 'right', mono: true },
+    { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
+  ];
+  const side = (v: number | null) => (v ? inr(v) : '');
+  const cellRows: Cell[][] = rows.map((r) => [
+    { text: r.dateLabel },
+    { text: r.particulars, detail: r.detail },
+    { text: side(r.debit) },
+    { text: side(r.credit) },
+    { text: inr(r.balance) },
+  ]);
+  const totalRow: Cell[] = [
+    { text: 'Closing balance', detail: closing?.note },
+    { text: '' },
+    { text: inr(totals.debit) },
+    { text: inr(totals.credit) },
+    { text: inr(totals.balance), color: C.ink },
+  ];
+  const leadRow: Cell[] | undefined =
+    opening === undefined
+      ? undefined
+      : [
+          { text: '' },
+          { text: 'Opening balance' },
+          { text: '' },
+          { text: '' },
+          { text: inr(opening), color: C.ink },
+        ];
+  return { cols, cellRows, totalRow, leadRow };
+}
+
+/**
  * Vector PDF statement for any ledger entity (customer, supplier, cash, bank,
  * owner) — reuses the shared Phase-R react-pdf kit (letterhead, KPI tiles,
- * generic two-column-style table). Rows arrive already resolved + balanced by
- * `computeLedgerRows` so the PDF matches the on-screen `<LedgerView>` exactly.
+ * generic two-column-style table). Rows arrive from the Statement module
+ * (`statement/pdf.ts`), the same lines the screen's `StatementView` prints.
+ *
+ * The optional `partyLines`, `partyAccount`, `opening`, `closing` and per-row
+ * `detail` turn it into one customer's or supplier's account statement (the
+ * mobile Share / Download, see `partyStatement.ts`); without them the document is
+ * the desktop Unified Ledger's, unchanged (pinned by `ledgerDoc.test.tsx`).
  */
 export const LedgerDoc: React.FC<LedgerDocProps> = ({
   title,
@@ -61,28 +148,24 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
   showLogo = true,
   generatedAt,
   paper = 'A4',
+  partyLines,
+  partyAccount = false,
+  opening,
+  closing,
 }) => {
-  const cols: Col[] = [
-    { header: 'Date', flex: 1.3, strong: true },
-    { header: 'Particulars', flex: 2.8 },
-    { header: debitLabel, flex: 1.4, align: 'right', mono: true },
-    { header: creditLabel, flex: 1.4, align: 'right', mono: true },
-    { header: balanceLabel, flex: 1.5, align: 'right', mono: true, strong: true },
-  ];
-  const cellRows: Cell[][] = rows.map((r) => [
-    { text: r.dateLabel },
-    { text: r.particulars },
-    { text: r.debit ? inr(r.debit) : '' },
-    { text: r.credit ? inr(r.credit) : '', color: r.credit ? C.success : undefined },
-    { text: inr(r.balance) },
-  ]);
-  const totalRow: Cell[] = [
-    { text: 'TOTALS' },
-    { text: '' },
-    { text: inr(totals.debit) },
-    { text: inr(totals.credit), color: C.success },
-    { text: inr(totals.balance), color: C.ink },
-  ];
+  const { cols, cellRows, totalRow, leadRow } = ledgerDocTable({
+    debitLabel,
+    creditLabel,
+    balanceLabel,
+    rows,
+    totals,
+    opening,
+    closing,
+  });
+  // `inr` / `inr0` sign a negative as `−₹1,200.00` (the shared signed-money rule).
+  const kpiMoney = partyAccount ? inr : inr0;
+  // A negative balance is a shortfall on the desktop ledger, an advance on a party's account.
+  const balanceTone = totals.balance < 0 && !partyAccount ? C.danger : C.ink;
 
   return (
     <Document>
@@ -95,26 +178,35 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
         />
         <Text style={s.sub}>
           {entityName} {'\u2022'} {periodLabel}
-          {generatedAt ? ` \u2022 Generated ${fmtDateTime(generatedAt)}` : ''}
+          {generatedAt ? ` \u2022 Generated ${generatedLabel(generatedAt)}` : ''}
         </Text>
+        {(partyLines ?? []).map((line, i) => (
+          <Text key={i} style={[s.sub, { marginTop: 2 }]}>
+            {line}
+          </Text>
+        ))}
 
         <View style={s.kpiRow}>
-          <Kpi l={debitLabel} v={inr0(totals.debit)} />
-          <Kpi l={creditLabel} v={inr0(totals.credit)} c={C.success} />
-          <Kpi
-            l={balanceLabel}
-            v={inr0(totals.balance)}
-            c={totals.balance < 0 ? C.danger : C.ink}
-          />
+          {opening !== undefined && <Kpi l="Opening balance" v={kpiMoney(opening)} />}
+          <Kpi l={debitLabel} v={kpiMoney(totals.debit)} />
+          <Kpi l={creditLabel} v={kpiMoney(totals.credit)} c={C.success} />
+          <Kpi l={balanceLabel} v={kpiMoney(totals.balance)} c={balanceTone} />
         </View>
 
         <Text style={s.h2}>STATEMENT OF ACCOUNT</Text>
-        {rows.length === 0 ? (
+        {rows.length === 0 && opening === undefined ? (
           <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>
             No transactions in this period.
           </Text>
         ) : (
-          <TableView columns={cols} rows={cellRows} total={totalRow} />
+          <>
+            <TableView columns={cols} rows={cellRows} total={totalRow} lead={leadRow} />
+            {rows.length === 0 && (
+              <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>
+                No transactions in this period.
+              </Text>
+            )}
+          </>
         )}
 
         <View style={s.foot} fixed>

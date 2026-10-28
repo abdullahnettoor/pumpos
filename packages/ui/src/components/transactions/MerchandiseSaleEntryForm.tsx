@@ -2,13 +2,16 @@ import React from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
-import type { ShiftOption } from './ExpenseEntryForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
-import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form, Icon } from '../../pump-ds/index.js';
+import { Button, Form, Icon, SegmentedControl } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
+
+export interface ShiftOption {
+  id: string;
+  label: string;
+}
 
 export interface MerchandiseSaleEntryFormProps {
   shiftOptions: ShiftOption[];
@@ -151,7 +154,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       )}
 
       {hasMultipleShiftOptions && (
-        <Field label="Target Shift">
+        <Field label="Target shift">
           <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((o) => (
               <option key={o.id} value={o.id}>
@@ -176,7 +179,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
 
       {products.length === 0 ? (
         <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
-          No non-fuel products found. Add merchandise products in Station Overview → Products first.
+          No non-fuel products found. Add products in Station → Products first.
         </div>
       ) : (
         <div>
@@ -281,7 +284,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                   </div>
                   {t && (
                     <div
-                      style={{ fontSize: '10px', color: 'var(--text-faint)', paddingLeft: '2px' }}
+                      style={{ fontSize: '12px', color: 'var(--text-faint)', paddingLeft: '2px' }}
                     >
                       {inr(t.taxable)}
                       {t.hasTax ? ` + tax ${inr(t.tax)}` : ''} = {inr(t.total)}
@@ -290,7 +293,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                   {oversell && (
                     <div
                       style={{
-                        fontSize: '11px',
+                        fontSize: '12px',
                         color: 'var(--brand-warning)',
                         paddingLeft: '2px',
                       }}
@@ -321,15 +324,18 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
             Add item
           </Button>
           {typeof errors.lines?.message === 'string' && (
-            <div style={{ fontSize: '11px', color: 'var(--brand-danger)', marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--brand-danger)', marginTop: '4px' }}>
               {errors.lines.message}
             </div>
           )}
         </div>
       )}
 
-      <Field label="Payment Method">
-        <Segmented
+      <Field label="Payment method">
+        <SegmentedControl
+          stretch
+          size="md"
+          activeStyle="brand"
           options={[
             { value: 'Cash', label: 'Cash' },
             { value: 'Card', label: 'Card' },
@@ -339,7 +345,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           value={paymentMethod}
           onChange={(v) => setValue('paymentMethod', v, { shouldValidate: true })}
           disabled={submitting}
-          aria-label="Payment Method"
+          aria-label="Payment method"
         />
       </Field>
 
@@ -374,7 +380,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
         >
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               color: 'var(--text-muted)',
               textTransform: 'uppercase',
@@ -383,7 +389,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           >
             Buyer details (optional)
           </span>
-          <span style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '-6px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '-6px' }}>
             For a walk-in not in your registry — used on the bill/invoice.
           </span>
           <Field label="Name">
@@ -397,7 +403,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
               <TextInput placeholder="GSTIN" disabled={submitting} {...register('buyerGstin')} />
             </Field>
           </div>
-          <Field label="State Code">
+          <Field label="State code">
             <TextInput
               placeholder="e.g. 32"
               disabled={submitting}
@@ -464,7 +470,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           }}
         >
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-            Sale Total
+            Sale total
           </span>
           <strong
             style={{

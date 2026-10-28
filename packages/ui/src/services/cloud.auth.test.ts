@@ -1,5 +1,10 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { CloudStationService, CloudShiftService, setApiBaseUrl } from './cloud.js';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
+import {
+  CloudStationService,
+  CloudShiftService,
+  CloudTransactionService,
+  setApiBaseUrl,
+} from './cloud.js';
 import { setTokenSource, setAuthToken, resetAuthTokenState } from './auth/tokenStore.js';
 
 /** An API envelope, as the worker would return it. */
@@ -132,6 +137,38 @@ describe('cloud request auth', () => {
 
     const keys = fetchMock.mock.calls.map((call) => headersOf(call)['Idempotency-Key']);
     expect(keys).toEqual(['key-1', 'key-1']);
+  });
+
+  it('closes a shift and writes readings with an Idempotency-Key (#534)', async () => {
+    setAuthToken('t');
+    fetchMock
+      .mockResolvedValueOnce(okResponse({ shift: { id: 's1' } }))
+      .mockResolvedValueOnce(okResponse({}));
+
+    const service = new CloudShiftService();
+    await service.closeShift('s1', { closingCash: 100 } as any, { idempotencyKey: 'close-1' });
+    await service.updateNozzleReadings('s1', [], { idempotencyKey: 'read-1' });
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/shifts/close');
+    expect(headersOf(fetchMock.mock.calls[0])['Idempotency-Key']).toBe('close-1');
+    expect(headersOf(fetchMock.mock.calls[1])['Idempotency-Key']).toBe('read-1');
+  });
+
+  it('updates one customer field with an Idempotency-Key and sends nothing else', async () => {
+    setAuthToken('t');
+    fetchMock.mockResolvedValueOnce(okResponse({ id: 'c1', creditLimit: '5000' }));
+
+    await new CloudTransactionService().updateCustomer(
+      'c1',
+      { creditLimit: 5000 },
+      { idempotencyKey: 'key-9' },
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.test/api/transactions/customers/c1');
+    expect((init as RequestInit).method).toBe('PUT');
+    expect((init as RequestInit).body).toBe(JSON.stringify({ creditLimit: 5000 }));
+    expect(headersOf(fetchMock.mock.calls[0])['Idempotency-Key']).toBe('key-9');
   });
 
   it('falls back to the last known token when the source read throws', async () => {

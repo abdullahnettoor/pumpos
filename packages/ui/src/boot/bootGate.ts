@@ -26,7 +26,7 @@ export interface BootGateState {
 }
 
 /**
- * What to render between pressing Sign In and seeing the app.
+ * What to render between pressing Sign in and seeing the app.
  *
  * - `boot`     one branded screen, for the genuine wait before we know the user
  * - `takeover` a full page that owns the viewport: login, an error card with its

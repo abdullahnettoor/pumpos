@@ -1,5 +1,5 @@
-import { canOnboardStation, type Role } from '@pump/shared';
-import { describe, expect, it } from 'vitest';
+import { can, principalOf, type Role } from '@pump/shared';
+import { describe, expect, it } from 'vite-plus/test';
 import { preReadyQuickCreateIds } from './quickCreateActions.js';
 
 describe('preReadyQuickCreateIds', () => {
@@ -40,7 +40,7 @@ describe('the lockout and the quick-create agree on who is locked out', () => {
 
     for (const role of allRoles) {
       expect(preReadyQuickCreateIds(role).includes('onboard-station')).toBe(
-        canOnboardStation(role),
+        can(principalOf(role), 'station.onboard'),
       );
     }
   });

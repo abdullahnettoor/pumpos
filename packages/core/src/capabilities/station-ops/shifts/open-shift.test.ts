@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   FixedClock,
   InMemoryEventStore,
@@ -115,6 +115,15 @@ class StaffDirectoryFake {
   }
 }
 
+/** Fuel names, for the no-rate refusal (#630). */
+class FuelNamesFake {
+  constructor(readonly names: Record<string, string> = { pet: 'Petrol', dsl: 'Diesel' }) {}
+  async findNames(_orgId: string, productIds: string[]) {
+    const known = productIds.filter((id) => this.names[id] !== undefined);
+    return new Map(known.map((id) => [id, this.names[id] ?? id] as const));
+  }
+}
+
 class ReadingRepo implements NozzleReadingRepository {
   readonly saved: NozzleReading[] = [];
   constructor(private readonly lastClosing: Record<string, number> = {}) {}
@@ -133,9 +142,11 @@ class ReadingRepo implements NozzleReadingRepository {
 }
 
 class PriceRepo implements FuelPriceRepository {
+  asOf: string | null = null;
   constructor(readonly rows: FuelPrice[]) {}
   async save() {}
-  async listByStation() {
+  async listByStation(_org: string, _station: string, asOf: string) {
+    this.asOf = asOf;
     return this.rows;
   }
 }
@@ -166,14 +177,19 @@ function nozzle(id: string, productId: string, currentReading: string): Nozzle {
     updatedAt: '',
   };
 }
-function price(productId: string, p: string): FuelPrice {
+function price(
+  productId: string,
+  p: string,
+  effectiveFrom = '2026-03-01',
+  id = 'p-' + productId,
+): FuelPrice {
   return {
-    id: 'p-' + productId,
+    id,
     organizationId: 'org-1',
     stationId: 'st-1',
     productId,
     price: p,
-    effectiveFrom: '2026-03-01',
+    effectiveFrom,
     createdAt: '2026-03-01',
   };
 }
@@ -197,6 +213,7 @@ describe('OpenShift', () => {
       // Both seeded nozzles sit on du-1, which this case runs and assigns.
       dispensers: new InServiceDispenserRepo(['du-1']),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events,
     }).execute(
       {
@@ -228,6 +245,48 @@ describe('OpenShift', () => {
     expect(types).toContain(BusinessEvents.SHIFT_OPENED);
   });
 
+  it('prices nozzles at the rate in effect now, never a scheduled one (#619)', async () => {
+    const nozzleReadings = new ReadingRepo({});
+    // The clock reads 2026-03-15T03:00Z. Petrol has a change scheduled for
+    // 05:00Z: stored, but not current until then. Even a repository that
+    // lists it must not price this shift at it.
+    const fuelPrices = new PriceRepo([
+      price('pet', '103', '2026-03-15T05:00:00.000Z', 'p-next'),
+      price('pet', '102.5', '2026-03-10T00:30:00.000Z', 'p-now'),
+      price('pet', '101', '2026-03-01T00:30:00.000Z', 'p-old'),
+    ]);
+    const open = (at: string) =>
+      new OpenShift({
+        shifts: new ShiftRepo(),
+        businessDays: new BdRepo(),
+        nozzles: new NozzleRepo([nozzle('n1', 'pet', '1000')]),
+        nozzleReadings,
+        fuelPrices,
+        dispensers: new InServiceDispenserRepo(['du-1']),
+        staff: new StaffDirectoryFake(),
+        fuels: new FuelNamesFake(),
+        events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      }).execute(
+        {
+          stationId: 'st-1',
+          shiftTemplateId: 'tpl-1',
+          staffAssignments: [{ userId: 'u-1', duId: 'du-1', openingFloat: 0 }],
+        },
+        { ...makeContext(), clock: new FixedClock(new Date(at)) },
+      );
+
+    const before = await open('2026-03-15T03:00:00.000Z');
+    expect(before.success).toBe(true);
+    // The repository is asked for the prices in effect at the open.
+    expect(fuelPrices.asOf).toBe('2026-03-15T03:00:00.000Z');
+    expect(nozzleReadings.saved.at(-1)?.unitPrice).toBe('102.5');
+
+    // From its effective time on, the scheduled price is the current one.
+    const after = await open('2026-03-15T05:00:00.000Z');
+    expect(after.success).toBe(true);
+    expect(nozzleReadings.saved.at(-1)?.unitPrice).toBe('103');
+  });
+
   it("issues each Drawer's Opening Float; opening cash is their sum (ADR 0005)", async () => {
     const shifts = new ShiftRepo();
     const store = new InMemoryEventStore();
@@ -239,6 +298,7 @@ describe('OpenShift', () => {
       fuelPrices: new PriceRepo([]),
       dispensers: new InServiceDispenserRepo(['du-1', 'du-2', 'du-3', 'du-4']),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store }),
     }).execute(
       {
@@ -278,6 +338,7 @@ describe('OpenShift', () => {
       fuelPrices: new PriceRepo([]),
       dispensers: new InServiceDispenserRepo(['du-1']),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       {
@@ -317,6 +378,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, ctx);
     expect(result.success).toBe(true);
@@ -368,6 +430,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
 
@@ -402,6 +465,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -426,6 +490,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -464,6 +529,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-14' },
@@ -494,6 +560,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-03-16' },
@@ -515,6 +582,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', businessDate: '2026-02-31' },
@@ -554,6 +622,7 @@ describe('OpenShift', () => {
       // station runs no dispensers for their purposes.
       dispensers: new InServiceDispenserRepo([]),
       staff: new StaffDirectoryFake(),
+      fuels: new FuelNamesFake(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1' }, makeContext());
     expect(result.success).toBe(false);
@@ -589,9 +658,10 @@ describe('OpenShift attendant requirement', () => {
           businessDays: new BdRepo(),
           nozzles: new NozzleRepo(opts.nozzles ?? []),
           nozzleReadings: readings,
-          fuelPrices: new PriceRepo([]),
+          fuelPrices: new PriceRepo([price('pet', '102.5')]),
           dispensers: new InServiceDispenserRepo(opts.inService),
           staff: new StaffDirectoryFake(opts.assignable),
+          fuels: new FuelNamesFake(),
           events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
         }).execute(
           {
@@ -688,6 +758,7 @@ describe('OpenShift assignment validity', () => {
         fuelPrices: new PriceRepo([]),
         dispensers: new InServiceDispenserRepo(opts.inService),
         staff: new StaffDirectoryFake(opts.assignable),
+        fuels: new FuelNamesFake(),
         events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
       }).execute(
         { stationId: 'st-1', shiftTemplateId: 'tpl-1', staffAssignments: opts.staffAssignments },
@@ -778,5 +849,104 @@ describe('OpenShift assignment validity', () => {
       assignable: ['u-1'],
     }).run();
     expect(result.success).toBe(true);
+  });
+});
+
+/**
+ * A fuel with no rate in effect would sell at ₹0 for the whole shift (#630).
+ * Refused before anything is written; only fuels on the nozzles of dispensers
+ * in service count.
+ */
+describe('OpenShift rate requirement', () => {
+  const openWith = (opts: { nozzles: Nozzle[]; prices: FuelPrice[]; inService?: string[] }) => {
+    const shifts = new ShiftRepo();
+    const businessDays = new BdRepo();
+    const readings = new ReadingRepo();
+    const store = new InMemoryEventStore();
+    const inService = opts.inService ?? ['du-1'];
+    const run = () =>
+      new OpenShift({
+        shifts,
+        businessDays,
+        nozzles: new NozzleRepo(opts.nozzles),
+        nozzleReadings: readings,
+        fuelPrices: new PriceRepo(opts.prices),
+        dispensers: new InServiceDispenserRepo(inService),
+        staff: new StaffDirectoryFake(),
+        fuels: new FuelNamesFake(),
+        events: new InProcessEventDispatcher({ store }),
+      }).execute(
+        {
+          stationId: 'st-1',
+          shiftTemplateId: 'tpl-1',
+          staffAssignments: inService.map((duId) => ({ userId: 'u-1', duId })),
+        },
+        makeContext(),
+      );
+    return { shifts, businessDays, readings, store, run };
+  };
+
+  it('refuses a fuel with no price at all, naming it, and writes nothing', async () => {
+    const { shifts, businessDays, readings, store, run } = openWith({
+      nozzles: [nozzle('n1', 'pet', '100'), nozzle('n2', 'dsl', '100')],
+      prices: [price('pet', '102.5')],
+    });
+    const result = await run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.code).toBe('VALIDATION_ERROR');
+      expect(result.error.message).toBe('Diesel has no rate in effect. Set a rate before opening.');
+      expect(result.error.details).toEqual({ productIds: ['dsl'] });
+    }
+    expect(shifts.rows).toHaveLength(0);
+    expect(businessDays.rows).toHaveLength(0);
+    expect(readings.saved).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('refuses a fuel priced only for the future (a scheduled price is not in effect)', async () => {
+    // The clock reads 2026-03-15T03:00Z.
+    const { run } = openWith({
+      nozzles: [nozzle('n1', 'pet', '100')],
+      prices: [price('pet', '103', '2026-03-15T05:00:00.000Z')],
+    });
+    const result = await run();
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.details).toEqual({ productIds: ['pet'] });
+  });
+
+  it('lists every fuel without a rate, by name', async () => {
+    const { run } = openWith({
+      nozzles: [nozzle('n1', 'pet', '100'), nozzle('n2', 'dsl', '100'), nozzle('n3', 'pet', '1')],
+      prices: [],
+    });
+    const result = await run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toBe(
+        'Diesel and Petrol have no rate in effect. Set a rate before opening.',
+      );
+      expect(result.error.details).toEqual({ productIds: ['dsl', 'pet'] });
+    }
+  });
+
+  it('ignores a fuel sold only on a dispenser out of service', async () => {
+    const { readings, run } = openWith({
+      nozzles: [nozzle('n1', 'pet', '100'), { ...nozzle('n2', 'dsl', '100'), duId: 'du-off' }],
+      prices: [price('pet', '102.5')],
+    });
+    const result = await run();
+    expect(result.success).toBe(true);
+    expect(readings.saved.map((r) => [r.nozzleId, r.unitPrice])).toEqual([['n1', '102.5']]);
+  });
+
+  it('opens once every fuel on a running pump has a rate in effect', async () => {
+    const { readings, run } = openWith({
+      nozzles: [nozzle('n1', 'pet', '100'), nozzle('n2', 'dsl', '100')],
+      prices: [price('pet', '102.5'), price('dsl', '89.7')],
+    });
+    const result = await run();
+    expect(result.success).toBe(true);
+    expect(readings.saved.map((r) => r.unitPrice)).toEqual(['102.5', '89.7']);
   });
 });

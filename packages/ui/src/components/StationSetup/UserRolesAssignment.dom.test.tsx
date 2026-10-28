@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import {
   createTestQueryClient,
@@ -10,18 +10,37 @@ import {
 import { queryKeys } from '../../query/hooks.js';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { UserRolesAssignment, defaultNewMemberStationIds } from './UserRolesAssignment.js';
+import { MemberDrawer } from './TeamMemberDrawers.js';
+import type { User } from '@pump/shared';
+
+/** The member the API returns after a save, typed as the service returns it. */
+const savedUser = (id: string): User => ({
+  id,
+  organizationId: 'org-1',
+  fullName: 'Saved member',
+  email: '',
+  status: 'ACTIVE',
+  createdAt: '2026-10-15T00:00:00Z',
+  updatedAt: '2026-10-15T00:00:00Z',
+});
 
 const ST_A = { id: 'st-a', name: 'Kochi', code: 'KOC' };
 const ST_B = { id: 'st-b', name: 'Thrissur', code: 'TCR' };
 
+/** A new member's drawer, as the page's "Add team member" opens it. */
 const renderTeam = (stations: any[], currentStationId: string | null) => {
   const queryClient = createTestQueryClient();
   queryClient.setQueryData(queryKeys.users(), []);
   queryClient.setQueryData(queryKeys.stations(), stations);
-  renderWithProviders(<UserRolesAssignment currentStationId={currentStationId} />, {
-    queryClient,
-  });
-  fireEvent.click(screen.getByRole('button', { name: /Add Team Member/ }));
+  renderWithProviders(
+    <MemberDrawer
+      isOpen
+      editingUser={null}
+      currentStationId={currentStationId}
+      onClose={() => {}}
+    />,
+    { queryClient },
+  );
 };
 const stationBox = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
 
@@ -67,7 +86,7 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. 98765 43210'), {
       target: { value: '12345' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     expect(await screen.findByText('Enter a valid 10-digit Indian mobile number')).toBeTruthy();
     expect(create).not.toHaveBeenCalled();
   });
@@ -77,14 +96,14 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('e.g. John Doe'), {
       target: { value: 'Ravi Kumar' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     expect(await screen.findByText('A phone number is required for phone login.')).toBeTruthy();
   });
 
   it('sends the one stored spelling for a valid mobile (#300)', async () => {
     const create = vi
       .spyOn(CloudUserAssignmentService.prototype, 'createUser')
-      .mockResolvedValue({ id: 'u-new' } as any);
+      .mockResolvedValue(savedUser('u-new'));
     renderTeam([ST_A], null);
     fireEvent.change(screen.getByPlaceholderText('e.g. John Doe'), {
       target: { value: 'Ravi Kumar' },
@@ -95,11 +114,86 @@ describe('New Team Member form', () => {
     fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
       target: { value: 'Secret123' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Member' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(create.mock.calls[0][0]).toMatchObject({
       phone: '+919876543210',
       stationIds: ['st-a'],
     });
+  });
+});
+
+describe('Team submit keys (#538)', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = muteExpectedConsoleErrors([/not wrapped in act/]);
+  });
+  afterEach(() => {
+    cleanup();
+    restore();
+    vi.restoreAllMocks();
+  });
+
+  const network = Object.assign(new Error('offline'), { code: 'NETWORK' });
+
+  /** Opens a fresh new-member drawer, fills a phone login for `name`, and saves. */
+  const addMember = async (name: string, phone: string) => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.users(), []);
+    queryClient.setQueryData(queryKeys.stations(), [ST_A]);
+    renderWithProviders(
+      <MemberDrawer isOpen editingUser={null} currentStationId={null} onClose={() => {}} />,
+      { queryClient },
+    );
+    fireEvent.change(screen.getByPlaceholderText('e.g. John Doe'), { target: { value: name } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. 98765 43210'), {
+      target: { value: phone },
+    });
+    fireEvent.change(screen.getByPlaceholderText('At least 8 characters'), {
+      target: { value: 'Secret123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
+  };
+
+  it('a different member in a new drawer gets a new key; the same one recovers it', async () => {
+    const keys: (string | undefined)[] = [];
+    const create = vi
+      .spyOn(CloudUserAssignmentService.prototype, 'createUser')
+      .mockImplementation(async (_body, opts) => {
+        keys.push(opts?.idempotencyKey);
+        if (keys.length === 1) throw network;
+        return savedUser(`u-${keys.length}`);
+      });
+
+    await addMember('Ravi Kumar', '98765 43210');
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    cleanup();
+    await addMember('Anil Joseph', '98000 11122');
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    cleanup();
+    await addMember('Ravi Kumar', '98765 43210');
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(3));
+
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).not.toBe(keys[0]);
+    expect(keys[2]).toBe(keys[0]);
+  });
+});
+
+describe('Team list', () => {
+  afterEach(cleanup);
+
+  it('shows Retry, not an empty team, when the list fails', async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.stations(), [ST_A]);
+    vi.spyOn(CloudUserAssignmentService.prototype, 'listUsers').mockRejectedValue(
+      Object.assign(new Error('boom'), { status: 500 }),
+    );
+    const restore = muteExpectedConsoleErrors([/boom/]);
+    renderWithProviders(<UserRolesAssignment />, { queryClient });
+    expect(await screen.findByText(/Couldn't load team members/)).toBeTruthy();
+    expect(screen.queryByText('No team members yet')).toBeNull();
+    restore();
+    vi.restoreAllMocks();
   });
 });

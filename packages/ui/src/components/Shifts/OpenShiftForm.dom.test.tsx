@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   renderWithProviders,
   createTestQueryClient,
   muteExpectedConsoleErrors,
 } from '../../test/renderWithProviders.js';
+import { calendarDay, datePicker, pickDate, pickedDate } from '../../test/datePicker.js';
 import { queryKeys } from '../../query/hooks.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 
@@ -28,10 +29,8 @@ const seedStatus = (
   data: unknown,
 ) => client.setQueryData(queryKeys.businessDayStatus(STATION, businessDate), data);
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const baseProps = (over: Record<string, unknown> = {}): any =>
   ({
-    lastShiftSummary: null,
     lastShift: null,
     stationId: STATION,
     templates: [{ id: 'tpl-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }],
@@ -51,12 +50,11 @@ const baseProps = (over: Record<string, unknown> = {}): any =>
     onInitialReadingChange: vi.fn(),
     isOpening: false,
     onSubmit: vi.fn(),
-    onViewLastShiftSummary: vi.fn(),
     ...over,
   }) as any;
 
 const openButton = () =>
-  screen.getByRole('button', { name: /Start Shift Operations/i }) as HTMLButtonElement;
+  screen.getByRole('button', { name: /Start shift operations/i }) as HTMLButtonElement;
 
 const renderForm = (
   props: Record<string, unknown> = {},
@@ -83,9 +81,9 @@ describe('OpenShiftForm', () => {
     restoreConsole();
   });
 
-  it('renders the no-active-shift state', () => {
+  it('renders the open-shift form', () => {
     renderForm();
-    expect(screen.getByText('No active shift')).toBeDefined();
+    expect(screen.getByText('Shift details')).toBeDefined();
   });
 
   describe('business-day gating', () => {
@@ -208,15 +206,41 @@ describe('OpenShiftForm', () => {
       );
       await waitFor(() => expect(openButton().disabled).toBe(false));
 
-      const dateInput = document.querySelector('input[name="businessDate"]') as HTMLInputElement;
-      if (dateInput) {
-        fireEvent.change(dateInput, { target: { value: '2026-02-27' } });
-        // An unrelated prop moves; the chosen date must survive it.
-        rerender(
-          <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, isOpening: false })} />,
-        );
-        await waitFor(() => expect(dateInput.value).toBe('2026-02-27'));
-      }
+      // Choose Custom business date, then a day from the calendar (#609).
+      fireEvent.change(screen.getByDisplayValue(/1 Mar 2026 · Open/), {
+        target: { value: 'custom' },
+      });
+      pickDate('Custom business date', '2026-02-27');
+      // An unrelated prop moves; the chosen date must survive it.
+      rerender(
+        <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, isOpening: false })} />,
+      );
+      await waitFor(() => expect(pickedDate('Custom business date')).toBe('2026-02-27'));
+      fireEvent.submit(openButton().closest('form')!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].businessDate).toBe('2026-02-27');
+    });
+
+    it('wires the custom date through the form: describedby, focusable ref, touched (#611)', async () => {
+      renderForm({}, { requestedState: 'CLOSED', openBusinessDays: [] });
+      const picker = datePicker('Custom business date');
+      const ids = picker.getAttribute('aria-describedby')!.split(' ');
+      expect(document.getElementById(ids[0]!)?.textContent).toContain(
+        'Unavailable: this Business Day is closed',
+      );
+      // Submitting with an error focuses the first invalid field: the picker.
+      fireEvent.submit(openButton().closest('form')!);
+      await waitFor(() => expect(document.activeElement).toBe(picker));
+      await waitFor(() => expect(picker.getAttribute('aria-invalid')).toBe('true'));
+      const message = document.getElementById(ids[0]!)?.textContent ?? '';
+      expect(message.length).toBeGreaterThan(0);
+    });
+
+    it('offers no custom Business Date after the station clock (#609)', () => {
+      renderForm({}, { requestedState: 'NOT_CREATED', openBusinessDays: [] });
+      fireEvent.click(datePicker('Custom business date'));
+      expect(calendarDay(TODAY)?.disabled).toBe(false);
+      expect(calendarDay('2026-03-02')?.disabled).toBe(true);
     });
 
     it('re-derives the submitted template when the selection changes', async () => {

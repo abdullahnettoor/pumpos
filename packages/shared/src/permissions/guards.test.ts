@@ -1,18 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import {
-  canOnboardStation,
-  canManageReportTemplates,
-  canOpenShift,
-  canCloseShift,
-  canReopenShift,
-  canEditExpense,
-  canCreatePurchase,
   isAuthorizedForStation,
-  canRecordHandover,
   isHandoverSelfScoped,
+  canActOnTeamMember,
+  canWriteStationSetup,
   UserContext,
   ResourceContext,
 } from './guards.js';
+import { can, principalOf } from './catalogue.js';
+import type { Role } from '../types/core.js';
 
 describe('Role and Shift Permissions Guards', () => {
   describe('isAuthorizedForStation', () => {
@@ -37,76 +33,51 @@ describe('Role and Shift Permissions Guards', () => {
 
   describe('Shift Lifecycle Guards', () => {
     it('should allow Owners, Managers, and Staff to open shifts', () => {
-      expect(canOpenShift('Owner')).toBe(true);
-      expect(canOpenShift('Manager')).toBe(true);
-      expect(canOpenShift('Staff')).toBe(true);
-      expect(canOpenShift('Accountant')).toBe(false);
+      expect(can(principalOf('Owner'), 'shifts.open')).toBe(true);
+      expect(can(principalOf('Manager'), 'shifts.open')).toBe(true);
+      expect(can(principalOf('Staff'), 'shifts.open')).toBe(true);
+      expect(can(principalOf('Accountant'), 'shifts.open')).toBe(false);
     });
 
     it('should restrict reopening shifts to Owners and Managers only', () => {
-      expect(canReopenShift('Owner')).toBe(true);
-      expect(canReopenShift('Manager')).toBe(true);
-      expect(canReopenShift('Staff')).toBe(false);
-      expect(canReopenShift('Accountant')).toBe(false);
-    });
-  });
-
-  describe('Expense Modification Guards', () => {
-    it('should allow editing expense in OPEN shifts', () => {
-      expect(canEditExpense('Staff', 'OPEN')).toBe(true);
-      expect(canEditExpense('Accountant', 'OPEN')).toBe(true);
+      expect(can(principalOf('Owner'), 'shifts.reopen')).toBe(true);
+      expect(can(principalOf('Manager'), 'shifts.reopen')).toBe(true);
+      expect(can(principalOf('Staff'), 'shifts.reopen')).toBe(false);
+      expect(can(principalOf('Accountant'), 'shifts.reopen')).toBe(false);
     });
 
-    it('should deny editing expense in CLOSED or LOCKED shifts', () => {
-      expect(canEditExpense('Owner', 'CLOSED')).toBe(false);
-      expect(canEditExpense('Owner', 'LOCKED')).toBe(false);
-    });
-  });
-
-  describe('Purchase Management Guards', () => {
-    it('should deny Staff from creating purchases', () => {
-      expect(canCreatePurchase('Staff')).toBe(false);
-    });
-
-    it('should allow Owners, Managers, and Accountants to create purchases', () => {
-      expect(canCreatePurchase('Owner')).toBe(true);
-      expect(canCreatePurchase('Manager')).toBe(true);
-      expect(canCreatePurchase('Accountant')).toBe(true);
+    it('shares close / reopen business day between Owner and Manager (#551)', () => {
+      const holders = ROLES.filter((r) => can(principalOf(r), 'shifts.closeDay'));
+      expect(holders).toEqual(['Owner', 'Manager']);
     });
   });
 });
 
-describe('Station onboarding guard', () => {
-  it('lets Owners and Managers onboard a station', () => {
-    expect(canOnboardStation('Owner')).toBe(true);
-    expect(canOnboardStation('Manager')).toBe(true);
-  });
+const ROLES: Role[] = ['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'];
+const holders = (perm: Parameters<typeof can>[1]) => ROLES.filter((r) => can(principalOf(r), perm));
 
-  it('refuses the roles that are locked out until setup finishes', () => {
-    // Staff and Accountants see a "setup in progress" screen instead. Offering
-    // them the onboarding action anyway is what strands them (#132): it routes
-    // to a focused full page that then refuses them, outside the shell and so
-    // without the top bar's sign-out.
-    expect(canOnboardStation('Staff')).toBe(false);
-    expect(canOnboardStation('Accountant')).toBe(false);
-  });
-
-  it('refuses Attendants, who are mobile-only', () => {
-    expect(canOnboardStation('Attendant')).toBe(false);
+describe('Default Permissions that guarded a behaviour before the catalogue', () => {
+  it.each([
+    ['pricing.change', ['Owner', 'Manager']],
+    ['station.onboard', ['Owner', 'Manager']],
+    ['station.reportTemplates', ['Owner', 'Manager']],
+    ['station.tankLevels', ['Owner', 'Manager']],
+    ['inventory.density', ['Owner', 'Manager', 'Accountant', 'Staff']],
+    ['inventory.decantation', ['Owner', 'Manager', 'Accountant']],
+    ['purchases.record', ['Owner', 'Manager', 'Accountant']],
+    ['expenses.create', ['Owner', 'Manager', 'Accountant', 'Staff']],
+    ['expenses.void', ['Owner', 'Manager']],
+    ['handover.record', ROLES],
+    ['mobile.home', ['Owner', 'Manager']],
+    ['mobile.shifts', ['Owner', 'Manager']],
+    ['mobile.insights', ['Owner', 'Manager']],
+  ] as const)('%s', (perm, expected) => {
+    expect(holders(perm)).toEqual(expected);
   });
 });
 
-// #301: anyone may cover a pump and hold its Drawer. Attendants and
-// Accountants hand over only their own Drawer; the other operational roles may
-// record on anyone's behalf.
-describe('handover guards', () => {
-  it.each(['Owner', 'Manager', 'Staff', 'Attendant', 'Accountant'] as const)(
-    'lets a %s record a handover',
-    (role) => {
-      expect(canRecordHandover(role)).toBe(true);
-    },
-  );
-
+// #301: Attendants and Accountants hand over only their own Drawer.
+describe('handover whose-data rule', () => {
   it.each([
     ['Attendant', true],
     ['Accountant', true],
@@ -118,12 +89,27 @@ describe('handover guards', () => {
   });
 });
 
-describe('canManageReportTemplates (#332)', () => {
-  it('allows Owner and Manager only', () => {
-    expect(canManageReportTemplates('Owner')).toBe(true);
-    expect(canManageReportTemplates('Manager')).toBe(true);
-    expect(canManageReportTemplates('Accountant')).toBe(false);
-    expect(canManageReportTemplates('Staff')).toBe(false);
-    expect(canManageReportTemplates('Attendant' as never)).toBe(false);
+describe('canActOnTeamMember', () => {
+  const manager = { role: 'Manager' as Role, stationIds: ['A'] };
+  it('lets an Owner act on anyone', () => {
+    expect(canActOnTeamMember({ role: 'Owner', stationIds: [] }, 'Manager', [])).toBe(true);
+  });
+  it('limits a Manager to Staff and Attendants on every shared station', () => {
+    expect(canActOnTeamMember(manager, 'Staff', ['A'])).toBe(true);
+    expect(canActOnTeamMember(manager, 'Staff', ['A', 'B'])).toBe(false);
+    expect(canActOnTeamMember(manager, 'Staff', [])).toBe(false);
+    expect(canActOnTeamMember(manager, 'Accountant', ['A'])).toBe(false);
+    expect(canActOnTeamMember({ role: 'Staff', stationIds: ['A'] }, 'Staff', ['A'])).toBe(false);
+  });
+});
+
+describe('canWriteStationSetup', () => {
+  it('reaches every station for an Owner, assigned ones for a Manager, none for others', () => {
+    const user = (role: Role, ids: string[]) => ({ role, assignedStationIds: ids });
+    expect(canWriteStationSetup(user('Owner', []), 'X')).toBe(true);
+    expect(canWriteStationSetup(user('Manager', ['X']), 'X')).toBe(true);
+    expect(canWriteStationSetup(user('Manager', ['X']), 'Y')).toBe(false);
+    expect(canWriteStationSetup(user('Manager', ['X']), null)).toBe(false);
+    expect(canWriteStationSetup(user('Accountant', ['X']), 'X')).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { composeDssr } from './compose.js';
 import type { DssrSourceData } from './ports.js';
 
@@ -31,6 +31,7 @@ describe('composeDssr attendant variance (#287)', () => {
       purchases: [],
       sales: [],
       creditSales: [],
+      omcCardSales: [],
       stockVariances: [],
       saleItems: [],
       products: {},
@@ -54,6 +55,7 @@ describe('composeDssr attendant variance (#287)', () => {
       purchases: [],
       sales: [],
       creditSales: [],
+      omcCardSales: [],
       stockVariances: [],
       saleItems: [],
       products: {},

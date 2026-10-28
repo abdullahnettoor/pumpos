@@ -26,6 +26,7 @@ export function shiftSequenceSql(alias: ShiftAlias): SQL<number> {
     SELECT COUNT(*)
     FROM shifts seq
     WHERE seq.business_day_id = ${a}.business_day_id
+      AND seq.organization_id = ${a}.organization_id
       AND (seq.opened_at, seq.id) <= (${a}.opened_at, ${a}.id)
   )::int`;
 }

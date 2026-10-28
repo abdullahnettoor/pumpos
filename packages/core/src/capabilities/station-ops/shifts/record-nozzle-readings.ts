@@ -8,9 +8,8 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { BusinessDayWriteRepository } from '../business-days/index.js';
-import type { NozzleReadingRepository, ShiftRepository } from './ports.js';
-import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
+import type { NozzleReadingRepository } from './ports.js';
+import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from './resolve-shift-write.js';
 
 export interface RecordNozzleReadingsCommand {
   shiftId: string;
@@ -24,9 +23,7 @@ const schema = z.object({
     .min(1, 'at least one reading is required'),
 });
 
-export interface RecordNozzleReadingsDeps {
-  shifts: ShiftRepository;
-  businessDays: BusinessDayWriteRepository;
+export interface RecordNozzleReadingsDeps extends ShiftWriteDeps {
   nozzleReadings: NozzleReadingRepository;
   events: EventPublisher;
 }
@@ -55,8 +52,7 @@ export class RecordNozzleReadings implements UseCase<
       );
 
     const eligibility = await resolveShiftBusinessDayWrite(
-      this.deps.shifts,
-      this.deps.businessDays,
+      this.deps.shiftWriteGate,
       ctx,
       p.data.shiftId,
       'STOCK',

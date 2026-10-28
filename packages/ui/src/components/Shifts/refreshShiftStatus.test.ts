@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { queryKeys } from '../../query/hooks.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
 
@@ -66,5 +66,39 @@ describe('refreshShiftStatus', () => {
 
     expect(invalidateOperational).toHaveBeenCalledWith(null);
     expect(queryClient.refetchQueries).not.toHaveBeenCalled();
+  });
+
+  it('passes throwOnError through, so a failed refetch rejects (#606)', async () => {
+    const invalidateOperational = vi.fn(() => Promise.resolve());
+    const queryClient = { refetchQueries: vi.fn(() => Promise.reject(new Error('offline'))) };
+
+    await expect(
+      refreshShiftStatus(queryClient, invalidateOperational, 'station-1', { throwOnError: true }),
+    ).rejects.toThrow('offline');
+    expect(invalidateOperational).toHaveBeenCalledWith('station-1', { throwOnError: true });
+    expect(queryClient.refetchQueries).toHaveBeenCalledWith(
+      { queryKey: queryKeys.shiftStatus('station-1', false), type: 'active' },
+      { throwOnError: true },
+    );
+  });
+
+  it('still waits for the shift status when another view fails to refresh, then reports it', async () => {
+    const refetch = deferred();
+    const invalidateOperational = vi.fn(() => Promise.reject(new Error('dashboard offline')));
+    const queryClient = { refetchQueries: vi.fn(() => refetch.promise) };
+    let settled = false;
+
+    const refresh = refreshShiftStatus(queryClient, invalidateOperational, 'station-1', {
+      throwOnError: true,
+    }).catch((e: Error) => {
+      settled = true;
+      return e;
+    });
+    await flush();
+    expect(queryClient.refetchQueries).toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    refetch.resolve();
+    expect(((await refresh) as Error).message).toBe('dashboard offline');
   });
 });

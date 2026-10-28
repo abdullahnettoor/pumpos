@@ -100,6 +100,42 @@ export const userStationAssignments = pgTable('user_station_assignments', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+/**
+ * Per-user Permission changes (ADR 0013): the DIFFERENCE from the user's Role
+ * defaults, never a full copy, so a Permission added to the catalogue later
+ * follows Role defaults for everyone who has not changed it. One row per
+ * user; absent row = no changes. Unknown ids are ignored at resolution time.
+ */
+export const userPermissionChanges = pgTable(
+  'user_permission_changes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    userId: uuid('user_id')
+      .references(() => users.id)
+      .notNull(),
+    /** Permission ids added on top of the Role defaults (string[]). */
+    granted: jsonb('granted')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    /** Permission ids removed from the Role defaults (string[]). */
+    revoked: jsonb('revoked')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    userUniq: uniqueIndex('user_permission_changes_user_uniq').on(t.userId),
+    orgIdx: index('user_permission_changes_org_idx').on(t.organizationId),
+  }),
+);
+
 // ----------------------------------------------------
 // INFRASTRUCTURE DOMAIN
 // ----------------------------------------------------
@@ -248,6 +284,11 @@ export const businessDays = pgTable(
       t.stationId,
       t.businessDate,
     ),
+    orgBusinessDateIdx: index('business_days_org_business_date_idx').on(
+      t.organizationId,
+      t.businessDate,
+      t.id,
+    ),
   }),
 );
 
@@ -296,6 +337,8 @@ export const shifts = pgTable(
     oneOpenPerStation: uniqueIndex('shifts_station_open_uniq')
       .on(t.organizationId, t.stationId)
       .where(sql`${t.status} = 'OPEN'`),
+    // A Business Day's Shifts (Insights shift performance, day rollups).
+    businessDayIdx: index('shifts_business_day_idx').on(t.businessDayId),
   }),
 );
 
@@ -442,6 +485,11 @@ export const customerTransactions = pgTable(
   (t) => ({
     shiftAttendantIdx: index('customer_txn_shift_attendant_idx').on(t.shiftId, t.attendantId),
     shiftDuIdx: index('customer_txn_shift_du_idx').on(t.shiftId, t.duId),
+    customerBusinessDayCreatedIdx: index('customer_txn_customer_business_day_created_idx').on(
+      t.customerId,
+      t.businessDayId,
+      t.createdAt,
+    ),
   }),
 );
 
@@ -494,6 +542,11 @@ export const supplierTransactions = pgTable(
     orgStationEntryDateIdx: index('supplier_transactions_org_station_entry_date_idx').on(
       t.organizationId,
       t.stationId,
+      t.entryDate,
+    ),
+    orgSupplierEntryDateIdx: index('supplier_transactions_org_supplier_entry_date_idx').on(
+      t.organizationId,
+      t.supplierId,
       t.entryDate,
     ),
     // The payment-has-funding CHECK lives in 0001_rls_and_triggers.sql (custom
@@ -616,6 +669,8 @@ export const sales = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
+    // A Business Day's Sales (mobile Reports Business Day list, #394).
+    businessDayIdx: index('sales_business_day_idx').on(t.businessDayId),
     shiftAttendantIdx: index('sales_shift_attendant_idx').on(t.shiftId, t.attendantId),
   }),
 );
@@ -652,53 +707,74 @@ export const saleItems = pgTable('sale_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export const stockMovements = pgTable('stock_movements', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  // Nullable: sale movements occur within a shift; purchase/receipt movements
-  // happen against a business day with no shift.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  productId: uuid('product_id')
-    .references(() => products.id)
-    .notNull(),
-  tankId: uuid('tank_id').references(() => tanks.id),
-  movementType: varchar('movement_type', { length: 50 }).notNull(), // 'Purchase', 'Sale', 'Adjustment', 'Decantation', 'Variance'
-  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
-  referenceType: varchar('reference_type', { length: 50 }),
-  referenceId: uuid('reference_id'),
-  notes: varchar('notes', { length: 500 }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const stockMovements = pgTable(
+  'stock_movements',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // Nullable: sale movements occur within a shift; purchase/receipt movements
+    // happen against a business day with no shift.
+    shiftId: uuid('shift_id').references(() => shifts.id),
+    businessDayId: uuid('business_day_id')
+      .references(() => businessDays.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    tankId: uuid('tank_id').references(() => tanks.id),
+    movementType: varchar('movement_type', { length: 50 }).notNull(), // 'Purchase', 'Sale', 'Adjustment', 'Variance', 'Decantation' (reference_type 'decantation_tank_line', reference_id = tank line id)
+    quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+    referenceType: varchar('reference_type', { length: 50 }),
+    referenceId: uuid('reference_id'),
+    notes: varchar('notes', { length: 500 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // A Business Day's stock movements per tank (days of cover on Home, #403).
+    businessDayTankIdx: index('stock_movements_business_day_tank_idx').on(
+      t.businessDayId,
+      t.tankId,
+    ),
+  }),
+);
 
-export const stockVariances = pgTable('stock_variances', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .references(() => organizations.id)
-    .notNull(),
-  stationId: uuid('station_id')
-    .references(() => stations.id)
-    .notNull(),
-  // Nullable: a dip/physical count is a business-day reconciliation, not a
-  // shift-bound event. shift_id is set only for shift-scoped variance capture.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  productId: uuid('product_id')
-    .references(() => products.id)
-    .notNull(),
-  tankId: uuid('tank_id').references(() => tanks.id),
-  expectedQuantity: numeric('expected_quantity', { precision: 12, scale: 3 }).notNull(),
-  actualQuantity: numeric('actual_quantity', { precision: 12, scale: 3 }).notNull(),
-  varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
-  reason: varchar('reason', { length: 255 }),
-  approvedBy: uuid('approved_by').references(() => users.id),
-  // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
-  metadata: jsonb('metadata').default({}).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const stockVariances = pgTable(
+  'stock_variances',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    // Nullable: a dip/physical count is a business-day reconciliation, not a
+    // shift-bound event. shift_id is set only for shift-scoped variance capture.
+    shiftId: uuid('shift_id').references(() => shifts.id),
+    businessDayId: uuid('business_day_id')
+      .references(() => businessDays.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    tankId: uuid('tank_id').references(() => tanks.id),
+    expectedQuantity: numeric('expected_quantity', { precision: 12, scale: 3 }).notNull(),
+    actualQuantity: numeric('actual_quantity', { precision: 12, scale: 3 }).notNull(),
+    varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
+    reason: varchar('reason', { length: 255 }),
+    approvedBy: uuid('approved_by').references(() => users.id),
+    // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
+    metadata: jsonb('metadata').default({}).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // A Station's stock variances by Business Day (mobile Insights stock loss, #402).
+    orgStationDayIdx: index('stock_variances_org_station_day_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDayId,
+    ),
+  }),
+);
 
 // ----------------------------------------------------
 // FINANCE DOMAIN
@@ -888,34 +964,60 @@ export const collections = pgTable(
       t.stationId,
       t.entryDate,
     ),
+    orgCustomerEntryDateIdx: index('collections_org_customer_entry_date_idx').on(
+      t.organizationId,
+      t.customerId,
+      t.entryDate,
+    ),
   }),
 );
 
-export const purchases = pgTable('purchases', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  documentNumber: varchar('document_number', { length: 100 }).notNull(),
-  // Purchases are inventory + payable events anchored to a business day, NOT a
-  // shift. shiftId is kept only for an optional drawer-paid linkage.
-  shiftId: uuid('shift_id').references(() => shifts.id),
-  businessDayId: uuid('business_day_id')
-    .references(() => businessDays.id)
-    .notNull(),
-  supplierId: uuid('supplier_id')
-    .references(() => suppliers.id)
-    .notNull(),
-  invoiceNumber: varchar('invoice_number', { length: 100 }),
-  // `amount` is the grand total (tax inclusive) = the supplier payable.
-  // The tax breakup below is denormalised from purchase_items for invoice/ITC reporting.
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }).default('0').notNull(),
-  cgstTotal: numeric('cgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
-  sgstTotal: numeric('sgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
-  igstTotal: numeric('igst_total', { precision: 12, scale: 2 }).default('0').notNull(),
-  vatTotal: numeric('vat_total', { precision: 12, scale: 2 }).default('0').notNull(),
-  cessTotal: numeric('cess_total', { precision: 12, scale: 2 }).default('0').notNull(),
-  notes: varchar('notes', { length: 500 }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const purchases = pgTable(
+  'purchases',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    documentNumber: varchar('document_number', { length: 100 }).notNull(),
+    // Purchases are inventory + payable events anchored to a business day, NOT a
+    // shift. shiftId is kept only for an optional drawer-paid linkage.
+    shiftId: uuid('shift_id').references(() => shifts.id),
+    // Nullable: product purchases anchor to a business day; Fuel Purchases anchor
+    // to `entryDate` instead (ADR 0007). CHECK purchases_has_anchor needs one.
+    businessDayId: uuid('business_day_id').references(() => businessDays.id),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    entryDate: varchar('entry_date', { length: 10 }),
+    supplierId: uuid('supplier_id')
+      .references(() => suppliers.id)
+      .notNull(),
+    invoiceNumber: varchar('invoice_number', { length: 100 }),
+    // `amount` is the grand total (tax inclusive) = the supplier payable.
+    // The tax breakup below is denormalised from purchase_items for invoice/ITC reporting.
+    amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+    taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+    cgstTotal: numeric('cgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+    sgstTotal: numeric('sgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+    igstTotal: numeric('igst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+    vatTotal: numeric('vat_total', { precision: 12, scale: 2 }).default('0').notNull(),
+    cessTotal: numeric('cess_total', { precision: 12, scale: 2 }).default('0').notNull(),
+    notes: varchar('notes', { length: 500 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    hasAnchor: check(
+      'purchases_has_anchor',
+      sql`${t.businessDayId} IS NOT NULL OR ${t.entryDate} IS NOT NULL`,
+    ),
+    orgStationEntryDateIdx: index('purchases_org_station_entry_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.entryDate,
+    ),
+  }),
+);
 
 // Line items of a purchase (supplier tax invoice). Each line updates inventory
 // for its product and carries its own computed tax breakup. Fuel lines may split
@@ -945,11 +1047,221 @@ export const purchaseItems = pgTable(
     cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
     lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
     tankAllocations: jsonb('tank_allocations'),
+    // Invoice density at 15 °C (kg/m³) on fuel lines.
+    invoiceDensity: numeric('invoice_density', { precision: 7, scale: 2 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => ({
     purchaseIdIdx: index('purchase_items_purchase_id_idx').on(t.purchaseId),
     productIdIdx: index('purchase_items_product_id_idx').on(t.productId),
+  }),
+);
+
+// ----------------------------------------------------
+// DECANTATION & DENSITY (ADR 0007)
+// ----------------------------------------------------
+
+// One tanker visit. Anchored to a business day (no shift).
+export const decantations = pgTable(
+  'decantations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    businessDayId: uuid('business_day_id')
+      .references(() => businessDays.id)
+      .notNull(),
+    documentNumber: varchar('document_number', { length: 100 }).notNull(), // DEC-000001
+    tankerNumber: varchar('tanker_number', { length: 50 }).notNull(),
+    driverName: varchar('driver_name', { length: 100 }),
+    unloadStartedAt: timestamp('unload_started_at'),
+    unloadEndedAt: timestamp('unload_ended_at'),
+    chambersChecked: boolean('chambers_checked').default(false).notNull(),
+    // DRAFT | PENDING_MEASUREMENT | MEASURED
+    status: varchar('status', { length: 30 }).default('PENDING_MEASUREMENT').notNull(),
+    // [{ code, tankLineId?, chamberNo?, message }]; codes DENSITY_OUT_OF_TOLERANCE |
+    // TANKER_SHORT | CHAMBER_NOT_EMPTIED | EARLY_AFTER_DIP
+    flags: jsonb('flags').default([]).notNull(),
+    notes: varchar('notes', { length: 500 }),
+    recordedBy: uuid('recorded_by').references(() => users.id),
+    metadata: jsonb('metadata').default({}),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    orgStationDayIdx: index('decantations_org_station_day_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDayId,
+    ),
+    stationStatusIdx: index('decantations_station_status_idx').on(t.stationId, t.status),
+  }),
+);
+
+export const decantationTankLines = pgTable(
+  'decantation_tank_lines',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    decantationId: uuid('decantation_id')
+      .references(() => decantations.id)
+      .notNull(),
+    tankId: uuid('tank_id')
+      .references(() => tanks.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    beforeDip: numeric('before_dip', { precision: 12, scale: 3 }).notNull(), // litres
+    beforeDipAt: timestamp('before_dip_at'),
+    observedDensity: numeric('observed_density', { precision: 7, scale: 2 }),
+    observedTempC: numeric('observed_temp_c', { precision: 5, scale: 2 }),
+    roDensity: numeric('ro_density', { precision: 7, scale: 2 }), // RO Density at 15 °C
+    afterDip: numeric('after_dip', { precision: 12, scale: 3 }),
+    afterDipAt: timestamp('after_dip_at'),
+    salesDuring: numeric('sales_during', { precision: 12, scale: 3 }).default('0').notNull(),
+    receivedQty: numeric('received_qty', { precision: 12, scale: 3 }),
+    // AFTER_DIP | TANK_DIP
+    measuredBy: varchar('measured_by', { length: 20 }),
+    // stock_variances id of the resolving routine Tank Dip
+    measurementRefId: uuid('measurement_ref_id'),
+    measuredAt: timestamp('measured_at'),
+    // PENDING_MEASUREMENT | MEASURED
+    status: varchar('status', { length: 30 }).default('PENDING_MEASUREMENT').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    decantationIdx: index('decantation_tank_lines_decantation_idx').on(t.decantationId),
+    tankStatusIdx: index('decantation_tank_lines_org_station_tank_status_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.tankId,
+      t.status,
+    ),
+  }),
+);
+
+export const decantationChambers = pgTable(
+  'decantation_chambers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    decantationId: uuid('decantation_id')
+      .references(() => decantations.id)
+      .notNull(),
+    tankLineId: uuid('tank_line_id').references(() => decantationTankLines.id),
+    chamberNo: integer('chamber_no').notNull(),
+    capacityL: numeric('capacity_l', { precision: 12, scale: 3 }),
+    sealOk: boolean('seal_ok'),
+    mark: varchar('mark', { length: 10 }), // OK | SHORT | EXCESS
+    dipMm: numeric('dip_mm', { precision: 8, scale: 1 }),
+    emptied: boolean('emptied'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    decantationChamberUniq: uniqueIndex('decantation_chambers_decantation_chamber_uniq').on(
+      t.decantationId,
+      t.chamberNo,
+    ),
+  }),
+);
+
+// Per-product link between a Decantation and its Fuel Purchase invoice, with the
+// per-invoice variance (received − invoice; + Excess, − Short).
+export const decantationPurchases = pgTable(
+  'decantation_purchases',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    decantationId: uuid('decantation_id')
+      .references(() => decantations.id)
+      .notNull(),
+    purchaseId: uuid('purchase_id')
+      .references(() => purchases.id)
+      .notNull(),
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    receivedQty: numeric('received_qty', { precision: 12, scale: 3 }),
+    invoiceQty: numeric('invoice_qty', { precision: 12, scale: 3 }),
+    varianceQty: numeric('variance_qty', { precision: 12, scale: 3 }),
+    varianceComputedAt: timestamp('variance_computed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    decantationProductUniq: uniqueIndex('decantation_purchases_decantation_product_uniq').on(
+      t.decantationId,
+      t.productId,
+    ),
+    purchaseIdx: index('decantation_purchases_purchase_idx').on(t.purchaseId),
+  }),
+);
+
+// Product density register (#471).
+export const densityReadings = pgTable(
+  'density_readings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    businessDate: varchar('business_date', { length: 10 }).notNull(), // resolveBusinessDate
+    productId: uuid('product_id')
+      .references(() => products.id)
+      .notNull(),
+    kind: varchar('kind', { length: 20 }).notNull(), // MORNING | ADHOC | DECANTATION
+    sampledFrom: varchar('sampled_from', { length: 10 }), // NOZZLE | TANK
+    tankId: uuid('tank_id').references(() => tanks.id),
+    nozzleId: uuid('nozzle_id').references(() => nozzles.id),
+    entryMethod: varchar('entry_method', { length: 20 }).notNull(), // HYDROMETER | DIRECT_15
+    observedDensity: numeric('observed_density', { precision: 7, scale: 2 }),
+    observedTempC: numeric('observed_temp_c', { precision: 5, scale: 2 }),
+    density15: numeric('density_15', { precision: 7, scale: 2 }).notNull(),
+    decantationTankLineId: uuid('decantation_tank_line_id').references(
+      () => decantationTankLines.id,
+    ),
+    flags: jsonb('flags').default([]).notNull(), // e.g. UNEXPLAINED_JUMP
+    recordedBy: uuid('recorded_by').references(() => users.id),
+    recordedAt: timestamp('recorded_at').defaultNow().notNull(),
+    metadata: jsonb('metadata').default({}), // formulaVersion
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    productRecordedIdx: index('density_readings_org_station_product_recorded_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.productId,
+      t.recordedAt,
+    ),
+    dateIdx: index('density_readings_org_station_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDate,
+    ),
   }),
 );
 
@@ -1021,27 +1333,44 @@ export const documentSequences = pgTable(
 // REPORTING, AUDIT & SYNC DOMAINS
 // ----------------------------------------------------
 
-export const shiftSummaries = pgTable('shift_summaries', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id')
-    .references(() => shifts.id)
-    .notNull(),
-  snapshotData: jsonb('snapshot_data').notNull(),
-  generatedAt: timestamp('generated_at').defaultNow().notNull(),
-});
+export const shiftSummaries = pgTable(
+  'shift_summaries',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    shiftId: uuid('shift_id')
+      .references(() => shifts.id)
+      .notNull(),
+    snapshotData: jsonb('snapshot_data').notNull(),
+    generatedAt: timestamp('generated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    shiftIdx: index('shift_summaries_shift_idx').on(t.shiftId),
+  }),
+);
 
-export const dssrSnapshots = pgTable('dssr_snapshots', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id')
-    .references(() => organizations.id)
-    .notNull(),
-  stationId: uuid('station_id')
-    .references(() => stations.id)
-    .notNull(),
-  businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
-  snapshotData: jsonb('snapshot_data').notNull(),
-  generatedAt: timestamp('generated_at').defaultNow().notNull(),
-});
+export const dssrSnapshots = pgTable(
+  'dssr_snapshots',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    stationId: uuid('station_id')
+      .references(() => stations.id)
+      .notNull(),
+    businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
+    snapshotData: jsonb('snapshot_data').notNull(),
+    generatedAt: timestamp('generated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    // Date-range reads of a Station's sealed days (Insights, range DSSR).
+    orgStationDateIdx: index('dssr_snapshots_org_station_date_idx').on(
+      t.organizationId,
+      t.stationId,
+      t.businessDate,
+    ),
+  }),
+);
 
 // Canonical append-only business-event log (Handbook Vol. 4). Mirrors the
 // DomainEvent envelope in @pump/core. Audit log + sync/replay source; business

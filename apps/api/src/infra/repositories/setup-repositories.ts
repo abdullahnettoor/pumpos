@@ -1,6 +1,7 @@
-import { and, eq, inArray, desc } from 'drizzle-orm';
+import { and, eq, inArray, desc, lte } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
+import { fuelPricesNewestFirst } from './fuel-price-queries.js';
 import type {
   InServiceDispenserReader,
   Tank,
@@ -499,7 +500,12 @@ export class DrizzleFuelPriceRepository implements FuelPriceRepository {
       createdAt: new Date(p.createdAt),
     });
   }
-  async listByStation(organizationId: string, stationId: string): Promise<FuelPrice[]> {
+  /** The prices in effect at `asOf`; a scheduled price is not listed until its time (#619). */
+  async listByStation(
+    organizationId: string,
+    stationId: string,
+    asOf: string,
+  ): Promise<FuelPrice[]> {
     const rows = await this.db
       .select()
       .from(schema.fuelPrices)
@@ -507,9 +513,10 @@ export class DrizzleFuelPriceRepository implements FuelPriceRepository {
         and(
           eq(schema.fuelPrices.organizationId, organizationId),
           eq(schema.fuelPrices.stationId, stationId),
+          lte(schema.fuelPrices.effectiveFrom, new Date(asOf)),
         ),
       )
-      .orderBy(desc(schema.fuelPrices.effectiveFrom));
+      .orderBy(...fuelPricesNewestFirst());
     return rows.map((r) => this.toEntity(r));
   }
 }

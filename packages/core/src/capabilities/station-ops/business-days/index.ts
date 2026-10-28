@@ -143,10 +143,30 @@ export async function resolveBusinessDayWrite(
     day = await ensureBusinessDayForDate(repo, ctx, input.stationId, businessDate);
   }
 
+  return checkBusinessDayWriteEligibility(day, ctx, {
+    stationId: input.stationId,
+    kind: input.kind,
+    notFoundId: input.businessDayId ?? input.businessDate ?? 'current',
+  });
+}
+
+/** The Business Day statuses under which a write of `kind` is admitted. */
+export function writableBusinessDayStatuses(kind: BusinessDayWriteKind): BusinessDayStatus[] {
+  return kind === 'STOCK' ? ['OPEN'] : ['OPEN', 'CLOSED'];
+}
+
+/**
+ * Validate a Business Day read under its Station -> Business Day lock: it must
+ * still belong to the tenant and station, and a CLOSED day refuses STOCK writes
+ * (sales/stock are sealed) while admitting FINANCIAL ones as late entries.
+ */
+export function checkBusinessDayWriteEligibility(
+  day: BusinessDay | null,
+  ctx: ExecutionContext,
+  input: { stationId: string; kind: BusinessDayWriteKind; notFoundId: string },
+): Result<BusinessDayWriteEligibility> {
   if (!day || day.organizationId !== ctx.organizationId || day.stationId !== input.stationId) {
-    return err(
-      notFoundError('Business Day', input.businessDayId ?? input.businessDate ?? 'current'),
-    );
+    return err(notFoundError('Business Day', input.notFoundId));
   }
   if (day.status === 'CLOSED' && input.kind === 'STOCK') {
     return err(

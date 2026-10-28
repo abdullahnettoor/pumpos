@@ -105,6 +105,66 @@ export function shiftBusinessDate(businessDate: string, deltaDays: number): stri
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Whole calendar days from one business date to another (`to - from`; negative
+ * when `to` is earlier). Calendar labels, so UTC arithmetic like `shiftBusinessDate`.
+ */
+export function businessDateDiffDays(from: string, to: string): number {
+  const ms = new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime();
+  return Math.round(ms / 86_400_000);
+}
+
+export const MONTH_KEY = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/** First and last calendar date (`YYYY-MM-DD`) of a `YYYY-MM` month. Throws on a malformed month. */
+export function monthBounds(month: string): { from: string; to: string } {
+  const match = MONTH_KEY.exec(month);
+  if (!match) throw new Error(`Invalid month: ${month}`);
+  const lastDay = new Date(Date.UTC(Number(match[1]), Number(match[2]), 0)).getUTCDate();
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
+}
+
+/** Current sales-month and calendar-month windows used by party finance reads. */
+export function partyMonthWindows(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}) {
+  const timeZone = input.timeZone ?? DEFAULT_TIMEZONE;
+  const dayStartsAt = input.dayStartsAt ?? '00:00';
+  const currentBusinessDate = resolveBusinessDate({
+    now: input.now,
+    timeZone,
+    dayStartsAt,
+  });
+  const entryDate = resolveEntryDate({ now: input.now, timeZone });
+  const businessMonth = monthBounds(currentBusinessDate.slice(0, 7));
+  const entryMonth = monthBounds(entryDate.slice(0, 7));
+  return {
+    currentBusinessDate,
+    entryDate,
+    businessMonth,
+    entryMonth,
+    months: {
+      businessMonth: businessMonth.from.slice(0, 7),
+      entryMonth: entryMonth.from.slice(0, 7),
+    },
+  };
+}
+
+/** Current Business Date used when a read needs only the aging anchor. */
+export function currentBusinessDateOf(input: {
+  now: Date;
+  timeZone?: string | null;
+  dayStartsAt?: string | null;
+}): string {
+  return resolveBusinessDate({
+    now: input.now,
+    timeZone: input.timeZone ?? DEFAULT_TIMEZONE,
+    dayStartsAt: input.dayStartsAt ?? '00:00',
+  });
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;
@@ -113,4 +173,69 @@ export function businessDateSettings(settings: unknown): { timeZone: string; day
     dayStartsAt:
       (typeof s.business_day_starts_at === 'string' && s.business_day_starts_at) || '00:00',
   };
+}
+
+/** Offset (ms) of a timezone from UTC at an instant; positive east of UTC. */
+export function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(instant))
+      .map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return asUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The UTC instant (ms) at which a station's wall clock reads `date` + `HH:MM`.
+ * One correction pass handles DST edges.
+ */
+export function localToInstant(date: string, hhmm: string, timeZone: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = hhmm.split(':').map((n) => Number(n) || 0);
+  const wall = Date.UTC(y, m - 1, d, h, min);
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/**
+ * The half-open interval `[from, to)` (epoch ms) of one Business Day: from the
+ * station's Day Start on `businessDate` to the next Day Start.
+ */
+export function businessDayWindow(
+  businessDate: string,
+  clock: { timeZone: string; dayStartsAt: string },
+): { from: number; to: number } {
+  return {
+    from: localToInstant(businessDate, clock.dayStartsAt, clock.timeZone),
+    to: localToInstant(shiftBusinessDate(businessDate, 1), clock.dayStartsAt, clock.timeZone),
+  };
+}
+
+/** Minutes after local midnight of an instant (ms) in the station's timezone. */
+export function stationMinuteOfDay(ms: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return at('hour') * 60 + at('minute');
 }

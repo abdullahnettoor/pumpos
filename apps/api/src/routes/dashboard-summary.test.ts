@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { Hono } from 'hono';
 import { shiftsRouter } from './shifts.js';
 
@@ -69,6 +69,7 @@ describe('GET /dashboard-summary', () => {
               id: 'sh-last',
               status: 'CLOSED',
               templateName: 'Morning',
+              openedAt: '2026-03-14T16:30:00.000Z',
               closedAt,
               businessDate: '2026-03-15',
               shiftSequence: 1,
@@ -76,6 +77,8 @@ describe('GET /dashboard-summary', () => {
               hasSummary: true,
               totalVolumeSold: '740.5',
               closingCash: '9000',
+              totalFuelSalesValue: '66000.25',
+              cashVariance: '-15',
               fuelByProduct: [{ unit: 'L' }, { unit: 'L' }],
             },
             today: {
@@ -84,6 +87,24 @@ describe('GET /dashboard-summary', () => {
               volume: '1500.25',
               cashVariance: '-42',
             },
+            today_shifts: [
+              {
+                id: 'sh-1',
+                shiftTemplateId: 'tpl-1',
+                openedAt: '2026-03-15T00:30:00.000Z',
+                closedAt: '2026-03-15T08:30:00.000Z',
+                totalFuelSalesValue: '216120.5',
+                cashVariance: -340,
+              },
+              {
+                id: 'sh-2',
+                shiftTemplateId: 'tpl-2',
+                openedAt: '2026-03-15T08:45:00.000Z',
+                closedAt: null,
+                totalFuelSalesValue: null,
+                cashVariance: null,
+              },
+            ],
           },
         ],
       ],
@@ -101,6 +122,25 @@ describe('GET /dashboard-summary', () => {
     expect(body.data.today.volume).toBe(1500.25);
     expect(body.data.today.cashVariance).toBe(-42);
     expect(typeof body.data.today.businessDate).toBe('string');
+    // Every shift of the Business Day, by id: what the timeline matches summaries on.
+    expect(body.data.today.shifts).toEqual([
+      {
+        id: 'sh-1',
+        shiftTemplateId: 'tpl-1',
+        openedAt: '2026-03-15T00:30:00.000Z',
+        closedAt: '2026-03-15T08:30:00.000Z',
+        totalFuelSalesValue: 216120.5,
+        cashVariance: -340,
+      },
+      {
+        id: 'sh-2',
+        shiftTemplateId: 'tpl-2',
+        openedAt: '2026-03-15T08:45:00.000Z',
+        closedAt: null,
+        totalFuelSalesValue: null,
+        cashVariance: null,
+      },
+    ]);
 
     expect(body.data.activeShift).toBeNull();
     // businessDate + shiftSequence are what the UI turns into the readable
@@ -109,6 +149,7 @@ describe('GET /dashboard-summary', () => {
       id: 'sh-last',
       status: 'CLOSED',
       templateName: 'Morning',
+      openedAt: '2026-03-14T16:30:00.000Z',
       closedAt,
       businessDate: '2026-03-15',
       shiftSequence: 1,
@@ -116,6 +157,8 @@ describe('GET /dashboard-summary', () => {
     expect(body.data.lastShiftSummary).toEqual({
       totalVolumeSold: 740.5,
       closingCash: 9000,
+      totalFuelSalesValue: 66000.25,
+      cashVariance: -15,
       fuelUnits: ['L'],
     });
     // Closed 5 min ago on an open day, no open shift, Owner → reopenable.

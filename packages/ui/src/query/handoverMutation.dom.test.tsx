@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, muteExpectedConsoleErrors } from '../test/renderWithProviders.js';
+import { renderWithProviders } from '../test/renderWithProviders.js';
 
 /**
  * The refresh after a handover runs unawaited, so the write settles without it.
@@ -12,8 +12,9 @@ import { renderWithProviders, muteExpectedConsoleErrors } from '../test/renderWi
  * `useRunTask`, which also toasts.
  *
  * The unit test next door proves the options builder calls its injected
- * runner. This proves the hook injects one that actually reaches the operator
- * — the half that a fake runner can never show.
+ * runner. Since #606 the operator learns of a failed refresh on the page
+ * itself (an inline Retry beside totals held as "Saving…"), so the hook's
+ * runner only logs it; this pins that it is not a toast.
  */
 const recordHandover = vi.fn();
 
@@ -57,8 +58,11 @@ describe('useRecordHandoverMutation', () => {
     recordHandover.mockReset();
   });
 
-  it('toasts the operator when the post-handover refresh fails', async () => {
-    const restoreConsole = muteExpectedConsoleErrors([/could not be refreshed/]);
+  it('reports a failed post-handover refresh to the console, not a toast (#606)', async () => {
+    // The board and close page show it inline with Retry (handoverPatch.dom.test).
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => void errors.push(a[0]);
     try {
       recordHandover.mockResolvedValue({
         expectedTotal: 900,
@@ -71,15 +75,15 @@ describe('useRecordHandoverMutation', () => {
 
       screen.getByRole('button', { name: 'Record' }).click();
 
-      await waitFor(() => expect(screen.getByText(HANDOVER_REFRESH_FAILED)).toBeDefined());
+      await waitFor(() => expect(errors).toContain(HANDOVER_REFRESH_FAILED));
+      expect(screen.queryByText(HANDOVER_REFRESH_FAILED)).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
     } finally {
-      restoreConsole();
+      console.error = original;
     }
   });
 
-  it('does not toast when the refresh succeeds', async () => {
-    // Paired with the case above: without it, that one would also pass against
-    // a build that toasts unconditionally.
+  it('reports nothing when the refresh succeeds', async () => {
     recordHandover.mockResolvedValue({
       expectedTotal: 900,
       declaredTotal: 910,

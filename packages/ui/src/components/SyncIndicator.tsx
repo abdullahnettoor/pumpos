@@ -18,19 +18,19 @@ export const SyncIndicator: React.FC<SyncIndicatorProps> = ({ status, pendingCou
         return {
           color: 'var(--state-warning-fg)',
           bg: 'var(--state-warning-bg)',
-          text: pendingCount > 0 ? `Syncing (${pendingCount} pending)` : 'Syncing...',
+          text: pendingCount > 0 ? `Syncing (${pendingCount} pending)` : 'Syncing…',
         };
       case 'failed':
         return {
           color: 'var(--state-danger-fg)',
           bg: 'var(--state-danger-bg)',
-          text: 'Sync Failed',
+          text: 'Sync failed',
         };
       case 'offline':
         return {
           color: 'var(--text-muted)',
           bg: 'var(--bg-surface-alt)',
-          text: 'Offline Mode',
+          text: 'Offline mode',
         };
       case 'online':
       default:

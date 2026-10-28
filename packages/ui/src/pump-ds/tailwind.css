@@ -5,13 +5,13 @@
  *   1. Loads Tailwind v4's utility layer (NOT preflight — see below).
  *   2. Exposes every PumpOS CSS variable declared in `packages/ui/src/index.css`
  *      as a first-class Tailwind theme token, so utilities like `bg-brand`,
- *      `text-strong`, `border-border-soft`, `rounded-card`, `font-mono` all
+ *      `text-ink-strong`, `border-border-soft`, `rounded-card`, `font-mono` all
  *      resolve to the same values as the existing `--brand-primary`,
  *      `--text-strong`, etc.
  *
  * Single source of truth stays in `index.css` — this file only mirrors the
  * variables into Tailwind's `@theme` namespace. Change a raw value in one
- * place; both the legacy CSS classes and the Tailwind utilities pick it up.
+ * place; both the plain CSS classes and the Tailwind utilities pick it up.
  *
  * Load order matters: apps must import `@pump/ui/src/index.css` FIRST (so the
  * raw `--*` variables exist on `:root`), then this file (so Tailwind's
@@ -59,6 +59,15 @@
   --color-brand-secondary: var(--brand-secondary);
   --color-brand-warning: var(--brand-warning);
   --color-brand-danger: var(--brand-danger);
+  --color-on-brand: var(--text-on-brand);
+  /* Text on a solid tone fill, paired per fill (#518): bg-danger-fg / bg-brand-danger
+   * + text-on-danger, bg-warning-fg + text-on-warning, bg-success-fg +
+   * text-on-success, bg-info-fg + text-on-info, bg-ink-strong + text-on-neutral. */
+  --color-on-danger: var(--text-on-danger);
+  --color-on-warning: var(--text-on-warning);
+  --color-on-success: var(--text-on-success);
+  --color-on-info: var(--text-on-info);
+  --color-on-neutral: var(--text-on-neutral);
 
   /* Surfaces + borders */
   --color-canvas: var(--bg-canvas);

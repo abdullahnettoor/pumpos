@@ -5,17 +5,15 @@ import {
   attendantHandoverSchema,
   businessDateSettings,
   byNaturalField,
-  canOpenShift,
-  canCloseShift,
-  canReopenShift,
-  canRecordHandover,
+  can,
   compareByDispenserThenNozzle,
   dispenserLabel,
-  isAuthorizedForStation,
+  ATTENDANT_PHONE_HANDOVER_CAPABILITY,
   isAttendant,
+  isAuthorizedForStation,
   isHandoverSelfScoped,
+  productCashDrawer,
   resolveBusinessDate,
-  type Role,
 } from '@pump/shared';
 import {
   OpenShift,
@@ -31,11 +29,14 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
 import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
+import { isUuid } from '../infra/is-uuid.js';
+import { netNozzleVolume } from '../infra/shift-summary-sql.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleDispenserRepository,
@@ -46,6 +47,7 @@ import {
   DrizzleBusinessDayRepository,
   DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
+  DrizzleShiftWriteGateReader,
   DrizzleNozzleReadingRepository,
   DrizzleCloseShiftContextReader,
   DrizzleStockMovementWriter,
@@ -53,6 +55,7 @@ import {
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
   DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
 } from '../infra/repositories/station-ops-repositories.js';
 import { assignableStaffWhere } from '../infra/repositories/assignable-staff.js';
 import {
@@ -110,10 +113,6 @@ const shiftIdBody = z
 const stationIdBody = z
   .object({ stationId: z.string().trim().min(1, 'stationId is required') })
   .passthrough();
-
-function canManageDay(role: Role): boolean {
-  return role === 'Owner' || role === 'Manager';
-}
 
 // GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
 // A lightweight lifecycle read for desktop/console. Missing is explicit rather
@@ -229,6 +228,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         s.id,
         s.status,
         COALESCE(t.name, 'Custom') AS "templateName",
+        ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
         ${sql.raw(isoTs('s.closed_at'))} AS "closedAt",
         bd.business_date AS "businessDate",
         ${shiftSequenceSql('s')} AS "shiftSequence",
@@ -237,6 +237,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         COALESCE((ss.snapshot_data ->> 'totalVolumeSold')::numeric,
                  (ss.snapshot_data ->> 'totalVolume')::numeric, 0) AS "totalVolumeSold",
         COALESCE((ss.snapshot_data ->> 'closingCash')::numeric, 0) AS "closingCash",
+        COALESCE((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric, 0) AS "totalFuelSalesValue",
+        COALESCE((ss.snapshot_data ->> 'cashVariance')::numeric, 0) AS "cashVariance",
         COALESCE(ss.snapshot_data -> 'fuelByProduct', '[]'::jsonb) AS "fuelByProduct"
       FROM shifts s
       LEFT JOIN shift_templates t ON t.id = s.shift_template_id
@@ -257,11 +259,28 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       JOIN business_days bd ON bd.id = s.business_day_id
       WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
         AND bd.business_date = ${todayBusinessDate}
+    ),
+    today_shifts AS (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'id', s.id,
+        'shiftTemplateId', s.shift_template_id,
+        'openedAt', ${sql.raw(isoTs('s.opened_at'))},
+        'closedAt', ${sql.raw(isoTs('s.closed_at'))},
+        -- From the immutable Shift Summary snapshot; null until the shift closes.
+        'totalFuelSalesValue', (ss.snapshot_data ->> 'totalFuelSalesValue')::numeric,
+        'cashVariance', (ss.snapshot_data ->> 'cashVariance')::numeric
+      ) ORDER BY s.opened_at), '[]'::jsonb) AS j
+      FROM shifts s
+      JOIN business_days bd ON bd.id = s.business_day_id
+      LEFT JOIN shift_summaries ss ON ss.shift_id = s.id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+        AND bd.business_date = ${todayBusinessDate}
     )
     SELECT
       (SELECT row_to_json(open_shift) FROM open_shift) AS open_shift,
       (SELECT row_to_json(last_shift) FROM last_shift) AS last_shift,
-      (SELECT row_to_json(today) FROM today) AS today
+      (SELECT row_to_json(today) FROM today) AS today,
+      (SELECT j FROM today_shifts) AS today_shifts
   `);
 
   const openRaw = (row as any)?.open_shift as Record<string, any> | null;
@@ -293,7 +312,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
     if (
       lastRaw.status === 'CLOSED' &&
       lastRaw.dayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !openRaw
     )
       canReopenLastShift = true;
@@ -301,6 +320,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       id: lastRaw.id,
       status: lastRaw.status,
       templateName: lastRaw.templateName,
+      openedAt: lastRaw.openedAt,
       closedAt: lastRaw.closedAt,
       businessDate: lastRaw.businessDate ?? null,
       shiftSequence: lastRaw.shiftSequence ?? null,
@@ -309,6 +329,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       ? {
           totalVolumeSold: Number(lastRaw.totalVolumeSold),
           closingCash: Number(lastRaw.closingCash),
+          totalFuelSalesValue: Number(lastRaw.totalFuelSalesValue ?? 0),
+          cashVariance: Number(lastRaw.cashVariance ?? 0),
           fuelUnits: Array.from(
             new Set(
               ((lastRaw.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
@@ -332,6 +354,14 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         fuelSalesValue: Number(todayRaw?.fuelSalesValue ?? 0),
         volume: Number(todayRaw?.volume ?? 0),
         cashVariance: Number(todayRaw?.cashVariance ?? 0),
+        /** Every shift of the current Business Day (feeds the dashboard timeline). */
+        /** Closed shifts carry `totalFuelSalesValue` / `cashVariance` from their snapshot (null while open). */
+        shifts: (((row as any)?.today_shifts as Record<string, any>[] | null) ?? []).map((sh) => ({
+          ...sh,
+          totalFuelSalesValue:
+            sh.totalFuelSalesValue == null ? null : Number(sh.totalFuelSalesValue),
+          cashVariance: sh.cashVariance == null ? null : Number(sh.cashVariance),
+        })),
       },
     },
   });
@@ -798,7 +828,8 @@ shiftsRouter.get('/status', async (c) => {
       else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
       else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
     }
-    // Only the cash the attendant actually holds folds into their handover expected.
+    // Only the cash the attendant actually holds folds into a handover expected
+    // (on one Drawer: see drawerAttributedFor).
     for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseCash;
     const emptyAttr = {
       merchandiseCash: 0,
@@ -810,6 +841,23 @@ shiftsRouter.get('/status', async (c) => {
     };
     const attributedFor = (userId: string | null | undefined) =>
       (userId && attributedMap.get(userId)) || emptyAttr;
+    // A product sale carries no DU: the attendant's product cash folds into ONE
+    // Drawer's expected, their first DU by code (#419), so expectedExtra is the
+    // cash on that Drawer and 0 on the attendant's others.
+    const productCashDuFor = (userId: string | null | undefined) =>
+      productCashDrawer(
+        assignmentRows
+          .filter((r) => r.sa.userId === userId)
+          .map((r) => ({ duId: r.sa.duId, duCode: r.du?.code, duName: r.du?.name })),
+      );
+    const drawerAttributedFor = (
+      userId: string | null | undefined,
+      duId: string | null | undefined,
+    ) => {
+      const a = attributedFor(userId);
+      const owns = duId != null && productCashDuFor(userId) === duId;
+      return { ...a, expectedExtra: owns ? a.merchandiseCash : 0 };
+    };
 
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
@@ -819,7 +867,7 @@ shiftsRouter.get('/status', async (c) => {
         userName: staffUser?.fullName ?? 'Unknown',
         duName: du?.name ?? 'Unknown',
         duCode: du?.code ?? 'Unknown',
-        attributed: attributedFor(sa.userId),
+        attributed: drawerAttributedFor(sa.userId, sa.duId),
         creditSales,
         creditTotal: creditSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
         omcSales,
@@ -833,7 +881,7 @@ shiftsRouter.get('/status', async (c) => {
         assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
       duName: assignmentRows.find((a) => a.du?.id === h.duId)?.du?.name ?? null,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
-      attributed: attributedFor(h.userId),
+      attributed: drawerAttributedFor(h.userId, h.duId),
       creditSales: creditSalesFor(h.userId, h.duId),
       creditTotal: creditSalesFor(h.userId, h.duId).reduce(
         (s: number, l: any) => s + Number(l.amount),
@@ -914,7 +962,7 @@ shiftsRouter.get('/status', async (c) => {
     if (
       currentStatus === 'CLOSED' &&
       lastShiftRow.parentDayStatus === 'OPEN' &&
-      canReopenShift(user.role) &&
+      can(user, 'shifts.reopen') &&
       !dbActiveShift
     )
       canReopenLastShift = true;
@@ -1139,6 +1187,8 @@ shiftsRouter.get('/my-assignment', async (c) => {
         openingReading: Number(nr.openingReading),
         closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
         testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
+        // Litres the recorded Handover accepted: stored gross volume less testing.
+        netVolume: netNozzleVolume(nr.volumeSold, nr.testingVolume),
         unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
       }))
       .sort(byNaturalField((n) => n.nozzleName));
@@ -1306,11 +1356,14 @@ shiftsRouter.get('/handovers', async (c) => {
 shiftsRouter.post(
   '/handovers',
   writePolicyGuard('POST /shifts/handovers'),
+  requireCapabilityGuard(ATTENDANT_PHONE_HANDOVER_CAPABILITY, {
+    appliesTo: (u) => isAttendant(u.role),
+  }),
   validateJson(shiftIdBody),
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;
-    if (!canRecordHandover(user.role)) {
+    if (!can(user, 'handover.record')) {
       return c.json(
         {
           success: false,
@@ -1393,6 +1446,7 @@ shiftsRouter.post(
       return new RecordHandover({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         context: new DrizzleHandoverContextReader(tx),
         handovers: new DrizzleHandoverRepository(tx),
         events,
@@ -1422,7 +1476,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canOpenShift(user.role)) {
+    if (!can(user, 'shifts.open')) {
       return c.json(
         {
           success: false,
@@ -1456,6 +1510,7 @@ shiftsRouter.post(
         fuelPrices: new DrizzleFuelPriceRepository(tx),
         dispensers: new DrizzleDispenserRepository(tx),
         staff: new DrizzleStaffDirectory(tx),
+        fuels: new DrizzleFuelNameReader(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     });
@@ -1513,6 +1568,7 @@ shiftsRouter.put(
       return new RecordNozzleReadings({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
         events,
       }).execute(
@@ -1531,7 +1587,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canCloseShift(user.role)) {
+    if (!can(user, 'shifts.close')) {
       return c.json(
         {
           success: false,
@@ -1618,7 +1674,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canReopenShift(user.role)) {
+    if (!can(user, 'shifts.reopen')) {
       return c.json(
         {
           success: false,
@@ -1657,6 +1713,7 @@ shiftsRouter.post(
       const r = await new ReopenShift({
         shifts: new DrizzleShiftRepository(tx),
         businessDays,
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         summaries: new DrizzleShiftSummaryWriter(tx),
         stockVariances: new DrizzleStockVarianceRepository(tx),
         events,
@@ -1683,7 +1740,7 @@ shiftsRouter.post(
   validateJson(shiftIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1725,6 +1782,7 @@ shiftsRouter.post(
       new LockShift({
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
+        shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
         events,
       }).execute(body, buildContext(user, shift)),
     );
@@ -1739,7 +1797,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1781,7 +1839,7 @@ shiftsRouter.post(
   validateJson(stationIdBody),
   async (c) => {
     const user = c.var.user;
-    if (!canManageDay(user.role)) {
+    if (!can(user, 'shifts.closeDay')) {
       return c.json(
         {
           success: false,
@@ -1821,6 +1879,38 @@ shiftsRouter.post(
   },
 );
 
+/** The columns one Shift Summary row (list and single read) is built from. */
+function shiftSummaryRows(db: DbClient) {
+  return db
+    .select({
+      shift: schema.shifts,
+      snapshotData: schema.shiftSummaries.snapshotData,
+      generatedAt: schema.shiftSummaries.generatedAt,
+      businessDate: schema.businessDays.businessDate,
+      shiftSequence: shiftSequenceSql('shifts'),
+      templateName: schema.shiftTemplates.name,
+    })
+    .from(schema.shiftSummaries)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+    .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+    .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId));
+}
+
+type ShiftSummaryRow = Awaited<ReturnType<typeof shiftSummaryRows>>[number];
+
+const toShiftSummaryDto = (r: ShiftSummaryRow) => ({
+  shiftId: r.shift.id,
+  status: r.shift.status,
+  openedAt: r.shift.openedAt,
+  closedAt: r.shift.closedAt,
+  businessDayId: r.shift.businessDayId,
+  businessDate: r.businessDate,
+  shiftSequence: r.shiftSequence ?? null,
+  templateName: r.templateName ?? null,
+  generatedAt: r.generatedAt,
+  snapshotData: r.snapshotData,
+});
+
 // GET /api/shifts/shift-summaries?stationId=...&limit=...&before=...
 // Serves the STORED snapshot per summary — the snapshot is kept current at
 // write time (shift close + late-attribution refresh), so no read-time
@@ -1854,20 +1944,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       400,
     );
   }
-  const db = c.var.db;
-  const rows = await db
-    .select({
-      shift: schema.shifts,
-      snapshotData: schema.shiftSummaries.snapshotData,
-      generatedAt: schema.shiftSummaries.generatedAt,
-      businessDate: schema.businessDays.businessDate,
-      shiftSequence: shiftSequenceSql('shifts'),
-      templateName: schema.shiftTemplates.name,
-    })
-    .from(schema.shiftSummaries)
-    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
-    .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
-    .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
+  const rows = await shiftSummaryRows(c.var.db)
     .where(
       and(
         eq(schema.shifts.stationId, stationId),
@@ -1878,17 +1955,49 @@ shiftsRouter.get('/shift-summaries', async (c) => {
     .orderBy(desc(schema.shiftSummaries.generatedAt))
     .limit(limit);
 
-  const data = rows.map((r) => ({
-    shiftId: r.shift.id,
-    status: r.shift.status,
-    openedAt: r.shift.openedAt,
-    closedAt: r.shift.closedAt,
-    businessDayId: r.shift.businessDayId,
-    businessDate: r.businessDate,
-    shiftSequence: r.shiftSequence ?? null,
-    templateName: r.templateName ?? null,
-    generatedAt: r.generatedAt,
-    snapshotData: r.snapshotData,
-  }));
-  return c.json({ success: true, data });
+  return c.json({ success: true, data: rows.map(toShiftSummaryDto) });
+});
+
+// GET /api/shifts/shift-summaries/:shiftId
+// One Shift's stored summary, so a page opened by id (from a Business Day, an
+// alert) does not have to find it inside a paged list. One statement scoped by
+// the caller's organization; a Shift of another organization or station the
+// caller cannot reach answers 404, never 403, so ids do not leak.
+shiftsRouter.get('/shift-summaries/:shiftId', async (c) => {
+  const user = c.var.user;
+  if (!isUuid(c.req.param('shiftId'))) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift summary not found' } },
+      404,
+    );
+  }
+  // A Shift Summary contains every Drawer’s variance. An Attendant may read
+  // only their own Handover, so this station-wide snapshot is not available to them.
+  if (isAttendant(user.role)) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
+  }
+  const [row] = await shiftSummaryRows(c.var.db)
+    .where(
+      and(
+        eq(schema.shiftSummaries.shiftId, c.req.param('shiftId')),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    !row ||
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: row.shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift summary not found' } },
+      404,
+    );
+  }
+  return c.json({ success: true, data: toShiftSummaryDto(row) });
 });

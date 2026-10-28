@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { canOnboardStation, type Role } from '@pump/shared';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
+import { can, principalOf, type Role } from '@pump/shared';
 import { ToastProvider } from '../primitives/ToastProvider.js';
 import { WebOnboardingNotice } from './WebOnboardingNotice.js';
 
@@ -39,7 +39,7 @@ describe('WebOnboardingNotice follows the shared onboarding guard', () => {
 
     const offered = screen.queryByRole('button', { name: /open web console/i }) !== null;
 
-    expect(offered).toBe(canOnboardStation(role));
+    expect(offered).toBe(can(principalOf(role), 'station.onboard'));
   });
 
   it.each(ALL_ROLES)('tells %s whose job the setup is, matching the guard', (role) => {
@@ -47,7 +47,7 @@ describe('WebOnboardingNotice follows the shared onboarding guard', () => {
 
     const invited = screen.queryByText(/finish setting up on the web/i) !== null;
 
-    expect(invited).toBe(canOnboardStation(role));
+    expect(invited).toBe(can(principalOf(role), 'station.onboard'));
   });
 
   it('always leaves a sign-out, whichever side of the guard the role falls', () => {

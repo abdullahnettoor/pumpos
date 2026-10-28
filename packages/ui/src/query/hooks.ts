@@ -1,7 +1,11 @@
+import { useMemo } from 'react';
 import {
   useQueryClient,
   useQuery,
   useInfiniteQuery,
+  useMutation,
+  useQueries,
+  type QueryClient,
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import {
@@ -20,14 +24,71 @@ import {
   CloudFinanceService,
   CloudPaymentTerminalService,
   CloudAccessService,
+  CloudDesktopDownloadsService,
+  type DecantationDayCloseWarnings,
 } from '../services/cloud.js';
+import {
+  resolveTankLevelSettings,
+  type RoleChangePreview,
+  type TankLevelSettings,
+  type UserPermissionsView,
+} from '@pump/shared';
+import { patchQueryData } from './patches/applyPatch.js';
+import { flashRows } from '../utils/rowFlash.js';
+import {
+  withRecordedCurrentPrice,
+  withRecordedPriceInHistory,
+  type FuelPriceHistoryRow,
+  type RecordedFuelPrice,
+} from './patches/fuelPrices.js';
+import {
+  billedSaleRow,
+  handoverProductSaleRow,
+  withBilledSale,
+  withHandoverProductSale,
+  withoutSale,
+  type SaleAnswer,
+  type SaleLabels,
+} from './patches/productSales.js';
+import type {
+  DensityTodaySummary,
+  ShiftTemplate,
+  DensityReadingWithContext,
+  SaveDecantationBody,
+  RecordDensityReadingPayload,
+} from '@pump/shared';
 import type {
   BusinessDayStatusResponse,
   DailyCashBook,
+  DashboardSummary,
+  FuelPrice,
   FundingAccount,
   ProfitLossReport,
+  SupplierPaymentRow,
 } from '../services/cloud.js';
-import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
+import type {
+  AccessDocument,
+  DesktopDownloads,
+  AttendantHandoverReport,
+  AttendantReportFilters,
+  DecantationReport,
+  DecantationReportFilters,
+  BusinessDayList,
+  InsightsAttendantVariance,
+  InsightsCreditHealth,
+  InsightsRangeDays,
+  SalesInsightsDays,
+  InsightsSales,
+  CustomerReceivableSummary,
+  PayablesSummary,
+  RangedPartyLedger,
+  ReceivablesSummary,
+  SupplierPayableSummary,
+  InsightsStockLoss,
+  DecantationView,
+  LinkablePurchase,
+  OrganizationPayload,
+} from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -52,8 +113,22 @@ const eventsSvc = new CloudEventsService();
 const financeSvc = new CloudFinanceService();
 const terminalSvc = new CloudPaymentTerminalService();
 const accessSvc = new CloudAccessService();
+const desktopDownloadsSvc = new CloudDesktopDownloadsService();
 
 export const queryKeys = {
+  densityReadings: (
+    stationId: string,
+    productId = '',
+    from = '',
+    to = '',
+    kind = '',
+    limit = 500,
+  ) => ['density-readings', stationId, productId, from, to, kind, limit] as const,
+  densityReadingsPrefix: (stationId: string) => ['density-readings', stationId] as const,
+  densityToday: (stationId: string, businessDate = '') =>
+    ['density-today', stationId, businessDate] as const,
+  densityTodayPrefix: (stationId: string) => ['density-today', stationId] as const,
+
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
   // Prefix keys for station-wide invalidation (TanStack matches by prefix).
   shiftStatusPrefix: (stationId: string) => ['shift-status', stationId] as const,
@@ -64,30 +139,85 @@ export const queryKeys = {
   businessDayStatusPrefix: (stationId: string) => ['business-day-status', stationId] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  // Both sit under the 'shift-summaries' prefix, so useInvalidateOperational refreshes them.
+  shiftSummaryHistory: (stationId: string) => ['shift-summaries', 'history', stationId] as const,
+  shiftSummary: (shiftId: string) => ['shift-summaries', 'one', shiftId] as const,
   dashboardSummary: (stationId: string) => ['dashboard-summary', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
-  purchases: () => ['purchases'] as const,
+  /** Every cached Income range of a station. */
+  incomePrefix: (stationId: string) => ['income', stationId] as const,
+  purchases: (stationId?: string) =>
+    stationId ? (['purchases', stationId] as const) : (['purchases'] as const),
+  purchaseItems: (purchaseId: string) => ['purchase-items', purchaseId] as const,
+  supplierPayments: (stationId: string, from = '', to = '') =>
+    ['supplier-payments', stationId, from, to] as const,
+  /** Every cached Supplier payments range of a station. */
+  supplierPaymentsPrefix: (stationId: string) => ['supplier-payments', stationId] as const,
+  decantations: (stationId: string, status = '') => ['decantations', stationId, status] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
   vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
   customers: (activeOnly = true) => ['customers', activeOnly] as const,
+  /** The Organization's suppliers (pickers, search); also the prefix of `stationSuppliers`. */
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
+  /** One Station's suppliers, balanced on its own ledger (#575). */
+  stationSuppliers: (stationId: string, activeOnly = true) =>
+    ['suppliers', activeOnly, stationId] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
-  supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** Every cached all-time ledger of one supplier, any Station (prefix of `supplierLedger`). */
+  supplierLedgers: (supplierId: string) => ['supplier-ledger', supplierId] as const,
+  /** One supplier's all-time ledger at one Station (#575). */
+  supplierLedger: (supplierId: string, stationId: string) =>
+    ['supplier-ledger', supplierId, stationId] as const,
+  /** Every cached statement window of one customer (prefix of `customerStatement`). */
+  customerStatements: (customerId: string) => ['customer-statement', customerId] as const,
+  customerStatement: (customerId: string, from: string, to: string) =>
+    ['customer-statement', customerId, from, to] as const,
+  /** Every cached statement window of one supplier, any Station (prefix of `supplierStatement`). */
+  supplierStatements: (supplierId: string) => ['supplier-statement', supplierId] as const,
+  /** One supplier's statement window at one Station (#575: each pump has its own account). */
+  supplierStatement: (supplierId: string, from: string, to: string, stationId: string) =>
+    ['supplier-statement', supplierId, from, to, stationId] as const,
+  payables: (stationId: string) => ['payables', stationId] as const,
+  supplierPayable: (stationId: string, supplierId: string) =>
+    ['payables', stationId, supplierId] as const,
+  receivables: (stationId: string) => ['receivables', stationId] as const,
+  customerReceivable: (stationId: string, customerId: string) =>
+    ['receivables', stationId, customerId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  /** Prefix of every Decantation list (invalidated as one by operational writes). */
+  decantationsPrefix: (stationId: string) => ['decantations', stationId] as const,
+  linkablePurchases: (stationId: string, productId: string) =>
+    ['linkable-purchases', stationId, productId] as const,
+  decantationDayCloseWarnings: (stationId: string, businessDayId: string) =>
+    ['decantation-day-close-warnings', stationId, businessDayId] as const,
   inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
+  /** Every stored DSR (`dssr`): what a new DSR invalidates. */
+  dssrPrefix: () => ['dssr'] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
+  businessDayList: (stationId: string) => ['business-day-list', stationId] as const,
+  /** Every `dssrRange` window: what a new DSR invalidates. */
+  dssrRangePrefix: () => ['dssr-range'] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
   attendantHandoverReport: (stationId: string, from: string, to: string) =>
     ['attendant-handover-report', stationId, from, to] as const,
+  decantationReport: (stationId: string, from: string, to: string) =>
+    ['decantation-report', stationId, from, to] as const,
+  insightsSales: (stationId: string, days: number) => ['insights-sales', stationId, days] as const,
+  insightsAttendantVariance: (stationId: string, days: number) =>
+    ['insights-attendant-variance', stationId, days] as const,
+  insightsStockLoss: (stationId: string, days: number) =>
+    ['insights-stock-loss', stationId, days] as const,
+  insightsCreditHealth: (stationId: string, days: number) =>
+    ['insights-credit-health', stationId, days] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -96,15 +226,25 @@ export const queryKeys = {
   dispensers: (stationId: string) => ['dispensers', stationId] as const,
   nozzles: (stationId: string) => ['nozzles', stationId] as const,
   users: () => ['users'] as const,
+  userPermissions: (userId: string) => ['user-permissions', userId] as const,
+  roleChangePreview: (userId: string, role: string) =>
+    ['user-role-change-preview', userId, role] as const,
   shiftTemplates: () => ['shift-templates'] as const,
   paymentTerminals: (stationId: string) => ['payment-terminals', stationId] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
   pricingHistory: (stationId: string) => ['pricing-history', stationId] as const,
   organization: () => ['organization'] as const,
   access: () => ['access'] as const,
+  desktopDownloads: () => ['desktop-downloads'] as const,
+  /** An on-screen PDF preview (#605), drawn in the browser: never persisted. */
+  pdfPreview: (kind: string, fingerprint: string, width: number, maxPages: number) =>
+    ['pdf-preview', kind, fingerprint, width, maxPages] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
+  /** One station's activity for one Business Day (under the activity-groups prefix). */
+  dayActivity: (stationId: string, date: string, entryDate: string = date) =>
+    ['activity-groups', stationId, 'day', date, entryDate] as const,
   moneyMovements: (stationId: string, from: string, to: string) =>
     ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) =>
@@ -129,6 +269,23 @@ export const queryKeys = {
   /** Daily Cash Book (ADR 0005) — live per-account opening/in/out/closing for a date. */
   dailyCashBook: (stationId: string, date: string) => ['daily-cash-book', stationId, date] as const,
   dailyCashBookPrefix: () => ['daily-cash-book'] as const,
+  /** Every `financeMovements` range: what a money write invalidates. */
+  financeMovementsPrefix: () => ['finance-movements'] as const,
+} as const;
+
+/**
+ * Mutation keys (#606): a write in flight is found by its key and variables
+ * (`useMutationState`), so a row can read "Saving…" from the mutation itself
+ * rather than from a local flag, even after the drawer that sent it closed.
+ */
+export const mutationKeys = {
+  handover: () => ['record-handover'] as const,
+  handoverProductSale: () => ['record-handover-product-sale'] as const,
+  deleteHandoverProductSale: () => ['delete-handover-product-sale'] as const,
+  productSale: () => ['record-product-sale'] as const,
+  officeRecord: () => ['record-office-record'] as const,
+  voidOfficeRecord: () => ['void-office-record'] as const,
+  fuelPrice: () => ['record-fuel-price'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -149,6 +306,52 @@ export const TIER = {
   semi: { staleTime: 10 * 60_000, gcTime: 60 * 60_000, refetchOnWindowFocus: false } as const,
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
+
+/**
+ * After a DSR is generated (from the DSR screen or Reports): the day holds the
+ * write's own answer, and everything that shows a day's DSR state refreshes in
+ * the background — other days' previews, the stored DSRs (`dssr`, read by
+ * Shifts › Business Day), the DSR lists (`dssr-range`) and the business-day
+ * list. Synchronous on purpose (pump-data-caching rule 6): the caller shows the
+ * response at once and never waits on a refetch.
+ *
+ * @param generated the write's response; omit to refresh the day too.
+ */
+export function invalidateAfterDssrGenerate(
+  qc: QueryClient,
+  stationId: string,
+  date: string,
+  generated?: unknown,
+): void {
+  const dayKey = queryKeys.dssrPreview(stationId, date);
+  const keyOf = JSON.stringify(dayKey);
+  if (generated !== undefined) qc.setQueryData(dayKey, generated);
+  void qc.invalidateQueries({
+    queryKey: queryKeys.dssrPreviewPrefix(stationId),
+    // The day just generated already holds the write's answer.
+    predicate: (q) => generated === undefined || JSON.stringify(q.queryKey) !== keyOf,
+  });
+  void qc.invalidateQueries({ queryKey: queryKeys.dssrPrefix() });
+  void qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() });
+  void qc.invalidateQueries({ queryKey: queryKeys.businessDayList(stationId) });
+}
+
+/**
+ * The key of one party's statement window: `[prefix, partyId, from, to]`, and
+ * for a supplier the Station last (`[..., stationId]`).
+ */
+export type StatementKey =
+  | ReturnType<typeof queryKeys.customerStatement>
+  | ReturnType<typeof queryKeys.supplierStatement>;
+
+/** Whether `key` is a customer or supplier statement window (the shape the two builders above make). */
+export function isStatementKey(key: readonly unknown[] | undefined): key is StatementKey {
+  if (!key) return false;
+  const length = key[0] === 'customer-statement' ? 4 : key[0] === 'supplier-statement' ? 5 : 0;
+  return (
+    length > 0 && key.length === length && key.slice(1).every((part) => typeof part === 'string')
+  );
+}
 
 export const stationsQueryOptions = () => ({
   queryKey: queryKeys.stations(),
@@ -199,12 +402,64 @@ export function useStationTimeZone(stationId: string | null | undefined): string
   return (station?.settings as { timezone?: string } | undefined)?.timezone;
 }
 
+/**
+ * The station's tank levels (#520) from the (static, persisted) stations cache:
+ * the one source for every tank colour (Dashboard, alerts, Inventory, mobile).
+ * A station save invalidates `queryKeys.stations()`, so a change shows on every
+ * screen of this session; `useInvalidateOperational` also refreshes it, so a
+ * change made on another device lands with the next operational write (else on
+ * the 24h static refresh). Defaults (25 / 40) until the station is known.
+ */
+export function useTankLevelSettings(stationId: string | null | undefined): TankLevelSettings {
+  const { data } = useStations();
+  const station = (data ?? []).find((s: any) => s.id === stationId);
+  const settings = station?.settings;
+  return useMemo(() => resolveTankLevelSettings(settings), [settings]);
+}
+
 export function useUsers(options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.users(),
     queryFn: () => userSvc.listUsers(),
     ...TIER.static,
     ...options,
+  });
+}
+
+/**
+ * One member's Permissions (Owner only). Operational tier and never persisted:
+ * an edit on another device must show, and a stale switch is a wrong grant.
+ */
+export function useUserPermissions(
+  userId: string | null | undefined,
+  options?: Options<UserPermissionsView>,
+) {
+  return useQuery({
+    queryKey: queryKeys.userPermissions(userId ?? ''),
+    queryFn: () => userSvc.getUserPermissions(userId!),
+    enabled: !!userId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What a Role change would drop (Owner / Manager). Read at the moment the form
+ * saves, through the query cache under a centralized key: operational tier, so
+ * a preview older than the stale time is refetched, never persisted.
+ */
+export function fetchRoleChangePreview(
+  client: QueryClient,
+  userId: string,
+  role: string,
+): Promise<RoleChangePreview> {
+  return client.fetchQuery({
+    queryKey: queryKeys.roleChangePreview(userId, role),
+    queryFn: () => userSvc.previewUserRoleChange(userId, role),
+    staleTime: TIER.operational.staleTime,
+    gcTime: TIER.operational.gcTime,
+    // The caller blocks the save on a failure and offers a retry itself.
+    retry: false,
   });
 }
 
@@ -228,7 +483,7 @@ export function useNozzles(stationId: string | null | undefined, options?: Optio
   });
 }
 
-export function useShiftTemplates(options?: Options<any[]>) {
+export function useShiftTemplates(options?: Options<ShiftTemplate[]>) {
   return useQuery({
     queryKey: queryKeys.shiftTemplates(),
     queryFn: () => templateSvc.listTemplates(),
@@ -250,7 +505,7 @@ export function usePaymentTerminals(
   });
 }
 
-export function usePricing(stationId: string | null | undefined, options?: Options<any[]>) {
+export function usePricing(stationId: string | null | undefined, options?: Options<FuelPrice[]>) {
   return useQuery({
     queryKey: queryKeys.pricing(stationId ?? ''),
     queryFn: () => pricingSvc.getPricing(stationId!),
@@ -259,6 +514,65 @@ export function usePricing(stationId: string | null | undefined, options?: Optio
     ...options,
   });
 }
+
+/**
+ * Change a fuel's price (#537, #606): keyed by the caller's session. The answer
+ * goes into the price history and, when the server would now read it as
+ * current, into the current prices; the card is highlighted. The caller starts
+ * the background refresh.
+ */
+export function useRecordFuelPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.fuelPrice(),
+    // The attempt is what a retry restores (same body, same key), so it stays
+    // for the session rather than the default five minutes.
+    gcTime: Infinity,
+    mutationFn: (vars: {
+      payload: {
+        stationId: string;
+        productId: string;
+        price: number;
+        effectiveFrom?: string | null;
+      };
+      idempotencyKey: string;
+    }): Promise<RecordedFuelPrice> => {
+      // Bounded (#606 review): a hung request ends as an unknown outcome, so
+      // the card can never stay "Saving…" for good.
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), FUEL_PRICE_TIMEOUT_MS);
+      return pricingSvc
+        .recordPricing(vars.payload, {
+          idempotencyKey: vars.idempotencyKey,
+          signal: timeout.signal,
+        })
+        .finally(() => clearTimeout(timer));
+    },
+    onSuccess: (answer, { payload }): void => {
+      if (!answer?.id || !answer.effectiveFrom) return;
+      const { stationId } = payload;
+      const row = qc
+        .getQueryData<FuelPrice[]>(queryKeys.pricing(stationId))
+        ?.find((c) => c.productId === answer.productId);
+      // The current price is judged against the history as it was before the answer.
+      const history = qc.getQueryData<FuelPriceHistoryRow[]>(queryKeys.pricingHistory(stationId));
+      const now = Date.now();
+      patchQueryData<FuelPrice[]>(qc, queryKeys.pricing(stationId), (c) =>
+        withRecordedCurrentPrice(c, answer, history, now),
+      );
+      patchQueryData<FuelPriceHistoryRow[]>(qc, queryKeys.pricingHistory(stationId), (h) =>
+        withRecordedPriceInHistory(h, answer, {
+          productName: row?.productName ?? null,
+          productCode: row?.productCode ?? null,
+        }),
+      );
+      flashRows([answer.productId]);
+    },
+  });
+}
+
+/** How long a fuel price change may wait for its answer before it reads as unconfirmed. */
+export const FUEL_PRICE_TIMEOUT_MS = 20_000;
 
 /** Past price changes for a station. Semi-static: appended to, never edited. */
 export function usePricingHistory(stationId: string | null | undefined, options?: Options<any[]>) {
@@ -271,14 +585,16 @@ export function usePricingHistory(stationId: string | null | undefined, options?
   });
 }
 
+/** How often the Access Document (and so the effective Permissions) refreshes. */
+export const ACCESS_REFRESH_MS = 60_000;
+
 /**
- * The Organization's Access Document: what it may use, filtered for this
- * user's Role. Semi-static — access changes when PumpOS changes a plan, grant
- * or Limit, not during a shift — plus a focus refresh so a change made while
- * the app sat in the background lands on return.
+ * The Organization's Access Document: what it may use and the user's effective
+ * Permissions. Operational tier and never persisted (it is authorization data:
+ * an old copy must not outlive a revoke), refreshed on focus and every minute so
+ * a change lands within about a minute.
  *
- * It is persisted, so a warm client keeps working through a network drop. A
- * cold start has no document at all: read it with `capabilityState` (or the
+ * A cold start has no document at all: read it with `capabilityState` (or the
  * `CapabilityGate` components built on it), which hides optional capabilities
  * rather than inventing access.
  */
@@ -286,13 +602,31 @@ export function useAccess(options?: Options<AccessDocument>) {
   return useQuery({
     queryKey: queryKeys.access(),
     queryFn: () => accessSvc.getAccess(),
-    ...TIER.semi,
+    ...TIER.operational,
     refetchOnWindowFocus: true,
+    // Menus follow Permission changes within about a minute (ADR 0013).
+    refetchInterval: ACCESS_REFRESH_MS,
     ...options,
   });
 }
 
-export function useOrganization(options?: Options<any>) {
+/**
+ * Desktop installers per platform. Changes only when a desktop release is
+ * published, so it is neither static nor operational: a short stale time,
+ * never persisted (not in PERSIST_PREFIXES).
+ */
+export function useDesktopDownloads(options?: Options<DesktopDownloads>) {
+  return useQuery({
+    queryKey: queryKeys.desktopDownloads(),
+    queryFn: () => desktopDownloadsSvc.getDesktopDownloads(),
+    staleTime: 5 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    ...options,
+  });
+}
+
+export function useOrganization(options?: Options<OrganizationPayload>) {
   return useQuery({
     queryKey: queryKeys.organization(),
     queryFn: () => orgSvc.getOrganization(),
@@ -317,6 +651,21 @@ export function useActivityGroups(params?: { stationId?: string; type?: string; 
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.nextCursor,
     ...TIER.operational,
+  });
+}
+
+/** The dashboard timeline's events (operational tier, not persisted). */
+export function useDayActivity(
+  stationId: string | null | undefined,
+  date: string | null | undefined,
+  options?: { enabled?: boolean; entryDate?: string },
+) {
+  const entryDate = options?.entryDate ?? date ?? '';
+  return useQuery({
+    queryKey: queryKeys.dayActivity(stationId ?? '', date ?? '', entryDate),
+    queryFn: () => eventsSvc.getDayActivity(stationId!, date!, entryDate),
+    ...TIER.operational,
+    enabled: !!stationId && !!date && (options?.enabled ?? true),
   });
 }
 
@@ -381,7 +730,9 @@ export function useMerchandiseHandovers(
 export function useMerchandiseSales(shiftId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.merchandiseSales(shiftId ?? ''),
-    queryFn: () => txService.getMerchandiseSales(shiftId!).catch(() => []),
+    // A failure fails the query (its Data Section offers Retry); it is never
+    // read as "no sales", which would also wipe a sale patched in from its answer.
+    queryFn: () => txService.getMerchandiseSales(shiftId!),
     enabled: !!shiftId,
     ...TIER.operational,
     ...options,
@@ -438,12 +789,13 @@ export function useSalesTaxRegister(
 /** Input GST on purchases for a period. */
 export function usePurchaseGstRegister(
   params: { from?: string; to?: string },
+  stationId: string,
   options?: Options<any[]>,
 ) {
   return useQuery({
-    queryKey: queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''),
+    queryKey: [...queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''), stationId],
     queryFn: () =>
-      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined),
+      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined, stationId),
     ...TIER.operational,
     ...options,
   });
@@ -554,10 +906,14 @@ export function useTanks(stationId: string | null | undefined, options?: Options
   });
 }
 
+/**
+ * Shift status for a station. `lite: true` fetches the light payload (no
+ * assignments/handovers); it is part of the query key, so lite and full are
+ * cached separately.
+ */
 export function useShiftStatus(
   stationId: string | null | undefined,
-  lite = false,
-  options?: Options<any>,
+  { lite = false, ...options }: Options<any> & { lite?: boolean } = {},
 ) {
   return useQuery({
     queryKey: queryKeys.shiftStatus(stationId ?? '', lite),
@@ -592,12 +948,54 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
   });
 }
 
+/** What the history's cursor reads from a summary row. */
+type ShiftSummaryPageRow = { generatedAt?: string | null };
+
+/** Summaries per page of the closed-Shift history. */
+export const SHIFT_SUMMARY_PAGE_SIZE = 50;
+
+/**
+ * Closed-Shift history, newest first, one cursor page at a time (the cursor is the
+ * oldest `generatedAt` loaded). Operational tier, not persisted.
+ */
+export function useShiftSummaryHistory(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.shiftSummaryHistory(stationId ?? ''),
+    queryFn: ({ pageParam }) =>
+      shiftService.getShiftSummaryPage(stationId!, SHIFT_SUMMARY_PAGE_SIZE, pageParam ?? undefined),
+    enabled: !!stationId,
+    initialPageParam: null as string | null,
+    getNextPageParam: (page: ShiftSummaryPageRow[]): string | undefined =>
+      page.length < SHIFT_SUMMARY_PAGE_SIZE
+        ? undefined
+        : (page[page.length - 1]?.generatedAt ?? undefined),
+    ...TIER.operational,
+  });
+}
+
+/**
+ * One Shift's stored summary by id, whatever its age. `placeholderData` lets a
+ * caller that already holds the row paint it at once while the read confirms it.
+ */
+export function useShiftSummaryById(shiftId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.shiftSummary(shiftId ?? ''),
+    queryFn: () => shiftService.getShiftSummary(shiftId!),
+    enabled: !!shiftId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 /**
  * The dashboard's single shift read (#147): open/last shift identity, stored
  * last-summary scalars, reopen/grace state, and today's rollup — one bounded
  * request instead of full shift status + every historical shift summary.
  */
-export function useDashboardSummary(stationId: string | null | undefined, options?: Options<any>) {
+export function useDashboardSummary(
+  stationId: string | null | undefined,
+  options?: Options<DashboardSummary>,
+) {
   return useQuery({
     queryKey: queryKeys.dashboardSummary(stationId ?? ''),
     queryFn: () => shiftService.getDashboardSummary(stationId!),
@@ -625,10 +1023,43 @@ export function useExpenses(options?: Options<any[]>) {
   });
 }
 
-export function usePurchases(options?: Options<any[]>) {
+export function usePurchases(stationId = '', options?: Options<any[]>) {
   return useQuery({
-    queryKey: queryKeys.purchases(),
-    queryFn: () => txService.getPurchases(),
+    queryKey: stationId ? queryKeys.purchases(stationId) : queryKeys.purchases(),
+    queryFn: () => txService.getPurchases(stationId || undefined),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * Supplier Payments of a station over an Entry Date range (Suppliers →
+ * Payments). Operational tier; the range is in the key, so a new range fetches
+ * at once and a tile reading the month shares the ledger's cache when they match.
+ */
+export function useSupplierPayments(
+  params: { stationId?: string | null; from?: string; to?: string },
+  options?: Options<SupplierPaymentRow[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayments(params.stationId ?? '', params.from, params.to),
+    queryFn: () =>
+      txService.getSupplierPayments({
+        stationId: params.stationId!,
+        from: params.from,
+        to: params.to,
+      }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function usePurchaseItems(purchaseId: string | null, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.purchaseItems(purchaseId ?? ''),
+    queryFn: () => txService.getPurchaseItems(purchaseId as string),
+    enabled: !!purchaseId,
     ...TIER.operational,
     ...options,
   });
@@ -670,12 +1101,38 @@ export function useCustomers(activeOnly = true, options?: Options<any[]>) {
   });
 }
 
+/**
+ * The Organization's suppliers, each balanced on every Station's ledger. For
+ * pickers and search; a screen that shows balances next to a Station's
+ * payables reads `useStationSuppliers` instead.
+ */
 export function useSuppliers(activeOnly = true, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.suppliers(activeOnly),
     queryFn: () => txService.getSuppliers(activeOnly),
     ...TIER.semi,
     ...options,
+  });
+}
+
+/**
+ * One Station's suppliers (#575): its own and shared ones, plus any it has
+ * ledger entries with, each `currentBalance` read from the Station's ledger
+ * only, so the rows agree with `usePayables(stationId)`. Disabled until a
+ * Station is chosen. Semi tier; `useInvalidateOperational` refreshes the
+ * `suppliers` prefix whenever a balance moves.
+ */
+export function useStationSuppliers(
+  stationId: string | null | undefined,
+  activeOnly = true,
+  options?: Options<any[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.stationSuppliers(stationId ?? '', activeOnly),
+    queryFn: () => txService.getSuppliers(activeOnly, stationId!),
+    ...TIER.semi,
+    ...options,
+    enabled: !!stationId && (options?.enabled ?? true),
   });
 }
 
@@ -689,13 +1146,98 @@ export function useCustomerLedger(customerId: string | null | undefined, options
   });
 }
 
-export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
+/**
+ * Statement rows stay on screen while a request is in flight only when the
+ * window of the SAME party widens into the past with the same end ("Earlier
+ * months"). Picking another range, or another party, shows a loading state
+ * instead of rows that belong to somewhere else.
+ */
+function widensStatementWindow(
+  previousKey: readonly unknown[] | undefined,
+  key: readonly unknown[],
+): boolean {
+  if (!isStatementKey(previousKey) || !isStatementKey(key)) return false;
+  const [kind, previousId, previousFrom, previousTo, previousStation] = previousKey;
+  const [nextKind, partyId, from, to, stationId] = key;
+  return (
+    kind === nextKind &&
+    previousId === partyId &&
+    previousStation === stationId &&
+    previousTo === to &&
+    previousFrom > from
+  );
+}
+
+/**
+ * A party's statement for a date range (enriched rows + opening balance), from the
+ * ranged ledger API: one hook for both kinds. Operational tier; every operational
+ * write invalidates the `customer-statement` / `supplier-statement` prefix.
+ *
+ * Widening the range into the past ("Earlier months") changes the key; the
+ * previous range's rows stay on screen (`isPlaceholderData`) until the wider one
+ * arrives, so the list never collapses to a spinner. Only that case carries rows
+ * over: another range (the Filter) or another party loads from scratch.
+ */
+/**
+ * Whose statement: a customer (Organization-wide), or a supplier at one
+ * Station (#575: each pump has its own account with its OMC).
+ */
+export type StatementParty =
+  | { kind: 'customer'; id: string | null | undefined }
+  | { kind: 'supplier'; id: string | null | undefined; stationId: string | null | undefined };
+
+export function usePartyStatement(
+  party: StatementParty,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) {
+  const partyId = party.id ?? '';
+  const stationId = party.kind === 'supplier' ? (party.stationId ?? '') : '';
+  const queryKey =
+    party.kind === 'customer'
+      ? queryKeys.customerStatement(partyId, range.from, range.to)
+      : queryKeys.supplierStatement(partyId, range.from, range.to, stationId);
   return useQuery({
-    queryKey: queryKeys.supplierLedger(supplierId ?? ''),
-    queryFn: () => txService.getSupplierLedger(supplierId!),
-    enabled: !!supplierId,
+    queryKey,
+    queryFn: () =>
+      party.kind === 'customer'
+        ? txService.getCustomerLedgerRange(partyId, range)
+        : txService.getSupplierLedgerRange(partyId, range, stationId),
+    placeholderData: (previous, previousQuery) =>
+      widensStatementWindow(previousQuery?.queryKey, queryKey) ? previous : undefined,
     ...TIER.operational,
     ...options,
+    enabled: !!partyId && (party.kind === 'customer' || !!stationId) && (options?.enabled ?? true),
+  });
+}
+
+/** A customer's statement: `usePartyStatement` for a customer. */
+export const useCustomerStatement = (
+  customerId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement({ kind: 'customer', id: customerId }, range, options);
+
+/** A supplier's statement at one Station: `usePartyStatement` for a supplier. */
+export const useSupplierStatement = (
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  range: { from: string; to: string },
+  options?: Options<RangedPartyLedger>,
+) => usePartyStatement({ kind: 'supplier', id: supplierId, stationId }, range, options);
+
+/** One supplier's all-time ledger rows at one Station (#575). Disabled until both are known. */
+export function useSupplierLedger(
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  options?: Options<any[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierLedger(supplierId ?? '', stationId ?? ''),
+    queryFn: () => txService.getSupplierLedger(supplierId!, stationId!),
+    ...TIER.operational,
+    ...options,
+    enabled: !!supplierId && !!stationId && (options?.enabled ?? true),
   });
 }
 
@@ -739,6 +1281,51 @@ export function useInventoryStatus(stationId: string | null | undefined, options
   });
 }
 
+/** Decantations of a station, tank lines grouped per tanker visit. Operational tier. */
+export function useDecantations(
+  stationId: string | null | undefined,
+  status = '',
+  options?: Options<DecantationView[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantations(stationId ?? '', status),
+    queryFn: () => txService.getDecantations(stationId!, status ? { status } : {}),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Linkable Fuel Purchases per product (one query each, shared cache keys). */
+export function useLinkablePurchases(
+  stationId: string | null | undefined,
+  productIds: readonly string[],
+  enabled = true,
+) {
+  return useQueries({
+    queries: productIds.map((productId) => ({
+      queryKey: queryKeys.linkablePurchases(stationId ?? '', productId),
+      queryFn: () => txService.getLinkablePurchases(stationId!, productId),
+      enabled: enabled && !!stationId,
+      ...TIER.operational,
+    })),
+  });
+}
+
+export function useDecantationDayCloseWarnings(
+  stationId: string | null | undefined,
+  businessDayId: string | null | undefined,
+  options?: Options<DecantationDayCloseWarnings>,
+) {
+  return useQuery({
+    queryKey: queryKeys.decantationDayCloseWarnings(stationId ?? '', businessDayId ?? ''),
+    queryFn: () => txService.getDecantationDayCloseWarnings(stationId!, businessDayId!),
+    enabled: !!stationId && !!businessDayId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useInventoryItems(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.inventoryItems(stationId ?? ''),
@@ -775,6 +1362,7 @@ export function useInventoryVariances(
   });
 }
 
+/** A Sealed day's immutable DSSR snapshot (null when none is stored). */
 export function useDailyDssr(
   stationId: string | null | undefined,
   date: string,
@@ -784,9 +1372,21 @@ export function useDailyDssr(
     queryKey: queryKeys.dssr(stationId ?? '', date),
     queryFn: () => shiftService.getDailyDssr(stationId!, date),
     enabled: !!stationId && !!date,
+    ...TIER.operational,
     ...options,
   });
 }
+
+/**
+ * One day's DSR read (the stored snapshot for a closed day, live figures for an
+ * open one), as query options: the hook reads it, and a deep link fetches it
+ * through the same key (`qc.fetchQuery(dailyDssrPreviewQuery(…))`).
+ */
+export const dailyDssrPreviewQuery = (stationId: string, date: string) => ({
+  queryKey: queryKeys.dssrPreview(stationId, date),
+  queryFn: () => shiftService.getDailyDssrPreview(stationId, date),
+  ...TIER.operational,
+});
 
 // Live (non-persisted) DSSR/P&L for the open day — recomputed on demand.
 export function useDailyDssrPreview(
@@ -795,10 +1395,8 @@ export function useDailyDssrPreview(
   options?: Options<any>,
 ) {
   return useQuery({
-    queryKey: queryKeys.dssrPreview(stationId ?? '', date),
-    queryFn: () => shiftService.getDailyDssrPreview(stationId!, date),
+    ...dailyDssrPreviewQuery(stationId ?? '', date),
     enabled: !!stationId && !!date,
-    ...TIER.operational,
     ...options,
   });
 }
@@ -819,6 +1417,25 @@ export function useProfitLoss(
   });
 }
 
+/**
+ * The Reports tab's Business Day list, one calendar month per page, newest first.
+ * `fetchNextPage` loads the next older month that has any Business Day
+ * (`olderMonth`), so a station with a gap never shows an empty page. Operational
+ * tier: it reads live day state (Live → Draft → Sealed), so it must never serve
+ * same-session stale data; `useInvalidateOperational` refreshes it.
+ */
+export function useBusinessDayList(stationId: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.businessDayList(stationId ?? ''),
+    queryFn: ({ pageParam }): Promise<BusinessDayList> =>
+      shiftService.getBusinessDayList(stationId!, pageParam ?? undefined),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.olderMonth,
+    enabled: !!stationId,
+    ...TIER.operational,
+  });
+}
+
 export function useDailyDssrRange(
   stationId: string | null | undefined,
   from: string,
@@ -829,6 +1446,7 @@ export function useDailyDssrRange(
     queryKey: queryKeys.dssrRange(stationId ?? '', from, to),
     queryFn: () => shiftService.getDailyDssrRange(stationId!, from, to),
     enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -840,6 +1458,24 @@ export function useDailyDssrRange(
  * Entitlement is NOT checked here — callers mount this behind the capability
  * gate, and the server refuses regardless of what the client believes.
  */
+/**
+ * Decantation Report over a Business Date range (ticket #473).
+ * Tanker visits, tank line dips, invoice reconciliation and chamber results.
+ */
+export function useDecantationReport(
+  filters: Partial<DecantationReportFilters> & { stationId: string | null | undefined },
+  options?: Options<DecantationReport>,
+) {
+  const { stationId, from = '', to = '' } = filters;
+  return useQuery({
+    queryKey: queryKeys.decantationReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getDecantationReport({ stationId: stationId!, from, to }),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useAttendantHandoverReport(
   filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
   options?: Options<AttendantHandoverReport>,
@@ -851,6 +1487,156 @@ export function useAttendantHandoverReport(
     queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to),
     queryFn: () => shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to }),
     enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * Insights sales block over the last `days` closed Business Days. Everything in
+ * it is sealed (closed-day snapshots), but the range END is the newest closed
+ * day, which the server resolves, so it moves whenever any device closes a day.
+ * Operational tier: same-session closes invalidate it (`useInvalidateOperational`,
+ * which the desktop Business Day tab calls too), and a close made on ANOTHER
+ * device is picked up by the tier's short stale time. One aggregate statement,
+ * so a revalidation is cheap. Not persisted (not in PERSIST_PREFIXES).
+ */
+export function useInsightsSales(
+  stationId: string | null | undefined,
+  days: SalesInsightsDays,
+  options?: Options<InsightsSales>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsSales(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsSales(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What customers owe (total, aging split, a row per customer that owes). One
+ * statement over every ledger. Plain operational tier (it refetches on window
+ * focus, like the statements beside it); a credit sale or collection invalidates
+ * it (`useInvalidateOperational`). Not persisted.
+ */
+export function useReceivables(
+  stationId: string | null | undefined,
+  options?: Options<ReceivablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.receivables(stationId ?? ''),
+    queryFn: () => shiftService.getReceivables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * One customer's receivable and payment behaviour (single indexed statement).
+ * Same cache rule as the list: plain operational tier; a write invalidates the key.
+ */
+export function useCustomerReceivable(
+  stationId: string | null | undefined,
+  customerId: string | null | undefined,
+  options?: Options<CustomerReceivableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.customerReceivable(stationId ?? '', customerId ?? ''),
+    queryFn: () => shiftService.getCustomerReceivable(stationId!, customerId!),
+    enabled: !!stationId && !!customerId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * What the Station owes its suppliers (total, this month's purchased vs paid,
+ * a row per supplier that is owed money), from the Station's own supplier
+ * ledger (#575). One statement. Plain operational tier (it refetches on window focus, like the statements
+ * beside it); a purchase or supplier payment invalidates it
+ * (`useInvalidateOperational`). Not persisted.
+ */
+export function usePayables(
+  stationId: string | null | undefined,
+  options?: Options<PayablesSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.payables(stationId ?? ''),
+    queryFn: () => shiftService.getPayables(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * One supplier's payable, last payment, this month and purchases by product
+ * (single indexed statement). Same cache rule as the list: plain operational tier;
+ * a purchase or supplier payment invalidates it (`useInvalidateOperational`).
+ */
+export function useSupplierPayable(
+  stationId: string | null | undefined,
+  supplierId: string | null | undefined,
+  options?: Options<SupplierPayableSummary>,
+) {
+  return useQuery({
+    queryKey: queryKeys.supplierPayable(stationId ?? '', supplierId ?? ''),
+    queryFn: () => shiftService.getSupplierPayable(stationId!, supplierId!),
+    enabled: !!stationId && !!supplierId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
+ * Insights part 2 (#402): the blocks beside the sales block. Same range, same
+ * range end and the same cache rules as `useInsightsSales` (operational tier,
+ * invalidated with it, never persisted).
+ *
+ * The attendant block is gated on the `reports.attendant` Product Capability:
+ * mount it only where that is entitled (the screen puts it behind a
+ * `CapabilityGate`), so a Station without it never sends the request.
+ */
+export function useInsightsAttendantVariance(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsAttendantVariance[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsAttendantVariance(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsAttendantVariance(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsStockLoss(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsStockLoss[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsStockLoss(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsStockLoss(stationId!, days),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInsightsCreditHealth(
+  stationId: string | null | undefined,
+  days: InsightsRangeDays,
+  options?: Options<InsightsCreditHealth>,
+) {
+  return useQuery({
+    queryKey: queryKeys.insightsCreditHealth(stationId ?? '', days),
+    queryFn: () => shiftService.getInsightsCreditHealth(stationId!, days),
+    enabled: !!stationId,
     ...TIER.operational,
     ...options,
   });
@@ -872,48 +1658,318 @@ export function useAttendantHandoverReport(
  */
 export function useInvalidateOperational() {
   const qc = useQueryClient();
-  return (stationId?: string | null) => {
+  return (stationId?: string | null, opts?: { throwOnError?: boolean }) => {
+    // `throwOnError`: a refetch that fails rejects the returned promise, so a
+    // caller that reports refresh failures (useRefreshTask, #606) sees it.
+    // Without it (the default), failures stay on each query, as before.
+    const inv = (queryKey: readonly unknown[]) =>
+      qc.invalidateQueries({ queryKey }, { throwOnError: !!opts?.throwOnError });
     const invalidations = [
-      qc.invalidateQueries({ queryKey: ['shift-status'] }),
-      qc.invalidateQueries({ queryKey: ['business-day-status'] }),
-      qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
-      qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
-      qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
-      qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      inv(['purchase-gst-register']),
+      inv(['shift-status']),
+      inv(['business-day-status']),
+      inv(['shift-summaries']),
+      inv(['dashboard-summary']),
+      inv(['business-day-list']),
+      inv(['shift-transactions']),
+      inv(['merchandise-handovers']),
+      inv(['merchandise-sales']),
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
-      qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      inv(['attendant-handover-report']),
+      // Decantation Report: measurements and invoice settlement move it.
+      inv(['decantation-report']),
+      // Insights read sealed days; closing a Business Day adds one to the range.
+      inv(['insights-sales']),
+      // ...and so do the part 2 blocks: closed-day Shift Summaries, Tank Dips and
+      // Credit Sales move with a close, Collections (Entry Date) with a collection.
+      inv(['insights-attendant-variance']),
+      inv(['insights-stock-loss']),
+      inv(['insights-credit-health']),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
-      qc.invalidateQueries({ queryKey: ['dssr'] }),
-      qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
-      qc.invalidateQueries({ queryKey: ['expenses'] }),
-      qc.invalidateQueries({ queryKey: ['income'] }),
-      qc.invalidateQueries({ queryKey: ['purchases'] }),
-      qc.invalidateQueries({ queryKey: ['collections'] }),
-      qc.invalidateQueries({ queryKey: ['customers'] }),
+      inv(['dssr']),
+      inv(['dssr-preview']),
+      // Closing a Business Day writes its snapshot: the mobile Home's 7-day trend reads the range.
+      inv(['dssr-range']),
+      inv(['expenses']),
+      inv(['income']),
+      inv(['purchases']),
+      inv(['supplier-payments']),
+      // Decantations and the Fuel Purchases they link to move together (#469).
+      inv(['decantations']),
+      inv(['linkable-purchases']),
+      inv(['collections']),
+      inv(['customers']),
+      // Receivables are settled FIFO from the same ledger as a customer's balance,
+      // and the statement reads it: a credit sale or collection moves both.
+      inv(['receivables']),
+      inv(['customer-statement']),
+      // Payables are settled FIFO from the supplier ledger, like a supplier's
+      // balance: a purchase or supplier payment moves them and the statement.
+      inv(['payables']),
+      inv(['supplier-statement']),
+      // The statement drawers read the party ledgers: a record made over an open
+      // statement must show in it.
+      inv(['supplier-ledger']),
+      inv(['customer-ledger']),
       // Money layer: account balances, statements and the Cash & Bank register all
       // move with expenses / income / collections / payments.
-      qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
-      qc.invalidateQueries({ queryKey: ['account-ledger'] }),
-      qc.invalidateQueries({ queryKey: ['finance-movements'] }),
-      qc.invalidateQueries({ queryKey: queryKeys.dailyCashBookPrefix() }),
-      qc.invalidateQueries({ queryKey: queryKeys.profitLossAll() }),
-      qc.invalidateQueries({ queryKey: ['money-movements'] }),
+      inv(['financial-accounts']),
+      inv(['account-ledger']),
+      inv(queryKeys.financeMovementsPrefix()),
+      inv(queryKeys.dailyCashBookPrefix()),
+      inv(queryKeys.profitLossAll()),
+      inv(['money-movements']),
       // Suppliers carry computed payable balances that move with purchases/payments,
       // and new suppliers are created from PurchasesList — keep them fresh too.
-      qc.invalidateQueries({ queryKey: ['suppliers'] }),
-      qc.invalidateQueries({ queryKey: ['activity-groups'] }),
-      qc.invalidateQueries({ queryKey: ['activity-group'] }),
+      inv(['suppliers']),
+      inv(['activity-groups']),
+      inv(['density-readings']),
+      inv(['density-today']),
+      inv(['activity-group']),
+      // Tank levels (#520) live in the static stations cache (24h, persisted).
+      // An Owner may change them on another device; riding this cadence picks
+      // the change up on the next operational write. One GET /setup/stations.
+      inv(queryKeys.stations()),
     ];
     if (stationId) {
       invalidations.push(
-        qc.invalidateQueries({ queryKey: ['inventory-status', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
-        qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+        inv(['inventory-status', stationId]),
+        inv(['inventory-items', stationId]),
+        inv(['inventory-movements', stationId]),
+        inv(['inventory-variances', stationId]),
+        inv(['density-readings', stationId]),
+        inv(['density-today', stationId]),
+        inv(['decantation-day-close-warnings', stationId]),
       );
     }
     return Promise.all(invalidations).then(() => undefined);
   };
+}
+
+/**
+ * Decantation writes (ADR 0007, #469). The write response drives the UI; the
+ * operational caches refresh in the background (never awaited), so a slow
+ * refetch cannot delay closing a drawer or showing success.
+ */
+export function useRecordDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: {
+      body: SaveDecantationBody;
+      decantationId?: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.saveDecantation(vars.body, {
+        decantationId: vars.decantationId,
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+/** Density Reading write; operational caches refresh in the background (never awaited). */
+export function useRecordDensityReading(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { payload: RecordDensityReadingPayload; idempotencyKey?: string }) =>
+      txService.recordDensity(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useLinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      decantationId: string;
+      productId: string;
+      purchaseId: string;
+      idempotencyKey?: string;
+    }) =>
+      txService.linkDecantationPurchase(
+        vars.decantationId,
+        { productId: vars.productId, purchaseId: vars.purchaseId },
+        { idempotencyKey: vars.idempotencyKey },
+      ),
+    onSuccess: () => {
+      void invalidate(stationId);
+      // Linking settles the invoice, which can move a product's weighted-average cost.
+      void qc.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+/** Discard a DRAFT Decantation; refreshes in the background (never awaited). */
+export function useDiscardDecantation(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string }) =>
+      txService.discardDecantation(vars.decantationId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useUnlinkDecantationPurchase(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  return useMutation({
+    mutationFn: (vars: { decantationId: string; productId: string }) =>
+      txService.unlinkDecantationPurchase(vars.decantationId, vars.productId),
+    onSuccess: () => {
+      void invalidate(stationId);
+    },
+  });
+}
+
+/**
+ * Record (or replace) an employee's Handover Product Sale for a shift (#533).
+ * The answer leads the shift's Handover Product Sales list at once (#606); the
+ * shift reconciliation, the lists and stock refresh in the background (never
+ * awaited).
+ */
+export function useRecordHandoverProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.handoverProductSale(),
+    mutationFn: (vars: {
+      shiftId: string;
+      payload: {
+        attendantId?: string;
+        lines: { productId: string; quantity: number }[];
+        nonCashAmount?: number;
+      };
+      idempotencyKey: string;
+      /** Names the list shows that the answer does not carry. */
+      labels?: SaleLabels;
+    }): Promise<SaleAnswer> =>
+      txService.recordMerchandiseHandover(vars.shiftId, vars.payload, {
+        idempotencyKey: vars.idempotencyKey,
+      }),
+    onSuccess: (answer, vars) => {
+      if (answer?.sale && vars.labels) {
+        const row = handoverProductSaleRow(answer, vars.labels);
+        patchQueryData<{ id: string; attendantId?: string | null }[]>(
+          qc,
+          queryKeys.merchandiseHandovers(vars.shiftId),
+          (list) => withHandoverProductSale(list, row),
+        );
+      }
+      void invalidate(stationId);
+    },
+  });
+}
+
+/** Remove a Handover Product Sale (restores its stock); leaves the list at once, refreshes in the background. */
+export function useDeleteHandoverProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.deleteHandoverProductSale(),
+    mutationFn: (vars: {
+      saleId: string;
+      shiftId?: string;
+      /** The employee whose sale it is: the row's identity for its write state. */
+      attendantId?: string | null;
+      idempotencyKey: string;
+    }) => txService.deleteMerchandiseHandover(vars.saleId, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: (_answer, vars) => {
+      if (vars.shiftId) {
+        patchQueryData<{ id: string }[]>(qc, queryKeys.merchandiseHandovers(vars.shiftId), (list) =>
+          withoutSale(list, vars.saleId),
+        );
+      }
+      void invalidate(stationId);
+    },
+  });
+}
+
+/**
+ * Record a Billed (quick-entry) Product Sale (#606): keyed, and the answer
+ * leads the shift's Billed Sales list at once; everything else it moves
+ * (attribution, stock, receivables) refreshes in the background.
+ */
+export function useRecordProductSale(stationId: string | null | undefined) {
+  const invalidate = useInvalidateOperational();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationKey: mutationKeys.productSale(),
+    mutationFn: (vars: {
+      payload: Parameters<CloudTransactionService['recordSale']>[0];
+      idempotencyKey: string;
+      labels?: SaleLabels;
+    }): Promise<SaleAnswer> =>
+      txService.recordSale(vars.payload, { idempotencyKey: vars.idempotencyKey }),
+    onSuccess: (answer, vars) => {
+      if (answer?.sale && vars.labels) {
+        const row = billedSaleRow(answer, vars.labels);
+        patchQueryData<{ id: string }[]>(
+          qc,
+          queryKeys.merchandiseSales(vars.payload.shiftId),
+          (list) => withBilledSale(list, row),
+        );
+      }
+      // The seller's Product sales row confirms it (#606).
+      flashRows([answer?.sale?.attendantId]);
+      void invalidate(stationId);
+    },
+  });
+}
+
+export function useDensityTodaySummary(
+  stationId: string | null | undefined,
+  businessDate?: string,
+  options?: Omit<UseQueryOptions<DensityTodaySummary, Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityToday(stationId ?? '', businessDate ?? ''),
+    queryFn: () => txService.getDensityTodaySummary({ stationId: stationId!, businessDate }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
+}
+
+export function useDensityReadings(
+  stationId: string | null | undefined,
+  params: {
+    productId?: string;
+    from?: string;
+    to?: string;
+    kind?: string;
+    limit?: number;
+  } = {},
+  options?: Omit<UseQueryOptions<DensityReadingWithContext[], Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: queryKeys.densityReadings(
+      stationId ?? '',
+      params.productId ?? '',
+      params.from ?? '',
+      params.to ?? '',
+      params.kind ?? '',
+      params.limit ?? 500,
+    ),
+    queryFn: () =>
+      txService.getDensityReadings({
+        stationId: stationId!,
+        productId: params.productId,
+        from: params.from,
+        to: params.to,
+        kind: params.kind,
+        limit: params.limit,
+      }),
+    enabled: Boolean(stationId),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+    ...options,
+  });
 }

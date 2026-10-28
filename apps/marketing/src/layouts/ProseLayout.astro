@@ -13,6 +13,8 @@ interface Props {
   backLabel?: string;
   article?: boolean;
   noindex?: boolean;
+  /** Fine-print typography for legal pages. */
+  legal?: boolean;
 }
 
 const {
@@ -25,13 +27,14 @@ const {
   backLabel = 'Back',
   article = false,
   noindex = false,
+  legal = false,
 } = Astro.props;
 ---
 <BaseLayout title={metaTitle} description={description} path={path} article={article} noindex={noindex}>
   <Fragment slot="head"><slot name="head" /></Fragment>
   <Section class="prose-section" container={false} aria-label={title}>
     <div class="ds-w">
-      <article class="prose-page" data-pagefind-body>
+      <article class:list={["prose-page", { "prose-page--legal": legal }]} data-pagefind-body>
         {backHref && <a class="prose-back" href={backHref}>← {backLabel}</a>}
         <header class="prose-header">
           {eyebrow && <p class="ds-ey">{eyebrow}</p>}

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, type RenderOptions, type RenderResult } from '@testing-library/react';
 import { ToastProvider } from '../components/primitives/ToastProvider.js';
 import { ConfirmProvider } from '../components/primitives/ConfirmDialog.js';
+import { TooltipProvider } from '../components/primitives/Tooltip.js';
 
 /**
  * Shared render helper for `*.dom.test.tsx`.
@@ -42,7 +43,9 @@ export function renderWithProviders(
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <ConfirmProvider>{children}</ConfirmProvider>
+        <TooltipProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </TooltipProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

@@ -1,23 +1,40 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-import { canViewReports, shiftDisplayLabel } from '@pump/shared';
+import { can, formatStationDateTime } from '@pump/shared';
+import { principalFor } from '../../access/effectivePrincipal.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarRange, Check, Info, Lock } from 'lucide-react';
 import {
+  Button,
+  DataSection,
+  EmptyState,
+  FilterChips,
+  Icon,
+  InteractiveTable,
   KpiStrip,
   KpiTile,
   Panel,
+  SectionHeader,
   StatusChip,
-  Chip,
-  DateText,
-  EmptyState,
-  Button,
+  VarianceChip,
+  type KpiScope,
+  type TableColumn,
+  type TotalRow,
 } from '../../pump-ds/index.js';
-import { DataTable } from '../primitives/DataTable.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { Banner } from '../primitives/Banner.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { CloudShiftService } from '../../services/cloud.js';
-import { inr, formatDate, formatQty } from '../../utils/format.js';
+import {
+  CloudShiftService,
+  formatDecantationWarningSummary,
+  type BusinessDayStatusItem,
+} from '../../services/cloud.js';
+import {
+  formatClockInZone,
+  formatDate,
+  formatMoney,
+  formatQuantity,
+  formatShortDay,
+} from '../../utils/format.js';
+import { countOf } from '../../utils/ledgerWindow.js';
 import {
   useBusinessDayStatus,
   useDailyDssr,
@@ -25,10 +42,14 @@ import {
   useShiftStatus,
   useInvalidateOperational,
   useCustomers,
+  useDecantationDayCloseWarnings,
   queryKeys,
 } from '../../query/hooks.js';
+import { patchBusinessDayClosed } from '../../query/shiftStatusPatches.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
-import type { BusinessDayStatusItem } from '../../services/cloud.js';
+import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
+import { officeSubmitKeys, sendKeyed } from '../../office-records/submitKeys.js';
+import { dayFigures, dayShifts, type DayShiftRow } from './businessDayModel.js';
 
 const shiftService = new CloudShiftService();
 
@@ -38,6 +59,10 @@ interface BusinessDayTabProps {
   activeBusinessDayId?: string | null;
   requestedBusinessDate?: string | null;
   onBusinessDateSelected?: () => void;
+  /** Dashboard "Review in Shifts": show only still-open past Business Days. */
+  openPastDaysRequested?: boolean;
+  /** Called once the request is applied, so the host can drop its intent. */
+  onOpenPastDaysConsumed?: () => void;
   /**
    * Route elsewhere in the app. Used by "See older", which hands days beyond
    * the recent window to the Reports page's Daily DSSR list (#226).
@@ -50,45 +75,26 @@ interface BusinessDayTabProps {
   onNavigate: (path: string) => void;
 }
 
-const rowStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '10px 16px',
-  borderBottom: '1px solid var(--border-soft)',
-  fontSize: '13px',
-};
-const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' };
+type DayFilter = 'all' | 'open-past';
 
 /**
- * Business Day cockpit. The Shifts page is shift-centric; this tab
- * surfaces the forecourt sales-day layer so activity is visible even when no
- * shift is open. Office Records use Entry Date and appear in the Daily Cash
- * Book instead. Composed live from the DSSR preview (closed shifts + sales,
- * purchases and stock),
- * without writing a snapshot.
- * Owner/Manager closure generates the immutable DSSR snapshot and locks the
- * selected day. A day can close when it has no open Shift.
+ * Business days (#533): the recent Business Days on the left of the page's
+ * reading order, then the selected day — its tiles, the shifts in it and its
+ * sales lines. The forecourt sales-day layer, visible even with no shift
+ * open; Office Records use their Entry Date and live in the Daily Cash Book.
+ * Composed live from the DSR preview (closed shifts + sales, purchases and
+ * stock) without writing a snapshot. Owner/Manager closure generates the
+ * immutable DSR snapshot and seals the day; a day can close when it has no
+ * open Shift.
  */
-function formatStationActivity(value: string, timeZone?: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone,
-  });
-}
-
 export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   selectedStation,
   userRole,
   activeBusinessDayId,
   requestedBusinessDate,
   onBusinessDateSelected,
+  openPastDaysRequested,
+  onOpenPastDaysConsumed,
   onNavigate,
 }) => {
   const stationId = selectedStation?.id ?? null;
@@ -112,8 +118,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const confirm = useConfirm();
   const qc = useQueryClient();
   const invalidateOperational = useInvalidateOperational();
+  const runTask = useRunTask();
+  const refresh = useRefreshTask();
   const [closing, setClosing] = useState(false);
-  const canClose = userRole === 'Owner' || userRole === 'Manager';
+  const canClose = can(principalFor(userRole), 'shifts.closeDay');
 
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, {
     enabled: !!stationId,
@@ -122,13 +130,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     enabled: !!stationId,
   });
   const selectedState = businessDayStatusQ.data?.requestedState;
+  const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
+  const dayCloseWarningsQ = useDecantationDayCloseWarnings(stationId, selectedBusinessDay?.id, {
+    enabled: !!stationId && !!selectedBusinessDay?.id && selectedState === 'OPEN' && canClose,
+  });
   const previewQ = useDailyDssrPreview(stationId, businessDate, {
     enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED'),
-  } as any);
+  });
   const snapshotQ = useDailyDssr(stationId, businessDate, {
     enabled: !!stationId && selectedState === 'CLOSED',
-  } as any);
-  const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
+  });
+  const shiftStatusQ = useShiftStatus(stationId, { lite: true, enabled: !!stationId });
   const shiftStatus = shiftStatusQ.data;
   const activeShift = shiftStatus?.activeShift;
 
@@ -136,7 +148,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   // day close — surfaced as a (non-blocking) reminder before closing the day.
   const { data: dayCustomers } = useCustomers(true, {
     enabled: !!stationId && canClose && businessDate === currentBusinessDate,
-  } as any);
+  });
   const eodDueCustomers = useMemo(
     () =>
       businessDate === currentBusinessDate
@@ -150,6 +162,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     (s: number, c: any) => s + Number(c.currentBalance || 0),
     0,
   );
+  const decantationWarnings = dayCloseWarningsQ.data;
+  const decantationWarningCount = decantationWarnings
+    ? new Set([
+        ...decantationWarnings.pendingMeasurement,
+        ...decantationWarnings.purchaseNotLinked.map(({ documentNumber }) => documentNumber),
+        ...decantationWarnings.flagged,
+        ...(decantationWarnings.unloading ?? []),
+      ]).size
+    : 0;
 
   const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
   const snap = report?.snapshotData ?? null;
@@ -172,7 +193,20 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
    * `guards.ts`, the same source the nav gates the route with — an inline role
    * list here could drift from it and offer a door that does not open.
    */
-  const mayOpenReports = canViewReports(userRole);
+  const mayOpenReports = can(principalFor(userRole), 'reports.view');
+
+  // "Review in Shifts" from the dashboard notice: narrow the list to the
+  // still-open past days until the operator clears the filter.
+  const [onlyOpenPast, setOnlyOpenPast] = useState(false);
+  if (openPastDaysRequested && !onlyOpenPast) setOnlyOpenPast(true);
+  useEffect(() => {
+    if (openPastDaysRequested) onOpenPastDaysConsumed?.();
+  }, [openPastDaysRequested, onOpenPastDaysConsumed]);
+  const visibleBusinessDays = onlyOpenPast
+    ? recentBusinessDays.filter(
+        (day) => day.status === 'OPEN' && day.businessDate < currentBusinessDate,
+      )
+    : recentBusinessDays;
 
   useEffect(() => {
     if (
@@ -215,550 +249,432 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     initializedStationId.current = stationId;
     onBusinessDateSelected?.();
   }, [requestedBusinessDate, stationId, onBusinessDateSelected]);
-  const shiftColumns = useMemo<ColumnDef<any, any>[]>(
+  const timeZone = settings.timezone;
+  const status = selectedState;
+  const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
+  const reportQ = status === 'CLOSED' ? snapshotQ : previewQ;
+  const figures = useMemo(() => dayFigures(snap), [snap]);
+  const shifts = useMemo(
+    () =>
+      dayShifts({
+        snap,
+        businessDate,
+        openShift: hasOpenShift ? activeShift : null,
+      }),
+    [snap, businessDate, hasOpenShift, activeShift],
+  );
+  const scope: KpiScope = businessDate === currentBusinessDate ? 'today' : { day: businessDate };
+
+  const dayColumns = useMemo<TableColumn<BusinessDayStatusItem>[]>(
     () => [
       {
-        id: 'template',
-        header: 'Shift',
-        cell: ({ row }) => (
-          <div>
-            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-              {row.original.templateName || 'Custom'}
-            </span>
-            {/* The readable shift name (#228), identical in the summary PDF. */}
-            <div
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-              }}
-            >
-              {shiftDisplayLabel(row.original)}
-            </div>
-          </div>
+        id: 'date',
+        header: 'Business day',
+        kind: 'date',
+        value: (d) => d.businessDate,
+        cell: (d) => (
+          <span className="font-semibold text-ink-strong">{formatDate(d.businessDate)}</span>
         ),
       },
       {
-        id: 'closedAt',
-        header: 'Closed',
-        cell: ({ row }) =>
-          row.original.closedAt ? (
-            <span>{formatStationActivity(row.original.closedAt, settings.timezone)}</span>
-          ) : (
-            <Chip tone="success" size="xs">
-              Open
-            </Chip>
-          ),
+        id: 'status',
+        header: 'Status',
+        kind: 'status',
+        value: (d) => (d.status === 'OPEN' ? 'day-open' : 'day-sealed'),
+        width: '16%',
       },
       {
-        id: 'netVolume',
-        header: 'Net Volume',
-        cell: ({ row }) =>
-          row.original.closedAt ? (
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
-              {formatQty(row.original.netVolume || 0, 2)} L
-            </span>
-          ) : (
-            <span style={{ color: 'var(--text-faint)' }}>—</span>
-          ),
+        id: 'shifts',
+        header: 'Shifts',
+        kind: 'text',
+        value: (d) => `${Number(d.closedShiftCount)} closed · ${Number(d.openShiftCount)} open`,
+        width: '24%',
       },
       {
-        id: 'expectedDrawerCash',
-        header: 'Expected Drawer',
-        cell: ({ row }) =>
-          row.original.closedAt ? (
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
-              {inr(row.original.expectedDrawerCash || 0)}
-            </span>
-          ) : (
-            <span style={{ color: 'var(--text-faint)' }}>—</span>
-          ),
-      },
-      {
-        id: 'cashVariance',
-        header: 'Cash Variance',
-        cell: ({ row }) => {
-          if (!row.original.closedAt) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
-          const v = Number(row.original.cashVariance || 0);
-          const color =
-            v < 0
-              ? 'var(--brand-danger)'
-              : v > 0
-                ? 'var(--brand-warning)'
-                : 'var(--state-success-fg)';
-          return (
-            <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
-              {v > 0 ? '+' : ''}
-              {inr(v)}
-            </span>
-          );
-        },
+        id: 'activity',
+        header: 'Last activity',
+        kind: 'text',
+        value: (d) => formatStationDateTime(d.lastActivityAt, timeZone),
+        width: '28%',
       },
     ],
-    [settings.timezone],
+    [timeZone],
   );
 
-  const status = selectedState;
-  const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
-  const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
-  const liveAsOf =
-    status !== 'CLOSED' && report?.generatedAt
-      ? formatStationActivity(report.generatedAt, settings.timezone)
-      : null;
-  const reportLoading =
-    businessDayStatusQ.isPending ||
-    (status === 'CLOSED' ? snapshotQ.isLoading : previewQ.isLoading);
-  const reportError =
-    businessDayStatusQ.isError || (status === 'CLOSED' ? snapshotQ.isError : previewQ.isError);
-  const shiftRows = (() => {
-    // Every row carries the day's business date so `shiftDisplayLabel` can
-    // derive the `YYYYMMDD-N` name from the sequence the API projected.
-    const rows = ((snap?.shifts ?? []) as any[]).map((row) => ({
-      ...row,
-      businessDate: row.businessDate ?? snap?.businessDate ?? businessDate,
-    }));
-    if (hasOpenShift && !rows.some((row) => row.shiftId === activeShift.id)) {
-      rows.unshift({
-        shiftId: activeShift.id,
-        templateName: activeShift.templateName,
-        businessDate: activeShift.businessDate ?? businessDate,
-        shiftSequence: activeShift.shiftSequence ?? null,
-        closedAt: null,
-      });
-    }
-    return rows;
-  })();
+  const shiftColumns = useMemo<TableColumn<DayShiftRow>[]>(
+    () => [
+      {
+        id: 'shift',
+        header: 'Shift',
+        kind: 'text',
+        value: (r) => r.template,
+        cell: (r) => (
+          <span className="flex flex-col">
+            <span className="font-semibold text-ink-strong">{r.template}</span>
+            <span className="font-mono text-[12px] text-ink-muted">{r.label}</span>
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        kind: 'status',
+        value: (r) => (r.closedAt ? 'shift-closed' : 'shift-live'),
+        width: '13%',
+      },
+      {
+        id: 'closed',
+        header: 'Closed at',
+        kind: 'text',
+        value: (r) => (r.closedAt ? formatClockInZone(r.closedAt, timeZone) : null),
+        width: '13%',
+      },
+      {
+        id: 'volume',
+        header: 'Net volume',
+        kind: 'qty',
+        unit: 'L',
+        value: (r) => r.netVolume,
+        total: false,
+        width: '15%',
+      },
+      {
+        id: 'expected',
+        header: 'Expected drawer',
+        kind: 'money',
+        value: (r) => r.expectedDrawerCash,
+        width: '16%',
+      },
+      {
+        id: 'variance',
+        header: 'Office variance',
+        kind: 'money',
+        value: (r) => r.variance,
+        cell: (r) => (r.variance == null ? '' : <VarianceChip amount={r.variance} size="md" />),
+        width: '16%',
+      },
+    ],
+    [timeZone],
+  );
+  const shiftTotal = useMemo<TotalRow>(
+    () => ({ label: shifts.openCount > 0 ? 'Total excl. live shift' : 'Total' }),
+    [shifts.openCount],
+  );
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+      <p className="p-6 text-[13px] text-ink-muted">
         Please select a station to view the business day.
-      </div>
+      </p>
     );
   }
 
   const handleCloseDay = async () => {
     if (!snap?.businessDayId || !stationId) return;
+    const decantationNote = decantationWarningCount
+      ? `\n\nDecantation warnings: ${formatDecantationWarningSummary(decantationWarnings!)}. You can still close the day.`
+      : '';
     const eodNote =
       eodDueCustomers.length > 0
-        ? `\n\n${eodDueCustomers.length} end-of-day customer${eodDueCustomers.length === 1 ? '' : 's'} still owe ${inr(eodDueTotal)} that was expected to be collected today.`
+        ? `\n\n${eodDueCustomers.length} end-of-day customer${eodDueCustomers.length === 1 ? '' : 's'} still owe ${formatMoney(eodDueTotal)} that was expected to be collected today.`
         : '';
     const ok = await confirm({
       title: 'Close this business day?',
-      message: `This generates the immutable DSSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${eodNote}`,
+      message: `This generates the immutable DSR snapshot for ${formatDate(businessDate)} and seals sales and stock. Late financial entries remain available and are flagged separately.${decantationNote}${eodNote}`,
       confirmLabel: 'Close day',
     });
     if (!ok) return;
     try {
       setClosing(true);
-      await shiftService.closeBusinessDay(snap.businessDayId, stationId);
-      toast.success('Business day closed · DSSR generated.');
-      await Promise.all([
-        invalidateOperational(stationId),
-        // The day's DSSR snapshot only exists once the close succeeds, so both
-        // the single-day and range views are stale until they refetch.
-        qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
-        qc.invalidateQueries({ queryKey: ['dssr-range'] }),
-      ]);
+      // One key per close; a retry after an unanswered close reuses it.
+      const businessDayId: string = snap.businessDayId;
+      const closed = await sendKeyed(
+        officeSubmitKeys.session(`business-day:close:${businessDayId}`),
+        { stationId, businessDayId, businessDate },
+        (key) => shiftService.closeBusinessDay(businessDayId, stationId, { idempotencyKey: key }),
+      );
+      // The day reads Closed from the answer (#606); its DSR arrives with the refresh.
+      patchBusinessDayClosed(qc, stationId, closed);
+      // Closed: report it from the response; the caches refresh in the
+      // background (caching rule 6). The day's DSSR snapshot only exists once
+      // the close succeeds, so both the single-day and range views refetch.
+      toast.success('Business day closed · DSR generated.');
+      refresh(
+        () =>
+          Promise.all([
+            invalidateOperational(stationId, { throwOnError: true }),
+            qc.invalidateQueries(
+              { queryKey: queryKeys.dssr(stationId, businessDate) },
+              { throwOnError: true },
+            ),
+            qc.invalidateQueries({ queryKey: queryKeys.dssrRangePrefix() }, { throwOnError: true }),
+          ]),
+        'Day closed.',
+      );
     } catch (err: any) {
-      toast.error(err.message || 'Failed to close the business day.');
+      toast.error(withNextStep(err.message, 'Nothing was sealed. Try closing it again.'), {
+        title: 'Day not closed',
+        action: {
+          label: 'Try again',
+          onClick: () => runTask(handleCloseDay(), 'Could not close the day.'),
+        },
+      });
     } finally {
       setClosing(false);
     }
   };
 
-  const fuel = snap?.fuel ?? {};
-  const credit = snap?.credit ?? {};
-  const purchases = snap?.purchases ?? {};
-  const pnl = snap?.pnl ?? {};
-  const merchandise = snap?.merchandise ?? {};
+  const openPastCount = recentBusinessDays.filter(
+    (day) => day.status === 'OPEN' && day.businessDate < currentBusinessDate,
+  ).length;
+  const selectedDay = recentBusinessDays.find((d) => d.businessDate === businessDate);
+  const liveAsOf =
+    status !== 'CLOSED' && report?.live && report?.generatedAt
+      ? formatClockInZone(report.generatedAt, timeZone)
+      : null;
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      {/* Day header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '12px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <CalendarRange size={18} style={{ color: 'var(--text-muted)' }} />
-          <div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-strong)' }}>
-              <DateText value={businessDate} tone="strong" icon={false} />
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Business Day · forecourt sales and stock
-            </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {businessDayStatusQ.isError ? (
-            <Chip tone="danger" size="xs">
-              Unavailable
-            </Chip>
-          ) : !status ? (
-            <Chip tone="neutral" size="xs">
-              Checking
-            </Chip>
-          ) : status === 'NOT_CREATED' ? (
-            <Chip tone="neutral" size="xs">
-              Not started
-            </Chip>
-          ) : (
-            <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />
-          )}
-          {report?.live && (
-            <Chip tone="warning" size="xs">
-              Live{liveAsOf ? ` · ${liveAsOf}` : ''}
-            </Chip>
-          )}
-          {status === 'OPEN' && canClose && snap && (
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Lock size={13} />}
-              loading={closing}
-              disabled={hasOpenShift}
-              title={
-                hasOpenShift
-                  ? 'Close the active shift before closing the business day'
-                  : 'Generate the DSSR snapshot and lock this day'
-              }
-              onClick={handleCloseDay}
-            >
-              Close business day
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <Panel flush title={`Recent Business Days · ${recentBusinessDays.length}`}>
-        {currentBusinessDayStatusQ.isPending ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title="Loading Business Days"
-              description="Checking the Station's Business Day lifecycle."
-            />
-          </div>
-        ) : currentBusinessDayStatusQ.isError ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title="Business Day status unavailable"
-              description="Recent Business Days could not be loaded. Check the connection and retry."
-            />
-          </div>
-        ) : recentBusinessDays.length === 0 ? (
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title={
-                recentFromBusinessDate
-                  ? `No Business Days since ${formatDate(recentFromBusinessDate)}`
-                  : 'No recent Business Days'
-              }
-              description="Open a shift to start a Business Day, or see older days in Reports."
-            />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {recentBusinessDays.map((day) => {
-              const selected = day.businessDate === businessDate;
-              const isOpen = day.status === 'OPEN';
-              return (
-                <button
-                  key={day.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setPickedBusinessDate(day.businessDate)}
-                  style={{
-                    ...rowStyle,
-                    width: '100%',
-                    gap: '16px',
-                    border: 0,
-                    borderBottom: '1px solid var(--border-soft)',
-                    background: selected ? 'var(--state-info-bg)' : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <div style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                      {formatDate(day.businessDate)}
-                    </span>
-                    <StatusChip status={isOpen ? 'open' : 'closed'} size="sm" />
-                  </div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                    {Number(day.closedShiftCount)} closed · {Number(day.openShiftCount)} open
-                  </div>
-                  <div
-                    style={{
-                      marginLeft: 'auto',
-                      color: 'var(--text-muted)',
-                      fontSize: '12px',
-                      textAlign: 'right',
-                    }}
-                  >
-                    Last activity {formatStationActivity(day.lastActivityAt, settings.timezone)}
-                  </div>
-                  {selected && (
-                    <Check
-                      size={14}
-                      style={{ color: 'var(--state-info-fg)', flexShrink: 0 }}
-                      aria-label="Selected"
-                    />
-                  )}
-                </button>
-              );
-            })}
-            {/* Days beyond the window live in the Reports page's Daily DSSR
-                list, which already reads them. Gated on the role that may open
-                that page — routing anyone else there lands them on a page
-                their own nav does not list. */}
-            {mayOpenReports && (
-              <div style={{ padding: '8px 16px' }}>
-                <Button variant="ghost" size="xs" onClick={() => onNavigate('/reports')}>
-                  See older Business Days
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </Panel>
-
-      {hasOpenShift && status === 'OPEN' && canClose && snap && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'center',
-            padding: '8px 12px',
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
+    <div className="flex flex-col gap-5">
+      <section className="flex flex-col gap-2" aria-label="Recent business days">
+        <SectionHeader
+          title="Business days"
+          subtitle={
+            recentFromBusinessDate ? `Since ${formatDate(recentFromBusinessDate)}` : undefined
+          }
+          controls={{
+            filters: currentBusinessDayStatusQ.data && (
+              <FilterChips<DayFilter>
+                aria-label="Business days shown"
+                options={[
+                  { value: 'all', label: 'All', count: recentBusinessDays.length },
+                  {
+                    value: 'open-past',
+                    label: 'Open past days',
+                    count: openPastCount,
+                  },
+                ]}
+                value={onlyOpenPast ? 'open-past' : 'all'}
+                onChange={(v) => setOnlyOpenPast(v === 'open-past')}
+              />
+            ),
+            actions: mayOpenReports ? (
+              <Button variant="ghost" size="sm" onClick={() => onNavigate('/reports')}>
+                See older Business Days
+              </Button>
+            ) : undefined,
           }}
+        />
+        <DataSection
+          title="business days"
+          query={currentBusinessDayStatusQ}
+          placeholderHeight={200}
+          flush
+          isEmpty={visibleBusinessDays.length === 0}
+          empty={
+            <div className="p-3">
+              <EmptyState
+                compact
+                icon={<Icon name="calendar-range" size="md" />}
+                title={
+                  onlyOpenPast
+                    ? 'No open past Business Days'
+                    : recentFromBusinessDate
+                      ? `No Business Days since ${formatDate(recentFromBusinessDate)}`
+                      : 'No recent Business Days'
+                }
+                description="Open a shift to start a Business Day, or see older days in Reports."
+              />
+            </div>
+          }
         >
-          <Info size={14} style={{ flexShrink: 0 }} />
-          <span>
+          <InteractiveTable
+            bare
+            columns={dayColumns}
+            rows={visibleBusinessDays}
+            rowKey={(d) => d.id}
+            selectedRowId={selectedDay?.id ?? null}
+            onRowClick={(d) => setPickedBusinessDate(d.businessDate)}
+            rowLabel={(d) => formatDate(d.businessDate)}
+            title="business days"
+          />
+        </DataSection>
+      </section>
+
+      <section className="flex flex-col gap-3" aria-label="Selected business day">
+        <SectionHeader
+          title={`Business day ${formatShortDay(businessDate)}`}
+          subtitle={
+            businessDayStatusQ.isError ? undefined : !status ? undefined : status ===
+              'NOT_CREATED' ? (
+              'Not started'
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <StatusChip status={status === 'CLOSED' ? 'day-sealed' : 'day-open'} size="md" />
+                {liveAsOf && <span>Live · as of {liveAsOf}</span>}
+              </span>
+            )
+          }
+          controls={
+            status === 'OPEN' && canClose && snap
+              ? {
+                  actions: (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<Icon name="lock" size="xs" />}
+                      loading={closing}
+                      disabled={hasOpenShift}
+                      title={
+                        hasOpenShift
+                          ? 'Close the active shift before closing the business day'
+                          : 'Generate the DSR snapshot and lock this day'
+                      }
+                      onClick={handleCloseDay}
+                    >
+                      Close business day
+                    </Button>
+                  ),
+                }
+              : undefined
+          }
+        />
+
+        {hasOpenShift && status === 'OPEN' && canClose && snap && (
+          <Banner severity="warning">
             A shift is still open. Close the active shift before closing the business day.
-          </span>
-        </div>
-      )}
-
-      {status === 'OPEN' && canClose && eodDueCustomers.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'flex-start',
-            padding: '8px 12px',
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-          }}
-        >
-          <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-          <span>
+          </Banner>
+        )}
+        {status === 'OPEN' && canClose && eodDueCustomers.length > 0 && (
+          <Banner severity="warning">
             {eodDueCustomers.length} end-of-day customer{eodDueCustomers.length === 1 ? '' : 's'}{' '}
-            still owe{eodDueCustomers.length === 1 ? 's' : ''}{' '}
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(eodDueTotal)}</strong> expected
-            to be collected before day close
-            {' — '}
+            still owe{eodDueCustomers.length === 1 ? 's' : ''} {formatMoney(eodDueTotal)} expected
+            to be collected before day close —{' '}
             {eodDueCustomers
               .slice(0, 3)
               .map((c: any) => c.name)
               .join(', ')}
             {eodDueCustomers.length > 3 ? ` +${eodDueCustomers.length - 3} more` : ''}. You can
             still close the day.
-          </span>
-        </div>
-      )}
+          </Banner>
+        )}
+        {status === 'OPEN' && canClose && decantationWarningCount > 0 && (
+          <Banner severity="warning">
+            Decantation warnings through this day:{' '}
+            {formatDecantationWarningSummary(decantationWarnings!)}. You can still close the day.
+          </Banner>
+        )}
 
-      {reportLoading ? (
-        <Panel flush title="Business day">
-          <div style={{ padding: '16px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title="Loading…"
-              description="Composing the business day."
-            />
-          </div>
-        </Panel>
-      ) : reportError ? (
-        <Panel flush title="Business day">
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title="Business Day workspace unavailable"
-              description="This day's Shifts and operational context could not be loaded. Check the connection and retry."
-            />
-          </div>
-        </Panel>
-      ) : !snap ? (
-        <Panel flush title="Business day">
-          <div style={{ padding: '12px' }}>
-            <EmptyState
-              compact
-              icon={<CalendarRange />}
-              title="No activity yet"
-              description="This business day opens automatically with the first shift or financial entry."
-            />
-          </div>
-        </Panel>
-      ) : (
-        <>
-          {/* Headline KPIs */}
-          <KpiStrip columns="auto">
-            <KpiTile
-              dot="brand"
-              label="Net Fuel Volume"
-              value={`${formatQty(fuel.totalNetVolume || 0, 1)} L`}
-              hint={`${snap.shiftsIncluded || 0} closed shift${snap.shiftsIncluded === 1 ? '' : 's'}`}
-            />
-            <KpiTile
-              dot="info"
-              label="Revenue"
-              value={inr(pnl.revenue || 0)}
-              hint={`Fuel ${inr(pnl.revenueFuel || 0)} · Merch ${inr(pnl.revenueMerch || 0)}`}
-            />
-            <KpiTile
-              dot="warning"
-              valueTone="warning"
-              label="Credit Issued"
-              value={inr(credit.total || 0)}
-              hint={`Fleet ${inr(credit.fleetCredit || 0)}`}
-            />
-            <KpiTile
-              dot="danger"
-              valueTone="danger"
-              label="Purchases"
-              value={inr(purchases.total || 0)}
-              hint="Stock inflow (business-day anchored)"
-            />
-            <KpiTile
-              dot={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
-              valueTone={Number(pnl.grossMargin || 0) < 0 ? 'danger' : 'success'}
-              label="Gross Margin"
-              value={inr(pnl.grossMargin || 0)}
-              hint={`COGS ${inr(pnl.cogs || 0)}`}
-            />
-          </KpiStrip>
+        <DataSection
+          title="the business day"
+          query={[businessDayStatusQ, reportQ]}
+          shape="cards"
+          placeholderHeight={320}
+          enabled={!!stationId}
+          isEmpty={!snap}
+          empty={
+            <Panel>
+              <EmptyState
+                compact
+                icon={<Icon name="calendar-range" size="md" />}
+                title="No activity yet"
+                description="This business day opens automatically with the first shift or sale."
+              />
+            </Panel>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <KpiStrip columns="auto" scope={scope}>
+              <KpiTile
+                label="Fuel sold"
+                value={formatQuantity(figures.netVolume, 'L')}
+                hint={`${countOf(figures.shiftsIncluded, 'closed shift', 'closed shifts')}`}
+              />
+              <KpiTile
+                label="Sales"
+                value={formatMoney(figures.revenue)}
+                hint={`Fuel ${formatMoney(figures.revenueFuel, { decimals: 0 })} · Products ${formatMoney(figures.revenueProducts, { decimals: 0 })}`}
+              />
+              <KpiTile
+                label="Credit sales"
+                value={formatMoney(figures.creditTotal)}
+                hint={`Fleet ${formatMoney(figures.fleetCredit, { decimals: 0 })}`}
+              />
+              <KpiTile
+                label="Gross margin"
+                value={formatMoney(figures.grossMargin)}
+                alert={figures.grossMargin < 0 ? 'danger' : undefined}
+                hint={`COGS ${formatMoney(figures.cogs, { decimals: 0 })}`}
+              />
+            </KpiStrip>
 
-          {status !== 'CLOSED' && (
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'flex-start',
-                padding: '10px 12px',
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                border: '1px solid var(--border-soft)',
-              }}
-            >
-              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span>
-                Provisional day view composed from{' '}
-                <strong>
-                  {snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}
-                </strong>{' '}
-                plus live merchandise, credit and purchases. Office money is in the Daily Cash Book.
+            {status !== 'CLOSED' && (
+              <Banner severity="info">
+                Provisional: {countOf(figures.shiftsIncluded, 'closed shift', 'closed shifts')} plus
+                live product sales, credit and purchases. Office money is in Accounts → Daily cash
+                book.
                 {hasOpenShift
-                  ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
+                  ? " Fuel from the open shift isn't counted until it closes."
                   : ' Fuel for a shift is counted once that shift closes.'}
-              </span>
-            </div>
-          )}
-
-          {status === 'CLOSED' && Number(report?.lateEntryCount ?? 0) > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'center',
-                padding: '8px 12px',
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                border: '1px solid var(--border-soft)',
-              }}
-            >
-              <Info size={14} style={{ flexShrink: 0 }} />
-              <span>
+              </Banner>
+            )}
+            {status === 'CLOSED' && Number(report?.lateEntryCount ?? 0) > 0 && (
+              <Banner severity="warning">
                 {Number(report.lateEntryCount)} financial{' '}
                 {Number(report.lateEntryCount) === 1 ? 'entry was' : 'entries were'} recorded after
-                this day closed. The DSSR snapshot is unchanged.
-              </span>
-            </div>
-          )}
+                this day closed. The DSR snapshot is unchanged.
+              </Banner>
+            )}
 
-          {/* Shifts in this day */}
-          <Panel flush title="Shifts in this day">
-            <DataTable
-              columns={shiftColumns}
-              data={shiftRows}
-              bare
-              getRowId={(s: any) => s.shiftId}
-              emptyMessage="No shifts have been opened for this business day yet."
-            />
-          </Panel>
+            <section className="flex flex-col gap-2" aria-label="Shifts in this day">
+              <SectionHeader
+                title="Shifts in this day"
+                subtitle={countOf(shifts.rows.length, 'shift', 'shifts')}
+              />
+              <div className="overflow-hidden rounded-card border border-border-soft bg-surface">
+                {shifts.rows.length === 0 ? (
+                  <div className="p-3">
+                    <EmptyState
+                      compact
+                      icon={<Icon name="shifts" size="md" />}
+                      title="No shifts yet"
+                      description="No shift has been opened for this business day yet."
+                    />
+                  </div>
+                ) : (
+                  <InteractiveTable
+                    bare
+                    columns={shiftColumns}
+                    rows={shifts.rows}
+                    rowKey={(r) => r.shiftId}
+                    totalRow={shiftTotal}
+                    title="shifts in this day"
+                  />
+                )}
+              </div>
+            </section>
 
-          {/* Day sales figures — office money lives in the Daily Cash Book */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '14px',
-            }}
-          >
-            <Panel flush title="Credit & merchandise">
-              <div style={rowStyle}>
-                <span>Credit — regular</span>
-                <span style={money}>{inr(credit.normalCredit || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Credit — fleet</span>
-                <span style={money}>{inr(credit.fleetCredit || 0)}</span>
-              </div>
-              <div style={rowStyle}>
-                <span>Purchases</span>
-                <span style={money}>{inr(purchases.total || 0)}</span>
-              </div>
-              <div style={{ ...rowStyle, borderBottom: 'none' }}>
-                <span>Merchandise sales</span>
-                <span style={money}>{inr(merchandise.salesValue || 0)}</span>
-              </div>
+            <Panel title="Credit, purchases & products">
+              <dl className="grid grid-cols-1 gap-x-8 gap-y-1.5 text-[13px] sm:grid-cols-2">
+                {(
+                  [
+                    ['Credit · regular', figures.normalCredit],
+                    ['Credit · fleet', figures.fleetCredit],
+                    ['Purchases', figures.purchases],
+                    ['Product sales', figures.productSales],
+                  ] as const
+                ).map(([label, value]) => (
+                  <div key={label} className="flex items-baseline justify-between gap-3">
+                    <dt className="text-ink-muted">{label}</dt>
+                    <dd className="font-mono tabular-nums text-ink-default">
+                      {formatMoney(value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </Panel>
           </div>
-        </>
-      )}
+        </DataSection>
+      </section>
     </div>
   );
 };

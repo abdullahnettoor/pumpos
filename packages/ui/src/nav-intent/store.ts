@@ -24,7 +24,7 @@ export interface NavIntent {
   /** Focus a specific supplier (opens their statement drawer). */
   focusSupplierId?: string;
   /** Focus a specific inventory tab + entity (tank card / merchandise row). */
-  focusInventoryTab?: 'tanks' | 'items';
+  focusInventoryTab?: 'tanks' | 'items' | 'density' | 'decantations';
   focusInventoryId?: string;
   /**
    * Open a drawer immediately on arrival at the destination page.
@@ -36,17 +36,38 @@ export interface NavIntent {
    * so reviving one here would open an entry form with an empty target shift.
    * Route those through `openQuickEntry` instead.
    */
-  open?: 'customer-statement' | 'new-customer' | 'supplier-statement' | 'supplier-payment';
+  open?: 'customer-statement' | 'new-customer' | 'supplier-statement';
   /** Open a specific past business day's DSSR summary (Reports page). */
   openDssrDate?: string;
   /** Open a specific Business Day in the Shifts workspace. */
   openBusinessDayDate?: string;
+  /**
+   * Open Shifts → Business Day with the list filtered to still-open past
+   * Business Days (dashboard open-days notice).
+   */
+  openPastDays?: boolean;
   /**
    * Open one closed shift's **Shift Summary** (Shifts → History). Distinct from
    * `openDssrDate`: a shift summary is the shift-close snapshot, a DSSR is the
    * business-day-close snapshot.
    */
   openShiftSummaryId?: string;
+  /** Open a specific report in the Reports sub-navigation. */
+  openReportsTab?: 'gst';
+  /** With `openReportsTab: 'gst'`: which GST view to show. */
+  openGstView?: 'sales' | 'purchases' | 'income';
+  /** Open a specific tab of the Accounts page (the Daily cash book lives there). */
+  openAccountsTab?: 'cash-book' | 'transfers';
+  /**
+   * Open one Financial Account's page (#530, #576). Reports › Cash & bank
+   * links each account row here. The shell turns it into a navigation to
+   * `accountRoute(id)` (`navTarget`), so it never reaches the page as an intent.
+   */
+  openAccountId?: string;
+  /** Open the Record Purchase drawer on arrival at Suppliers → Purchases. */
+  openNewPurchase?: boolean;
+  /** Open a specific tab on the Organization page. */
+  openOrganizationTab?: 'desktop';
 }
 
 export interface NavIntentState {
@@ -95,7 +116,12 @@ export function subscribeToNavIntent(listener: () => void) {
 /** Current store state. Prefer `useNavIntent()` in components. */
 export const getNavIntentState = () => state;
 
-/** The pending intent plus its token, for the rare consumer that must run an effect. */
+/**
+ * The pending intent plus its token. For a consumer that takes the intent once
+ * (Accounts): copy it into its own state during render, guarded by the token
+ * (`if (token !== taken)`), then clear it in an effect. Or for one that must
+ * run an effect on arrival.
+ */
 export function useNavIntentEntry(): NavIntentState {
   return useSyncExternalStore(subscribeToNavIntent, getNavIntentState, getNavIntentState);
 }

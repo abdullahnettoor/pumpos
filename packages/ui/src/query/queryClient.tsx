@@ -1,6 +1,7 @@
 import React from 'react';
 import { clearNavIntent } from '../nav-intent/store.js';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { installWindowFocusRefetch } from './windowFocus.js';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -26,15 +27,16 @@ const PERSIST_PREFIXES = new Set([
   'funding-accounts',
   'pricing',
   'organization',
-  // Only the role-filtered Access Document is persisted — never grant rows,
-  // reasons, or platform actor data, which clients are not sent at all.
-  'access',
 ]);
-// Bump to invalidate all persisted client caches on next load. v4 adds the
+// Bump to invalidate all persisted client caches on next load. v8 drops the
+// Access Document, which now carries effective Permissions and is never persisted
+// (ADR 0013). v7 drops
+// `organization` payloads persisted before #616 shaped it by Role, so a Staff
+// device no longer holds the plan and billing columns. v4 adds the
 // persisted Access Document (Phase E1); v3 dropped stale empty `stations`
 // lists cached while a user briefly resolved to a wrong/empty org (Phase A
 // duplicate-auth-user bug).
-const CACHE_BUSTER = 'v4';
+const CACHE_BUSTER = 'v8';
 
 /** localStorage key the persisted static/semi cache is written to. */
 export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';
@@ -111,11 +113,13 @@ function invalidateAccessOnPolicyError(client: QueryClient, error: unknown): voi
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
  * this single cache. Defaults favour operator workflows: short stale time,
- * refetch on focus (a shift screen left open should catch new transactions),
+ * refetch on focus — tab switch, restore, or the window regaining focus from
+ * another app (see windowFocus.ts) — so a screen left open catches up,
  * and a single retry (the API is on a low-latency edge) — except resource-limit
  * failures, which are never retried.
  */
 export function createQueryClient(): QueryClient {
+  installWindowFocusRefetch();
   const client: QueryClient = new QueryClient({
     queryCache: new QueryCache({
       onError: (error) => invalidateAccessOnPolicyError(client, error),

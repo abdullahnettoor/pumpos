@@ -1,5 +1,5 @@
 import type { AttendantReportShift } from '@pump/shared';
-import { formatQty } from '../../utils/format.js';
+import { formatQuantity } from '../../utils/format.js';
 
 /**
  * Presentation of a Shift's fuel-on-credit chits, shared by the attendant
@@ -14,6 +14,7 @@ import { formatQty } from '../../utils/format.js';
  *    its section still summed to the Shift line; the drawer rendered nothing
  *    and quietly dropped that money out of the breakdown.
  *  - **How a quantity reads.** The PDF printed `12.500 L`, the drawer `12.500`.
+ *    Both now print `formatQuantity`'s `12.50 L`: a volume, not a meter reading.
  *  - **What stands in for a missing name.** "Unknown customer" and "—" were
  *    written out in both files.
  *
@@ -36,6 +37,10 @@ export interface CreditChitRow {
   product: string;
   /** Formatted with its unit, or '—' when the chit recorded no quantity. */
   quantity: string;
+  /** The quantity as a number, for a table that sorts or totals it; null when unrecorded. */
+  quantityValue: number | null;
+  /** The chit's unit, litres when it recorded none. */
+  unit: string;
   /**
    * Product and quantity in one cell, for a renderer too narrow for two.
    * '—' when there is no product; the product alone when there is no quantity.
@@ -80,6 +85,8 @@ export function creditChitRows(shift: AttendantReportShift): CreditChitRow[] {
         vehicle: MISSING,
         product: MISSING,
         quantity: MISSING,
+        quantityValue: null,
+        unit: 'L',
         productWithQuantity: MISSING,
         amount: shift.creditSales,
         isPlaceholder: true,
@@ -91,14 +98,18 @@ export function creditChitRows(shift: AttendantReportShift): CreditChitRow[] {
     const product = line.productName || MISSING;
     // A chit that recorded no quantity is a dash, not a formatted zero. The
     // unit comes off the chit: 'L' for liquids, 'kg' for CNG / Auto-LPG.
-    const quantity =
-      line.quantity == null ? MISSING : formatQty(line.quantity, 3, line.unit || 'L');
+    const unit = line.unit || 'L';
+    // The one quantity format (#519): litres to 2 places. The table's Qty
+    // column formats `quantityValue` with the same call, so they cannot drift.
+    const quantity = formatQuantity(line.quantity, unit, { fallback: MISSING });
     return {
       key: line.transactionId,
       customerName: line.customerName || 'Unknown customer',
       vehicle: line.vehicleRegistration || MISSING,
       product,
       quantity,
+      quantityValue: line.quantity,
+      unit,
       productWithQuantity:
         line.productName == null || line.productName === ''
           ? MISSING

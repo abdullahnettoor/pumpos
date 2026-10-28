@@ -1,43 +1,56 @@
 ---
 import ProseLayout from '../../layouts/ProseLayout.astro';
-import Card from '../../components/ds/Card.astro';
+import { WHATSAPP_URL, WHATSAPP_DISPLAY } from '../../config';
 ---
 <ProseLayout
-  title="Terms of service"
+  title="Pilot terms"
   metaTitle="Pilot terms | PumpOS"
-  description="Draft terms for the PumpOS guided pilot."
+  description="Scope, pricing, payment and data terms for the PumpOS guided pilot."
   path="/legal/terms"
   eyebrow="PumpOS pilot"
-  noindex
+  legal
 >
-  <Card as="aside" class="prose-callout" role="note">
-    Draft, pending founder approval and legal review. This page is not a service agreement and has no effective date yet.
-  </Card>
+  <p slot="meta" class="legal-updated">Last updated 20 October 2026. We update this page when the pilot changes.</p>
+
+  <h2>Who you agree with</h2>
+  <p>These terms are between your organisation and Abdullah Nettoor, who runs PumpOS from Kochi, Kerala, India. We confirm the details for your station in writing before it joins. Where that written confirmation differs from this page, the written confirmation applies.</p>
+
   <h2>Scope of the pilot</h2>
-  <p>The pilot is a guided rollout for selected fuel stations. We agree with you in advance which capabilities are included. Planned capabilities are not part of the pilot unless we confirm them in writing.</p>
-  <h2>Onboarding and support</h2>
-  <p>We help set up your station and users. Support channels and response times are to be decided and will be stated before you join.</p>
-  <h2>Pricing, payment and cancellation</h2>
-  <p>Plan prices are published on the <a href="/pricing">pricing page</a>: Core ₹999 and Pro ₹1,599 per station per month (Pro may vary with your station's configuration), Scale on request. Prices exclude GST; yearly billing is charged at ten months. Pilot stations get their first 3 months free on any plan. What happens when those 3 months end, payment methods, refunds and cancellation are not yet settled and will be confirmed in writing before you join.</p>
-  <h2>Account responsibilities</h2>
-  <p>Your organization is responsible for the users it adds, keeping credentials secure, and the accuracy of the records it enters.</p>
-  <h2>Service limitations</h2>
-  <p>PumpOS works online. It is not a point-of-sale system or an accounting package, and extended offline operation is not part of the pilot.</p>
-  <h2>Your data</h2>
-  <p>Your station's operational records remain yours. Export and deletion arrangements on termination are to be decided; see the <a href="/legal/privacy">privacy information</a>.</p>
-  <h2>Termination and liability</h2>
-  <p>Termination rights and limits on liability will be set out in the final terms after legal review.</p>
-  <h2>Demonstrations</h2>
-  <p>The website's walkthroughs use illustrative sample data.</p>
-  <h2>Questions</h2>
-  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to discuss the terms for your station.</p>
-  <h2>Open items before publication</h2>
+  <p>The pilot is a guided rollout for selected fuel stations. Before you start, we agree with you which capabilities your station gets. Features marked "Coming next" on the <a href="/pricing">pricing page</a>, such as Tally, GSTR and Excel export and WhatsApp reminders, are not part of the pilot unless we confirm them in writing.</p>
+
+  <h2>Onboarding</h2>
+  <p>We set up your station with you: tanks, nozzles, products, users and opening balances, including each credit customer's outstanding amount. After that, your team runs shifts and day closings in PumpOS.</p>
+
+  <h2>Support</h2>
+  <p>We support pilot stations on WhatsApp at <a href={WHATSAPP_URL}>{WHATSAPP_DISPLAY}</a>.</p>
+
+  <h2>Pricing</h2>
+  <p>Plan prices are on the <a href="/pricing">pricing page</a>. Core is ₹999, Pro is ₹1,599 and Pro+ is ₹2,099 per station per month. Each additional station is 20% off on Pro and Pro+; for 10+ stations, talk to us. Prices exclude GST. Yearly billing costs ten months of the monthly rate.</p>
+  <p>Pilot stations pay ₹0 for their first 3 months on any plan. Before those 3 months end, you choose whether to continue, on which plan, and whether to pay monthly or yearly. The standard rate starts only after you confirm.</p>
+
+  <h2>Payment</h2>
+  <p>You pay in advance for each month or year, by UPI transfer to us. We send an invoice on request. We plan to add a payment gateway later.</p>
+  <p>If a payment is late, your station keeps normal access for 7 days. After that, access is limited: your team can finish the station's daily work, but setup changes and new additions are blocked until you pay.</p>
+
+  <h2>Cancellation and refunds</h2>
+  <p>You can cancel at any time by telling us on WhatsApp or by email. You are not charged for any period after you cancel.</p>
   <ul>
-    <li>Legal operator name and jurisdiction.</li>
-    <li>End of the 3-month pilot period, payment methods, refunds and cancellation.</li>
-    <li>Support scope and response times.</li>
-    <li>Data export and deletion on termination.</li>
-    <li>Liability and termination wording, after legal review.</li>
-    <li>Effective and revision dates.</li>
+    <li>Monthly plans: the month already paid is not refunded.</li>
+    <li>Yearly plans: we refund the unused part of the year. We work out the amount and confirm it with you.</li>
   </ul>
+
+  <h2>Your responsibilities</h2>
+  <p>Your organisation decides who gets a login and which role each person has. It is responsible for those users, for keeping their passwords private, and for the accuracy of the records they enter.</p>
+
+  <h2>What PumpOS is not</h2>
+  <p>PumpOS needs an internet connection. Extended offline operation is not part of the pilot. PumpOS is not a point-of-sale system or an accounting package.</p>
+
+  <h2>Your data</h2>
+  <p>Your station's operational records belong to your organisation. On request, we send you a copy of them. If you ask us to delete them, we delete them within 30 days. See the <a href="/legal/privacy">privacy information</a> for how data is handled.</p>
+
+  <h2>Demonstrations</h2>
+  <p>Walkthroughs on this website and in demo stations use sample data.</p>
+
+  <h2>Questions</h2>
+  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to talk through the terms for your station.</p>
 </ProseLayout>

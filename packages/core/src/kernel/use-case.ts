@@ -1,4 +1,4 @@
-import type { Result } from '@pump/shared';
+import type { PermissionId, Principal, Result, Role } from '@pump/shared';
 import type { Clock, IdGenerator } from './clock.js';
 import { createEvent } from './event.js';
 import type { DomainEvent } from './event.js';
@@ -20,6 +20,11 @@ export interface ExecutionContext {
   actorId: string | null;
   correlationId: string | null;
   actorSnapshot?: EventActorSnapshot;
+  /**
+   * The actor's effective Permissions (Role defaults plus the Owner's changes).
+   * Not persisted. Absent = fall back to the Role's defaults.
+   */
+  permissions?: ReadonlySet<string>;
   groupingRole?: EventGroupingRole;
   /** Internal command-local emission count used to classify sibling facts. */
   emittedEventCount?: number;
@@ -105,4 +110,13 @@ export function relatedEventFromContext<TType extends string, TPayload>(
   input: Omit<ContextEventInput<TType, TPayload>, 'groupingRole' | 'causationId'>,
 ): DomainEvent<TType, TPayload> {
   return eventFromContext(ctx, { ...input, groupingRole: 'related' });
+}
+
+/** The acting tenant user as a Principal: effective Permissions when the context carries them, else Role defaults. */
+export function actorPrincipal(ctx: ExecutionContext): Principal | null {
+  const actor = ctx.actorSnapshot;
+  if (!actor || actor.role === null) return null;
+  return ctx.permissions
+    ? { role: actor.role as Role, permissions: ctx.permissions as ReadonlySet<PermissionId> }
+    : { role: actor.role as Role };
 }

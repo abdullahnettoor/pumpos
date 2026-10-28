@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { cleanup, render, screen, act } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 // Drive the hook through a faked shift-status query so no QueryClient/network
 // is involved: this test is about the mapping + ticker, not the fetch.
@@ -82,6 +82,6 @@ describe('useOpenShiftLabel', () => {
   it('reads the lite branch of the shift-status query', () => {
     withOpenShift('2026-09-22T06:00:00.000Z');
     render(<Probe />);
-    expect(useShiftStatus).toHaveBeenCalledWith('st-1', true);
+    expect(useShiftStatus).toHaveBeenCalledWith('st-1', { lite: true });
   });
 });

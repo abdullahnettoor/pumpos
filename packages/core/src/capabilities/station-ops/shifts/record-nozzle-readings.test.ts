@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   BusinessEvents,
   FixedClock,
@@ -10,6 +10,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import { RecordNozzleReadings } from './record-nozzle-readings.js';
 import type { NozzleReading, NozzleReadingRepository, Shift, ShiftRepository } from './ports.js';
+import { withRepositoryShiftWriteGate } from './__tests__/repository-shift-write-gate.js';
 
 function shift(status: Shift['status'] = 'OPEN', overrides: Partial<Shift> = {}): Shift {
   return {
@@ -137,12 +138,14 @@ function setup(
   const calls: string[] = [];
   const readings = new ReadingRepo();
   const store = new InMemoryEventStore();
-  const useCase = new RecordNozzleReadings({
-    shifts: new ShiftRepo(shift(shiftStatus, shiftOverrides), calls),
-    businessDays: new BusinessDayRepo(dayStatus, calls),
-    nozzleReadings: readings,
-    events: new InProcessEventDispatcher({ store }),
-  });
+  const useCase = new RecordNozzleReadings(
+    withRepositoryShiftWriteGate({
+      shifts: new ShiftRepo(shift(shiftStatus, shiftOverrides), calls),
+      businessDays: new BusinessDayRepo(dayStatus, calls),
+      nozzleReadings: readings,
+      events: new InProcessEventDispatcher({ store }),
+    }),
+  );
   return { useCase, calls, readings, store };
 }
 
@@ -229,7 +232,8 @@ describe('RecordNozzleReadings', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
-    expect(calls).toEqual(['shift-discovery']);
+    // Discovery reads the Shift and its Business Day unlocked (#248); no lock is taken.
+    expect(calls).toEqual(['shift-discovery', 'day-find']);
     expect(readings.updates).toEqual([]);
     expect(store.events).toEqual([]);
   });

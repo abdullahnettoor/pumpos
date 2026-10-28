@@ -2,11 +2,11 @@
  * @vitest-environment jsdom
  */
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { BootScreen } from './index.js';
 
 /**
- * The boot screen is the first thing an operator sees after pressing Sign In,
+ * The boot screen is the first thing an operator sees after pressing Sign in,
  * and for a cold sign-in on a station connection it is on screen for real
  * seconds. What it must never do is leak how the software is built.
  */
@@ -50,13 +50,14 @@ describe('BootScreen', () => {
     expect(mark?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('uses the existing spinner primitive rather than a second spinner', () => {
+  it('uses the pump-ds Spinner, which holds still under reduced motion', () => {
     const { container } = render(<BootScreen />);
 
-    // .loading-spinner is the one primitive the reduced-motion block in
-    // index.css slows down. A bespoke spinner here would silently opt out of
-    // that, which is why this asserts the class and not merely "something spins".
-    expect(container.querySelector('.loading-spinner')).toBeTruthy();
+    // The one spinner primitive spins only under `motion-safe:`. A bespoke
+    // spinner here would silently opt out of reduced motion, which is why this
+    // asserts the class and not merely "something spins".
+    const spinner = container.querySelector('svg.motion-safe\\:animate-spin');
+    expect(spinner).toBeTruthy();
   });
 
   it('lets a caller state which phase is in progress', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { cleanup, render, screen } from '@testing-library/react';
 import { LegacyPurchasesTable } from './LegacyPurchasesTable.js';
 import { legacyPurchases } from '../../services/reports/legacyPurchases.js';
@@ -24,7 +24,7 @@ describe('LegacyPurchasesTable', () => {
 
   it('shows the purchases an older snapshot stored', () => {
     render(<LegacyPurchasesTable snapshot={OLD_SNAPSHOT} />);
-    expect(screen.getByText('Supplier Fuel Intakes')).toBeTruthy();
+    expect(screen.getByText('Supplier fuel intakes')).toBeTruthy();
     expect(screen.getByText('IOCL Depot')).toBeTruthy();
     expect(screen.getByText(/PUR-000007/)).toBeTruthy();
     expect(screen.getByText(/INV-42/)).toBeTruthy();
