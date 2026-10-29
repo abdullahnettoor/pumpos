@@ -1553,7 +1553,6 @@ export class CloudTransactionService {
 
   async recordPurchase(
     payload: {
-      shiftId?: string;
       stationId?: string;
       transactionDate?: string;
       supplierId: string;

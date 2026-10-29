@@ -16,7 +16,6 @@ export class DrizzlePurchaseRepository implements PurchaseRepository {
       documentNumber: p.documentNumber,
       organizationId: p.organizationId,
       stationId: p.stationId,
-      shiftId: p.shiftId,
       businessDayId: p.businessDayId,
       entryDate: p.entryDate,
       supplierId: p.supplierId,

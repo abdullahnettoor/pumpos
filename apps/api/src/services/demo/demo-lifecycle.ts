@@ -111,7 +111,7 @@ export async function clearDemoData(
   const shiftsOf = sql`(select id from shifts where organization_id = ${id})`;
   const daysOf = sql`(select id from business_days where organization_id = ${id})`;
   const salesOf = sql`(select id from sales where shift_id in ${shiftsOf} or business_day_id in ${daysOf})`;
-  const purchasesOf = sql`(select id from purchases where shift_id in ${shiftsOf} or business_day_id in ${daysOf} or supplier_id in (select id from suppliers where organization_id = ${id}))`;
+  const purchasesOf = sql`(select id from purchases where business_day_id in ${daysOf} or supplier_id in (select id from suppliers where organization_id = ${id}))`;
   const statements = [
     sql`delete from density_readings where organization_id = ${id}`,
     sql`delete from decantation_purchases where organization_id = ${id}`,
