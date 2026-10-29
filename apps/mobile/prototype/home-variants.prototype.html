@@ -1,0 +1,509 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not wired to the app.
+  Question: "What should the mobile Owner Home + shell look like?"
+  Three radically different variants of the Owner Home + shell, same mock data.
+  Switch with the floating bar, ←/→ keys, or ?variant=A|B|C. Open by double-click.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS mobile — Home variants (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+    /* PumpOS tokens */
+    --bg-canvas: #f6f7f4; --bg-surface: #fff; --bg-surface-alt: #f1f3ef;
+    --border-soft: #e3e7e0; --border-strong: #b9c1b7;
+    --text-strong: #18201a; --text-default: #2b342d; --text-muted: #5e6a61; --text-faint: #8a948b;
+    --brand: #1f6a53; --brand-2: #2e5e88; --amber: #b7811e; --red: #b44a3f;
+    --ok-bg: #e8f4ee; --ok-fg: #1e6a4e; --warn-bg: #f9f0da; --warn-fg: #8a6116;
+    --bad-bg: #f8e3e0; --bad-fg: #9f3f36; --info-bg: #e8f0f7; --info-fg: #2e5e88;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; font-family: var(--font-sans); color: var(--text-default); }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: -0.01em; }
+
+  /* ---------- stage ---------- */
+  .stage { display: flex; gap: 28px; align-items: flex-start; justify-content: center; padding: 8px 0 90px; flex-wrap: wrap; }
+  .phone {
+    width: 375px; height: 780px; border-radius: 44px; padding: 10px;
+    background: #0e1210; box-shadow: 0 30px 60px -20px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.2);
+    flex-shrink: 0;
+  }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 35px; overflow: hidden; display: flex; flex-direction: column; }
+  .statusbar { height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 6px 28px 0; font-size: 14px; font-weight: 600; }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; }
+  .notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 110px; height: 30px; background: #000; border-radius: 20px; z-index: 50; }
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .notes { width: 300px; font-size: 13px; line-height: 1.55; color: var(--text-muted); padding-top: 18px; }
+  .notes h2 { font-size: 20px; color: var(--text-strong); margin: 0 0 2px; letter-spacing: -0.02em; }
+  .notes .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); }
+  .notes ul { padding-left: 16px; margin: 10px 0; }
+  .notes li { margin-bottom: 6px; }
+  .notes b { color: var(--text-strong); font-weight: 600; }
+
+  /* ---------- switcher (not part of design) ---------- */
+  .switcher {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 999;
+    display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px;
+    background: #111; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 13px;
+  }
+  .switcher button { width: 34px; height: 34px; border-radius: 999px; color: #fff; font-size: 16px; }
+  .switcher button:hover { background: #2a2a2a; }
+  .switcher .lbl { min-width: 210px; text-align: center; font-weight: 600; }
+  .switcher .lbl span { opacity: .55; font-weight: 500; }
+  .dots { display: flex; gap: 4px; justify-content: center; margin-top: 2px; }
+  .dots i { width: 5px; height: 5px; border-radius: 9px; background: #555; }
+  .dots i.on { background: #fff; }
+
+  /* ================= VARIANT A — Briefing ================= */
+  .A { background: var(--bg-canvas); color: var(--text-default); }
+  .A .num, .C .num { font-family: var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .A .top { padding: 4px 18px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .A .ctx { display: flex; align-items: center; gap: 10px; text-align: left; }
+  .A .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--brand); display: grid; place-items: center; color: #fff; }
+  .A .ctx .st { font-size: 15px; font-weight: 700; color: var(--text-strong); letter-spacing: -0.01em; display: flex; gap: 4px; align-items: center; }
+  .A .ctx .sub { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .A .live { width: 6px; height: 6px; border-radius: 9px; background: #2fa36f; box-shadow: 0 0 0 3px rgba(47,163,111,.18); }
+  .A .avatar { width: 34px; height: 34px; border-radius: 99px; background: #dfe7e1; color: var(--brand); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+  .A .days { display: flex; gap: 4px; padding: 2px 14px 14px; }
+  .A .day { flex: 1; min-width: 0; padding: 6px 0 7px; border-radius: 12px; text-align: center; background: transparent; border: 1px solid transparent; }
+  .A .day .w { font-size: 10px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+  .A .day .d { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-top: 1px; }
+  .A .day .s { width: 5px; height: 5px; border-radius: 9px; margin: 4px auto 0; }
+  .A .day.on { background: var(--text-strong); }
+  .A .day.on .w { color: rgba(255,255,255,.6); } .A .day.on .d { color: #fff; }
+  .A .hero { margin: 0 14px; padding: 18px 18px 14px; border-radius: 22px; background: var(--bg-surface); box-shadow: 0 1px 0 var(--border-soft), 0 8px 24px -16px rgba(24,32,26,.25); }
+  .A .eyebrow { font-size: 12px; font-weight: 600; color: var(--text-muted); display: flex; justify-content: space-between; }
+  .A .big { font-size: 40px; font-weight: 800; letter-spacing: -0.035em; color: var(--text-strong); margin: 4px 0 2px; line-height: 1.05; }
+  .A .big small { font-size: 22px; font-weight: 700; color: var(--text-faint); }
+  .A .delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ok-fg); background: var(--ok-bg); padding: 3px 8px; border-radius: 99px; }
+  .A .heromuted { font-size: 12px; color: var(--text-muted); margin-left: 6px; }
+  .A .mix { display: flex; height: 8px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 16px 0 10px; }
+  .A .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; }
+  .A .legend div { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+  .A .legend b { margin-left: auto; color: var(--text-strong); font-weight: 600; }
+  .A .legend i { width: 8px; height: 8px; border-radius: 3px; }
+  .A .sect { padding: 22px 18px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+  .A .sect h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text-strong); letter-spacing: -0.01em; }
+  .A .sect a { font-size: 12px; font-weight: 600; color: var(--brand); }
+  .A .att { margin: 0 14px; background: var(--bg-surface); border-radius: 18px; overflow: hidden; box-shadow: 0 1px 0 var(--border-soft); }
+  .A .att .row { display: flex; gap: 12px; align-items: center; padding: 13px 14px; border-top: 1px solid var(--bg-surface-alt); text-align: left; width: 100%; }
+  .A .att .row:first-child { border-top: 0; }
+  .A .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+  .A .row .t { font-size: 14px; font-weight: 600; color: var(--text-strong); }
+  .A .row .m { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .A .chev { margin-left: auto; color: var(--text-faint); }
+  .A .stmt { margin: 0 14px; background: var(--bg-surface); border-radius: 18px; padding: 4px 16px; box-shadow: 0 1px 0 var(--border-soft); }
+  .A .stmt .line { display: flex; justify-content: space-between; align-items: baseline; padding: 11px 0; border-top: 1px dashed var(--border-soft); font-size: 14px; }
+  .A .stmt .line:first-child { border-top: 0; }
+  .A .stmt .line span:first-child { color: var(--text-muted); }
+  .A .stmt .line .v { font-weight: 600; color: var(--text-strong); font-size: 14px; }
+  .A .stmt .line .v em { font-style: normal; font-size: 11px; color: var(--text-faint); margin-right: 6px; font-family: var(--font-sans); }
+  .A .pos { margin: 0 14px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .A .pos > div { background: var(--bg-surface); border-radius: 18px; padding: 14px; box-shadow: 0 1px 0 var(--border-soft); }
+  .A .pos .l { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .A .pos .v { font-size: 19px; font-weight: 700; color: var(--text-strong); margin-top: 4px; letter-spacing: -0.02em; }
+  .A .pos .s { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .A .tab { flex-shrink: 0; display: grid; grid-template-columns: repeat(4,1fr); padding: 8px 10px 26px; background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-top: 1px solid var(--border-soft); }
+  .A .tab button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--text-faint); }
+  .A .tab button.on { color: var(--text-strong); }
+  .A .tab button.on svg { color: var(--brand); }
+
+  /* ================= VARIANT B — Control room (dark) ================= */
+  .B { background: #0b0f0d; color: #cfd8d2; }
+  .B .statusbar { color: #fff; }
+  .B .hdr { padding: 2px 16px 12px; display: flex; align-items: center; gap: 10px; }
+  .B .stbtn { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 12px; background: #151b18; border: 1px solid #222b26; }
+  .B .stbtn .lg { width: 24px; height: 24px; border-radius: 7px; background: #2fd18d; color: #06110c; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+  .B .stbtn .nm { font-size: 13px; font-weight: 600; color: #fff; }
+  .B .dt { margin-left: auto; font-size: 12px; color: #8fa197; display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 10px; border: 1px solid #222b26; }
+  .B .strip { margin: 0 12px; padding: 12px 14px; border-radius: 16px; background: linear-gradient(135deg, #12251c, #0f1714); border: 1px solid #1d3a2c; display: flex; align-items: center; gap: 12px; }
+  .B .pulse { width: 10px; height: 10px; border-radius: 9px; background: #2fd18d; box-shadow: 0 0 0 4px rgba(47,209,141,.18), 0 0 14px #2fd18d; }
+  .B .strip .t { font-size: 14px; font-weight: 700; color: #fff; }
+  .B .strip .m { font-size: 12px; color: #8fa197; }
+  .B .strip .clock { margin-left: auto; text-align: right; }
+  .B .strip .clock .v { font-size: 18px; color: #2fd18d; font-weight: 600; }
+  .B .strip .clock .m { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .B .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #64756b; padding: 18px 16px 8px; display: flex; justify-content: space-between; }
+  .B .lbl span:last-child { color: #2fd18d; letter-spacing: .04em; text-transform: none; font-weight: 600; font-size: 11px; }
+  .B .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px; }
+  .B .cell { background: #121815; border: 1px solid #1c2420; border-radius: 14px; padding: 12px; }
+  .B .cell.wide { grid-column: span 2; display: flex; align-items: flex-end; justify-content: space-between; }
+  .B .cell .k { font-size: 11px; color: #7d8f85; font-weight: 500; }
+  .B .cell .v { font-size: 20px; color: #fff; font-weight: 600; margin-top: 4px; }
+  .B .cell.wide .v { font-size: 32px; letter-spacing: -0.03em; }
+  .B .cell .s { font-size: 11px; color: #7d8f85; margin-top: 3px; }
+  .B .up { color: #2fd18d !important; } .B .dn { color: #ff7a6b !important; } .B .am { color: #f2b544 !important; }
+  .B .tanks { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; padding: 0 12px; }
+  .B .tank { background: #121815; border: 1px solid #1c2420; border-radius: 14px; padding: 10px; display: flex; gap: 10px; align-items: stretch; }
+  .B .tube { width: 16px; height: 74px; border-radius: 6px; background: #1b2420; position: relative; overflow: hidden; flex-shrink: 0; }
+  .B .tube i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 6px 6px; }
+  .B .tank .n { font-size: 12px; font-weight: 700; color: #fff; }
+  .B .tank .p { font-size: 18px; color: #fff; margin-top: 6px; font-weight: 600; }
+  .B .tank .c { font-size: 10px; color: #7d8f85; margin-top: 2px; line-height: 1.3; }
+  .B .dus { margin: 0 12px; background: #121815; border: 1px solid #1c2420; border-radius: 14px; }
+  .B .du { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid #1a221e; }
+  .B .du:first-child { border-top: 0; }
+  .B .du .id { width: 32px; height: 32px; border-radius: 9px; background: #1a2420; color: #9fb3a8; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .B .du .nm { font-size: 13px; color: #fff; font-weight: 600; }
+  .B .du .ms { font-size: 11px; color: #7d8f85; }
+  .B .badge { margin-left: auto; font-size: 10.5px; font-weight: 700; padding: 4px 8px; border-radius: 99px; }
+  .B .alert { margin: 0 12px 8px; display: flex; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 14px; background: #1f1712; border: 1px solid #3a2a19; }
+  .B .alert.red { background: #211312; border-color: #42201d; }
+  .B .alert .t { font-size: 13px; font-weight: 600; color: #fff; }
+  .B .alert .m { font-size: 11px; color: #a08e7e; }
+  .B .alert .go { margin-left: auto; font-size: 11px; font-weight: 700; color: #f2b544; padding: 6px 10px; border-radius: 9px; background: #2c2216; }
+  .B .alert.red .go { color: #ff7a6b; background: #2f1a18; }
+  .B .dock { z-index: 10; position: absolute; left: 14px; right: 14px; bottom: 22px; display: flex; justify-content: space-around; padding: 8px; border-radius: 22px; background: rgba(22,28,25,.86); backdrop-filter: blur(16px); border: 1px solid #263029; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .B .dock button { width: 52px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: #6f8178; position: relative; }
+  .B .dock button.on { background: #2fd18d; color: #06110c; }
+  .B .dock .pip { position: absolute; top: 7px; right: 11px; width: 7px; height: 7px; border-radius: 9px; background: #ff7a6b; border: 2px solid #161c19; }
+
+  /* ================= VARIANT C — Day story ================= */
+  .C { background: #fbfaf7; color: var(--text-default); }
+  .C .bar { display: flex; align-items: center; gap: 10px; padding: 2px 18px 6px; }
+  .C .bar .st { font-size: 13px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+  .C .bar .me { margin-left: auto; width: 30px; height: 30px; border-radius: 99px; background: #ece6d8; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #6b5a2e; }
+  .C .title { padding: 0 18px 2px; font-size: 30px; font-weight: 800; letter-spacing: -0.035em; color: var(--text-strong); line-height: 1.1; }
+  .C .title span { color: var(--text-faint); font-weight: 700; }
+  .C .cards { display: flex; gap: 10px; overflow-x: auto; padding: 14px 18px 4px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .C .dcard { scroll-snap-align: start; flex-shrink: 0; width: 262px; border-radius: 24px; padding: 18px; color: #fff; position: relative; overflow: hidden; }
+  .C .dcard.today { background: radial-gradient(120% 90% at 100% 0%, #2f8a6c 0%, #1f6a53 45%, #164c3c 100%); }
+  .C .dcard.past { width: 150px; background: #fff; color: var(--text-strong); border: 1px solid var(--border-soft); }
+  .C .dcard .k { font-size: 12px; font-weight: 600; opacity: .8; display: flex; align-items: center; gap: 6px; }
+  .C .dcard .v { font-size: 34px; font-weight: 800; letter-spacing: -0.035em; margin-top: 10px; }
+  .C .dcard.past .v { font-size: 20px; margin-top: 8px; }
+  .C .dcard .s { font-size: 12px; opacity: .85; margin-top: 2px; }
+  .C .spark { margin-top: 14px; height: 38px; }
+  .C .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; margin-top: 10px; }
+  .C .quick { display: flex; gap: 8px; padding: 14px 18px 0; overflow-x: auto; scrollbar-width: none; }
+  .C .qchip { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 14px; background: #fff; border: 1px solid var(--border-soft); text-align: left; }
+  .C .qchip .l { font-size: 11px; color: var(--text-muted); }
+  .C .qchip .v { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+  .C .qchip .dot { width: 8px; height: 8px; border-radius: 9px; }
+  .C h4 { margin: 0; padding: 22px 18px 10px; font-size: 13px; font-weight: 700; color: var(--text-strong); display: flex; justify-content: space-between; }
+  .C h4 span { font-weight: 500; color: var(--text-faint); }
+  .C .tl { padding: 0 18px 0 18px; position: relative; }
+  .C .ev { display: flex; gap: 12px; position: relative; padding-bottom: 16px; }
+  .C .ev::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: 0; width: 2px; background: #ece9e1; }
+  .C .ev:last-child::before { display: none; }
+  .C .ev .ico { width: 32px; height: 32px; border-radius: 99px; display: grid; place-items: center; flex-shrink: 0; z-index: 1; }
+  .C .ev .body { flex: 1; min-width: 0; padding-top: 1px; }
+  .C .ev .hd { display: flex; justify-content: space-between; gap: 8px; }
+  .C .ev .t { font-size: 14px; font-weight: 600; color: var(--text-strong); }
+  .C .ev .time { font-size: 11px; color: var(--text-faint); flex-shrink: 0; }
+  .C .ev .m { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+  .C .ev .card { margin-top: 8px; padding: 10px 12px; border-radius: 14px; background: #fff; border: 1px solid var(--border-soft); display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .C .ev .card b { font-size: 14px; color: var(--text-strong); }
+  .C .ev .act { margin-top: 8px; display: inline-flex; font-size: 12px; font-weight: 700; color: #fff; background: var(--text-strong); padding: 7px 12px; border-radius: 10px; }
+  .C .cmd { z-index: 10; position: absolute; left: 12px; right: 12px; bottom: 22px; display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 20px; background: #18201a; box-shadow: 0 14px 30px -10px rgba(0,0,0,.5); }
+  .C .cmd button { flex: 1; height: 42px; border-radius: 14px; color: #aab5ad; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .C .cmd button.on { background: #fff; color: #18201a; }
+  .C .cmd .srch { flex: 0 0 42px; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<div class="switcher" role="toolbar" aria-label="Prototype variant switcher">
+  <button id="prev" aria-label="Previous variant">‹</button>
+  <div><div class="lbl" id="lbl"></div><div class="dots" id="dots"></div></div>
+  <button id="next" aria-label="Next variant">›</button>
+</div>
+
+<script>
+/* ---------------- mock data (one realistic day) ---------------- */
+const D = {
+  station: 'Highway Fuels, Kozhikode', stations: 3, user: 'Abdullah', date: 'Fri, 9 Oct',
+  sales: 484528, volume: 5050, deltaPct: 9.8, vsLabel: 'vs Thu at 5:12 pm',
+  mix: [ { k: 'Cash', v: 231400, c: '#1f6a53' }, { k: 'UPI', v: 142300, c: '#2e8f6f' },
+         { k: 'Card', v: 57800, c: '#2e5e88' }, { k: 'Credit', v: 53028, c: '#b7811e' } ],
+  fuels: [ { k: 'MS', name: 'Petrol', l: 2410, v: 248037 }, { k: 'HSD', name: 'Diesel', l: 2640, v: 236491 } ],
+  trend: [402, 455, 431, 470, 512, 441, 485],
+  credit: 53028, purchases: 1043200, variance: -340, margin: 21450, products: 6840,
+  receivables: 682400, payables: 1043200, overdue: 4,
+  shift: { name: 'Shift 2', since: '2:00 pm', open: '3h 12m', attendants: 3 },
+  tanks: [ { k: 'MS', pct: 62, kl: '12.4 KL', days: '2.6 days' }, { k: 'HSD', pct: 18, kl: '3.6 KL', days: '0.9 day' }, { k: 'XP95', pct: 74, kl: '7.4 KL', days: '9 days' } ],
+  dus: [ { id: 'DU1', who: 'Ramesh K', st: 'Selling', drops: 0 }, { id: 'DU2', who: 'Sajid P', st: 'Selling', drops: 20000 }, { id: 'DU3', who: 'Vinod M', st: 'Handover due', drops: 10000 } ],
+  days: [ ['Sat',3,'ok'],['Sun',4,'ok'],['Mon',5,'ok'],['Tue',6,'ok'],['Wed',7,'open'],['Thu',8,'open'],['Fri',9,'live'] ],
+};
+const inr = (n, compact) => {
+  if (compact) {
+    const a = Math.abs(n);
+    if (a >= 1e5) return (n < 0 ? '−' : '') + '₹' + (a / 1e5).toFixed(2).replace(/\.?0+$/, '') + 'L';
+    if (a >= 1e3) return (n < 0 ? '−' : '') + '₹' + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+  }
+  return (n < 0 ? '−' : '') + '₹' + Math.abs(n).toLocaleString('en-IN');
+};
+const L = (n) => n.toLocaleString('en-IN') + ' L';
+
+/* ---------------- icons ---------------- */
+const ic = (p, s = 20, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const I = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M7 8h3"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/><path d="M8 13h8M8 17h5"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>', down: '<path d="m6 9 6 6 6-6"/>',
+  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  alert: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  cash: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+  play: '<circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  bars: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+  arrowup: '<path d="M7 17 17 7M8 7h9v9"/>',
+};
+const statusbar = (dark) => `<div class="statusbar" style="color:${dark ? '#fff' : '#111'}"><span>5:12</span><span class="icons">
+  <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+  <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x=".5" y=".5" width="21" height="11" rx="3" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="1.6" fill="currentColor"/><rect x="23" y="4" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".4"/></svg></span></div>`;
+const sparkPath = (vals, w, h, pad = 2) => {
+  const max = Math.max(...vals), min = Math.min(...vals);
+  const pts = vals.map((v, i) => [ (i / (vals.length - 1)) * w, h - pad - ((v - min) / (max - min || 1)) * (h - pad * 2) ]);
+  return pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+};
+const mixTotal = D.mix.reduce((s, m) => s + m.v, 0);
+
+/* ================= VARIANT A — Briefing ================= */
+function VariantA() {
+  const dayStatus = { ok: '#c3cbc4', open: '#d39a2c', live: '#2fa36f' };
+  return `<div class="screen A">${statusbar(false)}
+  <div class="scroll">
+    <div class="top">
+      <button class="ctx">
+        <div class="logo">${ic(I.drop, 18, 2.2)}</div>
+        <div>
+          <div class="st">${D.station} <span style="color:var(--text-faint)">${ic(I.down, 15, 2.4)}</span></div>
+          <div class="sub"><span class="live"></span>${D.shift.name} open · ${D.shift.open}</div>
+        </div>
+      </button>
+      <div class="avatar">AN</div>
+    </div>
+
+    <div class="days">${D.days.map(([w, d, s]) => `
+      <button class="day ${s === 'live' ? 'on' : ''}"><div class="w">${s === 'live' ? 'Today' : w}</div><div class="d">${d}</div>
+      <div class="s" style="background:${s === 'live' ? '#5fd39f' : dayStatus[s]}"></div></button>`).join('')}
+    </div>
+
+    <div class="hero">
+      <div class="eyebrow"><span>Fuel sales today</span><span class="num" style="color:var(--text-faint)">${L(D.volume)}</span></div>
+      <div class="big num">${inr(D.sales)}</div>
+      <div><span class="delta">${ic(I.arrowup, 12, 2.6)} ${D.deltaPct}%</span><span class="heromuted">${D.vsLabel}</span></div>
+      <svg viewBox="0 0 300 46" width="100%" height="46" style="margin-top:12px;display:block" preserveAspectRatio="none">
+        <defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#1f6a53" stop-opacity=".18"/><stop offset="1" stop-color="#1f6a53" stop-opacity="0"/></linearGradient></defs>
+        <path d="${sparkPath(D.trend, 300, 46, 4)} L300 46 L0 46 Z" fill="url(#ga)"/>
+        <path d="${sparkPath(D.trend, 300, 46, 4)}" fill="none" stroke="#1f6a53" stroke-width="2"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-faint);margin-top:2px"><span>Sat</span><span>7-day trend</span><span>Today</span></div>
+      <div class="mix">${D.mix.map(m => `<div style="flex:${m.v};background:${m.c}"></div>`).join('')}</div>
+      <div class="legend">${D.mix.map(m => `<div><i style="background:${m.c}"></i>${m.k}<b class="num">${inr(m.v, true)}</b></div>`).join('')}</div>
+    </div>
+
+    <div class="sect"><h3>Needs you <span style="color:var(--text-faint);font-weight:600">· 3</span></h3><a>See all</a></div>
+    <div class="att">
+      <button class="row"><div class="ic" style="background:var(--bad-bg);color:var(--bad-fg)">${ic(I.drop, 17)}</div>
+        <div><div class="t">Diesel tank at 18%</div><div class="m">About 0.9 day of cover · order a load</div></div><span class="chev">${ic(I.chev, 16)}</span></button>
+      <button class="row"><div class="ic" style="background:var(--warn-bg);color:var(--warn-fg)">${ic(I.cal, 17)}</div>
+        <div><div class="t">2 days not closed</div><div class="m">Wed 7 and Thu 8 Oct · DSSR pending</div></div><span class="chev">${ic(I.chev, 16)}</span></button>
+      <button class="row"><div class="ic" style="background:var(--warn-bg);color:var(--warn-fg)">${ic(I.cash, 17)}</div>
+        <div><div class="t">Shift 1 short by ₹340</div><div class="m">Vinod M · DU3 handover</div></div><span class="chev">${ic(I.chev, 16)}</span></button>
+    </div>
+
+    <div class="sect"><h3>Today's numbers</h3><a>Daily report</a></div>
+    <div class="stmt">
+      ${D.fuels.map(f => `<div class="line"><span>${f.name} <span style="color:var(--text-faint)">· ${f.k}</span></span><span class="v num"><em class="num">${L(f.l)}</em>${inr(f.v)}</span></div>`).join('')}
+      <div class="line"><span>Product sales</span><span class="v num">${inr(D.products)}</span></div>
+      <div class="line"><span>Credit sales</span><span class="v num">${inr(D.credit)}</span></div>
+      <div class="line"><span>Purchases</span><span class="v num">${inr(D.purchases)}</span></div>
+      <div class="line"><span>Cash variance</span><span class="v num" style="color:var(--bad-fg)">${inr(D.variance)}</span></div>
+      <div class="line"><span>Gross margin</span><span class="v num" style="color:var(--ok-fg)">${inr(D.margin)}</span></div>
+    </div>
+
+    <div class="sect"><h3>Money position</h3><a>Money</a></div>
+    <div class="pos">
+      <div><div class="l">To collect</div><div class="v num">${inr(D.receivables, true)}</div><div class="s">${D.overdue} customers overdue</div></div>
+      <div><div class="l">To pay</div><div class="v num">${inr(D.payables, true)}</div><div class="s">1 supplier · due Mon</div></div>
+    </div>
+    <div style="height:24px"></div>
+  </div>
+  <nav class="tab">
+    <button class="on">${ic(I.home, 22)}Today</button>
+    <button>${ic(I.pump, 22)}Shifts</button>
+    <button>${ic(I.doc, 22)}Reports</button>
+    <button>${ic(I.wallet, 22)}Money</button>
+  </nav></div>`;
+}
+
+/* ================= VARIANT B — Control room ================= */
+function VariantB() {
+  const tc = (p) => p < 25 ? '#ff7a6b' : p < 40 ? '#f2b544' : '#2fd18d';
+  const badge = (s) => s === 'Selling' ? 'background:#143326;color:#2fd18d' : 'background:#33260f;color:#f2b544';
+  return `<div class="screen B">${statusbar(true)}
+  <div class="scroll" style="padding-bottom:96px">
+    <div class="hdr">
+      <button class="stbtn"><div class="lg">HF</div><div class="nm">Highway Fuels</div><span style="color:#64756b">${ic(I.down, 14, 2.4)}</span></button>
+      <button class="dt">${ic(I.cal, 14)} <span class="num">Fri 9 Oct</span></button>
+    </div>
+
+    <div class="strip">
+      <div class="pulse"></div>
+      <div><div class="t">${D.shift.name} live</div><div class="m">Since ${D.shift.since} · ${D.shift.attendants} attendants</div></div>
+      <div class="clock"><div class="v num">${D.shift.open}</div><div class="m">open</div></div>
+    </div>
+
+    <div class="lbl"><span>Sales · today</span><span>▲ ${D.deltaPct}% vs Thu</span></div>
+    <div class="grid">
+      <div class="cell wide">
+        <div><div class="k">Fuel sales</div><div class="v num">${inr(D.sales)}</div><div class="s num">${L(D.volume)} · MS ${L(D.fuels[0].l)} · HSD ${L(D.fuels[1].l)}</div></div>
+        <svg width="84" height="40" viewBox="0 0 84 40"><path d="${sparkPath(D.trend, 84, 40, 3)}" fill="none" stroke="#2fd18d" stroke-width="2"/></svg>
+      </div>
+      <div class="cell"><div class="k">Cash variance</div><div class="v num dn">${inr(D.variance)}</div><div class="s">Shift 1 · DU3</div></div>
+      <div class="cell"><div class="k">Gross margin</div><div class="v num up">${inr(D.margin, true)}</div><div class="s">4.4% of sales</div></div>
+      <div class="cell"><div class="k">Credit sales</div><div class="v num am">${inr(D.credit, true)}</div><div class="s">7 fleet slips</div></div>
+      <div class="cell"><div class="k">Purchases</div><div class="v num">${inr(D.purchases, true)}</div><div class="s">1 HSD tanker</div></div>
+    </div>
+
+    <div class="lbl"><span>Attention</span><span>3 open</span></div>
+    <div class="alert red"><span style="color:#ff7a6b">${ic(I.drop, 18)}</span><div><div class="t">HSD below 20%</div><div class="m">0.9 day cover left</div></div><span class="go">Order</span></div>
+    <div class="alert"><span style="color:#f2b544">${ic(I.lock, 18)}</span><div><div class="t">2 days not closed</div><div class="m">7 & 8 Oct</div></div><span class="go">Close</span></div>
+
+    <div class="lbl"><span>Tanks</span><span>Dip 6:00 am</span></div>
+    <div class="tanks">${D.tanks.map(t => `<div class="tank"><div class="tube"><i style="height:${t.pct}%;background:${tc(t.pct)}"></i></div>
+      <div><div class="n">${t.k}</div><div class="p num" style="color:${tc(t.pct)}">${t.pct}%</div><div class="c">${t.kl}<br/>${t.days}</div></div></div>`).join('')}</div>
+
+    <div class="lbl"><span>Drawers · ${D.shift.name}</span><span>Float + drops</span></div>
+    <div class="dus">${D.dus.map(d => `<div class="du"><div class="id">${d.id}</div><div><div class="nm">${d.who}</div><div class="ms num">Float ₹2,000 · drops ${inr(d.drops)}</div></div><span class="badge" style="${badge(d.st)}">${d.st}</span></div>`).join('')}</div>
+
+    <div class="lbl"><span>Money position</span><span></span></div>
+    <div class="grid">
+      <div class="cell"><div class="k">Receivable</div><div class="v num am">${inr(D.receivables, true)}</div><div class="s">${D.overdue} overdue</div></div>
+      <div class="cell"><div class="k">Payable</div><div class="v num">${inr(D.payables, true)}</div><div class="s">Due Mon</div></div>
+    </div>
+  </div>
+  <nav class="dock">
+    <button class="on">${ic(I.home, 21, 2)}</button>
+    <button>${ic(I.pump, 21, 2)}</button>
+    <button>${ic(I.doc, 21, 2)}<span class="pip"></span></button>
+    <button>${ic(I.wallet, 21, 2)}</button>
+    <button>${ic(I.bars, 21, 2)}</button>
+  </nav></div>`;
+}
+
+/* ================= VARIANT C — Day story ================= */
+function VariantC() {
+  const pastDay = (label, val, status) => `<div class="dcard past">
+    <div class="k" style="color:var(--text-muted);opacity:1">${label}</div>
+    <div class="v num">${val}</div>
+    <span class="pill" style="${status === 'open' ? 'background:var(--warn-bg);color:var(--warn-fg)' : 'background:var(--ok-bg);color:var(--ok-fg)'}">${status === 'open' ? ic(I.lock, 11, 2.4) + ' Not closed' : '✓ DSSR'}</span></div>`;
+  const ev = (bg, fg, icon, t, time, m, extra = '') => `<div class="ev"><div class="ico" style="background:${bg};color:${fg}">${ic(icon, 16, 2)}</div>
+    <div class="body"><div class="hd"><span class="t">${t}</span><span class="time num">${time}</span></div><div class="m">${m}</div>${extra}</div></div>`;
+  return `<div class="screen C">${statusbar(false)}
+  <div class="scroll" style="padding-bottom:96px">
+    <div class="bar"><button class="st">${D.station} ${ic(I.down, 14, 2.4)}</button><div class="me">AN</div></div>
+    <div class="title">Good evening, Abdullah<span>.</span></div>
+    <div style="padding:4px 18px 0;font-size:13px;color:var(--text-muted)">Today is <b style="color:var(--text-strong)">9% ahead</b> of Thursday, and 3 things need you.</div>
+
+    <div class="cards">
+      <div class="dcard today">
+        <div class="k"><span style="width:7px;height:7px;border-radius:9px;background:#8ff0c4;display:inline-block"></span>Today · ${D.shift.name} live</div>
+        <div class="v num">${inr(D.sales)}</div>
+        <div class="s num">${L(D.volume)} · ▲ ${D.deltaPct}%</div>
+        <svg class="spark" viewBox="0 0 226 38" width="226" preserveAspectRatio="none"><path d="${sparkPath(D.trend, 226, 38, 3)}" fill="none" stroke="#bff5dc" stroke-width="2"/></svg>
+      </div>
+      ${pastDay('Thu 8 Oct', '₹4.41L', 'open')}
+      ${pastDay('Wed 7 Oct', '₹5.12L', 'open')}
+      ${pastDay('Tue 6 Oct', '₹4.70L', 'ok')}
+    </div>
+
+    <div class="quick">
+      <div class="qchip"><span class="dot" style="background:#b44a3f"></span><div><div class="l">Variance</div><div class="v num">${inr(D.variance)}</div></div></div>
+      <div class="qchip"><span class="dot" style="background:#1f6a53"></span><div><div class="l">Margin</div><div class="v num">${inr(D.margin, true)}</div></div></div>
+      <div class="qchip"><span class="dot" style="background:#b7811e"></span><div><div class="l">To collect</div><div class="v num">${inr(D.receivables, true)}</div></div></div>
+      <div class="qchip"><span class="dot" style="background:#2e5e88"></span><div><div class="l">To pay</div><div class="v num">${inr(D.payables, true)}</div></div></div>
+    </div>
+
+    <h4>Today's story <span>Latest first</span></h4>
+    <div class="tl">
+      ${ev('var(--bad-bg)', 'var(--bad-fg)', I.drop, 'Diesel running low', '5:00 pm', 'HSD at 18% (3.6 KL), about 0.9 day of cover.', '<button class="act">Plan a purchase</button>')}
+      ${ev('var(--info-bg)', 'var(--info-fg)', I.cash, 'Cash drop from DU2', '4:20 pm', 'Sajid P handed ₹20,000 to the office.')}
+      ${ev('var(--ok-bg)', 'var(--ok-fg)', I.play, 'Shift 2 opened', '2:00 pm', 'Ramesh, Sajid and Vinod on DU1 to DU3 · floats ₹6,000.')}
+      ${ev('var(--warn-bg)', 'var(--warn-fg)', I.lock, 'Shift 1 closed, ₹340 short', '1:52 pm', 'Vinod M · DU3. Other drawers matched.',
+          `<div class="card"><span style="color:var(--text-muted)">Shift 1 sales</span><b class="num">${inr(212880)}</b></div>`)}
+      ${ev('#efeae0', '#6b5a2e', I.truck, 'Diesel tanker received', '11:30 am', '12 KL from HPCL depot · ₹10,43,200 owed.')}
+      ${ev('var(--ok-bg)', 'var(--ok-fg)', I.play, 'Business day started', '6:00 am', 'Opening dip recorded for 3 tanks.')}
+    </div>
+  </div>
+  <nav class="cmd">
+    <button class="on">${ic(I.home, 17, 2.2)} Today</button>
+    <button>Shifts</button>
+    <button>Reports</button>
+    <button>Money</button>
+    <button class="srch">${ic(I.search, 18, 2.2)}</button>
+  </nav></div>`;
+}
+
+/* ---------------- variants + switcher ---------------- */
+const VARIANTS = [
+  { key: 'A', name: 'Briefing', render: VariantA, notes: `
+    <div class="tag">Variant A</div><h2>Briefing</h2>
+    <p>A calm, light morning read. <b>One hero number</b>, then the things that need you, then the rest as a statement.</p>
+    <ul><li>Station + live shift merged into <b>one header control</b>. The picker row and the date pill are gone.</li>
+    <li><b>Week strip</b> replaces the date pill. A dot under each day shows whether it is closed (grey), still open (amber) or live (green).</li>
+    <li>The hero holds sales, the delta vs the same time yesterday, the 7-day trend and the payment mix.</li>
+    <li>Seven equal KPI cards become a <b>statement list</b>, so the numbers read top to bottom.</li>
+    <li>Four tabs: Today, Shifts, Reports, Money. "More/Insights" folds into Reports, and the account moves to the avatar.</li></ul>` },
+  { key: 'B', name: 'Control room', render: VariantB, notes: `
+    <div class="tag">Variant B</div><h2>Control room</h2>
+    <p>Dark, dense, forecourt-first. Built for checking in while the shift is running.</p>
+    <ul><li>A <b>live shift strip</b> with a running clock leads the screen.</li>
+    <li>A bento grid with colour-coded values: green for good, red for loss, amber for credit.</li>
+    <li>Adds <b>tank gauges</b> (days of cover) and <b>each DU's drawer</b> (attendant, float, drops, handover state). The data exists but the current Home doesn't show it.</li>
+    <li>Alerts carry an inline action (Order, Close).</li>
+    <li>An icon-only floating dock with a badge on Reports for the unclosed days.</li></ul>` },
+  { key: 'C', name: 'Day story', render: VariantC, notes: `
+    <div class="tag">Variant C</div><h2>Day story</h2>
+    <p>Narrative. Reads like a feed of what happened at the station today.</p>
+    <ul><li>A greeting plus a <b>one-line summary</b>: "9% ahead, 3 things need you."</li>
+    <li><b>Swipeable day cards</b> replace the date pill. Past days show their sales and whether the DSSR is closed.</li>
+    <li>A chip rail holds the secondary numbers.</li>
+    <li>A <b>timeline of business events</b> (shift open/close, drops, tanker, alerts) with actions inline. This maps onto the existing event stream.</li>
+    <li>A floating command bar with labelled sections and search instead of a tab bar.</li></ul>` },
+];
+const params = new URLSearchParams(location.search);
+if (params.get('tall')) document.head.insertAdjacentHTML('beforeend','<style>.phone{height:auto}.screen{height:auto}.scroll{overflow:visible}</style>');
+let idx = Math.max(0, VARIANTS.findIndex(v => v.key === (params.get('variant') || 'A').toUpperCase()));
+function render() {
+  const v = VARIANTS[idx];
+  if (params.get('variant') === 'all' || innerWidth >= 1250) {
+    // Wide screens: all three side by side for comparison.
+    document.getElementById('stage').innerHTML = VARIANTS.map(x => `<div><div style="font:700 13px var(--font-sans);margin:0 0 10px 6px;color:var(--text-muted)">${x.key} · ${x.name}</div><div class="phone">${x.render()}</div></div>`).join('');
+    document.querySelector('.switcher').style.display = 'none';
+    return;
+  }
+  document.getElementById('stage').innerHTML = `<div class="phone">${v.render()}</div><div class="notes">${v.notes}</div>`;
+  document.getElementById('lbl').innerHTML = `${v.key} <span>(${v.name})</span>`;
+  document.getElementById('dots').innerHTML = VARIANTS.map((_, i) => `<i class="${i === idx ? 'on' : ''}"></i>`).join('');
+  try { const u = new URL(location.href); u.searchParams.set('variant', v.key); history.replaceState(null, '', u); } catch (e) {}
+}
+const go = (d) => { idx = (idx + d + VARIANTS.length) % VARIANTS.length; render(); };
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+addEventListener('keydown', (e) => {
+  const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1);
+});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,831 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not wired to the app.
+  Question: "Variant B (control room) won — what do the other tabs look like in
+  it, in dark AND light?"
+  Pages: Home · Shifts (+summary) · Reports (+DSSR) · Money · Insights · Alerts · Account. Tap the dock inside the
+  phone, use the floating bar / ←→, or ?page=home|shifts|reports|money|insights.
+  Theme: ?theme=dark|light or the ◐ button / "t" key. ?page=all shows every page.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PumpOS mobile — Control room pages (prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --font-sans: 'Plus Jakarta Sans', -apple-system, sans-serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100vh; font-family: var(--font-sans); background: #eceeea; }
+  body.darkpage { background: #1a1d1b; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  input { font: inherit; }
+  .num { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: -0.02em; }
+  .stage { display: flex; gap: 28px; align-items: flex-start; justify-content: center; padding: 8px 0 90px; flex-wrap: wrap; }
+  .phone { width: 375px; height: 780px; border-radius: 44px; padding: 10px; background: #000; box-shadow: 0 30px 60px -20px rgba(0,0,0,.4); flex-shrink: 0; }
+  .cap { font: 700 13px var(--font-sans); margin: 0 0 10px 6px; color: #6b766f; }
+  .notes { width: 290px; font-size: 13px; line-height: 1.55; color: #5e6a61; padding-top: 18px; }
+  body.darkpage .notes { color: #9aa69f; } body.darkpage .notes h2, body.darkpage .notes b { color: #fff; }
+  .notes h2 { font-size: 20px; color: #18201a; margin: 0 0 2px; letter-spacing: -0.02em; }
+  .notes .tag { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1f6a53; }
+  .notes ul { padding-left: 16px; margin: 10px 0; } .notes li { margin-bottom: 6px; } .notes b { color: #18201a; }
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 999; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px; background: #111; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 13px; }
+  .switcher button { width: 34px; height: 34px; border-radius: 999px; color: #fff; font-size: 16px; text-align: center; }
+  .switcher button:hover { background: #2a2a2a; }
+  .switcher .slbl { min-width: 170px; text-align: center; font-weight: 600; } .switcher .slbl span { opacity: .55; font-weight: 500; }
+  .switcher .sep { width: 1px; height: 22px; background: #333; margin: 0 2px; }
+  .dots { display: flex; gap: 4px; justify-content: center; margin-top: 2px; } .dots i { width: 5px; height: 5px; border-radius: 9px; background: #555; } .dots i.on { background: #fff; }
+
+  /* ================= themes ================= */
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 35px; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); color: var(--tx); }
+  .dark {
+    --bg: #0b0f0d; --card: #121815; --card2: #161d1a; --line: #1c2420; --line2: #26302b;
+    --tx: #cfd8d2; --hi: #ffffff; --mu: #7d8f85; --fa: #56655d;
+    --acc: #2fd18d; --on-acc: #06110c; --acc-soft: #143326;
+    --good: #2fd18d; --bad: #ff7a6b; --warn: #f2b544; --info: #6cb6ff;
+    --bad-soft: #211312; --bad-line: #42201d; --warn-soft: #1f1712; --warn-line: #3a2a19; --good-soft: #10241b;
+    --hero: linear-gradient(135deg, #12251c, #0f1714); --hero-line: #1d3a2c;
+    --dock: rgba(22,28,25,.86); --dock-line: #263029; --shadow: 0 10px 30px rgba(0,0,0,.5);
+    --sb: #fff; --track: #1b2420;
+  }
+  .light {
+    --bg: #f3f5f2; --card: #ffffff; --card2: #f7f8f6; --line: #e3e8e2; --line2: #d5dcd4;
+    --tx: #2b342d; --hi: #111813; --mu: #66736b; --fa: #97a29a;
+    --acc: #1f6a53; --on-acc: #ffffff; --acc-soft: #e3f1ea;
+    --good: #1e7a56; --bad: #c2453a; --warn: #a86f0c; --info: #2e5e88;
+    --bad-soft: #fcecea; --bad-line: #f3cfca; --warn-soft: #fbf3e2; --warn-line: #efdcae; --good-soft: #e6f3ec;
+    --hero: linear-gradient(135deg, #e4f2ea, #f6faf7); --hero-line: #cfe5d8;
+    --dock: rgba(255,255,255,.88); --dock-line: #e1e6df; --shadow: 0 10px 30px rgba(24,32,26,.14);
+    --sb: #111; --track: #e8ece7;
+  }
+  .light .card { box-shadow: 0 1px 2px rgba(24,32,26,.04); }
+
+  .statusbar { height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 6px 28px 0; font-size: 14px; font-weight: 600; color: var(--sb); }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; }
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; padding-bottom: 100px; }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* shared kit */
+  .hi { color: var(--hi); } .mu { color: var(--mu); } .good { color: var(--good) !important; } .bad { color: var(--bad) !important; } .warn { color: var(--warn) !important; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+  .hdr { padding: 2px 16px 12px; display: flex; align-items: center; gap: 8px; }
+  .stbtn { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .stbtn .lg { width: 24px; height: 24px; border-radius: 7px; background: var(--acc); color: var(--on-acc); display: grid; place-items: center; font-weight: 800; font-size: 11px; }
+  .stbtn .nm { font-size: 13px; font-weight: 600; color: var(--hi); }
+  .pgt { font-size: 22px; font-weight: 800; color: var(--hi); letter-spacing: -0.03em; }
+  .dt { margin-left: auto; font-size: 12px; color: var(--mu); display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+  .iconbtn { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; color: var(--mu); }
+  .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--fa); padding: 18px 16px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+  .lbl .r { color: var(--acc); letter-spacing: .02em; text-transform: none; font-weight: 600; font-size: 11px; }
+  .k { font-size: 11px; color: var(--mu); font-weight: 500; }
+  .s { font-size: 11px; color: var(--mu); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px; }
+  .cell { padding: 12px; }
+  .cell .v { font-size: 20px; color: var(--hi); font-weight: 600; margin-top: 4px; }
+  .cell.wide { grid-column: span 2; display: flex; align-items: flex-end; justify-content: space-between; }
+  .cell.wide .v { font-size: 30px; letter-spacing: -0.03em; }
+  .strip { margin: 0 12px; padding: 12px 14px; border-radius: 16px; background: var(--hero); border: 1px solid var(--hero-line); display: flex; align-items: center; gap: 12px; }
+  .pulse { width: 10px; height: 10px; border-radius: 9px; background: var(--acc); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 20%, transparent); flex-shrink: 0; }
+  .dark .pulse { box-shadow: 0 0 0 4px rgba(47,209,141,.18), 0 0 14px var(--acc); }
+  .strip .t { font-size: 14px; font-weight: 700; color: var(--hi); } .strip .m { font-size: 12px; color: var(--mu); }
+  .strip .clock { margin-left: auto; text-align: right; } .strip .clock .v { font-size: 18px; color: var(--acc); font-weight: 600; }
+  .strip .clock .m { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .alert { margin: 0 12px 8px; display: flex; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 14px; background: var(--warn-soft); border: 1px solid var(--warn-line); }
+  .alert.red { background: var(--bad-soft); border-color: var(--bad-line); }
+  .alert .t { font-size: 13px; font-weight: 600; color: var(--hi); } .alert .m { font-size: 11px; color: var(--mu); }
+  .alert .go { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--warn); padding: 6px 10px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .alert.red .go { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+  .badge { font-size: 10.5px; font-weight: 700; padding: 4px 8px; border-radius: 99px; white-space: nowrap; }
+  .b-ok { background: var(--good-soft); color: var(--good); } .b-warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-line); }
+  .b-bad { background: var(--bad-soft); color: var(--bad); } .b-mu { background: var(--card2); color: var(--mu); border: 1px solid var(--line); }
+  .list { margin: 0 12px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row .t { font-size: 13px; color: var(--hi); font-weight: 600; } .row .m { font-size: 11px; color: var(--mu); }
+  .row .end { margin-left: auto; text-align: right; }
+  .row .v { font-size: 13.5px; font-weight: 600; color: var(--hi); }
+  .chip { width: 32px; height: 32px; border-radius: 9px; background: var(--card2); border: 1px solid var(--line); color: var(--mu); font-size: 11px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
+  .seg { margin: 0 12px; display: grid; padding: 3px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .seg button { text-align: center; padding: 7px 0; border-radius: 9px; font-size: 12px; font-weight: 600; color: var(--mu); }
+  .seg button.on { background: var(--acc); color: var(--on-acc); }
+  .tanks { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; padding: 0 12px; }
+  .tank { padding: 10px; display: flex; gap: 10px; align-items: stretch; }
+  .tube { width: 16px; height: 74px; border-radius: 6px; background: var(--track); position: relative; overflow: hidden; flex-shrink: 0; }
+  .tube i { position: absolute; left: 0; right: 0; bottom: 0; }
+  .tank .n { font-size: 12px; font-weight: 700; color: var(--hi); } .tank .p { font-size: 18px; margin-top: 6px; font-weight: 600; }
+  .tank .c { font-size: 10px; color: var(--mu); margin-top: 2px; line-height: 1.35; }
+  .bar { height: 6px; border-radius: 9px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 9px; }
+  .hatch { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--acc) 35%, transparent) 0 4px, transparent 4px 8px); }
+  .daystrip { display: flex; gap: 6px; padding: 0 12px; }
+  .daystrip button { flex: 1; padding: 7px 0 8px; border-radius: 12px; text-align: center; border: 1px solid var(--line); background: var(--card); }
+  .daystrip .w { font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: var(--fa); letter-spacing: .05em; }
+  .daystrip .d { font-size: 15px; font-weight: 700; color: var(--hi); margin-top: 1px; }
+  .daystrip .dot { width: 5px; height: 5px; border-radius: 9px; margin: 4px auto 0; }
+  .daystrip button.on { background: var(--acc); border-color: var(--acc); } .daystrip button.on .w, .daystrip button.on .d { color: var(--on-acc); }
+  .search { margin: 0 12px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--mu); font-size: 13px; }
+  .tbl { width: 100%; font-size: 12px; }
+  .tbl .tr { display: grid; grid-template-columns: 1.1fr 1fr .9fr 1.2fr; padding: 10px 12px; border-top: 1px solid var(--line); align-items: baseline; }
+  .tbl .tr:first-child { border-top: 0; }
+  .tbl .th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--fa); font-weight: 700; }
+  .tbl .tr > :not(:first-child) { text-align: right; }
+  .tbl .tot { background: var(--card2); border-radius: 0 0 14px 14px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 13px; font-size: 13.5px; font-weight: 700; }
+  .btn.pri { background: var(--acc); color: var(--on-acc); } .btn.sec { background: var(--card); border: 1px solid var(--line); color: var(--hi); }
+  .dock { z-index: 10; position: absolute; left: 14px; right: 14px; bottom: 22px; display: flex; justify-content: space-around; padding: 7px; border-radius: 22px; background: var(--dock); backdrop-filter: blur(16px); border: 1px solid var(--dock-line); box-shadow: var(--shadow); }
+  .dock button { width: 54px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: var(--fa); position: relative; }
+  .dock button.on { background: var(--acc); color: var(--on-acc); }
+  .pip { position: absolute; top: 8px; right: 12px; width: 7px; height: 7px; border-radius: 9px; background: var(--bad); border: 2px solid var(--card); }
+  .chart { display: flex; align-items: flex-end; gap: 5px; height: 110px; padding: 0 2px; }
+  .chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; }
+  .chart .b { width: 100%; border-radius: 5px 5px 2px 2px; background: color-mix(in srgb, var(--acc) 35%, transparent); }
+  .chart .b.on { background: var(--acc); }
+  .chart .x { font-size: 9.5px; color: var(--fa); }
+  .av { width: 30px; height: 30px; border-radius: 99px; background: var(--acc-soft); color: var(--acc); font-size: 11px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0; }
+  .prog { display: flex; gap: 4px; } .prog i { flex: 1; height: 5px; border-radius: 9px; background: var(--track); } .prog i.on { background: var(--acc); }
+  /* --- round 3 additions --- */
+  .back { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; color: var(--hi); flex-shrink: 0; }
+  .dethdr { padding: 4px 14px 12px; display: flex; align-items: center; gap: 10px; }
+  .dethdr .tt { font-size: 17px; font-weight: 800; color: var(--hi); letter-spacing: -0.02em; }
+  .dethdr .st { font-size: 11.5px; color: var(--mu); margin-top: 1px; }
+  .actionbar { z-index: 10; position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px 26px; display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; background: var(--dock); backdrop-filter: blur(16px); border-top: 1px solid var(--dock-line); }
+  .stack { display: flex; height: 10px; gap: 2px; border-radius: 9px; overflow: hidden; }
+  .prow { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .prow:first-child { border-top: 0; }
+  .prow .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .prow .n { font-size: 13px; font-weight: 600; color: var(--hi); }
+  .prow .q { font-size: 11.5px; color: var(--mu); text-align: right; }
+  .prow .v { font-size: 13.5px; font-weight: 600; color: var(--hi); text-align: right; min-width: 78px; }
+  .subhd { padding: 10px 12px 6px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fa); display: flex; justify-content: space-between; border-top: 1px solid var(--line); background: var(--card2); }
+  .subhd .live { color: var(--acc); letter-spacing: .02em; text-transform: none; }
+  .nz { display: grid; grid-template-columns: 1.15fr 1.25fr 1.25fr .8fr; padding: 9px 12px; border-top: 1px solid var(--line); font-size: 11.5px; align-items: baseline; }
+  .nz:first-child { border-top: 0; }
+  .nz > :not(:first-child) { text-align: right; }
+  .nz.th { font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--fa); font-weight: 700; }
+  .dayrow { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-top: 1px solid var(--line); }
+  .dayrow:first-child { border-top: 0; }
+  .dayrow .dd { width: 40px; text-align: center; flex-shrink: 0; }
+  .dayrow .dd .w { font-size: 9.5px; font-weight: 700; color: var(--fa); text-transform: uppercase; letter-spacing: .06em; }
+  .dayrow .dd .d { font-size: 19px; font-weight: 800; color: var(--hi); line-height: 1.1; }
+  .chev { color: var(--fa); margin-left: 2px; flex-shrink: 0; }
+  [data-go] { cursor: pointer; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.45); z-index: 20; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--bg); border-radius: 26px 26px 0 0; padding: 8px 0 30px; border-top: 1px solid var(--line); max-height: 88%; overflow-y: auto; scrollbar-width: none; }
+  .grab { width: 38px; height: 5px; border-radius: 9px; background: var(--line2); margin: 2px auto 12px; }
+  .opt { display: grid; grid-template-columns: repeat(3,1fr); padding: 3px; border-radius: 11px; background: var(--card2); border: 1px solid var(--line); }
+  .opt button { text-align: center; padding: 6px 0; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--mu); }
+  .opt button.on { background: var(--card); color: var(--hi); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .diverge { position: relative; height: 8px; border-radius: 9px; background: var(--track); }
+  .diverge::after { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line2); }
+  .diverge i { position: absolute; top: 0; bottom: 0; border-radius: 9px; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; }
+  .duo > div { padding: 12px; } .duo > div + div { border-left: 1px solid var(--line); }
+  .moved { margin: 16px 12px 0; padding: 12px; border-radius: 14px; border: 1px dashed var(--line2); font-size: 11.5px; color: var(--mu); line-height: 1.5; }
+  /* --- handover --- */
+  .pin { margin: 0 12px 10px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--acc); color: var(--on-acc); }
+  .pin .t { font-size: 14px; font-weight: 800; } .pin .m { font-size: 11.5px; opacity: .8; font-weight: 600; }
+  .pin .go { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; padding: 7px 10px; border-radius: 10px; background: color-mix(in srgb, var(--on-acc) 14%, transparent); }
+  .sum { position: sticky; top: 0; z-index: 5; margin: 0 12px; padding: 10px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr 1fr; box-shadow: 0 8px 16px -12px rgba(0,0,0,.4); }
+  .sum > div + div { border-left: 1px solid var(--line); padding-left: 10px; }
+  .sum .k { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--fa); }
+  .sum .v { font-size: 15px; font-weight: 600; color: var(--hi); margin-top: 2px; }
+  details.step { margin: 8px 12px 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  details.step > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; }
+  details.step > summary::-webkit-details-marker { display: none; }
+  .stepn { width: 26px; height: 26px; border-radius: 99px; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--card2); border: 1px solid var(--line); color: var(--mu); flex-shrink: 0; }
+  .stepn.done { background: var(--good-soft); color: var(--good); border-color: transparent; }
+  details.step .st { font-size: 13.5px; font-weight: 700; color: var(--hi); } details.step .sm { font-size: 11px; color: var(--mu); }
+  details.step .tw { margin-left: auto; color: var(--fa); transition: transform .15s; }
+  details.step[open] .tw { transform: rotate(90deg); }
+  .stepbody { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .fld { display: flex; flex-direction: column; gap: 5px; }
+  .fld .fl { font-size: 11.5px; font-weight: 600; color: var(--mu); display: flex; justify-content: space-between; }
+  .inp { height: 46px; border-radius: 12px; border: 1px solid var(--line2); background: var(--card2); display: flex; align-items: center; padding: 0 12px; gap: 8px; font-family: var(--font-mono); font-size: 17px; font-weight: 600; color: var(--hi); }
+  .inp.focus { border-color: var(--acc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 20%, transparent); }
+  .inp .pre { color: var(--fa); font-size: 14px; } .inp .suf { margin-left: auto; font-family: var(--font-sans); font-size: 12px; color: var(--mu); font-weight: 600; }
+  .fh { font-size: 11px; color: var(--mu); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .slip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); }
+  .slip .t { font-size: 13px; font-weight: 600; color: var(--hi); } .slip .m { font-size: 11px; color: var(--mu); }
+  .addbtn { height: 40px; border-radius: 12px; border: 1px dashed var(--line2); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--acc); }
+  .nozhd { display: flex; align-items: center; gap: 8px; }
+  .nozhd .tag { font-size: 10px; font-weight: 800; padding: 3px 6px; border-radius: 6px; background: var(--card2); border: 1px solid var(--line); color: var(--mu); }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<div class="switcher" role="toolbar" aria-label="Prototype switcher">
+  <button id="prev" aria-label="Previous page">‹</button>
+  <div><div class="slbl" id="lbl"></div><div class="dots" id="dots"></div></div>
+  <button id="next" aria-label="Next page">›</button>
+  <span class="sep"></span>
+  <button id="theme" aria-label="Toggle theme" title="Toggle theme (t)">◐</button>
+</div>
+<script>
+/* ---------------- mock data (one consistent day) ---------------- */
+const D = {
+  // Today, Fri 9 Oct. Fuel = closed shifts only (Shift 1). Product sales are
+  // entered live, so they include the running Shift 2.
+  fuel: [ { k: 'MS', name: 'Petrol', l: 1060, v: 109095, c: 'var(--acc)' },
+          { k: 'HSD', name: 'Diesel', l: 1120, v: 100330, c: 'var(--info)' },
+          { k: 'XP95', name: 'Premium', l: 31, v: 3455, c: 'var(--warn)' } ],
+  other: [ { k: 'Lubricants', q: '14 units', v: 4920 }, { k: 'Additives', q: '6 units', v: 1140 }, { k: 'Accessories', q: '3 units', v: 780 } ],
+  trend: [402, 455, 431, 470, 512, 441, 485],
+  credit: 27520, purchases: 1043200, variance: -340, margin: 21450,
+  receivables: 682400, payables: 1043200,
+  tanks: [ { k: 'MS', pct: 62, kl: '12.4 KL', days: '2.6 days' }, { k: 'HSD', pct: 18, kl: '3.6 KL', days: '0.9 day' }, { k: 'XP95', pct: 74, kl: '7.4 KL', days: '9 days' } ],
+  dus: [ { id: 'DU1', who: 'Ramesh K', st: 'Selling', drops: 0 }, { id: 'DU2', who: 'Sajid P', st: 'Recorded', drops: 20000 }, { id: 'DU3', who: 'Vinod M', st: 'Handover due', drops: 10000 } ],
+};
+const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
+D.fuelV = sum(D.fuel, f => f.v); D.fuelL = sum(D.fuel, f => f.l); D.otherV = sum(D.other, o => o.v);
+const inr = (n, c) => { const a = Math.abs(n), s = n < 0 ? '−' : '';
+  if (c && a >= 1e5) return s + '₹' + (a / 1e5).toFixed(2).replace(/\.?0+$/, '') + 'L';
+  if (c && a >= 1e3) return s + '₹' + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+  return s + '₹' + a.toLocaleString('en-IN'); };
+const L = (n) => n.toLocaleString('en-IN') + ' L';
+const ic = (p, s = 20, w = 1.9) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const I = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',
+  pump: '<path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16"/><path d="M3 21h11"/><path d="M7 8h3"/><path d="M13 10h3l3 3v5a1.5 1.5 0 0 1-3 0v-4h-3"/>',
+  doc: '<path d="M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v5h5"/><path d="M8 13h8M8 17h5"/>',
+  wallet: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/>',
+  bars: '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+  down: '<path d="m6 9 6 6 6-6"/>', chev: '<path d="m9 6 6 6-6 6"/>', left: '<path d="m15 6-6 6 6 6"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  drop: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  share: '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>',
+  dl: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  cash: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>',
+  check: '<path d="m5 12 5 5L20 7"/>', building: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"/>',
+  truck: '<path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+};
+const statusbar = () => `<div class="statusbar"><span>5:12</span><span class="icons">
+  <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+  <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x=".5" y=".5" width="21" height="11" rx="3" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="15" height="8" rx="1.6" fill="currentColor"/></svg></span></div>`;
+const spark = (vals, w, h, p = 3) => { const mx = Math.max(...vals), mn = Math.min(...vals);
+  return vals.map((v, i) => (i ? 'L' : 'M') + ((i / (vals.length - 1)) * w).toFixed(1) + ' ' + (h - p - ((v - mn) / (mx - mn || 1)) * (h - p * 2)).toFixed(1)).join(' '); };
+const tc = (p) => p < 25 ? 'var(--bad)' : p < 40 ? 'var(--warn)' : 'var(--good)';
+const chev = `<span class="chev">${ic(I.chev, 16, 2.2)}</span>`;
+const vbadge = (v) => v === 0 ? '<span class="badge b-ok">Balanced</span>' : `<span class="badge ${v < 0 ? 'b-bad' : 'b-warn'} num">${v > 0 ? '+' : ''}${inr(v)}</span>`;
+
+const TABS = [['home', I.home], ['shifts', I.pump], ['reports', I.doc], ['money', I.wallet], ['insights', I.bars]];
+const dock = (active) => `<nav class="dock">${TABS.map(([k, p]) =>
+  `<button data-go="${k}" class="${k === active ? 'on' : ''}" aria-label="${k}">${ic(p, 21, 2)}</button>`).join('')}</nav>`;
+const actionbar = (what) => `<div class="actionbar"><button class="btn sec">${ic(I.share, 16)} Share</button><button class="btn pri">${ic(I.dl, 16, 2.2)} Download ${what}</button></div>`;
+const topRight = `<button class="iconbtn" data-go="alerts" style="position:relative" aria-label="Alerts">${ic(I.bell, 17)}<span class="pip" style="top:6px;right:7px"></span></button>
+  <button data-go="account" class="av" style="width:34px;height:34px" aria-label="Account">AN</button>`;
+const stHdr = () => `<div class="hdr"><button class="stbtn" data-go="account"><div class="lg">HF</div><div class="nm">Highway Fuels</div><span style="color:var(--fa)">${ic(I.down, 14, 2.4)}</span></button><div style="flex:1"></div>${topRight}</div>`;
+const pageHdr = (title, right = '') => `<div class="hdr" style="padding-top:6px"><div><div class="s" style="font-weight:600">Highway Fuels</div><div class="pgt">${title}</div></div><div style="margin-left:auto;display:flex;gap:8px">${right}</div></div>`;
+const detHdr = (back, title, sub, right = '') => `<div class="dethdr"><button class="back" data-go="${back}" aria-label="Back">${ic(I.left, 18, 2.2)}</button>
+  <div style="min-width:0;flex:1"><div class="tt">${title}</div><div class="st">${sub}</div></div>${right}</div>`;
+
+/* Sales-by-product card, reused by Home, Shift summary and DSSR. */
+function productCard({ fuel, other, fuelNote, otherNote }) {
+  const fv = sum(fuel, f => f.v), ov = sum(other, o => o.v), tot = fv + ov;
+  return `<div class="card" style="margin:0 12px;overflow:hidden">
+    <div style="padding:12px 12px 10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="k">Total sales</span><span class="num hi" style="font-size:17px;font-weight:600">${inr(tot)}</span></div>
+      <div class="stack" style="margin-top:10px">${fuel.map(f => `<div style="flex:${f.v};background:${f.c}"></div>`).join('')}<div style="flex:${Math.max(ov, tot * .012)};background:var(--mu)"></div></div>
+    </div>
+    <div class="subhd"><span>Fuel</span><span class="${fuelNote.live ? 'live' : ''}">${fuelNote.text}</span></div>
+    ${fuel.map(f => `<div class="prow"><span class="sw" style="background:${f.c}"></span><div><div class="n">${f.name} <span class="mu" style="font-weight:500">· ${f.k}</span></div></div><span class="q num">${L(f.l)}</span><span class="v num">${inr(f.v)}</span></div>`).join('')}
+    <div class="subhd"><span>Lubes & others</span><span class="${otherNote.live ? 'live' : ''}">${otherNote.text}</span></div>
+    ${other.map(o => `<div class="prow"><span class="sw" style="background:var(--mu);opacity:.6"></span><div class="n">${o.k}</div><span class="q">${o.q}</span><span class="v num">${inr(o.v)}</span></div>`).join('')}
+    <div class="prow" style="background:var(--card2)"><span></span><div class="n">Products total</div><span class="q">${other.reduce((s, o) => s + parseInt(o.q), 0)} units</span><span class="v num">${inr(ov)}</span></div>
+  </div>`;
+}
+
+/* ================= HOME ================= */
+function Home(assigned) {
+  const total = D.fuelV + D.otherV;
+  return `${stHdr()}${assigned ? pinCard() : ''}
+    <div class="strip"><div class="pulse"></div><div><div class="t">Shift 2 live</div><div class="m">Since 2:00 pm · 3 attendants</div></div>
+      <div class="clock"><div class="v num">3h 12m</div><div class="m">open</div></div></div>
+    <div class="lbl"><span>Sales · Fri 9 Oct</span><span class="r">▲ 4.2% vs Thu Shift 1</span></div>
+    <div class="grid2">
+      <div class="card cell wide" style="display:block">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+          <div><div class="k">Sales so far today</div><div class="v num">${inr(total)}</div><div class="s num">${L(D.fuelL)} fuel · ${inr(D.otherV)} products</div></div>
+          <svg width="84" height="40" viewBox="0 0 84 40"><path d="${spark(D.trend, 84, 40)}" fill="none" stroke="var(--acc)" stroke-width="2"/></svg>
+        </div>
+        <div style="display:flex;gap:3px;margin-top:12px;height:8px"><div style="flex:44;border-radius:9px 2px 2px 9px;background:var(--acc)"></div><div class="hatch" style="flex:56;border-radius:2px 9px 9px 2px"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px" class="s"><span>Shift 1 · closed</span><span>Shift 2 fuel · at close</span></div>
+      </div>
+      <div class="card cell"><div class="k">Cash variance</div><div class="v num bad">${inr(D.variance)}</div><div class="s">Shift 1 · DU3</div></div>
+      <div class="card cell"><div class="k">Gross margin</div><div class="v num good">${inr(D.margin, true)}</div><div class="s">Shift 1 · 10.1%</div></div>
+      <div class="card cell"><div class="k">Credit sales</div><div class="v num warn">${inr(D.credit, true)}</div><div class="s">4 fleet slips</div></div>
+      <div class="card cell"><div class="k">Purchases</div><div class="v num">${inr(D.purchases, true)}</div><div class="s">1 HSD tanker</div></div>
+    </div>
+    <div class="lbl"><span>Attention</span><span class="r" data-go="alerts">All 4 ›</span></div>
+    <div class="alert red"><span class="bad">${ic(I.drop, 18)}</span><div><div class="t">HSD below 20%</div><div class="m">0.9 day of cover left</div></div><span class="go">Order</span></div>
+    <div class="alert"><span class="warn">${ic(I.lock, 18)}</span><div><div class="t">2 days not closed</div><div class="m">7 & 8 Oct · DSSR pending</div></div><span class="go" data-go="reports">View</span></div>
+    <div class="lbl"><span>Sales by product</span><span class="r" data-go="report-detail">Daily report ›</span></div>
+    ${productCard({ fuel: D.fuel, other: D.other, fuelNote: { text: 'Shift 1 · closed' }, otherNote: { text: '● Live · both shifts', live: true } })}
+    <div class="lbl"><span>Tanks</span><span class="r">Dip 6:00 am</span></div>
+    <div class="tanks">${D.tanks.map(t => `<div class="card tank"><div class="tube"><i style="height:${t.pct}%;background:${tc(t.pct)}"></i></div>
+      <div><div class="n">${t.k}</div><div class="p num" style="color:${tc(t.pct)}">${t.pct}%</div><div class="c">${t.kl}<br/>${t.days}</div></div></div>`).join('')}</div>
+    <div class="lbl"><span>Money position</span><span class="r" data-go="money">Money ›</span></div>
+    <div class="grid2">
+      <div class="card cell" data-go="money"><div class="k">To collect</div><div class="v num warn">${inr(D.receivables, true)}</div><div class="s">4 overdue</div></div>
+      <div class="card cell" data-go="money"><div class="k">To pay</div><div class="v num">${inr(D.payables, true)}</div><div class="s">3 suppliers</div></div>
+    </div>`;
+}
+
+/* ================= SHIFTS ================= */
+function Shifts() {
+  const past = [
+    ['Today · Fri 9 Oct', [['Shift 1', '6:00 am – 1:52 pm', 216120, -340]]],
+    ['Thu 8 Oct', [['Shift 2', '2:00 pm – 10:04 pm', 259010, 0], ['Shift 1', '6:00 am – 1:58 pm', 206530, 120]]],
+    ['Wed 7 Oct', [['Shift 2', '2:00 pm – 10:00 pm', 264120, -1250], ['Shift 1', '6:00 am – 2:01 pm', 253880, 0]]],
+  ];
+  return `${pageHdr('Shifts', `<button class="iconbtn">${ic(I.cal, 17)}</button>`)}
+    <div class="lbl" style="padding-top:6px"><span>Live shift</span><span class="r">Opened by Abdullah</span></div>
+    <div class="card" style="margin:0 12px;overflow:hidden">
+      <div style="padding:14px;background:var(--hero);border-bottom:1px solid var(--hero-line);display:flex;align-items:center;gap:12px">
+        <div class="pulse"></div><div><div class="hi" style="font-weight:700;font-size:15px">Shift 2</div><div class="s">Fri 9 Oct · since 2:00 pm</div></div>
+        <div style="margin-left:auto;text-align:right"><div class="num" style="color:var(--acc);font-size:20px;font-weight:600">3h 12m</div><div class="s" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase">open</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);padding:12px 4px">
+        ${[['Opening floats', '₹6,000'], ['Cash drops', '₹30,000'], ['Nozzles', '6']].map(([k, v], i) => `<div style="padding:0 10px;${i ? 'border-left:1px solid var(--line)' : ''}"><div class="k">${k}</div><div class="num hi" style="font-size:16px;font-weight:600;margin-top:3px">${v}</div></div>`).join('')}
+      </div>
+      <div style="padding:0 14px 12px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="k">Handovers</span><span class="s num">1 / 3</span></div><div class="prog"><i class="on"></i><i></i><i></i></div></div>
+      <div style="border-top:1px solid var(--line)">${D.dus.map(d => `<div class="row"><div class="chip">${d.id}</div><div><div class="t">${d.who}</div><div class="m num">${d.st === 'Recorded' ? 'Declared ₹21,480 · var ₹0' : 'Drops ' + inr(d.drops)}</div></div>
+        <span class="end"><span class="badge ${d.st === 'Recorded' ? 'b-ok' : d.st === 'Selling' ? 'b-mu' : 'b-warn'}">${d.st === 'Selling' ? 'Pending' : d.st}</span></span></div>`).join('')}</div>
+      <div style="padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid var(--line)">
+        <button class="btn sec">${ic(I.cash, 16)} Cash drop</button><button class="btn pri">Close shift</button>
+      </div>
+    </div>
+    ${past.map(([day, rows]) => `<div class="lbl"><span>${day}</span><span class="r num">${inr(rows.reduce((s, r) => s + r[2], 0), true)}</span></div>
+      <div class="card list">${rows.map(([n, t, v, va]) => `<div class="row" data-go="shift-detail">
+        <div><div class="t">${n}</div><div class="m num">${t}</div></div>
+        <div class="end"><div class="v num">${inr(v)}</div><div style="margin-top:3px">${vbadge(va)}</div></div>${chev}</div>`).join('')}</div>`).join('')}`;
+}
+
+/* ================= SHIFT SUMMARY (detail) ================= */
+function ShiftDetail() {
+  const nz = [['N1', 'DU1 · MS', '1,84,220.4', '1,84,760.4', 540], ['N2', 'DU1 · MS', '96,410.0', '96,930.0', 520], ['N3', 'DU2 · HSD', '2,10,105.2', '2,10,515.2', 410],
+              ['N4', 'DU2 · HSD', '1,48,880.0', '1,49,260.0', 380], ['N5', 'DU3 · HSD', '72,340.6', '72,670.6', 330], ['N6', 'DU3 · XP95', '18,902.0', '18,933.0', 31]];
+  const drawers = [['DU1', 'Ramesh K', 34420, 34420], ['DU2', 'Sajid P', 32180, 32180], ['DU3', 'Vinod M', 31800, 31460]];
+  const pay = [['Cash', 102400, 'var(--acc)'], ['UPI', 61300, 'var(--info)'], ['Card', 24900, 'var(--mu)'], ['Credit', 27520, 'var(--warn)']];
+  const ptot = sum(pay, p => p[1]);
+  return `${detHdr('shifts', 'Shift 1 summary', 'Fri 9 Oct · 6:00 am – 1:52 pm', '<span class="badge b-ok">Closed</span>')}
+    <div class="grid2">
+      <div class="card cell wide"><div><div class="k">Total sales</div><div class="v num">${inr(ptot)}</div><div class="s num">${L(D.fuelL)} · products ${inr(3240)}</div></div>
+        <div style="text-align:right"><div class="k">Cash variance</div><div class="num bad" style="font-size:18px;font-weight:600;margin-top:3px">${inr(-340)}</div><div class="s">DU3 short</div></div></div>
+    </div>
+    <div class="lbl"><span>Payments</span><span></span></div>
+    <div class="card" style="margin:0 12px;padding:12px">
+      <div class="stack">${pay.map(p => `<div style="flex:${p[1]};background:${p[2]}"></div>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-top:10px">${pay.map(p => `<div style="display:flex;align-items:center;gap:6px;font-size:12px" class="mu"><span class="sw" style="width:8px;height:8px;border-radius:3px;background:${p[2]}"></span>${p[0]}<b class="num hi" style="margin-left:auto;font-weight:600">${inr(p[1])}</b></div>`).join('')}</div>
+    </div>
+    <div class="lbl"><span>Sales by product</span><span></span></div>
+    ${productCard({ fuel: D.fuel, other: [{ k: 'Lubricants', q: '7 units', v: 2460 }, { k: 'Additives', q: '3 units', v: 570 }, { k: 'Accessories', q: '1 unit', v: 210 }], fuelNote: { text: 'From nozzle readings' }, otherNote: { text: 'Product sales' } })}
+    <div class="lbl"><span>Nozzle readings</span><span class="r num">${L(D.fuelL)}</span></div>
+    <div class="card" style="margin:0 12px">
+      <div class="nz th"><span>Nozzle</span><span>Opening</span><span>Closing</span><span>Litres</span></div>
+      ${nz.map(([n, du, o, c, l]) => `<div class="nz"><span><b class="hi">${n}</b><br/><span class="mu" style="font-size:10px">${du}</span></span><span class="num mu">${o}</span><span class="num mu">${c}</span><span class="num hi" style="font-weight:600">${l}</span></div>`).join('')}
+    </div>
+    <div class="lbl"><span>Drawer reconciliation</span><span class="r">3 drawers</span></div>
+    <div class="card list">${drawers.map(([id, who, exp, dec]) => `<div class="row"><div class="chip">${id}</div>
+      <div><div class="t">${who}</div><div class="m num">${dec === exp ? "Declared " + inr(dec) : inr(dec) + " of " + inr(exp)}</div></div><span class="end">${vbadge(dec - exp)}</span></div>`).join('')}
+      <div class="row" style="background:var(--card2);border-radius:0 0 14px 14px"><div class="t" style="flex:1">Office count vs declared</div><span class="end"><span class="badge b-ok">Matched</span></span></div></div>
+    <div style="height:30px"></div>`;
+}
+
+/* ================= REPORTS (day list) ================= */
+function Reports() {
+  const days = [['Fri', 9, 'Live', 0, 485, '—'], ['Thu', 8, 'Draft', 120, 466, '4,752 L'], ['Wed', 7, 'Draft', -1250, 518, '5,210 L'],
+                ['Tue', 6, 'Sealed', 0, 470, '4,860 L'], ['Mon', 5, 'Sealed', -80, 431, '4,420 L'], ['Sun', 4, 'Sealed', 0, 455, '4,690 L'], ['Sat', 3, 'Sealed', 0, 402, '4,130 L']];
+  const st = { Live: 'b-ok', Draft: 'b-warn', Sealed: 'b-mu' };
+  return `${pageHdr('Daily reports', `<button class="iconbtn">${ic(I.cal, 17)}</button>`)}
+    <div class="grid2" style="margin-top:2px">
+      <div class="card cell"><div class="k">This week</div><div class="v num">₹31.96L</div><div class="s good">▲ 6.4% vs last</div></div>
+      <div class="card cell"><div class="k">Waiting to close</div><div class="v num warn">2 days</div><div class="s">7 & 8 Oct · drafts</div></div>
+    </div>
+    <div class="lbl"><span>October 2026</span><span class="r">Tap a day for its full report</span></div>
+    <div class="card list">${days.map(([w, d, s, va, k, vol]) => `<div class="dayrow" data-go="${s === 'Live' ? 'home' : 'report-detail'}">
+      <div class="dd"><div class="w">${w}</div><div class="d">${d}</div></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="num hi" style="font-size:14px;font-weight:600">${s === 'Live' ? 'In progress' : '₹' + (k / 100).toFixed(2) + 'L'}</span><span class="badge ${st[s]}">${s}</span></div>
+        <div class="bar" style="margin-top:7px"><i style="width:${k / 5.2}%;background:${s === 'Live' ? 'var(--line2)' : 'var(--acc)'};opacity:${s === 'Sealed' ? .55 : 1}"></i></div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px" class="s num"><span>${vol}</span><span class="${va < 0 ? 'bad' : va > 0 ? 'warn' : ''}">${s === 'Live' ? 'See Home' : va === 0 ? 'Cash balanced' : 'Cash ' + (va > 0 ? '+' : '') + inr(va)}</span></div>
+      </div>${chev}</div>`).join('')}</div>
+    <div class="lbl"><span>September 2026</span><span class="r num">₹1.38Cr</span></div>`;
+}
+
+/* ================= DSSR (detail) ================= */
+function ReportDetail() {
+  const fuel = [{ k: 'MS', name: 'Petrol', l: 2210, v: 227453, c: 'var(--acc)' }, { k: 'HSD', name: 'Diesel', l: 2380, v: 213200, c: 'var(--info)' }, { k: 'XP95', name: 'Premium', l: 162, v: 18047, c: 'var(--warn)' }];
+  const other = [{ k: 'Lubricants', q: '18 units', v: 5120 }, { k: 'Additives', q: '5 units', v: 950 }, { k: 'Accessories', q: '4 units', v: 770 }];
+  return `${detHdr('reports', 'Daily report · Thu 8 Oct', 'DSSR · 2 shifts · Highway Fuels',
+      `<div style="display:flex;gap:6px"><button class="back" aria-label="Previous day">${ic(I.left, 16, 2.2)}</button><button class="back" aria-label="Next day">${ic(I.chev, 16, 2.2)}</button></div>`)}
+    <div style="margin:0 12px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--warn-soft);border:1px solid var(--warn-line)">
+      <span class="warn">${ic(I.lock, 16)}</span><div style="flex:1"><div class="hi" style="font-size:12.5px;font-weight:600">Draft · day not closed</div><div class="s">Numbers can still change until the day is closed and the DSSR sealed.</div></div></div>
+    <div class="lbl"><span>Summary</span><span class="r">▼ 3.1% vs Wed</span></div>
+    <div class="grid2">
+      <div class="card cell"><div class="k">Gross margin</div><div class="v num good">${inr(20830, true)}</div><div class="s">4.5% of sales</div></div>
+      <div class="card cell"><div class="k">Cash variance</div><div class="v num warn">+₹120</div><div class="s">2 shifts</div></div>
+      <div class="card cell"><div class="k">Credit sales</div><div class="v num warn">${inr(48210, true)}</div><div class="s">Receivable</div></div>
+      <div class="card cell"><div class="k">Purchases</div><div class="v num">₹0</div><div class="s">No receipts</div></div>
+    </div>
+    <div class="lbl"><span>Sales by product</span><span></span></div>
+    ${productCard({ fuel, other, fuelNote: { text: '4,752 L' }, otherNote: { text: '27 units' } })}
+    <div class="lbl"><span>Included shifts</span><span class="r">2 closed</span></div>
+    <div class="card list">
+      <div class="row" data-go="shift-detail"><div class="chip">S1</div><div><div class="t">Shift 1</div><div class="m num">6:00 am – 1:58 pm</div></div><div class="end"><div class="v num">${inr(206530)}</div><div class="m warn num">+₹120</div></div>${chev}</div>
+      <div class="row" data-go="shift-detail"><div class="chip">S2</div><div><div class="t">Shift 2</div><div class="m num">2:00 pm – 10:04 pm</div></div><div class="end"><div class="v num">${inr(259010)}</div><div class="m good">Balanced</div></div>${chev}</div>
+    </div>
+    <div class="lbl"><span>Stock movement</span><span></span></div>
+    <div class="card list">${[['MS', '14,820', '2,210', '12,610', '−18'], ['HSD', '8,620', '2,380', '6,240', '+4'], ['XP95', '7,560', '162', '7,398', '0']].map(([p, o, s, c, v]) =>
+      `<div class="row"><div class="chip">${p}</div><div><div class="t num">${o} → ${c} L</div><div class="m num">Sold ${s} L</div></div><div class="end"><div class="k">Variance</div><div class="num ${v.startsWith('−') ? 'bad' : 'hi'}" style="font-size:13px;font-weight:600">${v} L</div></div></div>`).join('')}</div>
+    <div style="height:30px"></div>`;
+}
+
+/* ================= MONEY ================= */
+function Money() {
+  const cust = [
+    ['KTC Logistics', 'Fleet · limit ₹2L', 214600, 2e5, '18 days', 'bad'], ['Malabar Travels', 'Fleet · limit ₹1.5L', 128900, 1.5e5, '9 days', 'warn'],
+    ['Govt. Hospital Kzd', 'Institution · limit ₹1L', 96200, 1e5, '32 days', 'warn'], ['Sree Transports', 'Fleet · limit ₹2L', 84300, 2e5, '4 days', ''],
+    ['Calicut Cabs', 'Fleet · limit ₹1L', 61400, 1e5, '2 days', ''],
+  ];
+  return `${pageHdr('Money', `<button class="iconbtn">${ic(I.search, 17)}</button>`)}
+    <div class="seg" style="grid-template-columns:1fr 1fr"><button class="on">To collect</button><button data-go="money-pay">To pay</button></div>
+    <div class="card" style="margin:10px 12px 0;padding:14px;background:var(--hero);border-color:var(--hero-line)">
+      <div class="k">Receivables · 23 customers</div>
+      <div class="num hi" style="font-size:30px;font-weight:600;letter-spacing:-0.03em;margin-top:4px">${inr(D.receivables)}</div>
+      <div style="display:flex;height:8px;gap:2px;border-radius:9px;overflow:hidden;margin-top:12px"><div style="flex:42;background:var(--good)"></div><div style="flex:31;background:var(--warn)"></div><div style="flex:27;background:var(--bad)"></div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);margin-top:8px" class="s"><span><b class="hi num">₹2.87L</b><br/>0–7 days</span><span><b class="hi num">₹2.11L</b><br/>8–30 days</span><span><b class="bad num">₹1.84L</b><br/>30+ days</span></div>
+    </div>
+    <div class="lbl"><span>Highest balances</span><span class="r">Sort: balance ▾</span></div>
+    <div class="card list">${cust.map(([n, m, b, lim, age, tone]) => `<div class="row" data-go="customer-detail" style="flex-wrap:wrap;row-gap:8px">
+      <div class="av">${n.split(' ').map(w => w[0]).slice(0, 2).join('')}</div><div style="min-width:0"><div class="t">${n}</div><div class="m">${m}</div></div>
+      <div class="end"><div class="v num ${b > lim ? 'bad' : ''}">${inr(b)}</div><div class="m ${tone}">Oldest ${age}</div></div>${chev}
+      <div class="bar" style="flex-basis:100%;margin-left:40px;margin-right:26px"><i style="width:${Math.min(100, b / lim * 100)}%;background:${b > lim ? 'var(--bad)' : b / lim > .8 ? 'var(--warn)' : 'var(--acc)'}"></i></div></div>`).join('')}</div>
+    <div style="padding:10px 12px 0"><button class="btn sec" style="width:100%">See all 23 customers</button></div>`;
+}
+
+function MoneyPay() {
+  const sup = [['HPCL Kozhikode Depot', 'Fuel · 1 unpaid', 1043200, 'since 9 Oct'], ['Gulf Oil Lubricants', 'Lubricants · 2 unpaid', 38400, 'since 29 Sep'], ['Bharat Accessories', 'Accessories · 1 unpaid', 4200, 'since 2 Oct']];
+  const tot = sum(sup, s => s[2]);
+  return `${pageHdr('Money', `<button class="iconbtn">${ic(I.search, 17)}</button>`)}
+    <div class="seg" style="grid-template-columns:1fr 1fr"><button data-go="money">To collect</button><button class="on">To pay</button></div>
+    <div class="card" style="margin:10px 12px 0;padding:14px">
+      <div class="k">Payables · 3 suppliers</div>
+      <div class="num hi" style="font-size:30px;font-weight:600;letter-spacing:-0.03em;margin-top:4px">${inr(tot)}</div>
+      <div class="stack" style="margin-top:12px;height:8px"><div style="flex:${sup[0][2]};background:var(--info)"></div><div style="flex:${sup[1][2] * 4};background:var(--warn)"></div><div style="flex:${sup[2][2] * 4};background:var(--mu)"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;margin-top:10px" class="s"><span>Paid this month<br/><b class="hi num">₹10.2L</b></span><span>Purchased this month<br/><b class="hi num">₹21.4L</b></span></div>
+    </div>
+    <div class="lbl"><span>Suppliers</span><span class="r">Sort: balance ▾</span></div>
+    <div class="card list">${sup.map(([n, m, b, inv]) => `<div class="row" data-go="supplier-detail">
+      <div class="av" style="background:color-mix(in srgb, var(--info) 15%, transparent);color:var(--info)">${n.split(' ').map(w => w[0]).slice(0, 2).join('')}</div>
+      <div style="min-width:0"><div class="t">${n}</div><div class="m">${m}</div></div>
+      <div class="end"><div class="v num">${inr(b)}</div><div class="m">${inv}</div></div>${chev}</div>`).join('')}</div>`;
+}
+
+/* statement rows, newest first, grouped by month */
+const statement = (groups) => groups.map(([month, rows]) => `<div class="subhd" style="border-top:0;border-radius:0">${month}</div>
+  ${rows.map(([t, meta, amt, bal]) => { const up = amt > 0; return `<div class="row">
+    <div class="chip" style="border-radius:99px;color:${up ? 'var(--hi)' : 'var(--good)'}">${up ? '+' : '−'}</div>
+    <div style="min-width:0;flex:1"><div class="t">${t}</div>${meta.split('|').map(x => `<div class="m">${x}</div>`).join('')}</div>
+    <div class="end" style="white-space:nowrap"><div class="v num ${up ? '' : 'good'}">${up ? '+' : '−'}${inr(Math.abs(amt))}</div><div class="m num">Bal ${inr(bal)}</div></div></div>`; }).join('')}`).join('');
+
+function CustomerDetail() {
+  const veh = [['KL-11-AB-4521', 'Truck', 52300, 64], ['KL-11-AC-7710', 'Truck', 21400, 26], ['KL-11-BB-0912', 'Bus', 8200, 10]];
+  return `${detHdr('money', 'KTC Logistics', 'Fleet · FLT-014 · +91 98470 12345', `<button class="iconbtn" aria-label="Call">${ic('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 17)}</button>`)}
+    <div class="card" style="margin:0 12px;padding:14px;background:var(--bad-soft);border-color:var(--bad-line)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="k">Owes you</div><div class="num hi" style="font-size:30px;font-weight:600;letter-spacing:-0.03em;margin-top:3px">${inr(214600)}</div></div>
+        <span class="badge b-bad">Over limit</span></div>
+      <div class="bar" style="margin-top:12px;height:8px"><i style="width:100%;background:var(--bad)"></i></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px" class="s"><span>Limit ${inr(200000)}</span><span class="bad num">+${inr(14600)} over · 107%</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);margin-top:12px;padding-top:10px;border-top:1px solid var(--bad-line)" class="s">
+        <span><b class="hi num">₹86.4k</b><br/>0–7 days</span><span><b class="hi num">₹78.0k</b><br/>8–30 days</span><span><b class="bad num">₹50.2k</b><br/>30+ days</span></div>
+    </div>
+    <div class="grid2" style="margin-top:8px">
+      <div class="card cell"><div class="k">Last payment</div><div class="v num good" style="font-size:17px">₹40,000</div><div class="s">18 Sep · 21 days ago</div></div>
+      <div class="card cell"><div class="k">Usually pays in</div><div class="v num" style="font-size:17px">24 days</div><div class="s">avg, last 6 payments</div></div>
+      <div class="card cell"><div class="k">Credit this month</div><div class="v num warn" style="font-size:17px">₹81.9k</div><div class="s">23 slips · 812 L</div></div>
+      <div class="card cell"><div class="k">Paid this month</div><div class="v num" style="font-size:17px">₹0</div><div class="s">Settles: open account</div></div>
+    </div>
+    <div class="lbl"><span>Vehicles · this month</span><span class="r">3 vehicles</span></div>
+    <div class="card list">${veh.map(([no, t, v, p]) => `<div class="row" style="flex-wrap:wrap;row-gap:6px">
+      <div class="chip" style="width:auto;padding:0 8px;font-size:10px">${t}</div><div class="t num" style="font-size:12.5px">${no}</div>
+      <div class="end v num">${inr(v)}</div>
+      <div class="bar" style="flex-basis:100%"><i style="width:${p}%;background:var(--warn)"></i></div></div>`).join('')}</div>
+    <div class="lbl"><span>Statement</span><span class="r">Filter ▾</span></div>
+    <div class="card" style="margin:0 12px;overflow:hidden">${statement([
+      ['October 2026', [['Credit sale', '9 Oct · Shift 1 · 120 L HSD|KL-11-AB-4521', 10750, 214600], ['Credit sale', '8 Oct · Shift 2 · 95 L HSD|KL-11-AC-7710', 8510, 203850], ['Credit sale', '7 Oct · Shift 1 · 140 L HSD|KL-11-AB-4521', 12540, 195340]]],
+      ['September 2026', [['Payment received', '18 Sep · UPI · Ref 4471', -40000, 182800], ['Credit sale', '16 Sep · Shift 2 · 60 L HSD|KL-11-BB-0912', 5375, 222800]]],
+    ])}<div style="padding:12px;border-top:1px solid var(--line);text-align:center" class="s">Showing 5 of 64 entries · <b style="color:var(--acc)">Load more</b></div></div>
+    <div style="height:30px"></div>`;
+}
+
+function SupplierDetail() {
+  const prod = [['HSD', '12 KL', 1043200, 'var(--info)'], ['MS', '10 KL', 1029000, 'var(--acc)']];
+  return `${detHdr('money-pay', 'HPCL Kozhikode Depot', 'GSTIN 32AAACH1118R1Z5', `<button class="iconbtn" aria-label="Call">${ic('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 17)}</button>`)}
+    <div class="card" style="margin:0 12px;padding:14px;background:var(--hero);border-color:var(--hero-line)">
+      <div class="k">You owe</div><div class="num hi" style="font-size:30px;font-weight:600;letter-spacing:-0.03em;margin-top:3px">${inr(1043200)}</div>
+      <div class="s" style="margin-top:4px">1 unpaid purchase · oldest <b class="hi">9 Oct</b> (today)</div>
+    </div>
+    <div class="grid2" style="margin-top:8px">
+      <div class="card cell"><div class="k">Purchased this month</div><div class="v num" style="font-size:17px">₹20.7L</div><div class="s">2 tankers · 22 KL</div></div>
+      <div class="card cell"><div class="k">Paid this month</div><div class="v num good" style="font-size:17px">₹9.8L</div><div class="s">Last: 6 Oct · NEFT</div></div>
+    </div>
+    <div class="lbl"><span>Purchases by product · this month</span><span></span></div>
+    <div class="card list">${prod.map(([p, q, v, c]) => `<div class="row"><span class="sw" style="width:10px;height:10px;border-radius:3px;background:${c}"></span><div class="t">${p}</div><span class="end"><span class="m num" style="margin-right:10px">${q}</span><span class="v num">${inr(v)}</span></span></div>`).join('')}</div>
+    <div class="lbl"><span>Statement</span><span class="r">Filter ▾</span></div>
+    <div class="card" style="margin:0 12px;overflow:hidden">${statement([
+      ['October 2026', [['Purchase · HSD', '9 Oct · INV-55821 · 12 KL|Tanker KL-58-H-2210', 1043200, 1043200], ['Payment made', '6 Oct · NEFT|From SBI current a/c', -980000, 0], ['Purchase · MS', '3 Oct · INV-55407 · 10 KL', 1029000, 980000]]],
+      ['September 2026', [['Payment made', '29 Sep · NEFT', -1110000, -49000], ['Purchase · HSD', '27 Sep · INV-55102 · 12 KL', 1043200, 1061000]]],
+    ])}<div style="padding:12px;border-top:1px solid var(--line);text-align:center" class="s">Showing 5 of 41 entries · <b style="color:var(--acc)">Load more</b></div></div>
+    <div style="height:30px"></div>`;
+}
+
+/* ================= INSIGHTS (analytics only) ================= */
+function Insights() {
+  const days = [['S', 402], ['S', 455], ['M', 431], ['T', 470], ['W', 518], ['T', 466], ['F', 485]];
+  const att = [['Vinod M', -1590, '3 of 6 shifts short'], ['Ramesh K', 120, '1 over'], ['Sajid P', 0, 'Always balanced'], ['Anil T', -80, '1 short']];
+  const mixL = [['MS', 46, 'var(--acc)'], ['HSD', 50, 'var(--info)'], ['XP95', 4, 'var(--warn)']];
+  return `${pageHdr('Insights')}
+    <div class="seg" style="grid-template-columns:repeat(3,1fr)"><button class="on">7 days</button><button>30 days</button><button>90 days</button></div>
+    <div class="card" style="margin:10px 12px 0;padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div class="k">Total sales · 3–9 Oct</div><div class="num hi" style="font-size:26px;font-weight:600;letter-spacing:-0.03em;margin-top:3px">₹32.27L</div></div>
+        <span class="badge b-ok">▲ 6.4% vs prior 7</span></div>
+      <div class="chart" style="margin-top:14px">${days.map(([d, v], i) => `<div class="col"><div class="b ${i === 4 ? 'on' : ''}" style="height:${Math.max(8, (v - 340) / (520 - 340) * 100)}%"></div><span class="x">${d}</span></div>`).join('')}</div>
+      <div class="s" style="margin-top:8px">Best day: <b class="hi">Wed 7 Oct · ₹5.18L</b> · avg <b class="hi num">₹4.61L</b></div>
+    </div>
+
+    <div class="lbl"><span>Product mix</span><span class="r">by litres</span></div>
+    <div class="card" style="margin:0 12px;padding:12px">
+      <div class="stack">${mixL.map(m => `<div style="flex:${m[1]};background:${m[2]}"></div>`).join('')}</div>
+      <div style="display:flex;gap:14px;margin-top:8px" class="s">${mixL.map(m => `<span><span style="display:inline-block;width:8px;height:8px;border-radius:3px;background:${m[2]};margin-right:5px"></span>${m[0]} <b class="hi num">${m[1]}%</b></span>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+        <div><div class="k">Lubes & others</div><div class="num hi" style="font-size:16px;font-weight:600;margin-top:2px">₹48.2k</div></div>
+        <div style="text-align:right"><div class="s good">▲ 12% vs prior</div><div class="s">Top: 20W-40 1L · 31 units</div></div></div>
+    </div>
+
+    <div class="lbl"><span>Shift performance</span><span class="r">avg per shift</span></div>
+    <div class="card duo" style="margin:0 12px">
+      <div><div class="k">Shift 1 · morning</div><div class="num hi" style="font-size:18px;font-weight:600;margin-top:3px">₹2.12L</div><div class="s num">2,180 L · var <span class="bad">−₹210</span></div></div>
+      <div><div class="k">Shift 2 · evening</div><div class="num hi" style="font-size:18px;font-weight:600;margin-top:3px">₹2.49L</div><div class="s num">2,560 L · var <span class="good">₹0</span></div></div>
+    </div>
+
+    <div class="lbl"><span>Cash variance by attendant</span><span class="r">7 days</span></div>
+    <div class="card list">${att.map(([n, v, m]) => `<div class="row" style="display:grid;grid-template-columns:30px 1fr 92px 64px;gap:10px">
+      <div class="av">${n.split(' ').map(w => w[0]).join('')}</div><div style="min-width:0"><div class="t">${n}</div><div class="m">${m}</div></div>
+      <div class="diverge"><i style="${v < 0 ? `right:50%;width:${Math.min(50, -v / 1590 * 50)}%;background:var(--bad)` : `left:50%;width:${Math.min(50, v / 1590 * 50)}%;background:var(--warn)`}"></i></div>
+      <span class="num ${v < 0 ? 'bad' : v > 0 ? 'warn' : 'mu'}" style="text-align:right;font-size:13px;font-weight:600">${v === 0 ? '₹0' : (v > 0 ? '+' : '') + inr(v)}</span></div>`).join('')}</div>
+
+    <div class="lbl"><span>Stock loss</span><span class="r">tank dip vs book</span></div>
+    <div class="card list">${[['MS', '−42 L', '0.28% of sales', '−₹4,320', 'bad'], ['HSD', '+6 L', 'within tolerance', '+₹540', ''], ['XP95', '0 L', 'within tolerance', '₹0', '']].map(([p, l, m, v, t]) =>
+      `<div class="row"><div class="chip">${p}</div><div><div class="t num ${t}">${l}</div><div class="m">${m}</div></div><div class="end v num ${t}">${v}</div></div>`).join('')}</div>
+
+    <div class="lbl"><span>Credit health</span><span class="r">7 days</span></div>
+    <div class="card" style="margin:0 12px;padding:12px">
+      <div style="display:flex;justify-content:space-between" class="s"><span>Given on credit</span><b class="num hi">₹3.41L</b></div>
+      <div class="bar" style="margin:6px 0 10px;height:8px"><i style="width:100%;background:var(--warn)"></i></div>
+      <div style="display:flex;justify-content:space-between" class="s"><span>Collected</span><b class="num hi">₹2.96L</b></div>
+      <div class="bar" style="margin:6px 0 10px;height:8px"><i style="width:87%;background:var(--good)"></i></div>
+      <div class="s">Receivables grew <b class="warn num">₹45k</b> this week · credit is <b class="hi">11%</b> of sales</div>
+    </div>
+    <div class="moved"><b class="hi">Moved out of Insights:</b> Needs attention → bell (header). Inventory & tanks → Home. Team & Organization → account sheet (avatar).</div>`;
+}
+
+/* ================= ALERTS (bell) ================= */
+function Alerts() {
+  const a = (cls, icon, t, m, go) => `<div class="alert ${cls}"><span class="${cls === 'red' ? 'bad' : 'warn'}">${ic(icon, 18)}</span><div><div class="t">${t}</div><div class="m">${m}</div></div><span class="go">${go}</span></div>`;
+  return `${detHdr('home', 'Needs attention', '4 open · newest first')}
+    <div class="lbl" style="padding-top:4px"><span>Stock</span><span></span></div>
+    ${a('red', I.drop, 'HSD below 20%', '3.6 KL · 0.9 day of cover', 'Order')}
+    <div class="lbl"><span>Day close</span><span></span></div>
+    ${a('', I.lock, '2 days not closed', '7 & 8 Oct · DSSR still draft', 'View')}
+    <div class="lbl"><span>Credit</span><span></span></div>
+    ${a('', I.user, 'KTC Logistics over limit', '₹2.15L of ₹2L · oldest 18 days', 'Call')}
+    <div class="lbl"><span>Cash</span><span></span></div>
+    ${a('', I.cash, 'Shift 1 short by ₹340', 'Vinod M · DU3 · 3rd shortage this week', 'Open')}
+    <div class="lbl"><span>Resolved today</span><span></span></div>
+    <div class="card list" style="opacity:.7"><div class="row"><span class="good">${ic(I.check, 16, 2.4)}</span><div><div class="t">MS tanker received</div><div class="m">12 KL · 11:30 am</div></div></div></div>`;
+}
+
+/* ================= HANDOVER ================= */
+const pinCard = () => `<button class="pin" data-go="handover" style="width:calc(100% - 24px)">
+  <span style="display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:color-mix(in srgb, var(--on-acc) 14%, transparent)">${ic(I.pump, 18, 2.2)}</span>
+  <div><div class="t">Your handover · DU2</div><div class="m">Shift 2 · 3 of 5 steps done</div></div>
+  <span class="go">Continue ${ic(I.chev, 14, 2.6)}</span></button>`;
+
+const inp = (val, { pre = '', suf = '', focus = false } = {}) => `<div class="inp ${focus ? 'focus' : ''}">${pre ? `<span class="pre">${pre}</span>` : ''}<span>${val}</span>${suf ? `<span class="suf">${suf}</span>` : ''}</div>`;
+const step = (n, title, sub, done, open, body) => `<details class="step" ${open ? 'open' : ''}><summary>
+  <span class="stepn ${done ? 'done' : ''}">${done ? ic(I.check, 14, 3) : n}</span>
+  <div><div class="st">${title}</div><div class="sm">${sub}</div></div><span class="tw">${ic(I.chev, 16, 2.4)}</span></summary>
+  <div class="stepbody">${body}</div></details>`;
+
+function HandoverBody() {
+  return `<div class="sum">
+      <div><div class="k">Expected</div><div class="v num">₹74,114</div></div>
+      <div><div class="k">Declared</div><div class="v num">₹74,114</div></div>
+      <div><div class="k">Variance</div><div class="v num good">₹0</div></div>
+    </div>
+    ${step(1, 'Closing readings', 'N3, N4 · 818.2 L net', true, true, `
+      ${[['N3', 'HSD', '2,10,515.2', '2,10,930.4', '415.2', '5'], ['N4', 'HSD', '1,49,260.0', '1,49,668.0', '408.0', '0']].map(([n, p, o, c, l, t], i) => `
+        <div class="fld"><div class="fl"><span class="nozhd"><b class="hi">${n}</b><span class="tag">${p}</span></span><span class="num">Opening ${o}</span></div>
+          ${inp(c, { suf: l + ' L', focus: i === 0 })}
+          <div class="fh">${t !== '0' ? `Testing returned to tank: <b class="hi num">${t} L</b>` : '<span style="color:var(--acc);font-weight:700">+ Add testing litres</span>'}</div></div>`).join('')}`)}
+    ${step(2, 'Credit & fuel-card sales', '2 slips · ₹19,260', true, true, `
+      <div class="slip"><div class="av" style="width:28px;height:28px;font-size:10px">KL</div><div style="flex:1;min-width:0"><div class="t">KTC Logistics</div><div class="m num">KL-11-AB-4521 · 120 L HSD</div></div><b class="num hi">₹10,750</b></div>
+      <div class="slip"><div class="av" style="width:28px;height:28px;font-size:10px">MT</div><div style="flex:1;min-width:0"><div class="t">Malabar Travels</div><div class="m num">KL-10-B-3301 · 95 L HSD</div></div><b class="num hi">₹8,510</b></div>
+      <div class="two"><button class="addbtn">+ Credit sale</button><button class="addbtn">+ Fuel card</button></div>`)}
+    ${step(3, 'Card / UPI', 'Pine Labs T1 · ₹22,600', true, false, `
+      <div class="fl" style="font-size:12px;font-weight:700" class="hi">Pine Labs · T1</div>
+      <div class="two"><div class="fld"><div class="fl">Card</div>${inp('8,400', { pre: '₹' })}</div><div class="fld"><div class="fl">UPI</div>${inp('14,200', { pre: '₹' })}</div></div>
+      <div class="fld"><div class="fl">Batch ref (optional)</div>${inp('B-20261009-2', {})}</div>`)}
+    ${step(4, 'Products sold', 'In progress · 3 items · ₹1,080', false, true, `
+      <div class="slip"><div style="flex:1"><div class="t">Engine oil 20W-40 · 1 L</div><div class="m num">MRP ₹410</div></div>
+        <div style="display:flex;align-items:center;gap:8px"><button class="back" style="width:30px;height:30px">−</button><b class="num hi" style="width:16px;text-align:center">2</b><button class="back" style="width:30px;height:30px">+</button></div></div>
+      <div class="slip"><div style="flex:1"><div class="t">Coolant · 1 L</div><div class="m num">MRP ₹260</div></div>
+        <div style="display:flex;align-items:center;gap:8px"><button class="back" style="width:30px;height:30px">−</button><b class="num hi" style="width:16px;text-align:center">1</b><button class="back" style="width:30px;height:30px">+</button></div></div>
+      <button class="addbtn">+ Add product</button>
+      <div class="fld"><div class="fl"><span>Paid by card / UPI</span><span>of ₹1,080</span></div>${inp('260', { pre: '₹' })}</div>`)}
+    ${step(5, 'Cash handed over', 'Not confirmed · drops ₹20,000 taken', false, true, `
+      <div class="fld"><div class="fl"><span>Cash in drawer now</span><span>incl. ₹2,000 float</span></div>${inp('14,254', { pre: '₹', focus: true })}</div>
+      <button class="btn sec" style="height:40px">${ic(I.cash, 16)} Count notes</button>
+      <div class="fh">Expected cash: <b class="hi num">₹14,254</b> = float ₹2,000 + cash sales ₹32,254 − drops ₹20,000</div>`)}
+    <div style="height:30px"></div>`;
+}
+
+function Handover() {
+  return `${detHdr('home-assigned', 'My handover', 'Shift 2 · DU2 · since 2:00 pm', '<span class="badge b-mu">Draft</span>')}${HandoverBody()}`;
+}
+const hoBar = () => `<div class="actionbar"><button class="btn sec">Save draft</button><button class="btn pri">${ic(I.check, 16, 2.6)} Submit handover</button></div>`;
+
+/* Attendant shell: handover only. No dock, no bell, no other tabs. */
+const attHdr = (sub) => `<div class="hdr" style="padding-top:6px">
+  <div style="display:flex;align-items:center;gap:10px"><div class="stbtn" style="padding:0;border:0;background:none"><div class="lg" style="width:32px;height:32px;font-size:12px">HF</div></div>
+  <div><div class="hi" style="font-weight:800;font-size:15px">Highway Fuels</div><div class="s">${sub}</div></div></div>
+  <button data-go="attendant-account" class="av" style="margin-left:auto;width:34px;height:34px" aria-label="Account">SP</button></div>`;
+function Attendant() {
+  return `${attHdr('Sajid P · Attendant')}
+    <div class="strip" style="margin-bottom:10px"><div class="pulse"></div><div><div class="t">You're on DU2</div><div class="m">Shift 2 · N3, N4</div></div>
+      <div class="clock"><div class="v num">3h 12m</div><div class="m">on shift</div></div></div>
+    ${HandoverBody()}`;
+}
+function AttendantDone() {
+  return `${attHdr('Sajid P · Attendant')}
+    <div class="card" style="margin:6px 12px 0;padding:18px 16px;text-align:center;background:var(--good-soft);border-color:transparent">
+      <div style="width:52px;height:52px;border-radius:99px;background:var(--good);color:var(--on-acc);display:grid;place-items:center;margin:0 auto">${ic(I.check, 26, 3)}</div>
+      <div class="hi" style="font-size:18px;font-weight:800;margin-top:10px">Handover recorded</div>
+      <div class="s" style="margin-top:2px">DU2 · Shift 2 · 10:04 pm · Balanced</div></div>
+    <div class="lbl"><span>Your summary</span><span></span></div>
+    <div class="card list">${[['Fuel sold', '818.2 L', '₹73,294'], ['Products', '3 items', '₹1,080'], ['Credit & cards', '2 slips + T1', '₹41,860'], ['Cash drops', 'by office', '₹20,000'], ['Cash handed over', 'plus ₹2,000 float returned', '₹12,254']].map(([t, m, v]) =>
+      `<div class="row"><div><div class="t">${t}</div><div class="m">${m}</div></div><div class="end v num">${v}</div></div>`).join('')}
+      <div class="row" style="background:var(--card2);border-radius:0 0 14px 14px"><div class="t" style="flex:1">Variance</div><span class="badge b-ok">Balanced</span></div></div>
+    <div style="padding:12px"><button class="btn sec" style="width:100%">Edit before shift closes</button></div>
+    <div class="s" style="text-align:center;padding:0 24px">Your manager closes the shift. You can sign out now.</div>`;
+}
+function AttendantIdle() {
+  return `${attHdr('Sajid P · Attendant')}
+    <div style="padding:70px 30px 0;text-align:center">
+      <div style="width:64px;height:64px;border-radius:20px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;margin:0 auto;color:var(--mu)">${ic(I.pump, 28, 1.8)}</div>
+      <div class="hi" style="font-size:18px;font-weight:800;margin-top:14px">No shift assigned</div>
+      <div class="s" style="margin-top:6px;font-size:13px;line-height:1.5">When your manager opens a shift and puts you on a pump, your handover appears here.</div>
+      <button class="btn sec" style="margin:18px auto 0;padding:0 18px">Refresh</button></div>`;
+}
+function AttendantAccountSheet() {
+  return `<div class="scrim" data-go="attendant"></div><div class="sheet"><div class="grab"></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 16px 12px"><div class="av" style="width:44px;height:44px;font-size:15px">SP</div>
+      <div><div class="hi" style="font-weight:700;font-size:15px">Sajid P</div><div class="s">Attendant · Highway Fuels</div></div></div>
+    <div class="card list"><div class="row"><span class="bad">${ic(I.out, 17)}</span><div class="t bad">Sign out</div></div></div></div>`;
+}
+
+/* ================= ACCOUNT (sheet over Home) ================= */
+function AccountSheet() {
+  const st = [['Highway Fuels', 'Kozhikode', true], ['City Fuels', 'Feroke', false], ['Coastal Energy', 'Vadakara', false]];
+  return `<div class="scrim" data-go="home"></div><div class="sheet"><div class="grab"></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 16px 6px"><div class="av" style="width:44px;height:44px;font-size:15px">AN</div>
+      <div><div class="hi" style="font-weight:700;font-size:15px">Abdullah Nettoor</div><div class="s">Owner · Malabar Fuels Pvt Ltd</div></div></div>
+    <div class="lbl"><span>Station</span><span class="r">3</span></div>
+    <div class="card list">${st.map(([n, c, on]) => `<div class="row"><div class="chip" style="${on ? 'background:var(--acc);color:var(--on-acc);border-color:var(--acc)' : ''}">${n.split(' ').map(w => w[0]).join('')}</div>
+      <div><div class="t">${n}</div><div class="m">${c}</div></div>${on ? `<span class="end good">${ic(I.check, 18, 2.4)}</span>` : ''}</div>`).join('')}</div>
+    <div class="lbl"><span>Team</span><span class="r">9 members ›</span></div>
+    <div class="card list"><div class="row"><div style="display:flex">${['AN', 'RK', 'SP', 'VM', '+5'].map((x, i) => `<div class="av" style="margin-left:${i ? -8 : 0}px;border:2px solid var(--card)">${x}</div>`).join('')}</div><div class="end s">3 on shift now</div></div></div>
+    <div class="lbl"><span>Appearance</span><span></span></div>
+    <div style="padding:0 12px"><div class="opt"><button>System</button><button class="${theme === 'light' ? 'on' : ''}">Light</button><button class="${theme === 'dark' ? 'on' : ''}">Dark</button></div></div>
+    <div class="card list" style="margin-top:12px">
+      <div class="row"><span class="mu">${ic(I.building, 17)}</span><div class="t" style="flex:1">Organization</div><span class="s">Plan · Pro</span>${chev}</div>
+      <div class="row"><span class="bad">${ic(I.out, 17)}</span><div class="t bad">Sign out</div></div></div>
+  </div>`;
+}
+
+const META = {
+  home: { name: 'Home', tab: 'home', render: Home, notes: `<div class="tag">Home</div><h2>Control room</h2>
+    <ul><li><b>Drawers removed</b>. They live on the Shifts tab.</li>
+    <li><b>Sales by product</b>: fuel per grade (litres + value), then <b>Lubes & others</b> grouped by category (lubricants, additives, accessories).</li>
+    <li>Fuel counts closed shifts; product sales are entered live, so they include the running shift, as labelled.</li>
+    <li>The header gets a <b>bell</b> (all alerts) and an <b>avatar</b> (account sheet). Past days are in Reports, so the date button is gone.</li></ul>` },
+  shifts: { name: 'Shifts', tab: 'shifts', render: Shifts, notes: `<div class="tag">Shifts</div><h2>Shifts</h2>
+    <ul><li>The share button is gone from past-shift rows. <b>Tap a row</b> to open the full Shift summary.</li></ul>` },
+  'shift-detail': { name: 'Shift summary', tab: 'shifts', detail: 'PDF', render: ShiftDetail, notes: `<div class="tag">Shifts › detail</div><h2>Shift summary</h2>
+    <ul><li>The full report on screen: total and variance, payments split, sales by product, <b>nozzle readings</b>, drawer reconciliation.</li>
+    <li><b>Share</b> and <b>Download PDF</b> sit in a bottom action bar that replaces the tab bar on detail pages.</li></ul>` },
+  reports: { name: 'Reports', tab: 'reports', render: Reports, notes: `<div class="tag">Reports</div><h2>Daily reports</h2>
+    <ul><li>A <b>list of days</b> replaces the week strip and single report. Each row has sales, a relative bar, cash variance and status: Live, Draft or Sealed.</li>
+    <li>The top tiles show the week total and how many days are waiting to close.</li>
+    <li>Today's row goes to Home, because there's no report until the day closes.</li></ul>` },
+  'report-detail': { name: 'Daily report', tab: 'reports', detail: 'DSSR', render: ReportDetail, notes: `<div class="tag">Reports › detail</div><h2>DSSR</h2>
+    <ul><li>The full DSSR with ‹ › to step between days.</li>
+    <li>It reuses the <b>same Sales by product block</b> as Home and the shift summary.</li>
+    <li>The included shifts link through to their Shift summary.</li>
+    <li>Share and Download sit in the bottom action bar, as on the shift summary.</li></ul>` },
+  money: { name: 'Money · collect', tab: 'money', render: Money, notes: `<div class="tag">Money</div><h2>To collect</h2>
+    <ul><li>Every customer row now <b>opens the customer's page</b> (chevron). The inline ledger expand is gone.</li>
+    <li>The toggle switches to suppliers (To pay).</li></ul>` },
+  'customer-detail': { name: 'Customer', tab: 'money', detail: 'statement', render: CustomerDetail, notes: `<div class="tag">Money › customer</div><h2>Customer page</h2>
+    <ul><li>The header has fleet code, phone and a <b>call</b> button.</li>
+    <li>The hero shows <b>what they owe vs their limit</b>, with an over-limit warning and how old the debt is.</li>
+    <li>Payment behaviour: last payment, how long they usually take to pay, this month's credit vs paid.</li>
+    <li><b>Spend per vehicle</b> from credit-sale vehicle links.</li>
+    <li>A <b>statement</b> grouped by month with a running balance. Each credit sale shows its shift, vehicle and litres.</li>
+    <li><b>Share / Download statement</b> to send to the customer.</li></ul>` },
+  'money-pay': { name: 'Money · pay', tab: 'money', render: MoneyPay, notes: `<div class="tag">Money</div><h2>To pay</h2>
+    <ul><li>Supplier list with GSTIN, open invoices and the oldest unpaid date. Each row opens the supplier's page.</li>
+    <li>I dropped "due Mon": suppliers have no payment terms in the data yet.</li></ul>` },
+  'supplier-detail': { name: 'Supplier', tab: 'money', detail: 'statement', render: SupplierDetail, notes: `<div class="tag">Money › supplier</div><h2>Supplier page</h2>
+    <ul><li>GSTIN and vendor code, what you owe, and the oldest unpaid purchase.</li>
+    <li>This month: purchased vs paid, and purchases by product.</li>
+    <li>A statement with purchases (invoice no., KL, tanker) and payments (NEFT and from which account), with a running balance. Negative means an advance.</li>
+    <li>Share / Download statement for reconciling with the depot.</li></ul>` },
+  insights: { name: 'Insights', tab: 'insights', render: Insights, notes: `<div class="tag">Insights</div><h2>Insights = trends only</h2>
+    <p>Every block answers "how are we doing over time?". All are derivable from DSSR snapshots, shift summaries and handovers:</p>
+    <ul><li><b>Sales trend</b> with best day and average.</li>
+    <li><b>Product mix</b> in litres, plus lube sales and the top seller.</li>
+    <li><b>Shift performance</b>: morning vs evening averages.</li>
+    <li><b>Cash variance by attendant</b>: who is repeatedly short.</li>
+    <li><b>Stock loss</b>: tank dip vs book, in litres and ₹.</li>
+    <li><b>Credit health</b>: credit given vs collected.</li></ul>
+    <p>The unrelated items moved out (see the card at the bottom).</p>` },
+  alerts: { name: 'Alerts', tab: 'home', render: Alerts, notes: `<div class="tag">Bell</div><h2>Needs attention</h2>
+    <ul><li>The full alert inbox, which used to live in Insights. It opens from the bell on Home.</li>
+    <li>Alerts are grouped by kind (stock, day close, credit, cash), each with one action.</li></ul>` },
+  'home-assigned': { name: 'Home · on a DU', tab: 'home', render: () => Home(true), notes: `<div class="tag">Handover · owner/manager</div><h2>Pinned handover card</h2>
+    <ul><li>Shown only when the signed-in owner/manager is assigned to a DU on the open shift. This replaces the 6th "My handover" tab.</li>
+    <li>It shows progress ("3 of 5 steps done") and opens the handover as a full page.</li></ul>` },
+  handover: { name: 'My handover', tab: 'home', bar: hoBar, render: Handover, notes: `<div class="tag">Handover</div><h2>Stepped handover</h2>
+    <p>The same data and rules as today's form, restyled as five step cards:</p>
+    <ul><li><b>Closing readings</b> per nozzle, with live litres and optional testing.</li>
+    <li><b>Credit & fuel-card sales</b> as slips.</li><li><b>Card / UPI</b> per terminal plus batch ref.</li>
+    <li><b>Products sold</b> with − / + steppers and the card/UPI portion.</li><li><b>Cash handed over</b> with Count notes and the expected-cash formula.</li></ul>
+    <p>A sticky <b>Expected · Declared · Variance</b> strip updates as you type. Each step shows done/not-started and a one-line summary when collapsed. The bottom bar has Save draft and Submit.</p>` },
+  attendant: { name: 'Attendant', tab: 'home', noDock: true, bar: hoBar, render: Attendant, notes: `<div class="tag">Attendant role</div><h2>Handover-only app</h2>
+    <ul><li>The Attendant sees <b>only their handover</b>: no dock, bell, Home, Money or reports.</li>
+    <li>The header has the station and the avatar, which opens a sheet with Sign out only.</li>
+    <li>A "You're on DU2" strip shows their pump, shift and nozzles. Below it is the same stepped form as the owner's page.</li></ul>` },
+  'attendant-done': { name: 'Attendant · recorded', tab: 'home', noDock: true, render: AttendantDone, notes: `<div class="tag">Attendant role</div><h2>After submitting</h2>
+    <ul><li>A confirmation with their own summary and variance, from the accepted handover result.</li>
+    <li>They can edit until the shift closes, as today.</li></ul>` },
+  'attendant-idle': { name: 'Attendant · no shift', tab: 'home', noDock: true, render: AttendantIdle, notes: `<div class="tag">Attendant role</div><h2>Not assigned</h2><p>An empty state when no open shift has them on a DU.</p>` },
+  'attendant-account': { name: 'Attendant · account', tab: 'home', noDock: true, bar: hoBar, render: Attendant, overlay: AttendantAccountSheet, notes: `<div class="tag">Attendant role</div><h2>Account sheet</h2><p>Name, role, station and Sign out. No team, station switcher or appearance setting.</p>` },
+  account: { name: 'Account', tab: 'home', sheet: true, render: Home, notes: `<div class="tag">Avatar</div><h2>Account sheet</h2>
+    <ul><li>A bottom sheet with the station switcher, team, the <b>appearance</b> setting (System / Light / Dark), Organization and Sign out.</li>
+    <li>Takes over the old Insights "Team" and "Organization" sections, plus the separate station picker.</li></ul>` },
+};
+const PAGES = Object.keys(META);
+
+/* ---------------- shell ---------------- */
+const params = new URLSearchParams(location.search);
+if (params.get('tall')) document.head.insertAdjacentHTML('beforeend', '<style>.phone{height:auto}.screen{height:auto}.scroll{overflow:visible}</style>');
+let theme = params.get('theme') === 'dark' ? 'dark' : 'light';
+let page = PAGES.includes(params.get('page')) ? params.get('page') : 'home';
+const screen = (p) => { const m = META[p];
+  const bottom = m.bar ? m.bar() : m.detail ? actionbar(m.detail) : (m.noDock || m.render === Alerts) ? '' : dock(m.tab);
+  return `<div class="phone"><div class="screen ${theme}">${statusbar()}<div class="scroll">${m.render()}</div>${bottom}${m.sheet ? AccountSheet() : ''}${m.overlay ? m.overlay() : ''}</div></div>`; };
+function render() {
+  document.body.classList.toggle('darkpage', theme === 'dark');
+  if (params.get('page') === 'all') {
+    document.querySelector('.switcher').style.display = 'none';
+    const only = (params.get('only') || '').split(',').filter(Boolean);
+    document.getElementById('stage').innerHTML = (only.length ? only : PAGES).map(p => `<div><div class="cap">${META[p].name} · ${theme}</div>${screen(p)}</div>`).join('');
+  } else {
+    document.getElementById('stage').innerHTML = `${screen(page)}<div class="notes">${META[page].notes}</div>`;
+  }
+  document.getElementById('lbl').innerHTML = `${META[page].name} <span>· ${theme}</span>`;
+  document.getElementById('dots').innerHTML = PAGES.map(p => `<i class="${p === page ? 'on' : ''}"></i>`).join('');
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = (e) => { e.stopPropagation(); page = b.dataset.go; sync(); });
+}
+function sync() { try { const u = new URL(location.href); if (u.searchParams.get('page') !== 'all') u.searchParams.set('page', page); u.searchParams.set('theme', theme); history.replaceState(null, '', u); } catch (e) {} render(); }
+const go = (d) => { page = PAGES[(PAGES.indexOf(page) + d + PAGES.length) % PAGES.length]; sync(); };
+const flip = () => { theme = theme === 'dark' ? 'light' : 'dark'; sync(); };
+document.getElementById('prev').onclick = () => go(-1);
+document.getElementById('next').onclick = () => go(1);
+document.getElementById('theme').onclick = flip;
+addEventListener('keydown', (e) => { const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); if (e.key === 't') flip(); });
+render();
+</script>
+</body>
+</html>
