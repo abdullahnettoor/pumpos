@@ -16,9 +16,10 @@ npm run preview
 | --- | --- |\
 | `SITE` | Canonical origin, sitemap and sharing URLs |
 | `PUBLIC_CONSOLE_URL` | Web console destination |
-| `PUBLIC_DEMO_BOOKING_URL` | Optional HTTPS Cal.com booking URL |
+| `PUBLIC_DEMO_BOOKING_URL` | Optional HTTPS Cal.com booking URL (repo variable `DEMO_BOOKING_URL`) |
+| `PUBLIC_CONTACT_EMAIL` | Contact inbox on every page, default `hello@pumpos.app` (repo variable `CONTACT_EMAIL`) |
 
-Without a booking URL, `/demo` offers email-based scheduling. The desktop
+Without a booking URL, `/demo` sends the request on WhatsApp. The desktop
 installer is offered inside the console, not on this site. Final legal copy is a
 publication dependency.
 

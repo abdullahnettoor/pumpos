@@ -25,4 +25,13 @@ export const WHATSAPP_DIRECT_URL = `https://wa.me/${WHATSAPP_NUMBER.replace(/\D/
 export const WHATSAPP_URL = '/whatsapp';
 export const STARTING_PRICE = 'From ₹999/station/month + GST. Pilot stations get the first 3 months free on any plan.';
 
+/** Monitored contact inbox. Override with PUBLIC_CONTACT_EMAIL at build time. */
+export const CONTACT_EMAIL: string = contactEmail(import.meta.env.PUBLIC_CONTACT_EMAIL);
+function contactEmail(value: string | undefined): string {
+  return value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : 'hello@pumpos.app';
+}
+/** mailto: link to CONTACT_EMAIL, with an optional subject line. */
+export const contactMailto = (subject?: string): string =>
+  `mailto:${CONTACT_EMAIL}${subject ? `?subject=${encodeURIComponent(subject)}` : ''}`;
+
 export const LINKEDIN_URL = 'https://www.linkedin.com/company/pumpos/';

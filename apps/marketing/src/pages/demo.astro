@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Button from '../components/ds/Button.astro';
 import HeroBg from '../components/home/HeroBg.astro';
-import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY, WHATSAPP_NUMBER } from '../config';
+import { DEMO_BOOKING_URL, WHATSAPP_URL, WHATSAPP_DISPLAY, WHATSAPP_NUMBER, CONTACT_EMAIL, contactMailto } from '../config';
 import '../styles/home.css';
 
 const stats = [
@@ -188,8 +188,8 @@ const stats = [
               <Button variant="wa" href={WHATSAPP_URL} target="_blank" rel="noopener" class="d-wa-btn">
                 <span>WhatsApp {WHATSAPP_DISPLAY}</span>
               </Button>
-              <Button variant="secondary" href="mailto:hello@pumpos.app?subject=PumpOS%20guided%20demo" class="d-wa-btn">
-                <span>Email hello@pumpos.app</span>
+              <Button variant="secondary" href={contactMailto('PumpOS guided demo')} class="d-wa-btn">
+                <span>Email {CONTACT_EMAIL}</span>
               </Button>
             </div>
 
