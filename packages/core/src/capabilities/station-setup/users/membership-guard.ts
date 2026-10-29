@@ -1,11 +1,12 @@
 import { conflictError, err, forbiddenError, ok } from '../../../kernel/index.js';
 import type { Result } from '../../../kernel/index.js';
+import type { Role } from '@pump/shared';
 
 export interface MembershipChange {
   actorUserId: string;
-  target: { id: string; role: string; status: string };
+  target: { id: string; role: Role; status: string };
   /** The Role the member would end up with, when the change sets one. */
-  role?: string;
+  role?: Role;
   /** The status the member would end up with, when the change sets one. */
   status?: string;
   /** Other active Owners in the Organization, excluding the target. */

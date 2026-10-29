@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and, desc, inArray } from 'drizzle-orm';
-import { schema, DbClient } from '@pump/db';
+import { schema, DbClient, type DbExecutor } from '@pump/db';
 import {
   can,
   DECANTATION_SETTINGS_KEY_SET,
@@ -1038,10 +1038,10 @@ stationSetupRouter.post(
 
 /** Self-action and last-Owner rules, read after the Organization lock (#443). */
 async function guardMembershipChange(
-  tx: any,
+  tx: DbExecutor,
   actor: { id: string; organizationId: string },
   targetId: string,
-  change: { role?: string; status?: string },
+  change: { role?: Role; status?: string },
 ) {
   const repo = new DrizzleUserRepository(tx);
   const target = await repo.findById(targetId);
