@@ -65,6 +65,7 @@ function setup(user: User, opts: { entitled?: boolean } = {}) {
     save: async (u: User) => void rows.set(u.id, u),
     setStationAssignments: async () => {},
     listWithAssignments: async () => [],
+    linkLogin: async () => {},
   };
   const access = {
     load: async () => inputs(opts.entitled === false ? [] : ['permissions.custom']),
