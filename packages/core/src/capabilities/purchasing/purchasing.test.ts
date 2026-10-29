@@ -321,7 +321,7 @@ describe('RecordPurchase', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.purchase.amount).toBe('450000');
-      expect(result.data.purchase.shiftId).toBeNull();
+      expect(result.data.purchase).not.toHaveProperty('shiftId');
       expect(result.data.purchase.businessDayId).toBeNull();
       expect(result.data.purchase.entryDate).toBe('2026-03-14');
       expect(result.data.items[0].invoiceDensity).toBe('842.25');
@@ -368,8 +368,6 @@ describe('RecordPurchase', () => {
     if (!result.success) expect(result.error.message).toBe('entryDate cannot be in the future');
   });
 
-  // A legacy shiftId can still locate the station, but fuel remains an Office
-  // Record and defaults to the station's calendar date.
   const yesterdayShift: Shift = {
     id: 'sh-1',
     organizationId: 'org-1',
@@ -414,23 +412,28 @@ describe('RecordPurchase', () => {
       context,
     );
 
-  it.each([
-    ['with ctx.stationId', ctx()],
-    ['without ctx.stationId', { ...ctx(), stationId: null }],
-  ])(
-    'uses the legacy shiftId only to resolve station for fuel Entry Date (%s)',
-    async (_label, context) => {
-      const result = await recordWith({ shiftId: 'sh-1' }, context as ExecutionContext);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.purchase.businessDayId).toBeNull();
-        expect(result.data.purchase.entryDate).toBe('2026-03-15');
-        expect(result.data.purchase.shiftId).toBeNull();
-      }
-    },
-  );
+  it('defaults fuel to the station calendar date from the context station', async () => {
+    const result = await recordWith({}, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.purchase.businessDayId).toBeNull();
+      expect(result.data.purchase.entryDate).toBe('2026-03-15');
+      expect(result.data.purchase).not.toHaveProperty('shiftId');
+    }
+  });
 
-  it('anchors fuel to Entry Date even when a shiftId is also supplied', async () => {
+  // Purchases never carry a Shift (#312): a stale shiftId no longer locates the
+  // station, and is never stored.
+  it('requires a station even when a shiftId is sent', async () => {
+    const result = await recordWith({ shiftId: 'sh-1' }, {
+      ...ctx(),
+      stationId: null,
+    } as ExecutionContext);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.message).toBe('stationId is required');
+  });
+
+  it('ignores a shiftId sent alongside a station', async () => {
     const result = await recordWith(
       { stationId: 'st-1', shiftId: 'sh-1', transactionDate: '2026-03-15' },
       ctx(),
@@ -439,7 +442,7 @@ describe('RecordPurchase', () => {
     if (result.success) {
       expect(result.data.purchase.businessDayId).toBeNull();
       expect(result.data.purchase.entryDate).toBe('2026-03-15');
-      expect(result.data.purchase.shiftId).toBeNull();
+      expect(result.data.purchase).not.toHaveProperty('shiftId');
     }
   });
 

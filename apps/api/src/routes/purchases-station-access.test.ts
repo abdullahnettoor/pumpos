@@ -16,7 +16,7 @@ const { transactionsRouter, purchaseStationScope } = await import('./transaction
 /**
  * Purchase reads must not leak other stations' rows to a user who is not
  * authorized for them (tenant isolation), and the Entry Date clock must come
- * from the station, even when a legacy request names only a shift.
+ * from the requested station. Purchases never carry a Shift (#312).
  */
 const ACCESS_READS = () => [
   [
@@ -179,15 +179,31 @@ describe('purchase reads: station access', () => {
 });
 
 describe('POST /transactions/purchases clock', () => {
-  it('uses the shift station when the request carries only a shiftId', async () => {
-    // writePolicyGuard reads, then the shift's station lookup.
-    const { db } = makeDb([[{ stationId: 'st-1' }]], { write: true });
-    const res = await app('Manager', ['st-1'], db).request('/transactions/purchases', {
+  const post = (role: string, assigned: string[], body: unknown) => {
+    const { db } = makeDb([], { write: true });
+    return app(role, assigned, db).request('/transactions/purchases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shiftId: 'sh-1', supplierId: 's', items: [] }),
+      body: JSON.stringify(body),
     });
+  };
+
+  it('reads the clock of the requested station', async () => {
+    const res = await post('Manager', ['st-1'], { stationId: 'st-1', supplierId: 's' });
     expect(res.status).toBe(404);
     expect(clockCalls).toEqual(['st-1']);
+  });
+
+  it('requires a stationId; a shiftId alone no longer locates the station', async () => {
+    const res = await post('Manager', ['st-1'], { shiftId: 'sh-1', supplierId: 's' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error.code).toBe('VALIDATION_ERROR');
+    expect(clockCalls).toEqual([]);
+  });
+
+  it('refuses a station the user is not assigned to', async () => {
+    const res = await post('Manager', ['st-1'], { stationId: 'st-2', supplierId: 's' });
+    expect(res.status).toBe(403);
+    expect(clockCalls).toEqual([]);
   });
 });

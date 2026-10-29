@@ -225,7 +225,6 @@ describe('POST /transactions/sales — station scope', () => {
  */
 const SHIFT_ANCHORED_WRITES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['/transactions/sales', {}],
-  ['/transactions/purchases', {}],
 ];
 
 describe('shift-anchored writes refuse a foreign station', () => {
@@ -272,15 +271,16 @@ describe('the station reaching the ExecutionContext', () => {
 });
 
 /**
- * Office Records (ADR 0005) have no Shift: they name their station directly.
- * The station is required, must be one the caller may act on, and is what
- * reaches the ExecutionContext.
+ * Office Records (ADR 0005) and Purchases (#312) have no Shift: they name their
+ * station directly. The station is required, must be one the caller may act
+ * on, and is what reaches the ExecutionContext.
  */
 const OFFICE_WRITES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['/transactions/income', {}],
   ['/transactions/expenses', {}],
   ['/transactions/collections', { paymentMethod: 'Cash' }],
   ['/transactions/supplier-payments', {}],
+  ['/transactions/purchases', {}],
 ];
 
 describe('office writes (ADR 0005) are scoped by their named station', () => {

@@ -1708,33 +1708,13 @@ transactionsRouter.post(
       );
     }
     const body = await c.req.json().catch(() => ({}));
-    if (
-      body?.stationId &&
-      !isAuthorizedForStation(user, {
-        organizationId: user.organizationId,
-        stationId: body.stationId,
-      })
-    ) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-        403,
-      );
-    }
-    // The Shift owns the station; a body stationId is only cross-checked (#243).
-    // Resolved first so the Entry Date clock below is the station's, not a UTC
-    // fallback, for a legacy request that carries only a shiftId.
-    const shiftStation = await guardShiftStation(c, body);
-    if (!shiftStation.ok) return shiftStation.response;
-    const clock = await loadStationClock(
-      c.var.db,
-      user.organizationId,
-      shiftStation.stationId ?? body?.stationId,
-    );
-    if (!clock) return stationNotFound(c);
+    const office = await guardOfficeStation(c, body);
+    if (!office.ok) return office.response;
+    const { stationId, clock } = office;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const ctx = buildContext(user, {
-        stationId: shiftStation.stationId,
+        stationId,
         correlationId: trace.correlationId,
         groupingRole: 'primary',
         ...clock,
@@ -1783,9 +1763,6 @@ transactionsRouter.post(
         await new LedgerPostingService(tx).postSupplierPayment(pr.data);
       }
 
-      if (r.success) {
-        await refreshShiftSummaryForShift(tx, events, user, (r.data.purchase as any)?.shiftId);
-      }
       return r;
     });
     return sendResult(c, result);
@@ -3160,8 +3137,6 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   // totals consume (#149 / #113) — full-row selects made this payload scale
   // with every column of every table. Names are joined here (category /
   // supplier / customer) because the raw tables store only ids.
-  // Purchases anchor to the business day, never a Shift (ADR 0005, #308),
-  // so a shift has none; the empty list keeps the response shape stable.
   // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
   // not the collections table — surface them so totals/reconciliation/summary see them.
   const creditSales = await db
@@ -3200,12 +3175,11 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
     );
   // `sales` has no UI consumer on this payload (fuel is metered via readings;
   // merchandise renders from the status/merch endpoints). Expenses and
-  // collections are Office Records and purchases are day-anchored, so none has
-  // a Shift (ADR 0005, #308). All four keys
-  // stay for contract stability and are always empty.
+  // collections are Office Records, so none has a Shift (ADR 0005, #308). All
+  // three keys stay for contract stability and are always empty.
   return c.json({
     success: true,
-    data: { expenses: [], purchases: [], collections: [], sales: [], creditSales },
+    data: { expenses: [], collections: [], sales: [], creditSales },
   });
 });
 

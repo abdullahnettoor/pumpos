@@ -51,10 +51,6 @@ export interface RecordPurchaseCommand {
   notes?: string;
   /** Line items of the supplier invoice. */
   lines?: PurchaseLineInput[];
-  /** @deprecated Purchases never carry a Shift (ADR 0005, #308). Accepted
-   *  only so queued clients still replay: it locates the station when no
-   *  stationId is sent, and is never stored. */
-  shiftId?: string;
   stationId?: string;
   transactionDate?: string;
   // --- Legacy single-line shape (still accepted; normalised to one line) ---
@@ -82,7 +78,6 @@ const schema = z
     invoiceNumber: z.string().max(100).nullish(),
     notes: z.string().max(500).optional(),
     lines: z.array(lineSchema).min(1).optional(),
-    shiftId: z.string().min(1).optional(),
     stationId: z.string().min(1).optional(),
     transactionDate: z
       .string()
@@ -174,24 +169,14 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       return err(validationError('Record fuel and products as separate purchases'));
 
     const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (!requestedStationId && !cmd.shiftId) return err(validationError('stationId is required'));
-    // Purchases are forecourt stock events anchored to the business day only,
-    // never a Shift (ADR 0005, #308): resolve the day by station + date. A
-    // legacy replay that sends a shiftId but no date resolves through its Shift,
-    // so it lands on that Shift's day rather than today's; the Shift is still
-    // not stored.
+    if (!requestedStationId) return err(validationError('stationId is required'));
+    // Purchases never carry a Shift (ADR 0005, #308): fuel is an Office Record
+    // on the Entry Date, products resolve the business day by station + date.
     let businessDayId: string | null = null;
     let entryDate: string | null = null;
     let payableDate: string;
     let stationId = requestedStationId;
     if (fuelPurchase) {
-      if (!stationId) {
-        const shiftId = cmd.shiftId!;
-        const shift = await this.deps.shifts.findById(shiftId);
-        if (!shift || shift.organizationId !== ctx.organizationId)
-          return err(notFoundError('Shift', shiftId));
-        stationId = shift.stationId;
-      }
       const today = resolveEntryDate({ now: ctx.clock.now(), timeZone: ctx.timeZone });
       entryDate = cmd.transactionDate ?? today;
       if (!isValidBusinessDate(entryDate))
@@ -201,13 +186,10 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       payableDate = entryDate;
     } else {
       // Product purchases are day-sealed stock events, never a Shift.
-      const legacyShiftReplay = !!cmd.shiftId && !cmd.transactionDate;
       const anchor = await resolveFinancialAnchor(
         this.deps,
         ctx,
-        legacyShiftReplay
-          ? { shiftId: cmd.shiftId }
-          : { stationId: requestedStationId, transactionDate: cmd.transactionDate },
+        { stationId: requestedStationId, transactionDate: cmd.transactionDate },
         { kind: 'STOCK' },
       );
       if (!anchor.success) return anchor;
@@ -371,7 +353,6 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       documentNumber,
       organizationId: ctx.organizationId,
       stationId,
-      shiftId: null,
       businessDayId,
       entryDate,
       supplierId: supplier.id,
