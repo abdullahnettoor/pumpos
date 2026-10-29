@@ -57,6 +57,8 @@ const MANAGER_SCOPE_NOTE = 'Managers can manage only Staff and Attendants on the
 export interface MemberRights {
   canEdit: boolean;
   canResetPassword: boolean;
+  /** The member has no login yet: give them one (#462). */
+  canGiveAppAccess: boolean;
   canChangeStatus: boolean;
   /** The member is the signed-in user: their Role stays as it is. */
   roleLocked: boolean;
@@ -67,6 +69,7 @@ export interface MemberRights {
 const NONE: MemberRights = {
   canEdit: false,
   canResetPassword: false,
+  canGiveAppAccess: false,
   canChangeStatus: false,
   roleLocked: false,
   reason: null,
@@ -86,6 +89,7 @@ export function memberRights(
     // Resetting your own password here or switching off your own login would
     // strand you: those go through sign-in and another Owner.
     canResetPassword: !!member.hasLogin && !self,
+    canGiveAppAccess: !member.hasLogin,
     canChangeStatus: !self,
     roleLocked: self,
     reason: null,

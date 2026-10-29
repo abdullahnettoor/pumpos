@@ -83,6 +83,7 @@ describe('memberRights', () => {
     expect(memberRights(manager, staff)).toEqual({
       canEdit: true,
       canResetPassword: true,
+      canGiveAppAccess: false,
       canChangeStatus: true,
       roleLocked: false,
       reason: null,
@@ -99,6 +100,25 @@ describe('memberRights', () => {
   });
   it('offers a password reset only to a member with a login', () => {
     expect(memberRights(owner, { ...staff, hasLogin: false }).canResetPassword).toBe(false);
+  });
+  it('offers app access only to a member without a login the actor may act on', () => {
+    expect(memberRights(owner, { ...staff, hasLogin: false })).toMatchObject({
+      canGiveAppAccess: true,
+      canResetPassword: false,
+    });
+    expect(memberRights(owner, staff).canGiveAppAccess).toBe(false);
+    expect(memberRights(manager, { ...staff, hasLogin: false }).canGiveAppAccess).toBe(true);
+    expect(
+      memberRights(manager, { ...staff, hasLogin: false, role: 'Accountant' }).canGiveAppAccess,
+    ).toBe(false);
+    expect(
+      memberRights(manager, { ...staff, hasLogin: false, stationIds: ['s1', 's2'] })
+        .canGiveAppAccess,
+    ).toBe(false);
+    expect(
+      memberRights({ role: 'Accountant', stationIds: ['s1'] }, { ...staff, hasLogin: false })
+        .canGiveAppAccess,
+    ).toBe(false);
   });
   it('keeps an Owner from deactivating, resetting or re-roling themselves', () => {
     const r = memberRights(owner, { id: 'me', role: 'Owner', stationIds: [], hasLogin: true });

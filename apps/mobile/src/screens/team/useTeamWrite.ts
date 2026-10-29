@@ -65,7 +65,7 @@ function useTeamWrite<I, T>({ action, run, apply }: WriteConfig<I, T>) {
         } catch (error) {
           const failure = teamFailure(error, action);
           if (!failure.unknownOutcome) key.current = null;
-          if (failure.earlierAttemptReceived) {
+          if (failure.earlierAttemptReceived || failure.listOutdated) {
             void refreshUsers(qc);
             void refreshAccess(qc);
           }
@@ -131,6 +131,23 @@ export function useResetPassword(id: string) {
     [id],
   );
   return useTeamWrite<string, Saved>({ action: 'reset', run });
+}
+
+/** Give a member without a login one (`POST /setup/users/:id/app-access`). `body` comes from `appAccessRequest`. */
+export function useGrantAppAccess(id: string) {
+  const run = useCallback(
+    (body: Body, key: string) =>
+      service.grantAppAccess(id, body as { phone?: string; email?: string; password: string }, {
+        idempotencyKey: key,
+      }),
+    [id],
+  );
+  const apply = useCallback(
+    (qc: QueryClient, saved: Saved) =>
+      patchUsers(qc, (list) => patchMember(list, id, { ...memberRow(saved), hasLogin: true })),
+    [id],
+  );
+  return useTeamWrite<Body, Saved>({ action: 'access', run, apply });
 }
 
 /** Deactivate or reactivate a member (`POST /setup/users/:id/deactivate|reactivate`). */
