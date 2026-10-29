@@ -977,9 +977,6 @@ export const purchases = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     documentNumber: varchar('document_number', { length: 100 }).notNull(),
-    // Purchases are inventory + payable events anchored to a business day, NOT a
-    // shift. shiftId is kept only for an optional drawer-paid linkage.
-    shiftId: uuid('shift_id').references(() => shifts.id),
     // Nullable: product purchases anchor to a business day; Fuel Purchases anchor
     // to `entryDate` instead (ADR 0007). CHECK purchases_has_anchor needs one.
     businessDayId: uuid('business_day_id').references(() => businessDays.id),
