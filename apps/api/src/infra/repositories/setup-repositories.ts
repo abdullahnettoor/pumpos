@@ -1,4 +1,4 @@
-import { and, eq, inArray, desc, lte } from 'drizzle-orm';
+import { and, eq, inArray, isNull, desc, lte } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
 import { fuelPricesNewestFirst } from './fuel-price-queries.js';
@@ -421,6 +421,12 @@ export class DrizzleUserRepository implements UserRepository {
           updatedAt: new Date(u.updatedAt),
         },
       });
+  }
+  async linkLogin(userId: string, authUserId: string): Promise<void> {
+    await this.db
+      .update(schema.users)
+      .set({ authUserId })
+      .where(and(eq(schema.users.id, userId), isNull(schema.users.authUserId)));
   }
   async setStationAssignments(
     userId: string,

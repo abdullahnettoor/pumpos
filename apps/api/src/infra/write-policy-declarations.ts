@@ -270,6 +270,7 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
         'Changing what a team member may do is team administration, blocked like the rest.',
       ],
       ['POST /setup/users/:id/reset-password', 'Team administration is blocked.'],
+      ['POST /setup/users/:id/app-access', 'Team administration is blocked.'],
       ['POST /setup/users/:id/deactivate', 'Team administration is blocked.'],
       ['POST /setup/users/:id/reactivate', 'Team administration is blocked.'],
       ['POST /setup/products', 'Master data is setup.'],

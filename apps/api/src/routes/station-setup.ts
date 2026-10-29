@@ -42,6 +42,7 @@ import {
   SetUserPermissions,
   PreviewUserRoleChange,
   ResetUserPassword,
+  GrantUserAppAccess,
   SetUserStatus,
   RecordFuelPrice,
   CreateTank,
@@ -75,6 +76,7 @@ import { requireCapabilityGuard } from '../infra/capability-guard.js';
 import { DrizzleUserPermissionChangesRepository } from '../infra/repositories/user-permission-changes.repo.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
+import { SupabaseLoginProvisioner } from '../infra/login-provisioner.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
@@ -1015,6 +1017,97 @@ stationSetupRouter.post(
     const useCase = new ResetUserPassword({ repository: repo, events: createDispatcher(db) });
     const result = await useCase.execute({ id }, buildContext(user));
     return sendResult(c, result);
+  },
+);
+
+const appAccessBodySchema = z.object({
+  email: z.string().nullish(),
+  phone: z.string().nullish(),
+  password: z.string(),
+});
+
+/**
+ * Give an existing member without a login an app login (#462). The Role and
+ * Station rules are the same as creating a member with access; the login seat,
+ * identity and password rules live in the use-case. The password goes only to
+ * Supabase Auth: it is never stored, logged or returned.
+ */
+stationSetupRouter.post(
+  '/users/:id/app-access',
+  writePolicyGuard('POST /setup/users/:id/app-access'),
+  rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
+  validateJson(appAccessBodySchema, 'BAD_REQUEST'),
+  async (c) => {
+    const user = c.var.user;
+    if (!can(user, 'team.manage')) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } },
+        403,
+      );
+    }
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    const db = c.var.db;
+    const admin = getSupabaseAdmin(c);
+    if (!admin) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'CONFIG_ERROR',
+            message: 'Auth provisioning is not configured on the server',
+          },
+        },
+        500,
+      );
+    }
+
+    // The auth account is an external call that cannot roll back with the
+    // transaction, so a failed link or commit deletes it again.
+    const logins = new SupabaseLoginProvisioner(admin);
+    let result;
+    try {
+      result = await runInTransaction(db, async (tx, events) => {
+        const granted = await new GrantUserAppAccess({
+          repository: new DrizzleUserRepository(tx),
+          events,
+          capacity: new DrizzleStationCapacityPort(tx),
+          logins,
+          // Asked under the Organization lock, of the member as it is now.
+          authorizer: {
+            canGrantTo: async (target) =>
+              canActOnTarget(user, target.role, await loadTargetStationIds(tx, target.id)),
+          },
+        }).execute({ id, ...body }, buildContext(user));
+        if (!granted.success) return granted;
+
+        // The member row as GET /users returns it. Built here so a failed read rolls the
+        // grant back (and the login is deleted) instead of leaving a grant a retry would
+        // refuse as ALREADY_HAS_LOGIN.
+        const { authUserId, ...member } = granted.data;
+        const [custom] = await tx
+          .select({
+            granted: schema.userPermissionChanges.granted,
+            revoked: schema.userPermissionChanges.revoked,
+          })
+          .from(schema.userPermissionChanges)
+          .where(eq(schema.userPermissionChanges.userId, id));
+        return ok({
+          ...member,
+          stationIds: await loadTargetStationIds(tx, id),
+          hasLogin: !!authUserId,
+          hasCustomPermissions: (custom?.granted?.length ?? 0) + (custom?.revoked?.length ?? 0) > 0,
+        });
+      });
+    } catch (e) {
+      await logins.rollback();
+      throw e;
+    }
+    if (!result.success) {
+      await logins.rollback();
+      return sendResult(c, result);
+    }
+    return c.json({ success: true, data: result.data });
   },
 );
 

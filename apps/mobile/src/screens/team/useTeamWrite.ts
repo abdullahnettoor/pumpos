@@ -1,6 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
+import type { AppAccessRequest } from '@pump/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { CloudUserAssignmentService, createIdempotencyKey, queryKeys } from '@pump/ui';
+import {
+  CloudUserAssignmentService,
+  createIdempotencyKey,
+  patchUsersWithAppAccess,
+  queryKeys,
+} from '@pump/ui';
 import { addMember, memberRow, patchMember } from '../../lib/team/cache.js';
 import { teamFailure, type TeamAction, type TeamFailure } from '../../lib/team/failure.js';
 import type { TeamMember } from '../../lib/team/members.js';
@@ -65,7 +71,7 @@ function useTeamWrite<I, T>({ action, run, apply }: WriteConfig<I, T>) {
         } catch (error) {
           const failure = teamFailure(error, action);
           if (!failure.unknownOutcome) key.current = null;
-          if (failure.earlierAttemptReceived) {
+          if (failure.earlierAttemptReceived || failure.listOutdated) {
             void refreshUsers(qc);
             void refreshAccess(qc);
           }
@@ -131,6 +137,23 @@ export function useResetPassword(id: string) {
     [id],
   );
   return useTeamWrite<string, Saved>({ action: 'reset', run });
+}
+
+/** Give a member without a login one (`POST /setup/users/:id/app-access`). `body` comes from `appAccessRequest`. */
+export function useGrantAppAccess(id: string) {
+  const run = useCallback(
+    (body: AppAccessRequest, key: string) =>
+      service.grantAppAccess(id, body, { idempotencyKey: key }),
+    [id],
+  );
+  const apply = useCallback(
+    (qc: QueryClient, saved: Saved) => {
+      // The answer is the member row (`id` and contact details); anything else is the refetch's.
+      if (saved) patchUsersWithAppAccess(qc, { ...memberRow(saved), id });
+    },
+    [id],
+  );
+  return useTeamWrite<AppAccessRequest, Saved>({ action: 'access', run, apply });
 }
 
 /** Deactivate or reactivate a member (`POST /setup/users/:id/deactivate|reactivate`). */

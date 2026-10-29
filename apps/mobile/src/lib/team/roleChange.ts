@@ -20,4 +20,5 @@ export const roleChangeCheckFailure: TeamFailure = {
   message: "Couldn't check what a role change would reset. Nothing was saved.",
   unknownOutcome: false,
   earlierAttemptReceived: false,
+  listOutdated: false,
 };
