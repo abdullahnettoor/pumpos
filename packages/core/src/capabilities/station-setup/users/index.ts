@@ -427,3 +427,5 @@ export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, Us
     return ok(updated);
   }
 }
+
+export * from './membership-guard.js';
