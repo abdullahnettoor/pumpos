@@ -124,6 +124,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const productId = tank?.productId ?? cmd.productId!;
 
     let attributedDay = null;
+    let closedShiftEnd: string | null = null;
     if (cmd.shiftId) {
       const eligibility = await resolveShiftBusinessDayWrite(
         this.deps.shiftWriteGate,
@@ -143,6 +144,8 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       ) {
         return err(notFoundError('Shift', cmd.shiftId));
       }
+      if (attributedShift.status !== 'OPEN')
+        closedShiftEnd = attributedShift.closedAt ?? ctx.clock.now().toISOString();
     }
     // A dip may be recorded at any point in the business day. While a shift is
     // OPEN, dispensed fuel is not yet booked (nozzle sales land at close), so
@@ -174,10 +177,16 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
 
     // Pending Decantation lines of this tank are measured from this dip BEFORE
     // the expected quantity is read, so the received litres are in book stock
-    // and the dip never double counts them (D4). With a shift open the dip is
-    // not reconciled either, so the lines stay pending.
+    // and the dip never double counts them (D4). A dip taken mid-shift cannot
+    // measure them: that shift's sales are not booked yet, so the lines stay
+    // pending. A closing dip that names a closed Shift still measures them
+    // when the next Shift has already opened (back-to-back shifts, #494), for
+    // lines whose window began before that Shift closed: every Shift up to it
+    // has booked its sales, and only the litres the new Shift pumped before the
+    // dip are missing (the same shift-granularity approximation as below).
+    const measuresDecantation = !openShiftAtRecording || closedShiftEnd != null;
     let decantationLinesMeasured = 0;
-    if (tank && !openShiftAtRecording && this.deps.decantationMeasurement) {
+    if (tank && measuresDecantation && this.deps.decantationMeasurement) {
       const measured = await this.deps.decantationMeasurement.measureFromTankDip(ctx, {
         stationId: cmd.stationId,
         tankId: tank.id,
@@ -185,6 +194,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
         dipAt: nowIso,
         refId: varianceId,
         anchor: { businessDayId: bd.id, businessDate: bd.businessDate },
+        ...(openShiftAtRecording && closedShiftEnd ? { startedBy: closedShiftEnd } : {}),
       });
       if (!measured.success) return measured;
       decantationLinesMeasured = measured.data.measuredLines;
@@ -199,7 +209,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       if (documentNumbers.length > 0)
         warnings.push({
           code: 'DECANTATION_PENDING_OPEN_SHIFT',
-          message: `Decantation ${documentNumbers.join(', ')} stays pending: a Shift is open, so this dip does not measure it. Dip again after the Shift closes.`,
+          message: `Decantation ${documentNumbers.join(', ')} stays pending: a Shift is open, so this dip does not measure it. Dip again when you close the Shift.`,
           documentNumbers,
         });
     }
