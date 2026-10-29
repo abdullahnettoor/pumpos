@@ -137,6 +137,10 @@ describe('GrantUserAppAccess (#462)', () => {
     opts: {
       user?: Partial<User>;
       logins?: number;
+      /** Decides on the member as re-read under the lock. */
+      authorize?: (target: User) => boolean;
+      /** Runs when the Organization lock is taken: a concurrent commit landing first. */
+      onLock?: (repo: UserRepo) => void;
       provision?: (input: { email: string; password: string }) => Result<{ authUserId: string }>;
     } = {},
   ) => {
@@ -163,6 +167,7 @@ describe('GrantUserAppAccess (#462)', () => {
     const capacity = {
       lockOrganization: async () => {
         order.push('lock');
+        opts.onLock?.(repo);
       },
       load: async () => inputs,
     };
@@ -171,6 +176,7 @@ describe('GrantUserAppAccess (#462)', () => {
       events: new InProcessEventDispatcher({ store }),
       capacity,
       logins,
+      authorizer: { canGrantTo: async (target) => opts.authorize?.(target) ?? true },
     });
     return { repo, store, calls, order, useCase };
   };
@@ -271,6 +277,59 @@ describe('GrantUserAppAccess (#462)', () => {
     expect(!r.success && r.error.details).toMatchObject({ reason: 'IDENTITY_TAKEN' });
     expect(repo.rows.get('u-1')?.authUserId).toBeNull();
     expect(store.events).toEqual([]);
+  });
+
+  it('refuses a member the actor may not act on, creating nothing', async () => {
+    const { calls, repo, store, useCase } = await setup({ authorize: () => false });
+    const r = await useCase.execute(
+      { id: 'u-1', email: 'r@example.com', password: 'p'.repeat(8) },
+      ctx(),
+    );
+    expect(!r.success && r.error.code).toBe('FORBIDDEN');
+    expect(calls).toEqual([]);
+    expect(repo.rows.get('u-1')?.authUserId).toBeNull();
+    expect(store.events).toEqual([]);
+  });
+
+  it('authorizes against the member as re-read under the lock, not an earlier read', async () => {
+    // Staff when the route looked, promoted to Manager before the lock was taken.
+    const { calls, useCase } = await setup({
+      authorize: (target) => target.role === 'Staff',
+      onLock: (repo) => repo.rows.set('u-1', { ...repo.rows.get('u-1')!, role: 'Manager' }),
+    });
+    const r = await useCase.execute(
+      { id: 'u-1', email: 'r@example.com', password: 'p'.repeat(8) },
+      ctx(),
+    );
+    expect(!r.success && r.error.code).toBe('FORBIDDEN');
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a phone login for a member who has an email on record', async () => {
+    const { calls, repo, useCase } = await setup({ user: { email: 'ravi@example.com' } });
+    const r = await useCase.execute(
+      { id: 'u-1', phone: '98765 43210', password: 'p'.repeat(8) },
+      ctx(),
+    );
+    expect(!r.success && r.error).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'This member has an email on record. Give access with that email.',
+    });
+    expect(calls).toEqual([]);
+    expect(repo.rows.get('u-1')?.authUserId).toBeNull();
+  });
+
+  it('gives an email login to a member who has an email on record', async () => {
+    const { repo, useCase } = await setup({ user: { email: 'ravi@example.com' } });
+    const r = await useCase.execute(
+      { id: 'u-1', email: 'ravi@example.com', password: 'p'.repeat(8) },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    expect(repo.rows.get('u-1')).toMatchObject({
+      email: 'ravi@example.com',
+      authUserId: 'auth-new',
+    });
   });
 
   it.each([

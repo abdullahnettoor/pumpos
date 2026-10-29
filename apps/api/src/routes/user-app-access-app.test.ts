@@ -31,6 +31,7 @@ const state = {
   targetRole: 'Staff',
   targetStatus: 'ACTIVE',
   targetStations: ['s1'] as string[],
+  targetEmail: null as string | null,
   targetAuthUserId: null as string | null,
   userWrites: [] as Array<Record<string, any>>,
   failLink: false,
@@ -39,6 +40,11 @@ const state = {
   adminCreated: [] as Array<{ email: string; password: string }>,
   adminDeleted: [] as string[],
   adminFailure: null as null | { status: number; message: string },
+  /** A concurrent commit landing as the Organization lock is taken. */
+  onLock: null as null | (() => void),
+  inTransaction: false,
+  failPermissionsRead: false,
+  permissionsReadInTransaction: null as boolean | null,
 };
 
 /** Every bound parameter of a drizzle condition, so the fake can tell whose rows are asked for. */
@@ -91,7 +97,7 @@ function selectFrom(table: unknown, cond: unknown[]): unknown[] {
         organizationId: state.targetOrg,
         authUserId: state.targetAuthUserId,
         fullName: 'Ravi',
-        email: null,
+        email: state.targetEmail,
         phone: null,
         role: state.targetRole,
         status: state.targetStatus,
@@ -104,12 +110,24 @@ function selectFrom(table: unknown, cond: unknown[]): unknown[] {
     const stations = cond.includes(ACTOR) ? state.actorStations : state.targetStations;
     return stations.map((stationId) => ({ stationId }));
   }
+  if (table === schema.userPermissionChanges) {
+    state.permissionsReadInTransaction = state.inTransaction;
+    if (state.failPermissionsRead) throw new Error('db down');
+    return [];
+  }
   if (table === schema.idempotencyKeys) return state.idempotencyKey ? [state.idempotencyKey] : [];
   return [];
 }
 
 const fakeDb: Record<string, unknown> = {
-  transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(fakeDb),
+  transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+    state.inTransaction = true;
+    try {
+      return await fn(fakeDb);
+    } finally {
+      state.inTransaction = false;
+    }
+  },
   query: {
     users: {
       findFirst: async () => ({
@@ -123,7 +141,10 @@ const fakeDb: Record<string, unknown> = {
       }),
     },
   },
-  execute: async () => [],
+  execute: async () => {
+    state.onLock?.();
+    return [];
+  },
   select: () => ({ from: (table: unknown) => chain((cond) => selectFrom(table, cond)) }),
   insert: (table: unknown) => ({
     values: (row: any) => {
@@ -258,6 +279,11 @@ beforeEach(() => {
     adminCreated: [],
     adminDeleted: [],
     adminFailure: null,
+    targetEmail: null,
+    onLock: null,
+    inTransaction: false,
+    failPermissionsRead: false,
+    permissionsReadInTransaction: null,
   });
 });
 
@@ -328,6 +354,57 @@ describe('POST /setup/users/:id/app-access (#462)', () => {
     expect(r.status).toBe(403);
     expect(r.body.error.code).toBe('FORBIDDEN');
     refusedUntouched();
+  });
+
+  it('judges the member as locked and current, not as first read', async () => {
+    state.actorRole = 'Manager';
+    // A Staff at the Manager's Station when the request arrived; promoted before the lock.
+    state.onLock = () => {
+      state.targetRole = 'Manager';
+    };
+    const r = await post(byEmail);
+    expect(r.status).toBe(403);
+    expect(r.body.error.code).toBe('FORBIDDEN');
+    refusedUntouched();
+  });
+
+  it('judges the current Stations too: a member moved to another Station is refused', async () => {
+    state.actorRole = 'Manager';
+    state.onLock = () => {
+      state.targetStations = ['s2'];
+    };
+    const r = await post(byEmail);
+    expect(r.status).toBe(403);
+    refusedUntouched();
+  });
+
+  it('refuses a phone login for a member with an email on record', async () => {
+    state.targetEmail = 'ravi@example.com';
+    const r = await post(byPhone);
+    expect(r.status).toBe(400);
+    expect(r.body.error.code).toBe('VALIDATION_ERROR');
+    expect(r.body.error.message).toBe(
+      'This member has an email on record. Give access with that email.',
+    );
+    refusedUntouched();
+  });
+
+  it('gives an email login to a member with an email on record', async () => {
+    state.targetEmail = 'ravi@example.com';
+    expect((await post({ email: 'ravi@example.com', password: PASSWORD })).status).toBe(200);
+  });
+
+  it('builds the whole answer inside the transaction', async () => {
+    const r = await post(byEmail);
+    expect(r.status).toBe(200);
+    expect(state.permissionsReadInTransaction).toBe(true);
+  });
+
+  it('rolls everything back, login included, when the answer cannot be built', async () => {
+    state.failPermissionsRead = true;
+    const r = await post(byEmail, { key: 'k-fail' });
+    expect(r.status).toBe(500);
+    expect(state.adminDeleted).toEqual(['auth-new']);
   });
 
   it.each(['Accountant', 'Staff', 'Attendant'])('is refused for a %s', async (role) => {

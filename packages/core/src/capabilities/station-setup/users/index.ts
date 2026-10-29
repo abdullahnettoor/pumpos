@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Role } from '@pump/shared';
 import {
+  appAccessBodySchema,
   hasFixedPermissions,
   normalizeIndianMobile,
   optionalIndianMobileSchema,
@@ -16,6 +17,7 @@ import {
   conflictError,
   err,
   eventFromContext,
+  forbiddenError,
   notFoundError,
   ok,
   validationError,
@@ -331,27 +333,21 @@ export interface GrantUserAppAccessCommand {
   password: string;
 }
 
-const grantAppAccessSchema = z
-  .object({
-    id: z.string().min(1),
-    email: z.string().trim().email().nullish().or(z.literal('')),
-    phone: optionalIndianMobileSchema,
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-  })
-  .superRefine((val, ctx) => {
-    const identities = [val.email, val.phone].filter((v) => !!v && v.trim() !== '').length;
-    if (identities !== 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['email'],
-        message: 'Give exactly one of email or phone for app access',
-      });
-    }
-  });
+const grantAppAccessIdSchema = z.string().min(1);
+
+/**
+ * Whether the actor may act on a member (Role and Station rule). Asked of the
+ * member as re-read under the Organization lock, so a Role or Station change
+ * committed since the caller first looked cannot be acted on.
+ */
+export interface AppAccessAuthorizer {
+  canGrantTo(target: User): Promise<boolean>;
+}
 
 export interface GrantUserAppAccessDeps extends UserDeps {
   capacity: LoginCapacityPort;
   logins: LoginProvisioner;
+  authorizer: AppAccessAuthorizer;
 }
 
 /**
@@ -364,10 +360,13 @@ export interface GrantUserAppAccessDeps extends UserDeps {
 export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, User> {
   constructor(private readonly deps: GrantUserAppAccessDeps) {}
   async execute(input: GrantUserAppAccessCommand, ctx: ExecutionContext): Promise<Result<User>> {
-    const p = grantAppAccessSchema.safeParse(input);
-    if (!p.success)
+    const id = grantAppAccessIdSchema.safeParse(input.id);
+    const p = appAccessBodySchema.safeParse(input);
+    if (!id.success || !p.success)
       return err(
-        validationError('Invalid GrantUserAppAccess command', { issues: p.error.flatten() }),
+        validationError('Invalid GrantUserAppAccess command', {
+          issues: (p.success ? id.error! : p.error).flatten(),
+        }),
       );
     const email = normalizeEmail(p.data.email);
     const phone = normalizeIndianMobile(p.data.phone);
@@ -375,12 +374,20 @@ export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, Us
     if (!loginHandle) return err(validationError('A valid email or phone is required'));
 
     await this.deps.capacity.lockOrganization(ctx.organizationId);
-    const target = await this.deps.repository.findById(p.data.id);
+    const target = await this.deps.repository.findById(id.data);
     if (!target || target.organizationId !== ctx.organizationId)
-      return err(notFoundError('User', p.data.id));
+      return err(notFoundError('User', id.data));
+    if (!(await this.deps.authorizer.canGrantTo(target)))
+      return err(forbiddenError('Not allowed to give this member app access'));
     if (target.authUserId !== null)
       return err(
         conflictError('This member already has app access', { reason: 'ALREADY_HAS_LOGIN' }),
+      );
+    // An email on record is the login (clients and POST /setup/users agree), so a
+    // phone login would leave the member signing in with an identity nobody shows.
+    if (phone && target.email)
+      return err(
+        validationError('This member has an email on record. Give access with that email.'),
       );
     if (target.status === 'ACTIVE') {
       const capacity = await ensureLoginCapacity(this.deps.capacity, ctx.organizationId);

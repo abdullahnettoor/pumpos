@@ -139,59 +139,6 @@ export function memberFormSchema(rules: MemberFormRules) {
     });
 }
 
-export interface AppAccessFormValues {
-  /** What the login is. The other contact detail is not sent. */
-  identity: LoginIdentity;
-  phone: string;
-  email: string;
-  password: string;
-}
-
-/** The request body for `POST /setup/users/:id/app-access`: exactly one of `phone` / `email`, plus the password. */
-export function appAccessRequest(values: AppAccessFormValues): Record<string, unknown> {
-  if (values.identity === 'Phone')
-    return { phone: normalizeIndianMobile(values.phone) ?? null, password: values.password };
-  return { email: values.email.trim().toLowerCase(), password: values.password };
-}
-
-/**
- * The give-app-access form: the same field rules as Add member (`userBaseSchema`),
- * and the API's own cross-field rule (`userSchema`) on the request it will get.
- */
-export const appAccessFormSchema = z
-  .object({
-    identity: z.enum(['Phone', 'Email']),
-    phone: shared(userBaseSchema.shape.phone),
-    email: shared(userBaseSchema.shape.email),
-    password: shared(userBaseSchema.shape.password),
-  })
-  .superRefine((v, ctx) => {
-    const r = userSchema.safeParse({
-      fullName: 'Member',
-      enableAppAccess: true,
-      ...(v.identity === 'Phone'
-        ? { phone: v.phone.trim() }
-        : { email: v.email.trim().toLowerCase() }),
-      password: v.password,
-    });
-    if (r.success) return;
-    const names = new Set(r.error.issues.map((i) => i.path[0]));
-    if (names.has('email') || names.has('phone')) {
-      if (v.identity === 'Phone')
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['phone'],
-          message: 'Enter a phone number: it is what they sign in with.',
-        });
-      else
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['email'],
-          message: 'Enter an email address: it is what they sign in with.',
-        });
-    }
-  });
-
 /** The reset-password form: the password is held to the API schema's own rule (8+ characters). */
 export const resetPasswordSchema = z.object({ password: shared(userBaseSchema.shape.password) });
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;

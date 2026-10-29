@@ -1,6 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
+import type { AppAccessRequest } from '@pump/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { CloudUserAssignmentService, createIdempotencyKey, queryKeys } from '@pump/ui';
+import {
+  CloudUserAssignmentService,
+  createIdempotencyKey,
+  patchUsersWithAppAccess,
+  queryKeys,
+} from '@pump/ui';
 import { addMember, memberRow, patchMember } from '../../lib/team/cache.js';
 import { teamFailure, type TeamAction, type TeamFailure } from '../../lib/team/failure.js';
 import type { TeamMember } from '../../lib/team/members.js';
@@ -136,18 +142,18 @@ export function useResetPassword(id: string) {
 /** Give a member without a login one (`POST /setup/users/:id/app-access`). `body` comes from `appAccessRequest`. */
 export function useGrantAppAccess(id: string) {
   const run = useCallback(
-    (body: Body, key: string) =>
-      service.grantAppAccess(id, body as { phone?: string; email?: string; password: string }, {
-        idempotencyKey: key,
-      }),
+    (body: AppAccessRequest, key: string) =>
+      service.grantAppAccess(id, body, { idempotencyKey: key }),
     [id],
   );
   const apply = useCallback(
-    (qc: QueryClient, saved: Saved) =>
-      patchUsers(qc, (list) => patchMember(list, id, { ...memberRow(saved), hasLogin: true })),
+    (qc: QueryClient, saved: Saved) => {
+      // The answer is the member row (`id` and contact details); anything else is the refetch's.
+      if (saved) patchUsersWithAppAccess(qc, { ...memberRow(saved), id });
+    },
     [id],
   );
-  return useTeamWrite<Body, Saved>({ action: 'access', run, apply });
+  return useTeamWrite<AppAccessRequest, Saved>({ action: 'access', run, apply });
 }
 
 /** Deactivate or reactivate a member (`POST /setup/users/:id/deactivate|reactivate`). */

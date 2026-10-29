@@ -295,6 +295,23 @@ describe('Enable app access for a member without a login (#462)', () => {
     expect(grant.mock.calls[0][1]).toEqual({ email: 'meera@station.com', password: 'Secret123' });
   });
 
+  it('starts on Email, prefilled, for a member who has an email on record', async () => {
+    const grant = vi
+      .spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess')
+      .mockResolvedValue({ ...granted, email: 'meera@station.com' } as any);
+    renderEdit({ ...noLogin, email: 'meera@station.com', phone: '' });
+    expect(
+      within(section()).getByRole('radio', { name: 'Email' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(
+      (within(section()).getByPlaceholderText('e.g. john@station.com') as HTMLInputElement).value,
+    ).toBe('meera@station.com');
+    typePassword('Secret123');
+    submit();
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    expect(grant.mock.calls[0][1]).toEqual({ email: 'meera@station.com', password: 'Secret123' });
+  });
+
   it('marks the member as having a login, and refreshes users and the access document', async () => {
     vi.spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess').mockResolvedValue(
       granted as any,
@@ -316,7 +333,7 @@ describe('Enable app access for a member without a login (#462)', () => {
     renderEdit();
     typePassword('short');
     submit();
-    expect(await screen.findByText('The password needs at least 8 characters')).toBeTruthy();
+    expect(await screen.findByText('Password must be at least 8 characters')).toBeTruthy();
     fireEvent.change(within(section()).getByPlaceholderText('e.g. 98765 43210'), {
       target: { value: '12345' },
     });

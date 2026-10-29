@@ -4,16 +4,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  appAccessFormSchema,
+  appAccessRequest,
   can,
   canActOnTeamMember,
   hasOrganizationWideStationAccess,
   INDIAN_MOBILE_MESSAGE,
   normalizeIndianMobile,
+  type AppAccessFormValues,
   type Role,
   type Station,
 } from '@pump/shared';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { fetchRoleChangePreview, queryKeys, useStations } from '../../query/hooks.js';
+import { patchUsersWithAppAccess } from '../../query/teamMemberPatches.js';
 import { Drawer } from '../Drawer.js';
 import { Field, Select, TextInput } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -474,50 +478,8 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
 
 // --- enable app access -------------------------------------------------------
 
-/**
- * App access for a member who has no login (#462). The identity rules are the
- * create flow's: exactly one of phone or email, and a password of at least 8
- * characters. `identityType` lives in the form so the schema can ask for the
- * right one.
- */
-const appAccessSchema = z
-  .object({
-    identityType: z.enum(['Phone', 'Email']),
-    email: z.string(),
-    phone: z.string(),
-    password: z.string(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.identityType === 'Phone') {
-      if (v.phone.trim() === '') {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['phone'],
-          message: 'A phone number is required for phone login.',
-        });
-      } else if (normalizeIndianMobile(v.phone) === null) {
-        ctx.addIssue({ code: 'custom', path: ['phone'], message: INDIAN_MOBILE_MESSAGE });
-      }
-    } else if (!z.string().email().safeParse(v.email.trim()).success) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['email'],
-        message:
-          v.email.trim() === ''
-            ? 'An email address is required for email login.'
-            : 'Invalid email address',
-      });
-    }
-    if (v.password.length < 8) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['password'],
-        message: 'The password needs at least 8 characters',
-      });
-    }
-  });
-
-type AppAccessValues = z.infer<typeof appAccessSchema>;
+// The form's rules and the request it becomes are `@pump/shared`'s, the same the API and
+// the mobile app use. The member's identity picker starts on Email when they have one.
 
 /** May this caller give this member a login? The server's `team.manage` + `canActOnTarget`. */
 function canGiveAppAccess(member: TeamMember, stations: Station[]): boolean {
@@ -547,26 +509,22 @@ const GrantAppAccessSection: React.FC<{
     setValue,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<AppAccessValues>({
-    resolver: zodResolver(appAccessSchema),
+  } = useForm<AppAccessFormValues>({
+    resolver: zodResolver(appAccessFormSchema),
     defaultValues: {
-      identityType: member.email ? 'Email' : 'Phone',
+      identity: member.email ? 'Email' : 'Phone',
       email: member.email || '',
       phone: member.phone || '',
       password: '',
     },
   });
-  const identityType = watch('identityType');
+  const identityType = watch('identity');
   const password = watch('password');
 
-  const onSubmit = async (values: AppAccessValues) => {
+  const onSubmit = async (values: AppAccessFormValues) => {
     setServerError(null);
-    const isPhone = values.identityType === 'Phone';
-    // Exactly one identity: the server refuses both.
-    const login = isPhone ? (normalizeIndianMobile(values.phone) ?? '') : values.email.trim();
-    const body = isPhone
-      ? { phone: login, password: values.password }
-      : { email: login, password: values.password };
+    const body = appAccessRequest(values);
+    const login = body.phone ?? body.email;
     let saved: Awaited<ReturnType<typeof userService.grantAppAccess>>;
     try {
       saved = await save(body, (idempotencyKey) =>
@@ -576,8 +534,8 @@ const GrantAppAccessSection: React.FC<{
       setServerError(errorMessage(err) || "Couldn't give app access. Try again.");
       return;
     }
-    const row: TeamMember = { ...member, ...saved, role: saved.role as Role, hasLogin: true };
-    team.merge(row);
+    patchUsersWithAppAccess(qc, saved);
+    team.refresh();
     void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(member.id) });
     toast.success('App access enabled.');
     onGranted({ login, password: values.password });
@@ -600,7 +558,7 @@ const GrantAppAccessSection: React.FC<{
       >
         <LoginIdentityFields
           identityType={identityType}
-          onIdentityTypeChange={(type) => setValue('identityType', type)}
+          onIdentityTypeChange={(type) => setValue('identity', type)}
           email={register('email')}
           phone={register('phone')}
           password={register('password')}

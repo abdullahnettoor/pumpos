@@ -282,7 +282,7 @@ export const MemberForm: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => set('password', generatePassword())}
-            className="self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
+            className="hit-44 self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
           >
             Generate a new one
           </button>

@@ -721,11 +721,59 @@ describe('giving app access to a member without a login (#462)', () => {
     expect(body.email).toBe('ramesh@example.com');
   });
 
+  it('starts on Email, prefilled, for a member with an email on record', async () => {
+    users = users.map((u) =>
+      u.id === 'att' ? { ...u, email: 'ramesh@example.com', phone: '+919876543210' } : u,
+    );
+    mount();
+    const dialog = await openGive();
+    expect(within(dialog).getByRole('radio', { name: 'Email' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(field(dialog, 'Email').value).toBe('ramesh@example.com');
+    fireEvent.click(submitGive(dialog));
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    const [, body] = grant.mock.calls[0] as any;
+    expect(Object.keys(body).sort()).toEqual(['email', 'password']);
+    expect(body.email).toBe('ramesh@example.com');
+  });
+
+  it('gives "Generate a new one" a 44px touch target', async () => {
+    mount();
+    const dialog = await openGive();
+    const generate = within(dialog).getByRole('button', { name: 'Generate a new one' });
+    expect(generate.className).toContain('hit-44');
+    const before = field(dialog, 'Password').value;
+    fireEvent.click(generate);
+    expect(field(dialog, 'Password').value).not.toBe(before);
+  });
+
+  it('writes the grant into the cached team list from the answer before the refetch', async () => {
+    grant.mockResolvedValue({
+      id: 'att',
+      fullName: 'Ramesh Attendant',
+      phone: '+919876543299',
+      hasLogin: true,
+    } as any);
+    const { qc } = mount();
+    const dialog = await openGive();
+    // The revalidation never answers, so what the cache holds is the patch.
+    listUsers.mockImplementation(() => new Promise(() => {}));
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    fireEvent.click(submitGive(dialog));
+    await screen.findByText('App access given');
+    const cached = qc.getQueryData<any[]>(ui.queryKeys.users());
+    expect(cached?.find((u) => u.id === 'att')).toMatchObject({
+      hasLogin: true,
+      phone: '+919876543299',
+    });
+  });
+
   it('validates inline with the shared rules and sends nothing', async () => {
     mount();
     const dialog = await openGive();
     fireEvent.click(submitGive(dialog));
-    expect(await within(dialog).findByText(/Enter a phone number/)).toBeTruthy();
+    expect(await within(dialog).findByText(/phone number is required/)).toBeTruthy();
     fireEvent.change(field(dialog, 'Phone'), { target: { value: '12345' } });
     fireEvent.change(field(dialog, 'Password'), { target: { value: 'short' } });
     fireEvent.click(submitGive(dialog));

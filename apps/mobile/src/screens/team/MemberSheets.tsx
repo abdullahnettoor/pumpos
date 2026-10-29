@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { appAccessFormSchema, appAccessRequest, type AppAccessFormValues } from '@pump/shared';
 import { useToast } from '@pump/ui';
 import {
-  appAccessFormSchema,
-  appAccessRequest,
   generatePassword,
   resetPasswordSchema,
-  type AppAccessFormValues,
   type MemberFormValues,
   type ResetPasswordValues,
 } from '../../lib/team/form.js';
@@ -163,7 +161,7 @@ const ResetForm: React.FC<{
         <button
           type="button"
           onClick={() => setValue('password', generatePassword())}
-          className="self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
+          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
         >
           Generate a new one
         </button>
@@ -217,7 +215,7 @@ const GiveAccessForm: React.FC<{
   } = useForm<AppAccessFormValues>({
     resolver: zodResolver(appAccessFormSchema),
     defaultValues: {
-      identity: member.phone || !member.email ? 'Phone' : 'Email',
+      identity: member.email ? 'Email' : 'Phone',
       phone: member.phone ?? '',
       email: member.email ?? '',
       password: generatePassword(),
@@ -232,7 +230,7 @@ const GiveAccessForm: React.FC<{
     const result = await save(body);
     if (result.ok)
       setDone({
-        login: (body.phone ?? body.email ?? '') as string,
+        login: body.phone ?? body.email,
         password: data.password,
       });
     else setRefusal(result.failure);
@@ -298,7 +296,7 @@ const GiveAccessForm: React.FC<{
         <button
           type="button"
           onClick={() => setValue('password', generatePassword())}
-          className="self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
+          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
         >
           Generate a new one
         </button>

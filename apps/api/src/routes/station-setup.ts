@@ -31,6 +31,7 @@ import {
   ensureLoginCapacity,
   claimLoginSeatForActivation,
   err,
+  ok,
   validationError,
   UpdateStation,
   CreateUser,
@@ -1041,23 +1042,6 @@ stationSetupRouter.post(
     const id = c.req.param('id');
     const body = c.req.valid('json');
     const db = c.var.db;
-    const target = await new DrizzleUserRepository(db).findById(id);
-    if (!target || target.organizationId !== user.organizationId) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
-        404,
-      );
-    }
-    const stationIds = await loadTargetStationIds(db, id);
-    if (!canActOnTarget(user, target.role, stationIds)) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'FORBIDDEN', message: 'Not allowed to give this member app access' },
-        },
-        403,
-      );
-    }
     const admin = getSupabaseAdmin(c);
     if (!admin) {
       return c.json(
@@ -1077,14 +1061,38 @@ stationSetupRouter.post(
     const logins = new SupabaseLoginProvisioner(admin);
     let result;
     try {
-      result = await runInTransaction(db, (tx, events) =>
-        new GrantUserAppAccess({
+      result = await runInTransaction(db, async (tx, events) => {
+        const granted = await new GrantUserAppAccess({
           repository: new DrizzleUserRepository(tx),
           events,
           capacity: new DrizzleStationCapacityPort(tx),
           logins,
-        }).execute({ id, ...body }, buildContext(user)),
-      );
+          // Asked under the Organization lock, of the member as it is now.
+          authorizer: {
+            canGrantTo: async (target) =>
+              canActOnTarget(user, target.role, await loadTargetStationIds(tx, target.id)),
+          },
+        }).execute({ id, ...body }, buildContext(user));
+        if (!granted.success) return granted;
+
+        // The member row as GET /users returns it. Built here so a failed read rolls the
+        // grant back (and the login is deleted) instead of leaving a grant a retry would
+        // refuse as ALREADY_HAS_LOGIN.
+        const { authUserId, ...member } = granted.data;
+        const [custom] = await tx
+          .select({
+            granted: schema.userPermissionChanges.granted,
+            revoked: schema.userPermissionChanges.revoked,
+          })
+          .from(schema.userPermissionChanges)
+          .where(eq(schema.userPermissionChanges.userId, id));
+        return ok({
+          ...member,
+          stationIds: await loadTargetStationIds(tx, id),
+          hasLogin: !!authUserId,
+          hasCustomPermissions: (custom?.granted?.length ?? 0) + (custom?.revoked?.length ?? 0) > 0,
+        });
+      });
     } catch (e) {
       await logins.rollback();
       throw e;
@@ -1093,25 +1101,7 @@ stationSetupRouter.post(
       await logins.rollback();
       return sendResult(c, result);
     }
-
-    // The member row as GET /users returns it.
-    const { authUserId, ...member } = result.data;
-    const [custom] = await db
-      .select({
-        granted: schema.userPermissionChanges.granted,
-        revoked: schema.userPermissionChanges.revoked,
-      })
-      .from(schema.userPermissionChanges)
-      .where(eq(schema.userPermissionChanges.userId, id));
-    return c.json({
-      success: true,
-      data: {
-        ...member,
-        stationIds,
-        hasLogin: !!authUserId,
-        hasCustomPermissions: (custom?.granted?.length ?? 0) + (custom?.revoked?.length ?? 0) > 0,
-      },
-    });
+    return c.json({ success: true, data: result.data });
   },
 );
 
