@@ -2,13 +2,18 @@ import { z } from 'zod';
 import type { Role } from '@pump/shared';
 import {
   hasFixedPermissions,
+  normalizeIndianMobile,
   optionalIndianMobileSchema,
+  phoneToAuthEmail,
   resolveEffectivePermissions,
 } from '@pump/shared';
+import { ensureLoginCapacity } from '../../organization-access/login-capacity.js';
+import type { LoginCapacityPort } from '../../organization-access/login-capacity.js';
 import type { UserPermissionChangesWriter } from '../../organization-access/ports.js';
 import { userPermissionsChangedEvent } from '../../organization-access/user-permissions.js';
 import {
   BusinessEvents,
+  conflictError,
   err,
   eventFromContext,
   notFoundError,
@@ -43,6 +48,8 @@ export interface UserWithAssignments extends User {
 
 export interface UserRepository extends Repository<User> {
   save(user: User): Promise<void>;
+  /** Link a member to its login account. `save` never writes `authUserId`. */
+  linkLogin(userId: string, authUserId: string): Promise<void>;
   /** Replace the user's station assignments; every station must belong to the organization. */
   setStationAssignments(
     userId: string,
@@ -302,6 +309,112 @@ export class SetUserStatus implements UseCase<SetUserStatusCommand, User> {
         aggregateType: 'User',
         aggregateId: updated.id,
         payload: { userId: updated.id, status: updated.status },
+      }),
+    ]);
+    return ok(updated);
+  }
+}
+
+/** The login-account provider (Supabase Auth admin), behind a port so core stays framework-free. */
+export interface LoginProvisioner {
+  /**
+   * Create a confirmed login for `email` (a real address or the phone handle).
+   * A taken identity is a CONFLICT with `details.reason = 'IDENTITY_TAKEN'`.
+   */
+  createLogin(input: { email: string; password: string }): Promise<Result<{ authUserId: string }>>;
+}
+
+export interface GrantUserAppAccessCommand {
+  id: string;
+  email?: string | null;
+  phone?: string | null;
+  password: string;
+}
+
+const grantAppAccessSchema = z
+  .object({
+    id: z.string().min(1),
+    email: z.string().trim().email().nullish().or(z.literal('')),
+    phone: optionalIndianMobileSchema,
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+  })
+  .superRefine((val, ctx) => {
+    const identities = [val.email, val.phone].filter((v) => !!v && v.trim() !== '').length;
+    if (identities !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Give exactly one of email or phone for app access',
+      });
+    }
+  });
+
+export interface GrantUserAppAccessDeps extends UserDeps {
+  capacity: LoginCapacityPort;
+  logins: LoginProvisioner;
+}
+
+/**
+ * Give an existing member without a login an app login (#462). Mirrors
+ * creating a member with app access: a login takes a `login_count` seat
+ * (ACTIVE members only; reactivating an INACTIVE one takes it later), decided
+ * under the Organization lock on a re-read of the member. The password only
+ * ever reaches the provisioner; it is never stored, logged or put on an event.
+ */
+export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, User> {
+  constructor(private readonly deps: GrantUserAppAccessDeps) {}
+  async execute(input: GrantUserAppAccessCommand, ctx: ExecutionContext): Promise<Result<User>> {
+    const p = grantAppAccessSchema.safeParse(input);
+    if (!p.success)
+      return err(
+        validationError('Invalid GrantUserAppAccess command', { issues: p.error.flatten() }),
+      );
+    const email = normalizeEmail(p.data.email);
+    const phone = normalizeIndianMobile(p.data.phone);
+    const loginHandle = email ?? phoneToAuthEmail(phone);
+    if (!loginHandle) return err(validationError('A valid email or phone is required'));
+
+    await this.deps.capacity.lockOrganization(ctx.organizationId);
+    const target = await this.deps.repository.findById(p.data.id);
+    if (!target || target.organizationId !== ctx.organizationId)
+      return err(notFoundError('User', p.data.id));
+    if (target.authUserId !== null)
+      return err(
+        conflictError('This member already has app access', { reason: 'ALREADY_HAS_LOGIN' }),
+      );
+    if (target.status === 'ACTIVE') {
+      const capacity = await ensureLoginCapacity(this.deps.capacity, ctx.organizationId);
+      if (!capacity.success) return capacity;
+    }
+
+    const created = await this.deps.logins.createLogin({
+      email: loginHandle,
+      password: p.data.password,
+    });
+    if (!created.success) return created;
+    const { authUserId } = created.data;
+
+    const updated: User = {
+      ...target,
+      authUserId,
+      // The login identity is the member's contact of that kind.
+      email: email ?? target.email,
+      phone: phone ?? target.phone,
+      updatedAt: ctx.clock.now().toISOString(),
+    };
+    await this.deps.repository.save(updated);
+    await this.deps.repository.linkLogin(updated.id, authUserId);
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.USER_APP_ACCESS_GRANTED,
+        aggregateType: 'User',
+        aggregateId: updated.id,
+        payload: {
+          userId: updated.id,
+          role: updated.role,
+          hasPhone: !!phone,
+          hasEmail: !!email,
+        },
       }),
     ]);
     return ok(updated);

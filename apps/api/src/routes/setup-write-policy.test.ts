@@ -53,6 +53,7 @@ const BLOCKED_UNDER_RESTRICTED: ReadonlyArray<[string, string, string]> = [
   ['PUT', '/setup/users/user-2', 'team administration'],
   ['POST', '/setup/users/user-2/reactivate', 'team reactivation'],
   ['POST', '/setup/users/user-2/reset-password', 'team administration'],
+  ['POST', '/setup/users/user-2/app-access', 'team administration'],
   ['POST', '/setup/products', 'catalog changes'],
   ['POST', '/setup/products/import', 'catalog import'],
   ['PUT', '/setup/products/product-1', 'catalog edits'],
