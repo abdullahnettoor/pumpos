@@ -1,6 +1,6 @@
 ---
 import ProseLayout from '../../layouts/ProseLayout.astro';
-import { WHATSAPP_URL, WHATSAPP_DISPLAY } from '../../config';
+import { WHATSAPP_URL, WHATSAPP_DISPLAY, CONTACT_EMAIL, contactMailto } from '../../config';
 ---
 <ProseLayout
   title="Pilot terms"
@@ -52,5 +52,5 @@ import { WHATSAPP_URL, WHATSAPP_DISPLAY } from '../../config';
   <p>Walkthroughs on this website and in demo stations use sample data.</p>
 
   <h2>Questions</h2>
-  <p>Email <a href="mailto:hello@pumpos.app?subject=Pilot%20terms">hello@pumpos.app</a> to talk through the terms for your station.</p>
+  <p>Email <a href={contactMailto('Pilot terms')}>{CONTACT_EMAIL}</a> to talk through the terms for your station.</p>
 </ProseLayout>

@@ -208,6 +208,8 @@ jobs:
           SITE: ${{ needs.changes.outputs.mode == 'production' && (vars.MARKETING_SITE || 'https://pumpos.app') || 'https://pumpos.abdullahnettoor.com' }}
           PUBLIC_CONSOLE_URL: ${{ needs.changes.outputs.mode == 'production' && (vars.CONSOLE_URL || 'https://console.pumpos.app') || 'https://console.pumpos.abdullahnettoor.com' }}
           PUBLIC_BLOG_SHOW_SCHEDULED: ${{ needs.changes.outputs.mode != 'production' }}
+          PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          PUBLIC_DEMO_BOOKING_URL: ${{ vars.DEMO_BOOKING_URL }}
       - name: Deploy marketing
         working-directory: apps/marketing
         run: |

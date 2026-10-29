@@ -1,6 +1,6 @@
 ---
 import BrandMark from '../marketing-preview/BrandMark.astro';
-import { WHATSAPP_URL, LINKEDIN_URL } from '../../config';
+import { WHATSAPP_URL, LINKEDIN_URL, CONTACT_EMAIL, contactMailto } from '../../config';
 // Compact footer for now. Switch to a column footer once Docs, Journal and the
 // learning sections have more pages. Legal name, address and GSTIN go in here
 // once available.
@@ -27,7 +27,7 @@ const icons = {
     <div class="sf-social">
       <a href={WHATSAPP_URL} target="_blank" rel="noopener" aria-label="WhatsApp PumpOS"><Fragment set:html={icons.wa} /></a>
       <a href={LINKEDIN_URL} target="_blank" rel="noopener" aria-label="PumpOS on LinkedIn"><Fragment set:html={icons.li} /></a>
-      <a href="mailto:hello@pumpos.app" aria-label="Email hello@pumpos.app"><Fragment set:html={icons.mail} /></a>
+      <a href={contactMailto()} aria-label={`Email ${CONTACT_EMAIL}`}><Fragment set:html={icons.mail} /></a>
     </div>
     <span class="sf-copy">© {new Date().getFullYear()} PumpOS</span>
   </div>
