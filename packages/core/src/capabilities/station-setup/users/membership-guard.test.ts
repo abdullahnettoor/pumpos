@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
+import type { Role } from '@pump/shared';
 import { checkMembershipChange, checkSelfPasswordReset } from './membership-guard.js';
 
-const owner = { id: 'u2', role: 'Owner', status: 'ACTIVE' };
+const owner: { id: string; role: Role; status: string } = {
+  id: 'u2',
+  role: 'Owner',
+  status: 'ACTIVE',
+};
 const base = { actorUserId: 'u1', target: owner, otherActiveOwners: 1 };
 const code = (r: any) => (r.success ? null : r.error.code);
 
@@ -26,7 +31,7 @@ describe('checkMembershipChange (#443)', () => {
     expect(checkMembershipChange({ ...base, role: 'Manager' }).success).toBe(true);
   });
   it('leaves other members and reactivation alone', () => {
-    const mgr = { id: 'u3', role: 'Manager', status: 'ACTIVE' };
+    const mgr = { ...owner, id: 'u3', role: 'Manager' as const };
     const none = { actorUserId: 'u1', otherActiveOwners: 0 };
     expect(checkMembershipChange({ ...none, target: mgr, status: 'INACTIVE' }).success).toBe(true);
     expect(
