@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  can,
+  canActOnTeamMember,
   hasOrganizationWideStationAccess,
   INDIAN_MOBILE_MESSAGE,
   normalizeIndianMobile,
@@ -15,16 +17,25 @@ import { fetchRoleChangePreview, queryKeys, useStations } from '../../query/hook
 import { Drawer } from '../Drawer.js';
 import { Field, Select, TextInput } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { currentPrincipal } from '../../access/effectivePrincipal.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { labelOf } from './permissionsModel.js';
-import { useToast, withNextStep, type ToastApi } from '../primitives/ToastProvider.js';
+import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { useKeyedSave } from '../../office-records/useKeyedSave.js';
-import { Button, Form, Icon, SegmentedControl } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { loginIdentity } from '../Organization/organizationModel.js';
+import {
+  CredentialsCard,
+  LoginIdentityFields,
+  PasswordRow,
+  copyWithFeedback,
+  generatePassword,
+  type Credentials,
+  type LoginIdentityType,
+} from './teamLoginParts.js';
 
-/** The credentials could not reach the clipboard (#606: say what to do next). */
-const COPY_FAILED = 'Copy failed. Select the text and copy it, or note it down.';
+export type { Credentials };
 
 /**
  * The Team drawers (#538): new / edit member (with the credentials to hand
@@ -52,50 +63,6 @@ const userFormSchema = z.object({
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
-
-export interface Credentials {
-  login: string;
-  password: string;
-}
-
-// --- helpers ---------------------------------------------------------------
-function generatePassword(): string {
-  // Readable, strong: avoids ambiguous chars (0/O, 1/l/I).
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const all = upper + lower + digits;
-  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
-  let out = pick(upper) + pick(lower) + pick(digits);
-  for (let i = 0; i < 7; i++) out += pick(all);
-  return out
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('');
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Copy + tell the operator whether it worked, in one place.
- *
- * Clipboard access is blocked often enough (insecure origin, permission denied)
- * that "did it copy?" is a real question, and these credentials are the one
- * thing the operator cannot re-read later. The trailing `.catch` is the
- * rejection path for a `copy` that rejects rather than resolving false.
- */
-function copyWithFeedback(text: string, label: string, toast: ToastApi): void {
-  copyText(text)
-    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error(COPY_FAILED)))
-    .catch(() => toast.error(COPY_FAILED));
-}
 
 /**
  * The stations a new member starts assigned to (#299): the station the operator
@@ -142,24 +109,6 @@ export function useTeamCache() {
     },
   };
 }
-
-/** A password input with Generate and Copy beside it. */
-const PasswordRow: React.FC<{
-  input: React.ReactNode;
-  onGenerate: () => void;
-  onCopy: () => void;
-  canCopy: boolean;
-}> = ({ input, onGenerate, onCopy, canCopy }) => (
-  <div className="flex gap-1.5">
-    <div className="min-w-0 flex-1">{input}</div>
-    <Button type="button" variant="secondary" size="md" onClick={onGenerate}>
-      Generate
-    </Button>
-    <Button type="button" variant="secondary" size="md" disabled={!canCopy} onClick={onCopy}>
-      Copy
-    </Button>
-  </div>
-);
 
 // --- member drawer -----------------------------------------------------------
 
@@ -232,7 +181,7 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       ? (editingUser.stationIds ?? [])
       : defaultNewMemberStationIds(stations, currentStationId),
   );
-  const [identityType, setIdentityType] = useState<'Email' | 'Phone'>(
+  const [identityType, setIdentityType] = useState<LoginIdentityType>(
     editingUser?.email ? 'Email' : 'Phone',
   );
 
@@ -396,6 +345,9 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
     }
   };
 
+  const offerAppAccess =
+    !!editingUser && editingUser.hasLogin === false && canGiveAppAccess(editingUser, stations);
+
   const toggleStation = (stationId: string, checked: boolean) =>
     setStationIds((prev) =>
       checked ? [...prev, stationId] : prev.filter((id) => id !== stationId),
@@ -410,143 +362,265 @@ export const MemberDrawer: React.FC<MemberDrawerProps> = ({
       {credentials ? (
         <CredentialsCard credentials={credentials} onDone={onClose} toast={toast} />
       ) : (
-        <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
-          <Field label="Full name" required error={errors.fullName?.message}>
-            <TextInput
-              placeholder="e.g. John Doe"
-              invalid={!!errors.fullName}
-              {...register('fullName')}
-            />
-          </Field>
-
-          {!editingUser && (
-            <div className="mb-4">
-              <Checkbox label="Enable app access (allows login)" {...register('enableAppAccess')} />
-            </div>
-          )}
-
-          {/* Identity picker — only when provisioning a new login */}
-          {!editingUser && watchEnableAppAccess && (
-            <div className="mb-4 flex flex-col rounded-card border border-border-soft bg-surface-alt p-3 pb-0">
-              <div className="mb-3 flex items-center gap-3">
-                <span className="text-[12px] font-semibold text-ink-muted">Login with</span>
-                <SegmentedControl
-                  aria-label="Login with"
-                  stretch
-                  className="flex-1"
-                  options={[
-                    { value: 'Phone', label: 'Phone' },
-                    { value: 'Email', label: 'Email' },
-                  ]}
-                  value={identityType}
-                  onChange={setIdentityType}
-                />
-              </div>
-
-              {identityType === 'Email' ? (
-                <Field label="Email address" required error={errors.email?.message}>
-                  <TextInput
-                    type="email"
-                    placeholder="e.g. john@station.com"
-                    invalid={!!errors.email}
-                    {...register('email')}
-                  />
-                </Field>
-              ) : (
-                <Field
-                  label="Phone number"
-                  required
-                  error={errors.phone?.message}
-                  hint="They sign in with this phone number + password. No SMS is sent."
-                >
-                  <TextInput
-                    type="tel"
-                    placeholder="e.g. 98765 43210"
-                    invalid={!!errors.phone}
-                    aria-invalid={!!errors.phone}
-                    {...register('phone')}
-                  />
-                </Field>
-              )}
-
-              <Field label="Password" required>
-                <PasswordRow
-                  input={
-                    <TextInput
-                      type="text"
-                      className="font-mono"
-                      placeholder="At least 8 characters"
-                      {...register('password')}
-                    />
-                  }
-                  onGenerate={() => setValue('password', generatePassword())}
-                  onCopy={() => copyWithFeedback(watchPassword, 'Password', toast)}
-                  canCopy={!!watchPassword}
-                />
-              </Field>
-            </div>
-          )}
-
-          {/* Profile phone for record-only / edit (non-login) */}
-          {(editingUser || !watchEnableAppAccess) && (
-            <Field label="Phone number" error={errors.phone?.message}>
+        <>
+          <Form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
+            <Field label="Full name" required error={errors.fullName?.message}>
               <TextInput
-                type="tel"
-                placeholder="e.g. 98765 43210"
-                invalid={!!errors.phone}
-                aria-invalid={!!errors.phone}
-                {...register('phone')}
+                placeholder="e.g. John Doe"
+                invalid={!!errors.fullName}
+                {...register('fullName')}
               />
             </Field>
-          )}
 
-          {(editingUser ? !!editingUser.hasLogin : watchEnableAppAccess) && (
-            <Field label="Role">
-              <Select {...register('role')}>
-                <option value="Owner">Owner (Global Admin)</option>
-                <option value="Manager">Manager</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Staff">Staff</option>
-                <option value="Attendant">Attendant (Mobile handover)</option>
-              </Select>
-            </Field>
-          )}
-
-          {!hasOrganizationWideStationAccess({ role: watchRole }) && (
-            <div
-              role="group"
-              aria-labelledby="team-assign-stations"
-              className="mb-4 flex flex-col gap-2"
-            >
-              <span id="team-assign-stations" className="field-label">
-                Assign stations
-              </span>
-              {stations.map((s) => (
+            {!editingUser && (
+              <div className="mb-4">
                 <Checkbox
-                  key={s.id}
-                  label={`${s.name} (${s.code})`}
-                  checked={stationIds.includes(s.id)}
-                  onChange={(e) => toggleStation(s.id, e.target.checked)}
+                  label="Enable app access (allows login)"
+                  {...register('enableAppAccess')}
                 />
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {editingUser && (
-            <Field label="Status">
-              <Select {...register('status')}>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-              </Select>
-            </Field>
-          )}
+            {/* Identity picker — only when provisioning a new login */}
+            {!editingUser && watchEnableAppAccess && (
+              <div className="mb-4 flex flex-col rounded-card border border-border-soft bg-surface-alt p-3 pb-0">
+                <LoginIdentityFields
+                  identityType={identityType}
+                  onIdentityTypeChange={setIdentityType}
+                  email={register('email')}
+                  phone={register('phone')}
+                  password={register('password')}
+                  emailError={errors.email?.message}
+                  phoneError={errors.phone?.message}
+                  passwordValue={watchPassword}
+                  onGeneratePassword={() => setValue('password', generatePassword())}
+                  toast={toast}
+                />
+              </div>
+            )}
 
-          <Button type="submit" variant="primary" size="md" loading={isSubmitting} className="mt-2">
-            {editingUser ? 'Save changes' : 'Add member'}
-          </Button>
-        </Form>
+            {/* Profile phone for record-only / edit (non-login) */}
+            {(editingUser || !watchEnableAppAccess) && (
+              <Field label="Phone number" error={errors.phone?.message}>
+                <TextInput
+                  type="tel"
+                  placeholder="e.g. 98765 43210"
+                  invalid={!!errors.phone}
+                  aria-invalid={!!errors.phone}
+                  {...register('phone')}
+                />
+              </Field>
+            )}
+
+            {(editingUser ? !!editingUser.hasLogin : watchEnableAppAccess) && (
+              <Field label="Role">
+                <Select {...register('role')}>
+                  <option value="Owner">Owner (Global Admin)</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Accountant">Accountant</option>
+                  <option value="Staff">Staff</option>
+                  <option value="Attendant">Attendant (Mobile handover)</option>
+                </Select>
+              </Field>
+            )}
+
+            {!hasOrganizationWideStationAccess({ role: watchRole }) && (
+              <div
+                role="group"
+                aria-labelledby="team-assign-stations"
+                className="mb-4 flex flex-col gap-2"
+              >
+                <span id="team-assign-stations" className="field-label">
+                  Assign stations
+                </span>
+                {stations.map((s) => (
+                  <Checkbox
+                    key={s.id}
+                    label={`${s.name} (${s.code})`}
+                    checked={stationIds.includes(s.id)}
+                    onChange={(e) => toggleStation(s.id, e.target.checked)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {editingUser && (
+              <Field label="Status">
+                <Select {...register('status')}>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </Select>
+              </Field>
+            )}
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={isSubmitting}
+              className="mt-2"
+            >
+              {editingUser ? 'Save changes' : 'Add member'}
+            </Button>
+          </Form>
+          {offerAppAccess && editingUser && (
+            <GrantAppAccessSection member={editingUser} onGranted={setCredentials} />
+          )}
+        </>
       )}
     </Drawer>
+  );
+};
+
+// --- enable app access -------------------------------------------------------
+
+/**
+ * App access for a member who has no login (#462). The identity rules are the
+ * create flow's: exactly one of phone or email, and a password of at least 8
+ * characters. `identityType` lives in the form so the schema can ask for the
+ * right one.
+ */
+const appAccessSchema = z
+  .object({
+    identityType: z.enum(['Phone', 'Email']),
+    email: z.string(),
+    phone: z.string(),
+    password: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.identityType === 'Phone') {
+      if (v.phone.trim() === '') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['phone'],
+          message: 'A phone number is required for phone login.',
+        });
+      } else if (normalizeIndianMobile(v.phone) === null) {
+        ctx.addIssue({ code: 'custom', path: ['phone'], message: INDIAN_MOBILE_MESSAGE });
+      }
+    } else if (!z.string().email().safeParse(v.email.trim()).success) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['email'],
+        message:
+          v.email.trim() === ''
+            ? 'An email address is required for email login.'
+            : 'Invalid email address',
+      });
+    }
+    if (v.password.length < 8) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'The password needs at least 8 characters',
+      });
+    }
+  });
+
+type AppAccessValues = z.infer<typeof appAccessSchema>;
+
+/** May this caller give this member a login? The server's `team.manage` + `canActOnTarget`. */
+function canGiveAppAccess(member: TeamMember, stations: Station[]): boolean {
+  const principal = currentPrincipal();
+  return (
+    can(principal, 'team.manage') &&
+    canActOnTeamMember(
+      { role: principal.role, stationIds: stations.map((s) => s.id) },
+      member.role ?? 'Staff',
+      member.stationIds ?? [],
+    )
+  );
+}
+
+const GrantAppAccessSection: React.FC<{
+  member: TeamMember;
+  onGranted: (credentials: Credentials) => void;
+}> = ({ member, onGranted }) => {
+  const toast = useToast();
+  const team = useTeamCache();
+  const qc = useQueryClient();
+  const save = useKeyedSave(`team:app-access:${member.id}`);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<AppAccessValues>({
+    resolver: zodResolver(appAccessSchema),
+    defaultValues: {
+      identityType: member.email ? 'Email' : 'Phone',
+      email: member.email || '',
+      phone: member.phone || '',
+      password: '',
+    },
+  });
+  const identityType = watch('identityType');
+  const password = watch('password');
+
+  const onSubmit = async (values: AppAccessValues) => {
+    setServerError(null);
+    const isPhone = values.identityType === 'Phone';
+    // Exactly one identity: the server refuses both.
+    const login = isPhone ? (normalizeIndianMobile(values.phone) ?? '') : values.email.trim();
+    const body = isPhone
+      ? { phone: login, password: values.password }
+      : { email: login, password: values.password };
+    let saved: Awaited<ReturnType<typeof userService.grantAppAccess>>;
+    try {
+      saved = await save(body, (idempotencyKey) =>
+        userService.grantAppAccess(member.id, body, { idempotencyKey }),
+      );
+    } catch (err) {
+      setServerError(errorMessage(err) || "Couldn't give app access. Try again.");
+      return;
+    }
+    const row: TeamMember = { ...member, ...saved, role: saved.role as Role, hasLogin: true };
+    team.merge(row);
+    void qc.invalidateQueries({ queryKey: queryKeys.userPermissions(member.id) });
+    toast.success('App access enabled.');
+    onGranted({ login, password: values.password });
+  };
+
+  return (
+    <section
+      aria-labelledby="team-enable-app-access"
+      className="mt-5 flex flex-col border-t border-border-soft pt-4"
+    >
+      <h3 id="team-enable-app-access" className="text-[13px] font-semibold text-ink-strong">
+        Enable app access
+      </h3>
+      <p className="mb-3 mt-0.5 text-[12px] text-ink-muted">
+        {member.fullName} has no login yet. Create one so they can sign in.
+      </p>
+      <Form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col rounded-card border border-border-soft bg-surface-alt p-3 pb-0"
+      >
+        <LoginIdentityFields
+          identityType={identityType}
+          onIdentityTypeChange={(type) => setValue('identityType', type)}
+          email={register('email')}
+          phone={register('phone')}
+          password={register('password')}
+          emailError={errors.email?.message}
+          phoneError={errors.phone?.message}
+          passwordError={errors.password?.message}
+          passwordValue={password}
+          onGeneratePassword={() => setValue('password', generatePassword())}
+          toast={toast}
+        />
+        {serverError && (
+          <p role="alert" className="field-error mb-3">
+            {serverError}
+          </p>
+        )}
+        <Button type="submit" variant="secondary" size="md" loading={isSubmitting} className="mb-3">
+          Enable app access
+        </Button>
+      </Form>
+    </section>
   );
 };
 
@@ -629,64 +703,3 @@ export const ResetPasswordDrawer: React.FC<ResetPasswordDrawerProps> = ({
     </Drawer>
   );
 };
-
-// --- credentials -------------------------------------------------------------
-
-/** One credential to hand over, with its Copy button. */
-const CredentialRow: React.FC<{ label: string; value: string; onCopy: () => void }> = ({
-  label,
-  value,
-  onCopy,
-}) => (
-  <div className="flex items-center justify-between gap-2 rounded-[8px] border border-border-soft bg-surface-alt px-2.5 py-2">
-    <div className="flex min-w-0 flex-col">
-      <span className="text-[12px] text-ink-muted">{label}</span>
-      <span className="truncate font-mono text-[13px] text-ink-strong">{value}</span>
-    </div>
-    <Button variant="secondary" size="xs" onClick={onCopy}>
-      Copy
-    </Button>
-  </div>
-);
-
-const CredentialsCard: React.FC<{
-  credentials: Credentials;
-  onDone: () => void;
-  toast: ToastApi;
-}> = ({ credentials, onDone, toast }) => (
-  <div className="flex flex-col gap-3.5">
-    <div
-      role="status"
-      className="flex items-center gap-2 rounded-[8px] bg-success-bg px-3 py-2.5 text-[12px] font-semibold text-success-fg"
-    >
-      <Icon name="check" size="xs" />
-      Login ready. Copy and hand these over — the password is shown only once.
-    </div>
-    <CredentialRow
-      label="Login"
-      value={credentials.login}
-      onCopy={() => copyWithFeedback(credentials.login, 'Login', toast)}
-    />
-    <CredentialRow
-      label="Password"
-      value={credentials.password}
-      onCopy={() => copyWithFeedback(credentials.password, 'Password', toast)}
-    />
-    <Button
-      variant="secondary"
-      size="sm"
-      onClick={() =>
-        copyWithFeedback(
-          `Login: ${credentials.login}\nPassword: ${credentials.password}`,
-          'Credentials',
-          toast,
-        )
-      }
-    >
-      Copy both
-    </Button>
-    <Button variant="primary" size="md" onClick={onDone}>
-      Done
-    </Button>
-  </div>
-);

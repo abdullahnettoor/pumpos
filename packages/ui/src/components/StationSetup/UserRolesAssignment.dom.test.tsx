@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import {
   createTestQueryClient,
   muteExpectedConsoleErrors,
   renderWithProviders,
 } from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
+import { publishEffective, resetEffectivePrincipal } from '../../access/effectivePrincipal.js';
 import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { UserRolesAssignment, defaultNewMemberStationIds } from './UserRolesAssignment.js';
 import { MemberDrawer } from './TeamMemberDrawers.js';
@@ -195,5 +196,165 @@ describe('Team list', () => {
     expect(screen.queryByText('No team members yet')).toBeNull();
     restore();
     vi.restoreAllMocks();
+  });
+});
+
+describe('Enable app access for a member without a login (#462)', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = muteExpectedConsoleErrors([/not wrapped in act/]);
+    publishEffective('Owner', ['team.manage']);
+  });
+  afterEach(() => {
+    cleanup();
+    restore();
+    resetEffectivePrincipal();
+    vi.restoreAllMocks();
+  });
+
+  const noLogin = {
+    id: 'u-nologin',
+    fullName: 'Meera Nair',
+    email: '',
+    phone: '+919876543210',
+    status: 'ACTIVE' as const,
+    role: 'Staff' as const,
+    hasLogin: false,
+    stationIds: ['st-a'],
+  };
+  const granted = { ...noLogin, hasLogin: true };
+
+  const renderEdit = (member: Record<string, unknown> = noLogin) => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.users(), [member]);
+    queryClient.setQueryData(queryKeys.stations(), [ST_A, ST_B]);
+    const view = renderWithProviders(
+      <MemberDrawer isOpen editingUser={member as any} onClose={() => {}} />,
+      { queryClient },
+    );
+    return { ...view, queryClient };
+  };
+  const section = () => screen.getByRole('region', { name: 'Enable app access' });
+  const submit = () =>
+    fireEvent.click(within(section()).getByRole('button', { name: 'Enable app access' }));
+  const typePassword = (value: string) =>
+    fireEvent.change(within(section()).getByPlaceholderText('At least 8 characters'), {
+      target: { value },
+    });
+
+  it('is offered for a member without a login, and not for one who has a login', () => {
+    renderEdit();
+    expect(section()).toBeTruthy();
+    cleanup();
+    renderEdit(granted);
+    expect(screen.queryByRole('region', { name: 'Enable app access' })).toBeNull();
+  });
+
+  it('is hidden when the caller cannot act on the member', () => {
+    publishEffective('Manager', ['team.manage']);
+    renderEdit({ ...noLogin, role: 'Manager' });
+    expect(screen.queryByRole('region', { name: 'Enable app access' })).toBeNull();
+  });
+
+  it('is hidden when the caller cannot manage the team', () => {
+    publishEffective('Accountant', []);
+    renderEdit();
+    expect(screen.queryByRole('region', { name: 'Enable app access' })).toBeNull();
+  });
+
+  it('sends the phone only, with one Idempotency-Key, then shows the credentials once', async () => {
+    const grant = vi
+      .spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess')
+      .mockResolvedValue(granted as any);
+    renderEdit();
+    typePassword('Secret123');
+    submit();
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    const [id, body, opts] = grant.mock.calls[0];
+    expect(id).toBe('u-nologin');
+    expect(body).toEqual({ phone: '+919876543210', password: 'Secret123' });
+    expect(opts?.idempotencyKey).toBeTruthy();
+    expect(await screen.findByText(/the password is shown only once/)).toBeTruthy();
+    expect(screen.getByText('+919876543210')).toBeTruthy();
+    expect(screen.getByText('Secret123')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Enable app access' })).toBeNull();
+  });
+
+  it('sends the email only when the member signs in with email', async () => {
+    const grant = vi
+      .spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess')
+      .mockResolvedValue(granted as any);
+    renderEdit();
+    fireEvent.click(within(section()).getByRole('radio', { name: 'Email' }));
+    fireEvent.change(within(section()).getByPlaceholderText('e.g. john@station.com'), {
+      target: { value: ' meera@station.com ' },
+    });
+    typePassword('Secret123');
+    submit();
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    expect(grant.mock.calls[0][1]).toEqual({ email: 'meera@station.com', password: 'Secret123' });
+  });
+
+  it('marks the member as having a login, and refreshes users and the access document', async () => {
+    vi.spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess').mockResolvedValue(
+      granted as any,
+    );
+    const { queryClient } = renderEdit();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    typePassword('Secret123');
+    submit();
+    await screen.findByText(/the password is shown only once/);
+    const cached = queryClient.getQueryData<{ id: string; hasLogin: boolean }[]>(queryKeys.users());
+    expect(cached?.find((u) => u.id === 'u-nologin')?.hasLogin).toBe(true);
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    expect(keys).toContain(JSON.stringify(queryKeys.users()));
+    expect(keys).toContain(JSON.stringify(queryKeys.access()));
+  });
+
+  it('does not send a short password or an invalid mobile', async () => {
+    const grant = vi.spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess');
+    renderEdit();
+    typePassword('short');
+    submit();
+    expect(await screen.findByText('The password needs at least 8 characters')).toBeTruthy();
+    fireEvent.change(within(section()).getByPlaceholderText('e.g. 98765 43210'), {
+      target: { value: '12345' },
+    });
+    typePassword('Secret123');
+    submit();
+    expect(await screen.findByText('Enter a valid 10-digit Indian mobile number')).toBeTruthy();
+    expect(grant).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal inline with its message and keeps the form', async () => {
+    vi.spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess').mockRejectedValue(
+      Object.assign(new Error('That phone number is already used by another login.'), {
+        status: 409,
+      }),
+    );
+    renderEdit();
+    typePassword('Secret123');
+    submit();
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('That phone number is already used by another login.');
+    expect(section()).toBeTruthy();
+    expect(screen.queryByText(/the password is shown only once/)).toBeNull();
+  });
+
+  it('shows Reset password on the member once access is given', async () => {
+    vi.spyOn(CloudUserAssignmentService.prototype, 'grantAppAccess').mockResolvedValue(
+      granted as any,
+    );
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(queryKeys.users(), [noLogin]);
+    queryClient.setQueryData(queryKeys.stations(), [ST_A, ST_B]);
+    renderWithProviders(<UserRolesAssignment />, { queryClient });
+    expect(screen.queryByLabelText('Reset password')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Edit member'));
+    typePassword('Secret123');
+    submit();
+    await screen.findByText(/the password is shown only once/);
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.getByLabelText('Reset password')).toBeTruthy());
   });
 });
