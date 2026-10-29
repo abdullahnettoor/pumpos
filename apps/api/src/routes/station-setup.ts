@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and, desc, inArray } from 'drizzle-orm';
-import { schema, DbClient } from '@pump/db';
+import { schema, DbClient, type DbExecutor } from '@pump/db';
 import {
   can,
   DECANTATION_SETTINGS_KEY_SET,
@@ -30,7 +30,10 @@ import {
   CreateStation,
   ensureLoginCapacity,
   claimLoginSeatForActivation,
+  checkMembershipChange,
+  checkSelfPasswordReset,
   err,
+  ok,
   validationError,
   UpdateStation,
   CreateUser,
@@ -828,6 +831,8 @@ stationSetupRouter.put(
         body.status === 'ACTIVE',
       );
       if (!seat.success) return seat;
+      const guard = await guardMembershipChange(tx, user, id, body);
+      if (!guard.success) return guard;
       return new UpdateUser({
         repository: new DrizzleUserRepository(tx),
         events,
@@ -972,6 +977,8 @@ stationSetupRouter.post(
         403,
       );
     }
+    const selfReset = checkSelfPasswordReset(user.id, id);
+    if (!selfReset.success) return sendResult(c, selfReset);
     if (!target.authUserId) {
       return c.json(
         {
@@ -1029,6 +1036,23 @@ stationSetupRouter.post(
   },
 );
 
+/** Self-action and last-Owner rules, read after the Organization lock (#443). */
+async function guardMembershipChange(
+  tx: DbExecutor,
+  actor: { id: string; organizationId: string },
+  targetId: string,
+  change: { role?: Role; status?: string },
+) {
+  const repo = new DrizzleUserRepository(tx);
+  const target = await repo.findById(targetId);
+  if (!target) return ok(undefined);
+  const members = await repo.listWithAssignments(actor.organizationId);
+  const otherActiveOwners = members.filter(
+    (m) => m.id !== targetId && m.role === 'Owner' && m.status === 'ACTIVE',
+  ).length;
+  return checkMembershipChange({ actorUserId: actor.id, target, ...change, otherActiveOwners });
+}
+
 async function setUserActive(c: any, active: boolean) {
   const user = c.var.user;
   const id = c.req.param('id');
@@ -1055,6 +1079,10 @@ async function setUserActive(c: any, active: boolean) {
       active,
     );
     if (!seat.success) return seat;
+    const guard = await guardMembershipChange(tx, user, id, {
+      status: active ? 'ACTIVE' : 'INACTIVE',
+    });
+    if (!guard.success) return guard;
     if (target.authUserId) {
       const admin = getSupabaseAdmin(c);
       if (admin) {

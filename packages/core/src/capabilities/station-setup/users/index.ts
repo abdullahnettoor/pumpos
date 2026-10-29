@@ -307,3 +307,5 @@ export class SetUserStatus implements UseCase<SetUserStatusCommand, User> {
     return ok(updated);
   }
 }
+
+export * from './membership-guard.js';
