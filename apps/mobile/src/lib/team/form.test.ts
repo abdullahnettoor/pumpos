@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { userSchema } from '@pump/shared';
 import {
+  appAccessFormSchema,
+  appAccessRequest,
   generatePassword,
   memberFormSchema,
   memberRequest,
   type MemberFormValues,
+  type AppAccessFormValues,
   type MemberFormRules,
 } from './form.js';
 
@@ -141,5 +144,56 @@ describe('generatePassword', () => {
   });
   it('is deterministic with an injected generator', () => {
     expect(generatePassword(() => 0)).toBe(generatePassword(() => 0));
+  });
+});
+
+describe('give app access form', () => {
+  const access: AppAccessFormValues = {
+    identity: 'Phone',
+    phone: '98765 43210',
+    email: '',
+    password: 'Abcdef23x',
+  };
+  const accessIssues = (values: Partial<AppAccessFormValues>) => {
+    const r = appAccessFormSchema.safeParse({ ...access, ...values });
+    const out: Record<string, string> = {};
+    if (!r.success) for (const i of r.error.issues) out[String(i.path[0])] ??= i.message;
+    return out;
+  };
+
+  it('sends a phone login with the phone only, in one stored spelling', () => {
+    expect(appAccessRequest({ ...access, email: 'x@y.in' })).toEqual({
+      phone: '+919876543210',
+      password: 'Abcdef23x',
+    });
+  });
+  it('sends an email login with the email only, lower-cased', () => {
+    expect(
+      appAccessRequest({
+        ...access,
+        identity: 'Email',
+        phone: '98765 43210',
+        email: ' Sajid@Example.com ',
+      }),
+    ).toEqual({ email: 'sajid@example.com', password: 'Abcdef23x' });
+  });
+  it('is accepted by the API schema as a member with app access', () => {
+    const body = appAccessRequest(access);
+    expect(
+      userSchema.safeParse({ fullName: 'Sajid', enableAppAccess: true, ...body }).success,
+    ).toBe(true);
+  });
+  it('accepts a complete form', () => {
+    expect(accessIssues({})).toEqual({});
+  });
+  it('needs the chosen identity, named in the message', () => {
+    expect(accessIssues({ phone: '' }).phone).toMatch(/phone/i);
+    expect(accessIssues({ identity: 'Email', email: '' }).email).toMatch(/email/i);
+  });
+  it('holds contact details and the password to the shared rules', () => {
+    expect(accessIssues({ phone: '12345' }).phone).toMatch(/mobile/i);
+    expect(accessIssues({ identity: 'Email', email: 'nope' }).email).toMatch(/email/i);
+    expect(accessIssues({ password: 'short' }).password).toMatch(/at least 8/);
+    expect(accessIssues({ password: '' }).password).toBeTruthy();
   });
 });
