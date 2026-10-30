@@ -4,6 +4,50 @@ import { commands, useInvalidatePlatform } from '../api/queries.js';
 import type { ApiTarget } from '../api/targets.js';
 import type { DemoCreateResult } from '../api/types.js';
 
+// Demos are created only on non-production targets, so prospects use the preview apps.
+const DEMO_CONSOLE_URL = 'https://console.pumpos.abdullahnettoor.com';
+const DEMO_MOBILE_URL = 'https://m.pumpos.abdullahnettoor.com';
+
+function demoShareMessage(stationName: string, created: DemoCreateResult): string {
+  const hasAttendant = Boolean(created.attendantEmail);
+  const lines = [
+    `*Welcome to PumpOS: ${stationName} demo*`,
+    '',
+    '*1. Owner console (phone, laptop or desktop)*',
+    `🔗 ${DEMO_CONSOLE_URL}`,
+    `- Email: ${created.ownerEmail}`,
+    `- Password: ${created.password}`,
+    ...(hasAttendant
+      ? [
+          '',
+          '*2. Attendant app (phone)*',
+          `🔗 ${DEMO_MOBILE_URL}`,
+          `- Email: ${created.attendantEmail}`,
+          `- Password: ${created.password}`,
+        ]
+      : []),
+    '',
+    '*How to try it*',
+    '1. Open the console link on your phone or computer and sign in with the Owner login. This is where you manage the station: setup, shifts, sales, stock, expenses and reports.',
+    ...(hasAttendant
+      ? [
+          "2. Open the attendant link in your phone's browser and sign in with the Attendant login. There's nothing to install.",
+          '3. In the console, open a shift and assign the attendant to a pump.',
+          '4. In the attendant app, enter nozzle readings and cash drops, then do the handover at the end of the shift.',
+          '5. Back in the console, close the shift and then the day to see the Shift Summary and the Daily Sales Report (DSR).',
+        ]
+      : [
+          '2. Open a shift, enter nozzle readings, then close the shift and the day to see the Shift Summary and the Daily Sales Report (DSR).',
+        ]),
+    '',
+    '*Notes*',
+    '- This is a demo account, so you can try anything without worry.',
+    '- Use Chrome or Safari for the best experience.',
+    '- If you need help, just reply to this message.',
+  ];
+  return lines.join('\n');
+}
+
 export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClose: () => void }) {
   const invalidate = useInvalidatePlatform(target);
   const [stationName, setStationName] = useState('Sample Fuels');
@@ -19,14 +63,8 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
   const [copied, setCopied] = useState(false);
 
   const copyCredentials = async (created: DemoCreateResult) => {
-    const lines = [
-      `PumpOS demo: ${stationName}`,
-      `Owner (console): ${created.ownerEmail}`,
-      created.attendantEmail && `Attendant (mobile): ${created.attendantEmail}`,
-      `Password: ${created.password}`,
-    ].filter(Boolean);
     try {
-      await navigator.clipboard.writeText(lines.join('\n'));
+      await navigator.clipboard.writeText(demoShareMessage(stationName, created));
       setCopied(true);
     } catch {
       setError('Copy failed. Select the credentials and copy them by hand.');
@@ -123,11 +161,7 @@ export function CreateDemoDrawer({ target, onClose }: { target: ApiTarget; onClo
             <dd>{new Date(result.demoExpiresAt).toLocaleString()}</dd>
             <dt>Console</dt>
             <dd>
-              <a
-                href="https://dev-pumpos-console.abdullahnettoor.workers.dev"
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a href={DEMO_CONSOLE_URL} target="_blank" rel="noreferrer">
                 Open demo console
               </a>
             </dd>
