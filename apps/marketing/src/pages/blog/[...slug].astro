@@ -2,6 +2,7 @@
 import ProseLayout from '../../layouts/ProseLayout.astro';
 import Button from '../../components/ds/Button.astro';
 import { render } from 'astro:content';
+import { Image, getImage } from 'astro:assets';
 import { formatPostDate as fmt, getLivePosts } from '../../blog';
 import '../../styles/content-pages.css';
 
@@ -14,6 +15,9 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content } = await render(post);
+const { cover, coverAlt } = post.data;
+// Link previews (WhatsApp, LinkedIn, X) don't render SVG, so share a PNG of the cover.
+const shareImage = cover && (await getImage({ src: cover, format: 'png', width: 1200, height: 630 })).src;
 ---
 <ProseLayout
   title={post.data.title}
@@ -23,6 +27,8 @@ const { Content } = await render(post);
   backHref="/blog"
   backLabel="Journal"
   article
+  ogImage={shareImage}
+  ogImageAlt={coverAlt}
 >
   <Fragment slot="head">
     <meta property="article:published_time" content={post.data.publishedAt.toISOString()} />
@@ -33,6 +39,7 @@ const { Content } = await render(post);
     {post.data.updatedAt && <span>Updated {fmt(post.data.updatedAt)}</span>}
     <div class="prose-tags">{post.data.tags.map((tag) => <span>{tag}</span>)}</div>
   </div>
+  {cover && <Image class="prose-cover" src={cover} alt={coverAlt ?? ''} loading="eager" />}
   <Content />
   <div slot="after" class="prose-after">
     <span>See the record for yourself.</span>

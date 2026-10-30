@@ -4,6 +4,7 @@ import Section from '../../components/ds/Section.astro';
 import Card from '../../components/ds/Card.astro';
 import Button from '../../components/ds/Button.astro';
 import BrandMark from '../../components/marketing-preview/BrandMark.astro';
+import { Image } from 'astro:assets';
 import { formatPostDate as fmt, getLivePosts } from '../../blog';
 import '../../styles/content-pages.css';
 
@@ -20,10 +21,16 @@ const posts = await getLivePosts();
       <div class="journal-list" aria-label="Journal articles">
         {posts.map((post) => (
           <Card as="article" class="journal-card journal-entry">
-            <a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}>
-              <p>Your station.<br />Your record.</p>
-              <BrandMark />
-            </a>
+            {post.data.cover ? (
+              <a class="journal-art journal-art--cover" href={`/blog/${post.id}`} aria-label={post.data.title}>
+                <Image src={post.data.cover} alt="" />
+              </a>
+            ) : (
+              <a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}>
+                <p>Your station.<br />Your record.</p>
+                <BrandMark />
+              </a>
+            )}
             <div class="journal-entry-content">
               <p class="article-meta">
                 <time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time>
