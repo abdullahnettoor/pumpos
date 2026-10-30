@@ -762,6 +762,23 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     );
   }
 
+  /**
+   * Give a member without a login an app login (`POST /setup/users/:id/app-access`).
+   * Send exactly one of `email` or `phone`, plus the password. Resolves to the
+   * member row as `GET /setup/users` returns it, now with `hasLogin: true`.
+   */
+  async grantAppAccess(
+    id: string,
+    body: { email?: string; phone?: string; password: string },
+    opts?: { idempotencyKey?: string },
+  ): Promise<User & { role: string; stationIds: string[]; hasLogin: boolean }> {
+    return request<User & { role: string; stationIds: string[]; hasLogin: boolean }>(
+      `/setup/users/${id}/app-access`,
+      { method: 'POST', body: JSON.stringify(body) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
   async deactivateUser(id: string, opts?: { idempotencyKey?: string }): Promise<User> {
     return request<User>(
       `/setup/users/${id}/deactivate`,
@@ -1553,7 +1570,6 @@ export class CloudTransactionService {
 
   async recordPurchase(
     payload: {
-      shiftId?: string;
       stationId?: string;
       transactionDate?: string;
       supplierId: string;

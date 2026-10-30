@@ -60,6 +60,7 @@ const proto = ui.CloudUserAssignmentService.prototype;
 const create = vi.spyOn(proto, 'createUser');
 const update = vi.spyOn(proto, 'updateUser');
 const reset = vi.spyOn(proto, 'resetUserPassword');
+const grant = vi.spyOn(proto, 'grantAppAccess');
 const deactivate = vi.spyOn(proto, 'deactivateUser');
 const reactivate = vi.spyOn(proto, 'reactivateUser');
 const listUsers = vi.spyOn(proto, 'listUsers');
@@ -124,7 +125,7 @@ beforeEach(() => {
   vi.spyOn(ui.CloudAccessService.prototype, 'getAccess').mockImplementation(
     async () => ({ subscription: { mode: accessMode } }) as any,
   );
-  for (const m of [create, update, reset, deactivate, reactivate]) m.mockReset();
+  for (const m of [create, update, reset, grant, deactivate, reactivate]) m.mockReset();
   previewRole.mockReset();
   previewRole.mockImplementation(
     async (id, role) =>
@@ -150,6 +151,14 @@ beforeEach(() => {
     return { id, ...body } as any;
   });
   reset.mockResolvedValue({} as any);
+  grant.mockImplementation(async (id: string, body: any) => {
+    users = users.map((u) =>
+      u.id === id
+        ? { ...u, phone: body.phone ?? u.phone, email: body.email ?? u.email, hasLogin: true }
+        : u,
+    );
+    return users.find((u) => u.id === id) as any;
+  });
   const setStatus = (status: string) => async (id: string) => {
     users = users.map((u) => (u.id === id ? { ...u, status } : u));
     return { id, status } as any;
@@ -620,5 +629,232 @@ describe('the member page', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
       'Not allowed to change this user',
     );
+  });
+});
+
+describe('giving app access to a member without a login (#462)', () => {
+  const giveRow = () => screen.queryByRole('button', { name: 'Give app access' });
+  const openGive = async (name = 'Ramesh Attendant') => {
+    await openMember(name);
+    fireEvent.click(giveRow()!);
+    return screen.findByRole('dialog', { name: 'Give app access' });
+  };
+  const field = (dialog: HTMLElement, label: string) =>
+    within(dialog).getByLabelText(label) as HTMLInputElement;
+  const submitGive = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole('button', { name: 'Give app access' })
+      .find((b) => (b as HTMLButtonElement).type === 'submit')!;
+
+  it('offers the row only to a member without a login', async () => {
+    mount();
+    await openMember('Sajid Staff');
+    expect(giveRow()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reset password' })).toBeTruthy();
+    cleanup();
+    mount();
+    await openMember('Ramesh Attendant');
+    expect(giveRow()).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reset password' })).toBeNull();
+  });
+
+  it('offers a Manager the row for Staff and Attendants on their station only', async () => {
+    visibleStations = [STATIONS[0]];
+    users = [
+      ...users,
+      user({ id: 'st3', fullName: 'Far Staff', stationIds: ['s2'], hasLogin: false }),
+    ];
+    mount('Manager', 'mgr');
+    await openMember('Ramesh Attendant');
+    expect(giveRow()).toBeTruthy();
+    cleanup();
+    mount('Manager', 'mgr');
+    await openMember('Far Staff');
+    expect(giveRow()).toBeNull();
+  });
+
+  it('is not offered to an Accountant', async () => {
+    mount('Accountant', 'acc');
+    await openMember('Ramesh Attendant');
+    expect(giveRow()).toBeNull();
+  });
+
+  it('gives access with a phone login, shows the password once, and refreshes users and access', async () => {
+    const { qc } = mount();
+    const dialog = await openGive();
+    const password = field(dialog, 'Password').value;
+    expect(password.length).toBeGreaterThanOrEqual(8);
+    expect(within(dialog).queryByLabelText('Email')).toBeNull();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '98765 43299' } });
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
+
+    fireEvent.click(submitGive(dialog));
+    expect(await screen.findByText('App access given')).toBeTruthy();
+
+    expect(grant).toHaveBeenCalledTimes(1);
+    const [id, body, opts] = grant.mock.calls[0] as any;
+    expect(id).toBe('att');
+    expect(body).toEqual({ phone: '+919876543299', password });
+    expect(opts.idempotencyKey).toBeTruthy();
+    const card = within(screen.getByRole('dialog', { name: 'Give app access' }));
+    expect(card.getByText(password)).toBeTruthy();
+    expect(card.getByText('+919876543299')).toBeTruthy();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ui.queryKeys.users() });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ui.queryKeys.access() });
+
+    // Reset password is offered once the member has a login.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(await screen.findByRole('button', { name: 'Reset password' })).toBeTruthy();
+    expect(giveRow()).toBeNull();
+  });
+
+  it('sends only the email for an email login', async () => {
+    mount();
+    const dialog = await openGive();
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Email' }));
+    expect(within(dialog).queryByLabelText('Phone')).toBeNull();
+    fireEvent.change(field(dialog, 'Email'), { target: { value: ' Ramesh@Example.com ' } });
+    fireEvent.click(submitGive(dialog));
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    const [, body] = grant.mock.calls[0] as any;
+    expect(Object.keys(body).sort()).toEqual(['email', 'password']);
+    expect(body.email).toBe('ramesh@example.com');
+  });
+
+  it('starts on Email, prefilled, for a member with an email on record', async () => {
+    users = users.map((u) =>
+      u.id === 'att' ? { ...u, email: 'ramesh@example.com', phone: '+919876543210' } : u,
+    );
+    mount();
+    const dialog = await openGive();
+    expect(within(dialog).getByRole('radio', { name: 'Email' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(field(dialog, 'Email').value).toBe('ramesh@example.com');
+    fireEvent.click(submitGive(dialog));
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(1));
+    const [, body] = grant.mock.calls[0] as any;
+    expect(Object.keys(body).sort()).toEqual(['email', 'password']);
+    expect(body.email).toBe('ramesh@example.com');
+  });
+
+  it('gives "Generate a new one" a 44px touch target', async () => {
+    mount();
+    const dialog = await openGive();
+    const generate = within(dialog).getByRole('button', { name: 'Generate a new one' });
+    expect(generate.className).toContain('hit-44');
+    const before = field(dialog, 'Password').value;
+    fireEvent.click(generate);
+    expect(field(dialog, 'Password').value).not.toBe(before);
+  });
+
+  it('writes the grant into the cached team list from the answer before the refetch', async () => {
+    grant.mockResolvedValue({
+      id: 'att',
+      fullName: 'Ramesh Attendant',
+      phone: '+919876543299',
+      hasLogin: true,
+    } as any);
+    const { qc } = mount();
+    const dialog = await openGive();
+    // The revalidation never answers, so what the cache holds is the patch.
+    listUsers.mockImplementation(() => new Promise(() => {}));
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    fireEvent.click(submitGive(dialog));
+    await screen.findByText('App access given');
+    const cached = qc.getQueryData<any[]>(ui.queryKeys.users());
+    expect(cached?.find((u) => u.id === 'att')).toMatchObject({
+      hasLogin: true,
+      phone: '+919876543299',
+    });
+  });
+
+  it('validates inline with the shared rules and sends nothing', async () => {
+    mount();
+    const dialog = await openGive();
+    fireEvent.click(submitGive(dialog));
+    expect(await within(dialog).findByText(/phone number is required/)).toBeTruthy();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '12345' } });
+    fireEvent.change(field(dialog, 'Password'), { target: { value: 'short' } });
+    fireEvent.click(submitGive(dialog));
+    expect(await within(dialog).findByText(/valid.*mobile/i)).toBeTruthy();
+    expect(within(dialog).getByText(/at least 8/)).toBeTruthy();
+    expect(grant).not.toHaveBeenCalled();
+  });
+
+  it('says the member already has a login and refreshes the list', async () => {
+    grant.mockRejectedValue(
+      Object.assign(new Error('User already has a login'), {
+        code: 'CONFLICT',
+        status: 409,
+        details: { reason: 'ALREADY_HAS_LOGIN' },
+      }),
+    );
+    mount();
+    const dialog = await openGive();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    const listCalls = listUsers.mock.calls.length;
+    fireEvent.click(submitGive(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(/already has a login/i);
+    await waitFor(() => expect(listUsers.mock.calls.length).toBeGreaterThan(listCalls));
+  });
+
+  it('says an identity already in use is taken, and keeps the sheet', async () => {
+    grant.mockRejectedValue(
+      Object.assign(new Error('Phone taken'), {
+        code: 'CONFLICT',
+        status: 409,
+        details: { reason: 'IDENTITY_TAKEN' },
+      }),
+    );
+    mount();
+    const dialog = await openGive();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    fireEvent.click(submitGive(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(
+      /already belongs to another login/i,
+    );
+  });
+
+  it('explains a reached login Limit from the server', async () => {
+    grant.mockRejectedValue(
+      refusal('LIMIT_REACHED', 'This plan includes 5 logins. Contact PumpOS to add more.', 409),
+    );
+    mount();
+    const dialog = await openGive();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    fireEvent.click(submitGive(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      'This plan includes 5 logins. Contact PumpOS to add more.',
+    );
+  });
+
+  it('a retried submit reuses one Idempotency-Key; a decided refusal takes a new one', async () => {
+    grant.mockRejectedValueOnce(Object.assign(new Error('Network error'), { code: 'NETWORK' }));
+    grant.mockRejectedValueOnce(refusal('FORBIDDEN', 'Not allowed', 403));
+    mount();
+    const dialog = await openGive();
+    fireEvent.change(field(dialog, 'Phone'), { target: { value: '9876543299' } });
+    fireEvent.click(submitGive(dialog));
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(
+      /will not be applied twice/,
+    );
+    fireEvent.click(submitGive(dialog));
+    await waitFor(() => expect(grant).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(within(dialog).getByRole('alert').textContent).toBe('Not allowed'));
+    fireEvent.click(submitGive(dialog));
+    await screen.findByText('App access given');
+    const keys = grant.mock.calls.map((c) => (c as any)[2].idempotencyKey);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[1]);
+  });
+
+  it('pauses the row with the reason while access is restricted', async () => {
+    accessMode = 'RESTRICTED';
+    mount();
+    await openMember('Ramesh Attendant');
+    await waitFor(() => expect(giveRow()!.getAttribute('aria-disabled')).toBe('true'));
+    fireEvent.click(giveRow()!);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

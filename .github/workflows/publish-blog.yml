@@ -78,6 +78,8 @@ jobs:
           npm run check:links
         env:
           PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.app' }}
+          PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          PUBLIC_DEMO_BOOKING_URL: ${{ vars.DEMO_BOOKING_URL }}
 
       - name: Deploy marketing
         if: steps.decide.outputs.run == 'true'

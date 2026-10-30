@@ -131,6 +131,7 @@ export * from './query/queryClient.js';
 export * from './query/hooks.js';
 export * from './query/handoverMutation.js';
 export * from './query/stockCountMutation.js';
+export { patchUsersWithAppAccess } from './query/teamMemberPatches.js';
 export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageFrame } from './components/page-frame/index.js';

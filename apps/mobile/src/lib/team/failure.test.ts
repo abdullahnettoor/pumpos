@@ -37,6 +37,42 @@ describe('teamFailure', () => {
   });
 });
 
+describe('giving app access', () => {
+  const conflict = (reason: string, message: string) =>
+    Object.assign(new Error(message), { code: 'CONFLICT', status: 409, details: { reason } });
+
+  it('says the member already has a login, and that the list is out of date', () => {
+    const f = teamFailure(conflict('ALREADY_HAS_LOGIN', 'User already has a login'), 'access');
+    expect(f.message).toMatch(/already has a login/i);
+    expect(f.unknownOutcome).toBe(false);
+    expect(f.listOutdated).toBe(true);
+  });
+  it('says the email or phone is taken', () => {
+    const f = teamFailure(conflict('IDENTITY_TAKEN', 'That phone is taken'), 'access');
+    expect(f.message).toMatch(/already .*another login/i);
+    expect(f.unknownOutcome).toBe(false);
+    expect(f.listOutdated).toBe(false);
+  });
+  it('explains a reached login Limit with the server wording, or a fallback about logins', () => {
+    expect(
+      teamFailure(failure('LIMIT_REACHED', 'This plan includes 5 logins.', 409), 'access').message,
+    ).toBe('This plan includes 5 logins.');
+    expect(teamFailure(failure('LIMIT_REACHED', '', 409), 'access').message).toMatch(
+      /another login.*Contact PumpOS/,
+    );
+  });
+  it('leaves an attempt still in flight as an unknown outcome, not a taken identity', () => {
+    const f = teamFailure(
+      failure('CONFLICT', 'A request with this Idempotency-Key is already in progress', 409),
+      'access',
+    );
+    expect(f.unknownOutcome).toBe(true);
+  });
+  it('has its own fallback wording', () => {
+    expect(teamFailure('boom', 'access').message).toMatch(/Could not give app access/);
+  });
+});
+
 describe('what the key does after a failure', () => {
   it('keeps the outcome open for a network drop and a 5xx', () => {
     expect(isOutcomeUnknown(failure(undefined, 'offline', undefined))).toBe(true);

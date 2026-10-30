@@ -162,6 +162,15 @@ export const stationSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+/** The rule for any password an Owner or Manager sets for a login (create, reset, app access). */
+export const LOGIN_PASSWORD_MIN_LENGTH = 8;
+export const loginPasswordSchema = z
+  .string()
+  .min(
+    LOGIN_PASSWORD_MIN_LENGTH,
+    `Password must be at least ${LOGIN_PASSWORD_MIN_LENGTH} characters`,
+  );
+
 export const userBaseSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
@@ -176,7 +185,7 @@ export const userBaseSchema = z.object({
   /** When true, provision a login account (needs an identity + password). */
   enableAppAccess: z.boolean().optional(),
   /** Owner-set password used when provisioning a login account. */
-  password: z.string().min(8, 'Password must be at least 8 characters').optional().nullable(),
+  password: loginPasswordSchema.optional().nullable(),
   stationIds: z.array(z.string()).optional(),
 });
 
@@ -803,3 +812,86 @@ export const optionalIndianMobileSchema = z.preprocess(
   (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
   indianMobileSchema.nullish().transform((v) => v ?? null),
 );
+
+// --- app access for an existing member (#462) --------------------------------
+
+export type AppAccessIdentity = 'Phone' | 'Email';
+
+/**
+ * The body of `POST /setup/users/:id/app-access`: exactly one of `email` /
+ * `phone`, plus the password. One rule for the API use-case and both clients.
+ */
+export const appAccessBodySchema = z
+  .object({
+    email: z.string().trim().email('Invalid email address').nullish().or(z.literal('')),
+    phone: optionalIndianMobileSchema,
+    password: loginPasswordSchema,
+  })
+  .superRefine((val, ctx) => {
+    const identities = [val.email, val.phone].filter((v) => !!v && v.trim() !== '').length;
+    if (identities !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Give exactly one of email or phone for app access',
+      });
+    }
+  });
+
+/** A request `appAccessBodySchema` accepts: one identity, never both. */
+export type AppAccessRequest =
+  | { email: string; phone?: undefined; password: string }
+  | { phone: string; email?: undefined; password: string };
+
+/** What the give-app-access form holds: the picked identity, both fields as typed, the password. */
+export interface AppAccessFormValues {
+  identity: AppAccessIdentity;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+/**
+ * The request for a form: only the picked identity (the other field is never
+ * sent), a phone in its one stored spelling, an email lower-cased. Text that
+ * does not normalize is kept as typed so `appAccessBodySchema` names it.
+ */
+export function appAccessRequest(values: AppAccessFormValues): AppAccessRequest {
+  if (values.identity === 'Phone') {
+    return {
+      phone: normalizeIndianMobile(values.phone) ?? values.phone.trim(),
+      password: values.password,
+    };
+  }
+  return { email: values.email.trim().toLowerCase(), password: values.password };
+}
+
+/** The give-app-access form's resolver schema: the body rules, reported on the form's fields. */
+export const appAccessFormSchema = z
+  .object({
+    identity: z.enum(['Phone', 'Email']),
+    email: z.string(),
+    phone: z.string(),
+    password: z.string(),
+  })
+  .superRefine((values, ctx) => {
+    const field = values.identity === 'Phone' ? 'phone' : 'email';
+    const add = (path: string, message: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    const blank = values[field].trim() === '';
+    if (blank) {
+      add(
+        field,
+        field === 'phone'
+          ? 'A phone number is required for phone login.'
+          : 'An email address is required for email login.',
+      );
+    }
+    const parsed = appAccessBodySchema.safeParse(appAccessRequest(values));
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0];
+      if (key === 'password') add('password', issue.message);
+      else if (key === field && !blank) add(field, issue.message);
+    }
+  });

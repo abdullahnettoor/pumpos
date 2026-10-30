@@ -680,7 +680,6 @@ async function main() {
     .values({
       id: ID.purchaseFuel,
       documentNumber: 'PUR-000001',
-      shiftId: null,
       businessDayId: null,
       organizationId: ID.org,
       stationId: ID.station,

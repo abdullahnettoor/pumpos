@@ -40,6 +40,12 @@ export interface TankDipMeasurementInput {
   /** Stock variance / count id, stored as `measurement_ref_id`. */
   refId: string;
   anchor: MeasurementAnchor;
+  /**
+   * Closing dip of a Shift taken after the next one opened: only lines whose
+   * window began by this instant (the Shift's close) are measured. Later lines
+   * stay pending, because the open Shift's sales are not booked yet.
+   */
+  startedBy?: string;
 }
 
 export interface TankDipMeasurementResult {
@@ -164,6 +170,9 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     let count = 0;
     for (let i = 0; i < pending.length; i++) {
       const { d, l, since } = pending[i];
+      // Later lines stay in the sequence so an earlier one still ends where
+      // the next tanker began.
+      if (input.startedBy && since > input.startedBy) break;
       const next = pending[i + 1];
       const sold = await this.deps.sales.litresSoldBetween(
         ctx.organizationId,

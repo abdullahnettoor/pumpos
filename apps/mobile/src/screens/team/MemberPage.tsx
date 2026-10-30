@@ -7,7 +7,12 @@ import { ListGroup } from '../../ui/ListRow.js';
 import { Note } from '../../ui/Note.js';
 import { SectionLabel } from '../../ui/SectionLabel.js';
 import { StatusBadge } from '../../ui/StatusBadge.js';
-import { EditMemberSheet, ResetPasswordSheet, StatusSheet } from './MemberSheets.js';
+import {
+  EditMemberSheet,
+  GiveAppAccessSheet,
+  ResetPasswordSheet,
+  StatusSheet,
+} from './MemberSheets.js';
 import { useTeamData } from './useTeamData.js';
 import { PausedReason, usePausedAction } from '../../ui/PausedAction.js';
 
@@ -22,7 +27,7 @@ const Detail: React.FC<{ label: string; value: React.ReactNode }> = ({ label, va
 
 /**
  * Member page: who they are and the actions the signed-in user may take:
- * edit, reset password, deactivate / reactivate. Read from the live users list
+ * edit, give app access or reset password, deactivate / reactivate. Read from the live users list
  * (the pushed element only carries the id), so a save repaints it at once.
  */
 export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
@@ -31,6 +36,7 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
   const gate = usePausedAction(teamWriteReason(writeAccess));
   const [editing, setEditing] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [givingAccess, setGivingAccess] = useState(false);
   // What the status sheet will do is fixed when it opens: the list repaints the
   // moment the save lands, and the sheet must not flip its own wording mid-close.
   const [status, setStatus] = useState<{ open: boolean; activate: boolean }>({
@@ -49,7 +55,8 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
   const badge = memberStatus(member, onShift);
   const inactive = isInactive(member);
   const login = loginIdentity(member);
-  const anyAction = rights.canEdit || rights.canResetPassword || rights.canChangeStatus;
+  const anyAction =
+    rights.canEdit || rights.canResetPassword || rights.canGiveAppAccess || rights.canChangeStatus;
 
   const actionClass =
     'flex min-h-[46px] w-full items-center px-3 text-left text-[13.5px] font-semibold aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
@@ -103,6 +110,15 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
                 Reset password
               </button>
             )}
+            {rights.canGiveAppAccess && (
+              <button
+                type="button"
+                {...gate.buttonProps(() => setGivingAccess(true))}
+                className={`${actionClass} text-text-high`}
+              >
+                Give app access
+              </button>
+            )}
             {rights.canChangeStatus && (
               <button
                 type="button"
@@ -139,6 +155,14 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
       )}
       {rights.canResetPassword && (
         <ResetPasswordSheet open={resetting} onClose={() => setResetting(false)} member={member} />
+      )}
+      {/* Stays mounted while open: the save gives the member a login, and the password is shown once. */}
+      {(rights.canGiveAppAccess || givingAccess) && (
+        <GiveAppAccessSheet
+          open={givingAccess}
+          onClose={() => setGivingAccess(false)}
+          member={member}
+        />
       )}
       {rights.canChangeStatus && (
         <StatusSheet

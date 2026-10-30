@@ -165,6 +165,10 @@ export const EventActivityCatalog = {
   [BusinessEvents.STATION_UPDATED]: info(BusinessEvents.STATION_UPDATED, 'Station updated'),
   [BusinessEvents.USER_CREATED]: success(BusinessEvents.USER_CREATED, 'Team member added'),
   [BusinessEvents.USER_INVITED]: info(BusinessEvents.USER_INVITED, 'Team member invited'),
+  [BusinessEvents.USER_APP_ACCESS_GRANTED]: info(
+    BusinessEvents.USER_APP_ACCESS_GRANTED,
+    'App access granted',
+  ),
   [BusinessEvents.USER_PASSWORD_RESET]: info(
     BusinessEvents.USER_PASSWORD_RESET,
     'Password reset sent',

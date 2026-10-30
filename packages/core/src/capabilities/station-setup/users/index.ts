@@ -1,16 +1,23 @@
 import { z } from 'zod';
 import type { Role } from '@pump/shared';
 import {
+  appAccessBodySchema,
   hasFixedPermissions,
+  normalizeIndianMobile,
   optionalIndianMobileSchema,
+  phoneToAuthEmail,
   resolveEffectivePermissions,
 } from '@pump/shared';
+import { ensureLoginCapacity } from '../../organization-access/login-capacity.js';
+import type { LoginCapacityPort } from '../../organization-access/login-capacity.js';
 import type { UserPermissionChangesWriter } from '../../organization-access/ports.js';
 import { userPermissionsChangedEvent } from '../../organization-access/user-permissions.js';
 import {
   BusinessEvents,
+  conflictError,
   err,
   eventFromContext,
+  forbiddenError,
   notFoundError,
   ok,
   validationError,
@@ -43,6 +50,8 @@ export interface UserWithAssignments extends User {
 
 export interface UserRepository extends Repository<User> {
   save(user: User): Promise<void>;
+  /** Link a member to its login account. `save` never writes `authUserId`. */
+  linkLogin(userId: string, authUserId: string): Promise<void>;
   /** Replace the user's station assignments; every station must belong to the organization. */
   setStationAssignments(
     userId: string,
@@ -307,3 +316,116 @@ export class SetUserStatus implements UseCase<SetUserStatusCommand, User> {
     return ok(updated);
   }
 }
+
+/** The login-account provider (Supabase Auth admin), behind a port so core stays framework-free. */
+export interface LoginProvisioner {
+  /**
+   * Create a confirmed login for `email` (a real address or the phone handle).
+   * A taken identity is a CONFLICT with `details.reason = 'IDENTITY_TAKEN'`.
+   */
+  createLogin(input: { email: string; password: string }): Promise<Result<{ authUserId: string }>>;
+}
+
+export interface GrantUserAppAccessCommand {
+  id: string;
+  email?: string | null;
+  phone?: string | null;
+  password: string;
+}
+
+const grantAppAccessIdSchema = z.string().min(1);
+
+/**
+ * Whether the actor may act on a member (Role and Station rule). Asked of the
+ * member as re-read under the Organization lock, so a Role or Station change
+ * committed since the caller first looked cannot be acted on.
+ */
+export interface AppAccessAuthorizer {
+  canGrantTo(target: User): Promise<boolean>;
+}
+
+export interface GrantUserAppAccessDeps extends UserDeps {
+  capacity: LoginCapacityPort;
+  logins: LoginProvisioner;
+  authorizer: AppAccessAuthorizer;
+}
+
+/**
+ * Give an existing member without a login an app login (#462). Mirrors
+ * creating a member with app access: a login takes a `login_count` seat
+ * (ACTIVE members only; reactivating an INACTIVE one takes it later), decided
+ * under the Organization lock on a re-read of the member. The password only
+ * ever reaches the provisioner; it is never stored, logged or put on an event.
+ */
+export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, User> {
+  constructor(private readonly deps: GrantUserAppAccessDeps) {}
+  async execute(input: GrantUserAppAccessCommand, ctx: ExecutionContext): Promise<Result<User>> {
+    const id = grantAppAccessIdSchema.safeParse(input.id);
+    const p = appAccessBodySchema.safeParse(input);
+    if (!id.success || !p.success)
+      return err(
+        validationError('Invalid GrantUserAppAccess command', {
+          issues: (p.success ? id.error! : p.error).flatten(),
+        }),
+      );
+    const email = normalizeEmail(p.data.email);
+    const phone = normalizeIndianMobile(p.data.phone);
+    const loginHandle = email ?? phoneToAuthEmail(phone);
+    if (!loginHandle) return err(validationError('A valid email or phone is required'));
+
+    await this.deps.capacity.lockOrganization(ctx.organizationId);
+    const target = await this.deps.repository.findById(id.data);
+    if (!target || target.organizationId !== ctx.organizationId)
+      return err(notFoundError('User', id.data));
+    if (!(await this.deps.authorizer.canGrantTo(target)))
+      return err(forbiddenError('Not allowed to give this member app access'));
+    if (target.authUserId !== null)
+      return err(
+        conflictError('This member already has app access', { reason: 'ALREADY_HAS_LOGIN' }),
+      );
+    // An email on record is the login (clients and POST /setup/users agree), so a
+    // phone login would leave the member signing in with an identity nobody shows.
+    if (phone && target.email)
+      return err(
+        validationError('This member has an email on record. Give access with that email.'),
+      );
+    if (target.status === 'ACTIVE') {
+      const capacity = await ensureLoginCapacity(this.deps.capacity, ctx.organizationId);
+      if (!capacity.success) return capacity;
+    }
+
+    const created = await this.deps.logins.createLogin({
+      email: loginHandle,
+      password: p.data.password,
+    });
+    if (!created.success) return created;
+    const { authUserId } = created.data;
+
+    const updated: User = {
+      ...target,
+      authUserId,
+      // The login identity is the member's contact of that kind.
+      email: email ?? target.email,
+      phone: phone ?? target.phone,
+      updatedAt: ctx.clock.now().toISOString(),
+    };
+    await this.deps.repository.save(updated);
+    await this.deps.repository.linkLogin(updated.id, authUserId);
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.USER_APP_ACCESS_GRANTED,
+        aggregateType: 'User',
+        aggregateId: updated.id,
+        payload: {
+          userId: updated.id,
+          role: updated.role,
+          hasPhone: !!phone,
+          hasEmail: !!email,
+        },
+      }),
+    ]);
+    return ok(updated);
+  }
+}
+
+export * from './membership-guard.js';

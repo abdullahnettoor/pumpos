@@ -47,7 +47,9 @@ const tank: Tank = {
   updatedAt: '',
 };
 
-function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number } = {}) {
+function setup(
+  opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number; closedShiftAt?: string } = {},
+) {
   const days = opts.days ?? [mkDay('bd-1', '2026-03-15', 'OPEN')];
   const current = days.find((d) => d.status === 'OPEN') ?? days[0];
   const store = new InMemoryEventStore();
@@ -133,8 +135,22 @@ function setup(opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number 
     events,
     measurement: service,
   });
+  // The Shift a closing dip names: closed at `closedShiftAt`, on today's day.
+  const closedShift = opts.closedShiftAt
+    ? {
+        id: 'sh-0',
+        organizationId: 'org-1',
+        stationId: 'st-1',
+        businessDayId: current.id,
+        status: 'CLOSED',
+        closedAt: opts.closedShiftAt,
+      }
+    : null;
+  const findShift = async (id: string) => (closedShift?.id === id ? closedShift : null) as never;
   const shifts = {
     findOpenByStation: async () => (opts.openShift ? ({ id: 'sh-1' } as never) : null),
+    findById: findShift,
+    findByIdWithoutLock: findShift,
   } as never;
   const count = new RecordStockCount({
     movements: movementsRepo,
@@ -301,6 +317,63 @@ describe('measurement: tank dip path', () => {
         documentNumbers: [created.data.decantation.documentNumber],
       }),
     ]);
+  });
+
+  // #494: at a station running back-to-back shifts the next Shift is often
+  // open by the time the closing dip is saved.
+  describe('closing dip of a closed Shift, next Shift already open', () => {
+    const closingDip = (actualQuantity: number) => ({
+      stationId: 'st-1',
+      tankId: 't-ms',
+      actualQuantity,
+      shiftId: 'sh-0',
+    });
+
+    it('measures a tanker unloaded before that Shift closed', async () => {
+      const t = setup({ openShift: true, closedShiftAt: '2026-03-15T14:00:00Z', sold: 300 });
+      const created = await t.record.execute(cmd(), t.ctx('2026-03-15T09:00:00Z'));
+      if (!created.success) throw new Error('create');
+      const r = await t.count.execute(closingDip(15700), t.ctx('2026-03-15T14:05:00Z'));
+      if (!r.success) throw new Error(JSON.stringify(r.error));
+      const line = t.rows.get(created.data.decantation.id)!.lines[0];
+      // 15,700 − 4,000 + 300 sold up to the close
+      expect(line).toMatchObject({
+        status: 'MEASURED',
+        receivedQty: 12000,
+        measuredBy: 'TANK_DIP',
+      });
+      expect(r.data.warnings).toEqual([]);
+    });
+
+    it('leaves a tanker unloaded after that Shift closed pending, with the warning', async () => {
+      const t = setup({ openShift: true, closedShiftAt: '2026-03-15T14:00:00Z' });
+      const created = await t.record.execute(cmd(), t.ctx('2026-03-15T15:00:00Z'));
+      if (!created.success) throw new Error('create');
+      const r = await t.count.execute(closingDip(15700), t.ctx('2026-03-15T16:00:00Z'));
+      if (!r.success) throw new Error('count');
+      expect(t.rows.get(created.data.decantation.id)!.lines[0].status).toBe('PENDING_MEASUREMENT');
+      expect(r.data.warnings).toEqual([
+        expect.objectContaining({
+          code: 'DECANTATION_PENDING_OPEN_SHIFT',
+          documentNumbers: [created.data.decantation.documentNumber],
+        }),
+      ]);
+    });
+
+    it('ends the earlier tanker where the later one began, never at the dip', async () => {
+      const t = setup({ openShift: true, closedShiftAt: '2026-03-15T14:00:00Z' });
+      const early = await t.record.execute(cmd(), t.ctx('2026-03-15T09:00:00Z'));
+      const late = await t.record.execute(cmd({ beforeDip: 15000 }), {
+        ...t.ctx('2026-03-15T15:00:00Z'),
+        ids: new SequentialIdGenerator('late'),
+      });
+      if (!early.success || !late.success) throw new Error('create');
+      await t.count.execute(closingDip(26000), t.ctx('2026-03-15T16:00:00Z'));
+      const earlyLine = t.rows.get(early.data.decantation.id)!.lines[0];
+      // 15,000 (the later tanker's before dip) − 4,000, not 26,000 − 4,000
+      expect(earlyLine).toMatchObject({ status: 'MEASURED', receivedQty: 11000 });
+      expect(t.rows.get(late.data.decantation.id)!.lines[0].status).toBe('PENDING_MEASUREMENT');
+    });
   });
 
   it('has no warning when nothing is pending', async () => {
