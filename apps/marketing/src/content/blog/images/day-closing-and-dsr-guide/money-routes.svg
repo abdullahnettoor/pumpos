@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="620" viewBox="0 0 760 620" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1f6a53"/>
+    </marker>
+  </defs>
+  <rect width="760" height="620" fill="#ffffff"/>
+  <text x="36" y="62" fill="#18201a" font-size="32" font-weight="800">Where each rupee is checked</text>
+  <text x="36" y="100" fill="#5e6a61" font-size="24">Four kinds of money, four places, never pooled</text>
+
+  <g stroke="#1f6a53" stroke-width="3" marker-end="url(#arrow)">
+    <line x1="336" y1="175" x2="402" y2="175"/>
+    <line x1="336" y1="295" x2="402" y2="295"/>
+    <line x1="336" y1="415" x2="402" y2="415"/>
+    <line x1="336" y1="535" x2="402" y2="535"/>
+  </g>
+
+  <g font-size="24" fill="#18201a">
+    <rect x="20" y="128" width="306" height="94" rx="14" fill="#f6f7f4" stroke="#d9ded6" stroke-width="2"/>
+    <text x="44" y="184" font-weight="800">Cash at the nozzle</text>
+    <rect x="414" y="128" width="326" height="94" rx="14" fill="#e5f0eb" stroke="#1f6a53" stroke-width="2"/>
+    <text x="438" y="168" font-weight="800" fill="#1f6a53">Attendant drawer</text>
+    <text x="438" y="202" fill="#5e6a61" font-size="22">checked at handover</text>
+
+    <rect x="20" y="248" width="306" height="94" rx="14" fill="#f6f7f4" stroke="#d9ded6" stroke-width="2"/>
+    <text x="44" y="304" font-weight="800">Card or UPI</text>
+    <rect x="414" y="248" width="326" height="94" rx="14" fill="#e5f0eb" stroke="#1f6a53" stroke-width="2"/>
+    <text x="438" y="288" font-weight="800" fill="#1f6a53">Settlement slips</text>
+    <text x="438" y="322" fill="#5e6a61" font-size="22">from the terminal</text>
+
+    <rect x="20" y="368" width="306" height="94" rx="14" fill="#f6f7f4" stroke="#d9ded6" stroke-width="2"/>
+    <text x="44" y="424" font-weight="800">Credit sale</text>
+    <rect x="414" y="368" width="326" height="94" rx="14" fill="#e5f0eb" stroke="#1f6a53" stroke-width="2"/>
+    <text x="438" y="408" font-weight="800" fill="#1f6a53">Customer ledger</text>
+    <text x="438" y="442" fill="#5e6a61" font-size="22">with vehicle number</text>
+
+    <rect x="20" y="488" width="306" height="94" rx="14" fill="#f6f7f4" stroke="#d9ded6" stroke-width="2"/>
+    <text x="44" y="530" font-weight="800">Bank collection</text>
+    <text x="44" y="562" fill="#5e6a61" font-size="22">NEFT or RTGS</text>
+    <rect x="414" y="488" width="326" height="94" rx="14" fill="#e5f0eb" stroke="#1f6a53" stroke-width="2"/>
+    <text x="438" y="528" font-weight="800" fill="#1f6a53">Office ledger</text>
+    <text x="438" y="562" fill="#5e6a61" font-size="22">by entry date</text>
+  </g>
+</svg>

@@ -22,7 +22,8 @@ they show: `cover.svg`, `drawer-reconciliation.svg`.
 Design body figures **mobile-first**: at 45% scale, 24px text reads as 11px,
 so no body text under 24px and no figure-level text under 22px. Prefer one
 tall column (a ledger, a vertical flow) over a wide row of boxes. The cover is
-a hero, not a reading surface: headline 64px+, nothing important under 20px.
+a hero, not a reading surface: headline 64px+, card text 18px+, small labels
+16px+.
 
 ## Palette and type
 
@@ -40,8 +41,9 @@ From `src/styles/tokens.css`; introduce no colour of your own.
 
 Set `font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif"` on the root
 `<svg>`. An SVG shown as `<img>` can't load the site's web font, and CI renders
-the cover PNG with whatever sans the runner has, so text renders in a fallback
-face: leave ~10% spare width on every text line.
+the cover PNG with whatever sans the runner has (often DejaVu Sans, wider than
+Helvetica), so text renders in a fallback face: leave ~15% spare width on every
+text line.
 
 ## Rules that bite
 

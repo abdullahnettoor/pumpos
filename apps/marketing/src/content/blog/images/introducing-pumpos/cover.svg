@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="630" fill="#0f2a21"/>
+  <circle cx="1080" cy="80" r="260" fill="#1f6a53" opacity="0.35"/>
+  <text x="80" y="118" fill="#8fd1b4" font-size="22" font-weight="700" letter-spacing="3">PUMPOS JOURNAL · PRODUCT</text>
+  <text x="80" y="210" fill="#ffffff" font-size="68" font-weight="800" letter-spacing="-1.5">Your station.</text>
+  <text x="80" y="290" fill="#ffffff" font-size="68" font-weight="800" letter-spacing="-1.5">Your record.</text>
+  <text x="80" y="346" fill="#b9cdc4" font-size="26">Inspect the numbers without waiting for a report.</text>
+
+  <g font-size="18" font-weight="700">
+    <rect x="80" y="430" width="240" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="102" y="470" fill="#8fd1b4" font-size="16">SHIFT</text>
+    <text x="102" y="508" fill="#ffffff">Nozzle readings</text>
+
+    <rect x="346" y="430" width="240" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="368" y="470" fill="#8fd1b4" font-size="16">DRAWER</text>
+    <text x="368" y="508" fill="#ffffff">Expected vs actual</text>
+
+    <rect x="612" y="430" width="240" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="634" y="470" fill="#8fd1b4" font-size="16">CREDIT</text>
+    <text x="634" y="508" fill="#ffffff">Who owes what</text>
+
+    <rect x="878" y="430" width="242" height="104" rx="14" fill="#8fd1b4"/>
+    <text x="900" y="470" fill="#0f2a21" font-size="16">DSR</text>
+    <text x="900" y="508" fill="#0f2a21">Saved at day close</text>
+  </g>
+</svg>
