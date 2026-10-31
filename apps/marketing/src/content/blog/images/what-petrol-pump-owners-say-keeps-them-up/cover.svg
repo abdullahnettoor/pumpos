@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="630" fill="#0f2a21"/>
+  <text x="80" y="170" fill="#ffffff" font-size="88" font-weight="800" letter-spacing="-2">Half the litres.</text>
+  <rect x="80" y="250" width="960" height="120" rx="18" fill="#8fd1b4"/>
+  <text x="1004" y="330" fill="#0f2a21" font-size="56" font-weight="800" text-anchor="end">12 KL</text>
+  <rect x="80" y="420" width="480" height="120" rx="18" fill="#8fd1b4"/>
+  <rect x="560" y="420" width="80" height="120" fill="none" stroke="#8fd1b4" stroke-width="4" stroke-dasharray="12 10"/>
+  <text x="676" y="500" fill="#ffffff" font-size="56" font-weight="800">6–7 KL</text>
+</svg>

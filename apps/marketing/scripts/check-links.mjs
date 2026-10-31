@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Fails when a built page links to a root-relative path that is not in dist/.
+ * Fails when a built page links to a root-relative path, or names an og:image,
+ * that is not in dist/.
  * The publish-blog workflow runs it because a post taken from dev can link to
  * a page that exists only on dev.
  *
@@ -32,6 +33,9 @@ for (const file of htmlFiles(dist)) {
   const html = readFileSync(file, 'utf8');
   for (const [, url] of html.matchAll(/\s(?:href|src)="(\/(?!\/)[^"]*)"/g)) {
     if (!resolves(url)) broken.push(`${relative(dist, file)} → ${url}`);
+  }
+  for (const [, url] of html.matchAll(/property="og:image" content="https?:\/\/[^/"]+(\/[^"]*)"/g)) {
+    if (!resolves(url)) broken.push(`${relative(dist, file)} → og:image ${url}`);
   }
 }
 

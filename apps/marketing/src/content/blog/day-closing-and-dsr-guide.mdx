@@ -4,6 +4,8 @@ description: "A practical guide to end-of-day reconciliation for Indian fuel sta
 publishedAt: 2026-10-05
 updatedAt: 2026-10-05
 tags: ["operations", "guide", "reconciliation"]
+cover: ./images/day-closing-and-dsr-guide/cover.svg
+coverAlt: "Five checks, one DSR: nozzles, drawers, dips and credit, then the DSR."
 ---
 
 At 10:30 PM on a typical forecourt in India, the manager's desk is covered in meter slips, paper chits, credit sale vouchers, and crumpled rupee bundles.
@@ -51,6 +53,13 @@ The attendant then makes their **cash declaration**—counting and handing over 
 
 If Anitha on DU-2 declared ₹1,21,100 against expected cash of ₹1,21,450, the ₹350 shortage is flagged immediately at handover. It has a name, a DU, and a timestamp. It is settled before she walks out the station gate.
 
+<figure>
+
+![Anitha's drawer on DU-2: opening float ₹5,000 plus cash sales ₹1,41,450 minus cash drops ₹25,000 gives expected cash of ₹1,21,450. She declared ₹1,21,100, a variance of −₹350.](./images/day-closing-and-dsr-guide/drawer-reconciliation.svg)
+
+<figcaption>Expected cash first, then the declaration against it. The ₹350 short has a name on it.</figcaption>
+</figure>
+
 Card and UPI collections are reconciled separately against the settlement slips from the payment terminal, never commingled with physical drawer cash.
 
 ---
@@ -80,6 +89,13 @@ If you supply credit to local transport fleets, buses, or commercial vehicle ope
 - **Record vehicle numbers at the time of fill.** When fuel is issued on credit, capture the customer account and vehicle registration number immediately.
 - **Credit sales never enter the drawer.** A credit sale debits the customer's ledger balance. It does not add cash to the attendant's pouch.
 - **Record bank collections by entry date.** When a fleet customer sends ₹50,000 via NEFT or RTGS, log it in the office ledger against the station's bank account with that day's entry date. Collections lower customer dues; they never touch forecourt shift cash.
+
+<figure>
+
+![Cash at the nozzle goes to the attendant drawer, checked at handover. Card or UPI is matched to the terminal's settlement slips. A credit sale goes to the customer ledger with the vehicle number. A bank collection by NEFT or RTGS goes to the office ledger by entry date.](./images/day-closing-and-dsr-guide/money-routes.svg)
+
+<figcaption>Each kind of money has its own place to be checked. None of it is pooled with drawer cash.</figcaption>
+</figure>
 
 By keeping credit entries clean, customer statements with running balances can be reviewed immediately when an invoice dispute arises.
 

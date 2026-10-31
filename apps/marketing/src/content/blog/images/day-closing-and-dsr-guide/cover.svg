@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="630" fill="#12283a"/>
+  <text x="80" y="170" fill="#ffffff" font-size="88" font-weight="800" letter-spacing="-2">Five checks. One DSR.</text>
+  <line x1="150" y1="370" x2="1050" y2="370" stroke="#5b86ad" stroke-width="6"/>
+  <circle cx="150" cy="370" r="62" fill="#2e5e88" stroke="#5b86ad" stroke-width="4"/>
+  <text x="150" y="392" fill="#ffffff" font-size="60" font-weight="800" text-anchor="middle">1</text>
+  <text x="150" y="502" fill="#d6e3ef" font-size="36" font-weight="700" text-anchor="middle">Nozzles</text>
+  <circle cx="375" cy="370" r="62" fill="#2e5e88" stroke="#5b86ad" stroke-width="4"/>
+  <text x="375" y="392" fill="#ffffff" font-size="60" font-weight="800" text-anchor="middle">2</text>
+  <text x="375" y="502" fill="#d6e3ef" font-size="36" font-weight="700" text-anchor="middle">Drawers</text>
+  <circle cx="600" cy="370" r="62" fill="#2e5e88" stroke="#5b86ad" stroke-width="4"/>
+  <text x="600" y="392" fill="#ffffff" font-size="60" font-weight="800" text-anchor="middle">3</text>
+  <text x="600" y="502" fill="#d6e3ef" font-size="36" font-weight="700" text-anchor="middle">Dips</text>
+  <circle cx="825" cy="370" r="62" fill="#2e5e88" stroke="#5b86ad" stroke-width="4"/>
+  <text x="825" y="392" fill="#ffffff" font-size="60" font-weight="800" text-anchor="middle">4</text>
+  <text x="825" y="502" fill="#d6e3ef" font-size="36" font-weight="700" text-anchor="middle">Credit</text>
+  <circle cx="1050" cy="370" r="62" fill="#8fd1b4" stroke="#8fd1b4" stroke-width="4"/>
+  <path d="M1022 372 L1042 394 L1080 348" fill="none" stroke="#12283a" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1050" y="502" fill="#8fd1b4" font-size="36" font-weight="700" text-anchor="middle">DSR</text>
+</svg>

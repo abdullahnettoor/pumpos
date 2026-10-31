@@ -3,10 +3,10 @@ import SiteHeader from '../components/layout/SiteHeader.astro';
 import SiteFooter from '../components/layout/SiteFooter.astro';
 import '../styles/tokens.css';
 import '../styles/site.css';
-interface Props { title: string; description?: string; path?: string; green?: boolean; noindex?: boolean; article?: boolean; }
-const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false } = Astro.props;
+interface Props { title: string; description?: string; path?: string; green?: boolean; noindex?: boolean; article?: boolean; ogImage?: string; ogImageAlt?: string; }
+const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false, ogImage: ogImagePath = '/og-default.png', ogImageAlt = 'PumpOS. Find the shortage today, not next month. First 3 months free for pilot stations.' } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
-const ogImage = new URL('/og-default.png', Astro.site).toString();
+const ogImage = new URL(ogImagePath, Astro.site).toString();
 // Preview builds set PUBLIC_NOINDEX so the preview domain never competes with pumpos.app in search.
 const robotsNoindex = noindex || import.meta.env.PUBLIC_NOINDEX === 'true';
 ---
@@ -20,7 +20,7 @@ const robotsNoindex = noindex || import.meta.env.PUBLIC_NOINDEX === 'true';
     <link rel="icon" type="image/svg+xml" href="/brand/pumpos-mark.svg" />
     <link rel="canonical" href={canonical} />
     <link rel="preload" href="/fonts/brand/plus-jakarta-sans-variable.woff2" as="font" type="font/woff2" crossorigin />
-    <meta property="og:type" content={article ? 'article' : 'website'} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:image" content={ogImage} /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="PumpOS. Find the shortage today, not next month. First 3 months free for pilot stations." /><meta property="og:site_name" content="PumpOS" /><meta property="og:locale" content="en_IN" />
+    <meta property="og:type" content={article ? 'article' : 'website'} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:image" content={ogImage} /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content={ogImageAlt} /><meta property="og:site_name" content="PumpOS" /><meta property="og:locale" content="en_IN" />
     <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={title} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={ogImage} />
     <link rel="alternate" type="application/rss+xml" title="PumpOS Journal" href="/rss.xml" />
     <meta name="generator" content={Astro.generator} />

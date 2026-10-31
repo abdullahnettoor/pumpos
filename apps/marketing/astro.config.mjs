@@ -14,6 +14,9 @@ const site = process.env.SITE ?? 'https://pumpos.abdullahnettoor.com';
 export default defineConfig({
   site,
   output: 'static',
+  // Blog covers are SVGs authored in this repo; rasterising them gives the PNG
+  // link-preview image (src/pages/blog/[...slug].astro).
+  image: { dangerouslyProcessSVG: true },
   integrations: [mdx(), sitemap({ filter: (page) => !/\/404/.test(page) }), pagefind()],
   vite: {
     plugins: [tailwindcss()],

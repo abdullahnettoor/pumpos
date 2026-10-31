@@ -15,6 +15,8 @@ interface Props {
   noindex?: boolean;
   /** Fine-print typography for legal pages. */
   legal?: boolean;
+  ogImage?: string;
+  ogImageAlt?: string;
 }
 
 const {
@@ -28,9 +30,11 @@ const {
   article = false,
   noindex = false,
   legal = false,
+  ogImage,
+  ogImageAlt,
 } = Astro.props;
 ---
-<BaseLayout title={metaTitle} description={description} path={path} article={article} noindex={noindex}>
+<BaseLayout title={metaTitle} description={description} path={path} article={article} noindex={noindex} ogImage={ogImage} ogImageAlt={ogImageAlt}>
   <Fragment slot="head"><slot name="head" /></Fragment>
   <Section class="prose-section" container={false} aria-label={title}>
     <div class="ds-w">

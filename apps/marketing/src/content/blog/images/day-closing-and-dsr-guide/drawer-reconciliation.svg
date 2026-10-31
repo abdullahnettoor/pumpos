@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="620" viewBox="0 0 760 620" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="760" height="620" fill="#ffffff"/>
+  <text x="36" y="62" fill="#18201a" font-size="32" font-weight="800">Anitha · DU-2 · handover</text>
+  <text x="36" y="100" fill="#5e6a61" font-size="24">Expected cash, then her declaration</text>
+
+  <g font-size="28" fill="#18201a">
+    <line x1="36" y1="130" x2="724" y2="130" stroke="#d9ded6" stroke-width="2"/>
+    <text x="68" y="180">Opening float</text>
+    <text x="724" y="180" text-anchor="end" font-weight="700">₹5,000</text>
+    <line x1="36" y1="208" x2="724" y2="208" stroke="#d9ded6" stroke-width="2"/>
+
+    <text x="36" y="258" fill="#1f6a53" font-weight="800">+</text>
+    <text x="68" y="258">DU cash sales</text>
+    <text x="724" y="258" text-anchor="end" font-weight="700">₹1,41,450</text>
+    <line x1="36" y1="286" x2="724" y2="286" stroke="#d9ded6" stroke-width="2"/>
+
+    <text x="36" y="336" fill="#1f6a53" font-weight="800">−</text>
+    <text x="68" y="336">Cash drops</text>
+    <text x="724" y="336" text-anchor="end" font-weight="700">₹25,000</text>
+
+    <rect x="20" y="362" width="720" height="78" rx="14" fill="#e5f0eb" stroke="#1f6a53" stroke-width="2"/>
+    <text x="36" y="412" fill="#1f6a53" font-weight="800">=</text>
+    <text x="68" y="412" fill="#1f6a53" font-weight="800">Expected cash</text>
+    <text x="724" y="412" text-anchor="end" font-weight="800">₹1,21,450</text>
+
+    <text x="68" y="492">Cash declared</text>
+    <text x="724" y="492" text-anchor="end" font-weight="700">₹1,21,100</text>
+
+    <rect x="20" y="518" width="720" height="78" rx="14" fill="#f7e7e4" stroke="#b44a3f" stroke-width="2"/>
+    <text x="68" y="568" fill="#b44a3f" font-weight="800">Variance (short)</text>
+    <text x="724" y="568" text-anchor="end" fill="#b44a3f" font-weight="800">−₹350</text>
+  </g>
+</svg>

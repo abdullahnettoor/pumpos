@@ -4,6 +4,8 @@ description: A station owner should be able to inspect the numbers without waiti
 publishedAt: 2026-07-16
 updatedAt: 2026-09-14
 tags: [product, announcement]
+cover: ./images/introducing-pumpos/cover.svg
+coverAlt: "Your station. Your record. The PumpOS mark."
 ---
 
 An owner asks how much a customer owes. Someone checks a register, calls the
@@ -29,6 +31,13 @@ The Shift Summary records a closed Shift. The Daily Station Sales Report, or
 DSR, brings together the Business Day's closed-shift summaries and financial
 records as of generation. Later financial entries do not silently rewrite that
 saved report.
+
+<figure>
+
+![A Business Day holds Shift 1 and Shift 2, each with nozzle readings and attendant drawers. Each shift closes into a saved Shift Summary, and the day closes into a DSR that is never recalculated. Bank collections, expenses and supplier payments sit apart and never rewrite a saved report.](./images/introducing-pumpos/shift-to-dsr.svg)
+
+<figcaption>Shift Summaries are saved as each shift closes; the DSR is saved when the day closes.</figcaption>
+</figure>
 
 That history matters when a question comes up days or months later.
 
