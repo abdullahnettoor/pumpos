@@ -1,25 +1,49 @@
 name: Publish Blog
 
-# Publishes blog posts to pumpos.app without an app release (#653).
+# Publishes the marketing site to pumpos.app without an app release (#653).
 #
-# Builds the released marketing site from main, with the blog folder taken
-# from dev, and deploys marketing only. Production gets new posts and nothing
-# else unreleased: no tag, no desktop build, no app or page changes.
+# Blog (default): builds the website code that is live, with the blog folder
+# taken from dev, and deploys marketing only. Production gets new posts and
+# nothing else unreleased: no tag, no desktop build, no app or page changes.
 #
-#   schedule                 -> every 15 min; deploys only when the posts that
-#                               should be live differ from pumpos.app's RSS
-#                               (a scheduled post came due, or one was pulled)
-#   Actions -> Publish Blog  -> deploys now, e.g. after editing a live post
+# Whole site: builds the entire marketing site from dev, after a production
+# approval, for website-only changes (layout, pages, styling) that should not
+# wait for an app release. The approval is where to confirm no page describes
+# a feature stations don't have yet.
 #
-# Posts are reviewed in their PR to dev, so this runs without an approval gate.
-# Scheduled runs use this file from the default branch (dev). A release deploy
-# builds main's own blog folder; the next scheduled run restores any post that
-# reached dev after the release was cut.
+#   push to dev (blog folder)         -> blog, deploys now: a post merged, or a
+#                                        live post edited
+#   schedule                          -> daily 00:30 UTC (06:00 IST), blog;
+#                                        deploys only when the posts that
+#                                        should be live differ from
+#                                        pumpos.app's RSS (a dated post came
+#                                        due). A date-only publishedAt is
+#                                        05:30 IST, so it goes out that morning.
+#   Actions -> Publish Blog (blog)    -> deploys now, e.g. a post timed for a
+#                                        precise hour
+#   Actions -> Publish Blog (site)    -> whole site from dev, after approval
+#
+# The `marketing-live` tag marks the commit whose website code a whole-site
+# publish put on pumpos.app. Blog runs build from that commit instead of main
+# until a release brings main past it, so a post coming due never rolls the
+# site back. A release deploy builds main's own site; the next daily run
+# restores any post that reached dev after the release was cut.
+#
+# Scheduled runs use this file from the default branch (dev).
 
 on:
+  push:
+    branches: [dev]
+    paths: ['apps/marketing/src/content/blog/**']
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '30 0 * * *'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: 'blog: posts only. site: the whole marketing site from dev (needs production approval)'
+        type: choice
+        default: blog
+        options: [blog, site]
 
 permissions:
   contents: read
@@ -30,15 +54,29 @@ concurrency:
 
 env:
   SITE: ${{ vars.MARKETING_SITE || 'https://pumpos.app' }}
+  PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.app' }}
+  PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+  PUBLIC_DEMO_BOOKING_URL: ${{ vars.DEMO_BOOKING_URL }}
 
 jobs:
   publish:
     name: Publish blog
+    if: inputs.scope != 'site'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: main
+          fetch-depth: 0
+
+      - name: Build from the website code that is live
+        run: |
+          git fetch --force origin 'refs/tags/marketing-live:refs/tags/marketing-live' 2>/dev/null || true
+          if git rev-parse -q --verify refs/tags/marketing-live >/dev/null \
+            && ! git merge-base --is-ancestor marketing-live HEAD; then
+            echo "::notice::Building from marketing-live: a whole-site publish is ahead of main."
+            git checkout -q marketing-live
+          fi
 
       - name: Take the blog folder from dev
         run: |
@@ -50,9 +88,9 @@ jobs:
         id: decide
         working-directory: apps/marketing
         run: |
-          # main hides scheduled posts only once it carries src/blog.ts.
+          # The site hides scheduled posts only once it carries src/blog.ts.
           if [ ! -f src/blog.ts ]; then
-            echo "::notice::main cannot schedule posts yet; publishing starts after the next release."
+            echo "::notice::The live site cannot schedule posts yet; publishing starts after the next release."
             echo "run=false" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" != "schedule" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -76,10 +114,6 @@ jobs:
           npm ci
           npm run build
           npm run check:links
-        env:
-          PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.app' }}
-          PUBLIC_CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
-          PUBLIC_DEMO_BOOKING_URL: ${{ vars.DEMO_BOOKING_URL }}
 
       - name: Deploy marketing
         if: steps.decide.outputs.run == 'true'
@@ -92,3 +126,43 @@ jobs:
       - name: Smoke-check marketing
         if: steps.decide.outputs.run == 'true'
         run: node scripts/smoke-deploy.mjs marketing "$SITE"
+
+  publish-site:
+    name: Publish whole site
+    if: inputs.scope == 'site'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: dev
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/marketing/package-lock.json
+
+      - name: Build marketing
+        working-directory: apps/marketing
+        run: |
+          npm ci
+          npm run build
+          npm run check:links
+
+      - name: Deploy marketing
+        working-directory: apps/marketing
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Smoke-check marketing
+        run: node scripts/smoke-deploy.mjs marketing "$SITE"
+
+      - name: Mark the live website code
+        run: |
+          git tag -f marketing-live
+          git push -f origin refs/tags/marketing-live

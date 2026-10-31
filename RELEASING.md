@@ -38,13 +38,29 @@ Three guardrails sit on the production path:
 
 ## Trigger matrix
 
-| Trigger                           | Result after required gates                                        | Target                                           |
-| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
-| Open / push to a **pull request** | Deploy only the frontends that PR changes                          | Per-PR `*.workers.dev` URL, posted on the PR     |
-| `git push origin dev`             | Deploy only changed web/API apps                                   | Preview custom domains (`*.abdullahnettoor.com`) |
-| `workflow_dispatch` on **Deploy** | Deploy selected app (`all`, `console`, `marketing`, `mobile`, API) | Preview custom domains                           |
-| Merged `dev` to `main` PR         | Start approval-gated release; deploy web/API and affected desktop  | `*.pumpos.app` and the GitHub Release            |
-| Push to another branch            | No deployment; an open PR still runs its checks                    | No deployment                                    |
+| Trigger                           | Result after required gates                                                               | Target                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Open / push to a **pull request** | Deploy only the frontends that PR changes                                                 | Per-PR `*.workers.dev` URL, posted on the PR     |
+| `git push origin dev`             | Deploy only changed web/API apps                                                          | Preview custom domains (`*.abdullahnettoor.com`) |
+| `workflow_dispatch` on **Deploy** | Deploy selected app (`all`, `console`, `marketing`, `mobile`, API)                        | Preview custom domains                           |
+| Merged `dev` to `main` PR         | Start approval-gated release; deploy web/API and affected desktop                         | `*.pumpos.app` and the GitHub Release            |
+| **Publish Blog** (blog)           | On a blog change to `dev`, daily 06:00 IST, or by hand: live website code + `dev`'s posts | `pumpos.app`                                     |
+| **Publish Blog** (scope `site`)   | After `production` approval, deploy the whole marketing site from `dev`                   | `pumpos.app`                                     |
+| Push to another branch            | No deployment; an open PR still runs its checks                                           | No deployment                                    |
+
+### Marketing without a release
+
+[`publish-blog.yml`](.github/workflows/publish-blog.yml) ships the marketing
+site between releases. Blog posts go out when they merge to `dev`, and a daily
+06:00 IST run publishes posts dated for that day.
+For a website-only change (layout, pages, styling), run **Actions → Publish
+Blog** with scope `site`: after a `production` approval it deploys the whole
+site from `dev` and moves the `marketing-live` tag to that commit. Approve only
+when no page describes a feature stations don't have yet.
+
+Blog runs build from `marketing-live` while it is ahead of `main`, so a post
+coming due never rolls the site back. Every release still deploys marketing
+from `main`, which by then contains the published commit.
 
 ### Pull-request previews
 
