@@ -205,7 +205,9 @@ The release model is unchanged: **merge `dev` into `main`**. See
 6. **Publishing a desktop release is a second approval.** `publish-desktop` uses
    the protected `production` environment: approving it is the moment software
    already running on stations starts seeing a new version. A web-only release
-   publishes straight after its deploy — it changes no update channel.
+   publishes straight after its deploy and is never marked `latest`: it carries
+   no `latest.json`, so `releases/latest` stays on the last desktop release and
+   the update channel is untouched.
 7. **The published channel is smoke-tested.** `scripts/smoke-updater.mjs`
    re-checks the same bytes at the public URLs clients actually poll.
 
