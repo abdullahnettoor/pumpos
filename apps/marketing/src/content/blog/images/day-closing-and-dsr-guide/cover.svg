@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="630" fill="#0f2a21"/>
+  <circle cx="1080" cy="80" r="260" fill="#1f6a53" opacity="0.35"/>
+  <text x="80" y="118" fill="#8fd1b4" font-size="22" font-weight="700" letter-spacing="3">PUMPOS JOURNAL · DAY CLOSING</text>
+  <text x="80" y="210" fill="#ffffff" font-size="68" font-weight="800" letter-spacing="-1.5">Close the day</text>
+  <text x="80" y="290" fill="#ffffff" font-size="68" font-weight="800" letter-spacing="-1.5">before staff leave.</text>
+  <text x="80" y="346" fill="#b9cdc4" font-size="26">Five checks, one saved DSR. Every OMC dealership.</text>
+
+  <g font-size="18" font-weight="700">
+    <rect x="80" y="430" width="186" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="102" y="470" fill="#8fd1b4" font-size="16">01</text>
+    <text x="102" y="508" fill="#ffffff">Nozzle readings</text>
+
+    <rect x="290" y="430" width="186" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="312" y="470" fill="#8fd1b4" font-size="16">02</text>
+    <text x="312" y="508" fill="#ffffff">Drawers</text>
+
+    <rect x="500" y="430" width="186" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="522" y="470" fill="#8fd1b4" font-size="16">03</text>
+    <text x="522" y="508" fill="#ffffff">Tank dips</text>
+
+    <rect x="710" y="430" width="186" height="104" rx="14" fill="#173a2e" stroke="#2f5c4b"/>
+    <text x="732" y="470" fill="#8fd1b4" font-size="16">04</text>
+    <text x="732" y="508" fill="#ffffff">Credit sales</text>
+
+    <rect x="920" y="430" width="200" height="104" rx="14" fill="#8fd1b4"/>
+    <text x="942" y="470" fill="#0f2a21" font-size="16">05</text>
+    <text x="942" y="508" fill="#0f2a21">DSR saved</text>
+  </g>
+  <g fill="#8fd1b4" font-size="24" font-weight="700" text-anchor="middle">
+    <text x="278" y="490">›</text>
+    <text x="488" y="490">›</text>
+    <text x="698" y="490">›</text>
+    <text x="908" y="490">›</text>
+  </g>
+</svg>

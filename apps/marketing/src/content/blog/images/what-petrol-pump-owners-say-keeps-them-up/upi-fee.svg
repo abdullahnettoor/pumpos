@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="480" viewBox="0 0 760 480" font-family="Plus Jakarta Sans, Helvetica, Arial, sans-serif">
+  <rect width="760" height="480" fill="#ffffff"/>
+  <text x="36" y="62" fill="#18201a" font-size="32" font-weight="800">A ₹5 UPI fee, on the dealer's side</text>
+  <text x="36" y="100" fill="#5e6a61" font-size="24">One fill, as a Reddit post worked it out</text>
+
+  <g font-size="28" fill="#18201a">
+    <line x1="36" y1="130" x2="724" y2="130" stroke="#d9ded6" stroke-width="2"/>
+    <text x="36" y="180">Fuel paid by UPI</text>
+    <text x="724" y="180" text-anchor="end" font-weight="700">₹3,000</text>
+    <line x1="36" y1="208" x2="724" y2="208" stroke="#d9ded6" stroke-width="2"/>
+
+    <text x="36" y="258">Dealer earns on it</text>
+    <text x="724" y="258" text-anchor="end" font-weight="700">about ₹90</text>
+    <line x1="36" y1="286" x2="724" y2="286" stroke="#d9ded6" stroke-width="2"/>
+
+    <text x="36" y="336">Reported UPI fee</text>
+    <text x="724" y="336" text-anchor="end" font-weight="700">₹5</text>
+
+    <rect x="20" y="370" width="720" height="78" rx="14" fill="#f7e7e4" stroke="#b44a3f" stroke-width="2"/>
+    <text x="36" y="420" fill="#b44a3f" font-weight="800">Share of dealer earnings</text>
+    <text x="724" y="420" text-anchor="end" fill="#b44a3f" font-weight="800">≈ 5.5%</text>
+  </g>
+</svg>
