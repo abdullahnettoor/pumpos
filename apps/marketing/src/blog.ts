@@ -24,3 +24,9 @@ export const formatPostDate = (date: Date) =>
 /** Minutes to read the post body at 200 words a minute, never less than 1. */
 export const readingMinutes = (post: Post) =>
   Math.max(1, Math.round((post.body ?? '').split(/\s+/).filter(Boolean).length / 200));
+
+/** The post's topic on the Journal: its first tag, capitalised. */
+export const postTopic = (post: Post) => {
+  const tag = post.data.tags[0] ?? 'notes';
+  return tag.charAt(0).toUpperCase() + tag.slice(1);
+};

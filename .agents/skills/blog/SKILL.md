@@ -70,8 +70,11 @@ draft: true
 - **`updatedAt`**: set it on a refresh only when the substance changed (new
   facts, new section). A typo fix is not an update.
 - **`tags`**: reuse the tags existing posts already use before inventing one.
+  The **first tag is the post's topic**: the Journal shows it on the post and
+  offers it as a filter, so lead with the broad one (`operations`, `owners`,
+  `product`), not a narrow one like `cash-flow`.
 - **`cover`** / **`coverAlt`**: the post's cover, drawn in step 5. It heads the
-  post, fronts its Journal card, and becomes the PNG link preview on
+  post, fronts its Journal entry, and becomes the PNG link preview on
   WhatsApp, LinkedIn and Google. `coverAlt` is required with it.
 - **`draft`**: `true` while the post is unfinished; it hides the post
   everywhere, preview included. Set `false` with a future `publishedAt` to

@@ -1,0 +1,18 @@
+---
+import { Image } from 'astro:assets';
+import { formatPostDate, postTopic, readingMinutes, type Post } from '../../blog';
+
+interface Props {
+  post: Post;
+}
+const { post } = Astro.props;
+---
+<a class="journal-row" href={`/blog/${post.id}`} data-topic={postTopic(post)}>
+  <span class="journal-thumb">{post.data.cover && <Image src={post.data.cover} alt="" />}</span>
+  <span class="journal-row-body">
+    <span class="journal-meta"><b>{postTopic(post)}</b>{formatPostDate(post.data.publishedAt)} · {readingMinutes(post)} min read</span>
+    <span class="journal-row-title">{post.data.title}</span>
+    <span class="journal-row-desc">{post.data.description}</span>
+  </span>
+  <span class="journal-row-arrow" aria-hidden="true">→</span>
+</a>
