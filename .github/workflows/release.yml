@@ -197,7 +197,9 @@ jobs:
   # A web-only release changes no desktop update channel, so it publishes as
   # soon as the deploy succeeds — the draft exists only so the release and its
   # assets appear together. It costs no second approval, exactly as before this
-  # feature landed.
+  # feature landed. It must not become `latest`: desktop clients poll
+  # releases/latest/download/latest.json, and this release carries none, so
+  # `latest` stays on the last desktop release.
   publish:
     name: Publish release
     needs: [tag, deploy, desktop]
@@ -211,7 +213,9 @@ jobs:
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
+          # No checkout in this job, so gh cannot infer the repository.
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest=false
 
   # A desktop release is different: publishing is the moment every installed
   # client starts seeing this version. That gets its own approval, because it
