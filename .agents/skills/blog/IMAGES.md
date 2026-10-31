@@ -21,17 +21,30 @@ they show: `cover.svg`, `drawer-reconciliation.svg`.
 
 Design body figures **mobile-first**: at 45% scale, 24px text reads as 11px,
 so no body text under 24px and no figure-level text under 22px. Prefer one
-tall column (a ledger, a vertical flow) over a wide row of boxes. The cover is
-a hero, not a reading surface: headline 64px+, card text 18px+, small labels
-16px+.
+tall column (a ledger, a vertical flow) over a wide row of boxes.
+
+## The cover
+
+The title already sits beside the cover on the Journal list, above it on the
+post, and under it in link previews, so the cover never repeats it. A cover is
+a **hook plus one picture**:
+
+- **Hook**: two to four words, 84px+, that make the post's point in a new way
+  ("Half the litres.", "Five checks. One DSR."). One line, or two short ones.
+- **Picture**: one large shape that carries the post's idea: a bar pair, a
+  step path, the PumpOS mark. Labels on it 36px+; the Journal shows covers
+  about 560px wide, so anything smaller is noise.
+- **Background**: differs from the covers of the posts listed beside it. Use
+  deep green `#0f2a21`, diesel blue `#12283a` (shapes `#2e5e88`, lines
+  `#5b86ad`, text `#d6e3ef`), or soft green `#e5f0eb` with dark text.
+- Nothing else: no eyebrow, subtitle or rows of small cards.
 
 ## Palette and type
 
-From `src/styles/tokens.css`; introduce no colour of your own.
+From `src/styles/tokens.css` and the cover backgrounds above; introduce no colour of your own.
 
 | Use                       | Colour    |
 | ------------------------- | --------- |
-| Deep background (covers)  | `#0f2a21` |
 | Primary / positive        | `#1f6a53` on soft fill `#e5f0eb` |
 | Mint accent on deep       | `#8fd1b4`, muted text `#b9cdc4` |
 | Ink / muted text          | `#18201a` / `#5e6a61` |
@@ -54,6 +67,8 @@ text line.
 - **Plain SVG only**: shapes, `<text>`, `<path>`. No `<image>`, external
   `href`, `<foreignObject>` or script; the build rasterises the cover with
   sharp, which renders none of them reliably.
+- Draw symbols (a tick, an arrow) as `<path>`, not text glyphs: the CI font
+  may lack them.
 - The PumpOS mark, when wanted, is the path in `public/brand/pumpos-mark.svg`.
 
 ## Placing a body figure

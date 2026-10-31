@@ -104,7 +104,8 @@ two to four internal links, and has been through `unslop`.
 
 ## 5. Draw the images
 
-Every post gets a **cover**. Then give each worked example, formula or
+Every post gets a **cover**: a short hook and one picture, never the title.
+Then give each worked example, formula or
 sequence in the body a **figure** when seeing it beats reading it: a drawer
 reconciliation as a ledger, a day-close as a flow, a variance as a comparison.
 Most posts carry one to three; a figure that restates a sentence is clutter.

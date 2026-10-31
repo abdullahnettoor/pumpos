@@ -20,3 +20,7 @@ export async function getLivePosts(): Promise<Post[]> {
 
 export const formatPostDate = (date: Date) =>
   date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Kolkata' });
+
+/** Minutes to read the post body at 200 words a minute, never less than 1. */
+export const readingMinutes = (post: Post) =>
+  Math.max(1, Math.round((post.body ?? '').split(/\s+/).filter(Boolean).length / 200));
