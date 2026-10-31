@@ -64,9 +64,11 @@ draft: true
 - **`description`**: 150–160 characters, answers the query in one sentence. It
   is the snippet under the search result, so write it to be clicked.
 - **File name**: the target query in lowercase-hyphenated words, short, no date.
-- **`publishedAt`**: when it goes live. A date (`2026-10-20`) goes live that
-  morning; a time (`2026-10-20T16:15:00+05:30`) goes live within about 15
-  minutes of it. Until then the post shows on preview builds only.
+- **`publishedAt`**: when it goes live. Today or earlier goes live as soon as
+  the PR merges. A future date (`2026-10-20`) goes live at 06:00 IST that
+  morning. A future time (`2026-10-20T16:15:00+05:30`) waits for the next
+  06:00 IST run, or a manual run at that time. Until then the post shows on
+  preview builds only.
 - **`updatedAt`**: set it on a refresh only when the substance changed (new
   facts, new section). A typo fix is not an update.
 - **`tags`**: reuse the tags existing posts already use before inventing one.
@@ -154,10 +156,11 @@ Tell the user how the post goes live, because merging is not publishing:
 1. The PR gets a marketing preview build, scheduled posts included.
 2. Merging to `dev` deploys the preview site.
 3. The **Publish Blog** workflow (`.github/workflows/publish-blog.yml`) puts it
-   on `pumpos.app` within about 15 minutes of `publishedAt`, without an app
-   release. A post already past its `publishedAt` goes out on the next run.
-4. An edit to a post that is already live, new images included, needs a
-   manual run: Actions → Publish Blog → Run workflow.
+   on `pumpos.app` without an app release: at once on merge when
+   `publishedAt` has passed, otherwise at 06:00 IST on its date. Edits to a
+   live post, new images included, also go out on merge.
+4. A post timed for a precise hour needs a manual run at that time: Actions →
+   Publish Blog → Run workflow.
 
 **Done when** the PR is open against `dev` and the user knows when the post will
 reach `pumpos.app`.

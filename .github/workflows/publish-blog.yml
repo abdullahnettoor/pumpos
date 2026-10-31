@@ -11,24 +11,32 @@ name: Publish Blog
 # wait for an app release. The approval is where to confirm no page describes
 # a feature stations don't have yet.
 #
-#   schedule                          -> every 15 min, blog; deploys only when
-#                                        the posts that should be live differ
-#                                        from pumpos.app's RSS
-#   Actions -> Publish Blog (blog)    -> deploys now, e.g. after editing a
-#                                        live post
+#   push to dev (blog folder)         -> blog, deploys now: a post merged, or a
+#                                        live post edited
+#   schedule                          -> daily 00:30 UTC (06:00 IST), blog;
+#                                        deploys only when the posts that
+#                                        should be live differ from
+#                                        pumpos.app's RSS (a dated post came
+#                                        due). A date-only publishedAt is
+#                                        05:30 IST, so it goes out that morning.
+#   Actions -> Publish Blog (blog)    -> deploys now, e.g. a post timed for a
+#                                        precise hour
 #   Actions -> Publish Blog (site)    -> whole site from dev, after approval
 #
 # The `marketing-live` tag marks the commit whose website code a whole-site
 # publish put on pumpos.app. Blog runs build from that commit instead of main
 # until a release brings main past it, so a post coming due never rolls the
-# site back. A release deploy builds main's own site; the next scheduled run
+# site back. A release deploy builds main's own site; the next daily run
 # restores any post that reached dev after the release was cut.
 #
 # Scheduled runs use this file from the default branch (dev).
 
 on:
+  push:
+    branches: [dev]
+    paths: ['apps/marketing/src/content/blog/**']
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '30 0 * * *'
   workflow_dispatch:
     inputs:
       scope:
