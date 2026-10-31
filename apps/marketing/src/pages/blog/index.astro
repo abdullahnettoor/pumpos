@@ -2,13 +2,17 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Section from '../../components/ds/Section.astro';
 import Card from '../../components/ds/Card.astro';
-import Button from '../../components/ds/Button.astro';
-import BrandMark from '../../components/marketing-preview/BrandMark.astro';
+import JournalRow from '../../components/journal/JournalRow.astro';
 import { Image } from 'astro:assets';
-import { formatPostDate as fmt, getLivePosts } from '../../blog';
+import { formatPostDate, getLivePosts, postTopic, readingMinutes, type Post } from '../../blog';
 import '../../styles/content-pages.css';
 
 const posts = await getLivePosts();
+const [lead, ...others] = posts;
+const latest = others.slice(0, 3);
+const older = others.slice(3);
+const topics = [...new Set(posts.map(postTopic))];
+const href = (post: Post) => `/blog/${post.id}`;
 ---
 <BaseLayout title="Journal | Notes on building PumpOS" description="Product notes and practical explanations of fuel station operations from PumpOS." path="/blog">
   <Section class="journal-section" aria-label="The PumpOS journal">
@@ -18,34 +22,82 @@ const posts = await getLivePosts();
         <h1 class="ds-h1">Notes from the build.</h1>
         <p class="ds-lead">What we're building, why it works this way, and the station workflows behind it.</p>
       </header>
-      <div class="journal-list" aria-label="Journal articles">
-        {posts.map((post) => (
-          <Card as="article" class="journal-card journal-entry">
-            {post.data.cover ? (
-              <a class="journal-art journal-art--cover" href={`/blog/${post.id}`} aria-label={post.data.title}>
-                <Image src={post.data.cover} alt="" />
-              </a>
-            ) : (
-              <a class="journal-art" href={`/blog/${post.id}`} aria-label={post.data.title}>
-                <p>Your station.<br />Your record.</p>
-                <BrandMark />
-              </a>
-            )}
-            <div class="journal-entry-content">
-              <p class="article-meta">
-                <time datetime={post.data.publishedAt.toISOString()}>{fmt(post.data.publishedAt)}</time>
-                · Product notes
-              </p>
-              <h2><a href={`/blog/${post.id}`}>{post.data.title}</a></h2>
-              <p>{post.data.description}</p>
-              <Button href={`/blog/${post.id}`} variant="secondary">
-                Read the story <span aria-hidden="true">↗</span>
-              </Button>
+
+      {lead ? (
+        <div class="journal">
+          {topics.length > 1 && (
+            <div class="journal-topics" role="group" aria-label="Filter by topic" data-journal-topics>
+              <button type="button" class="journal-topic" aria-pressed="true" data-topic="">All</button>
+              {topics.map((topic) => (
+                <button type="button" class="journal-topic" aria-pressed="false" data-topic={topic}>{topic}</button>
+              ))}
             </div>
-          </Card>
-        ))}
-        {posts.length === 0 && <Card class="journal-empty">Our first product notes will appear here.</Card>}
-      </div>
+          )}
+
+          <div data-journal-home>
+            <div class="journal-split">
+              <article class="journal-lead">
+                <a class="journal-lead-cover" href={href(lead)} tabindex="-1" aria-hidden="true">
+                  {lead.data.cover && <Image src={lead.data.cover} alt="" loading="eager" />}
+                </a>
+                <p class="journal-meta"><b>{postTopic(lead)}</b>{formatPostDate(lead.data.publishedAt)} · {readingMinutes(lead)} min read</p>
+                <h2><a href={href(lead)}>{lead.data.title}</a></h2>
+                <p class="journal-lead-desc">{lead.data.description}</p>
+              </article>
+
+              {latest.length > 0 && (
+                <aside class="journal-rail" aria-label="Latest posts">
+                  <p class="journal-rail-title">Latest</p>
+                  <ol>
+                    {latest.map((post, i) => (
+                      <li>
+                        <a href={href(post)}>
+                          <span class="journal-rail-num">{String(i + 2).padStart(2, '0')}</span>
+                          <span class="journal-rail-body">
+                            {post.data.cover && <Image class="journal-rail-thumb" src={post.data.cover} alt="" />}
+                            <span class="journal-meta"><b>{postTopic(post)}</b>{readingMinutes(post)} min read</span>
+                            <span class="journal-rail-heading">{post.data.title}</span>
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ol>
+                </aside>
+              )}
+            </div>
+
+            {older.length > 0 && (
+              <section class="journal-more" aria-label="More from the journal">
+                <h2 class="journal-more-title">More from the journal</h2>
+                {older.map((post) => <JournalRow post={post} />)}
+              </section>
+            )}
+          </div>
+
+          <div class="journal-filtered" data-journal-filtered hidden>
+            {posts.map((post) => <JournalRow post={post} />)}
+          </div>
+        </div>
+      ) : (
+        <Card class="journal-empty">Our first product notes will appear here.</Card>
+      )}
     </div>
   </Section>
 </BaseLayout>
+
+<script>
+  const bar = document.querySelector<HTMLElement>('[data-journal-topics]');
+  const home = document.querySelector<HTMLElement>('[data-journal-home]');
+  const filtered = document.querySelector<HTMLElement>('[data-journal-filtered]');
+  bar?.addEventListener('click', (event) => {
+    const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-topic]');
+    if (!chip || !home || !filtered) return;
+    const topic = chip.dataset.topic ?? '';
+    bar.querySelectorAll<HTMLButtonElement>('[data-topic]').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+    home.hidden = topic !== '';
+    filtered.hidden = topic === '';
+    filtered.querySelectorAll<HTMLElement>('.journal-row').forEach((row) => {
+      row.hidden = row.dataset.topic !== topic;
+    });
+  });
+</script>
