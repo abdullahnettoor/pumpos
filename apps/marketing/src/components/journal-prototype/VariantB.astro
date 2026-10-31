@@ -1,0 +1,88 @@
+---
+// PROTOTYPE — variant B: editorial index. Full-width hero cover, then a divided list with thumbnails and topic chips.
+import { Image } from 'astro:assets';
+import Button from '../ds/Button.astro';
+import type { Post } from '../../blog';
+import { href, meta, topic } from './util';
+
+interface Props { posts: Post[] }
+const { posts } = Astro.props;
+const [featured, ...rest] = posts;
+const topics = [...new Set(posts.map(topic))];
+---
+<div class="pb">
+  <div class="pb-chips" data-chips>
+    <button class="pb-chip is-on" data-topic="">All</button>
+    {topics.map((t) => <button class="pb-chip" data-topic={t}>{t}</button>)}
+  </div>
+  <article class="pb-hero" data-topic-item={topic(featured)}>
+    <a href={href(featured)}>{featured.data.cover && <Image src={featured.data.cover} alt="" />}</a>
+    <div class="pb-hero-body">
+      <div>
+        <p class="pb-meta"><span>{topic(featured)}</span>{meta(featured)}</p>
+        <h2><a href={href(featured)}>{featured.data.title}</a></h2>
+      </div>
+      <div>
+        <p class="pb-desc">{featured.data.description}</p>
+        <Button href={href(featured)} variant="secondary">Read the story <span aria-hidden="true">↗</span></Button>
+      </div>
+    </div>
+  </article>
+  <div class="pb-more"><b>More from the journal</b><span>{rest.length} posts</span></div>
+  {rest.map((post) => (
+    <a class="pb-row" href={href(post)} data-topic-item={topic(post)}>
+      {post.data.cover && <Image src={post.data.cover} alt="" />}
+      <div>
+        <p class="pb-meta"><span>{topic(post)}</span>{meta(post)}</p>
+        <h3>{post.data.title}</h3>
+        <p class="pb-desc">{post.data.description}</p>
+      </div>
+      <span class="pb-arrow" aria-hidden="true">→</span>
+    </a>
+  ))}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-chips]').forEach((bar) => {
+    bar.addEventListener('click', (event) => {
+      const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-topic]');
+      if (!chip) return;
+      bar.querySelectorAll('.pb-chip').forEach((c) => c.classList.toggle('is-on', c === chip));
+      const want = chip.dataset.topic;
+      bar.parentElement?.querySelectorAll<HTMLElement>('[data-topic-item]').forEach((item) => {
+        item.hidden = Boolean(want) && item.dataset.topicItem !== want;
+      });
+    });
+  });
+</script>
+
+<style>
+  .pb { margin-top: 28px; }
+  .pb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pb-chip { padding: 6px 13px; border: 1px solid var(--ds-line); border-radius: 999px; background: #fff; color: var(--ds-muted); font: inherit; font-size: 13px; cursor: pointer; }
+  .pb-chip.is-on { border-color: var(--ds-deep); background: var(--ds-deep); color: #fff; }
+  .pb-hero { margin-top: 24px; }
+  .pb-hero img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; border-radius: var(--ds-radius-lg); }
+  .pb-hero-body { display: grid; grid-template-columns: 1.2fr .8fr; gap: 40px; margin-top: 22px; }
+  .pb-hero h2 { margin-top: 10px; font-size: clamp(28px, 3.4vw, 42px); font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
+  .pb-hero h2 a { text-decoration: none; }
+  .pb-meta { display: flex; gap: 10px; color: var(--ds-muted); font-size: 13px; }
+  .pb-meta span { color: var(--ds-primary); font-weight: 700; }
+  .pb-desc { color: var(--ds-muted); font-size: 15px; line-height: 1.6; }
+  .pb-hero .ds-btn { margin-top: 16px; }
+  .pb-more { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--ds-line); color: var(--ds-muted); font-size: 13px; }
+  .pb-more b { color: var(--ds-ink); font-size: 15px; }
+  .pb-row { display: grid; grid-template-columns: 240px 1fr 24px; gap: 28px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--ds-line); color: inherit; text-decoration: none; }
+  .pb-row[hidden], .pb-hero[hidden] { display: none; }
+  .pb-row img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; border-radius: var(--ds-radius-sm); }
+  .pb-row h3 { margin-top: 6px; font-size: 21px; font-weight: 800; letter-spacing: -.02em; }
+  .pb-row .pb-desc { margin-top: 6px; font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pb-row:hover h3 { color: var(--ds-primary); }
+  .pb-arrow { color: var(--ds-primary); font-weight: 800; }
+  @media (max-width: 720px) {
+    .pb-hero-body { grid-template-columns: 1fr; gap: 12px; }
+    .pb-row { grid-template-columns: 112px 1fr; gap: 14px; }
+    .pb-row .pb-desc, .pb-arrow { display: none; }
+    .pb-row h3 { font-size: 16px; }
+  }
+</style>

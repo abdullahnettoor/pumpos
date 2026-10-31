@@ -1,0 +1,58 @@
+---
+// PROTOTYPE — variant D: magazine split. Newest post as a large lead on the left, a numbered "latest" rail on the right.
+import { Image } from 'astro:assets';
+import type { Post } from '../../blog';
+import { href, meta, topic } from './util';
+
+interface Props { posts: Post[] }
+const [lead, ...rest] = Astro.props.posts;
+---
+<div class="pd">
+  <article class="pd-lead">
+    <a class="pd-lead-cover" href={href(lead)}>{lead.data.cover && <Image src={lead.data.cover} alt="" />}</a>
+    <p class="pd-meta"><span>{topic(lead)}</span>{meta(lead)}</p>
+    <h2><a href={href(lead)}>{lead.data.title}</a></h2>
+    <p class="pd-desc">{lead.data.description}</p>
+  </article>
+  <aside class="pd-rail" aria-label="Latest posts">
+    <p class="pd-rail-title">Latest</p>
+    <ol>
+      {rest.map((post, i) => (
+        <li>
+          <a href={href(post)}>
+            <span class="pd-num">{String(i + 2).padStart(2, '0')}</span>
+            <div>
+              {post.data.cover && <Image class="pd-thumb" src={post.data.cover} alt="" />}
+              <p class="pd-meta"><span>{topic(post)}</span>{meta(post)}</p>
+              <h3>{post.data.title}</h3>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </aside>
+</div>
+
+<style>
+  .pd { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 48px; margin-top: 36px; }
+  .pd-lead-cover img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; border-radius: var(--ds-radius-lg); }
+  .pd-lead .pd-meta { margin-top: 20px; }
+  .pd-lead h2 { margin-top: 10px; font-size: clamp(28px, 3.4vw, 44px); font-weight: 800; line-height: 1.08; letter-spacing: -.035em; }
+  .pd-lead h2 a { text-decoration: none; }
+  .pd-desc { max-width: 60ch; margin-top: 12px; color: var(--ds-muted); font-size: 16px; line-height: 1.6; }
+  .pd-meta { display: flex; gap: 10px; color: var(--ds-muted); font-size: 13px; }
+  .pd-meta span { color: var(--ds-primary); font-weight: 700; }
+  .pd-rail { border-left: 1px solid var(--ds-line); padding-left: 32px; }
+  .pd-rail-title { padding-bottom: 12px; border-bottom: 2px solid var(--ds-ink); font-size: 13px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .pd-rail ol { margin: 0; padding: 0; list-style: none; }
+  .pd-rail li { border-bottom: 1px solid var(--ds-line); }
+  .pd-rail a { display: grid; grid-template-columns: 36px 1fr; gap: 12px; padding: 20px 0; color: inherit; text-decoration: none; }
+  .pd-num { color: var(--ds-line); font-size: 26px; font-weight: 800; line-height: 1; }
+  .pd-thumb { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; margin-bottom: 12px; border-radius: var(--ds-radius-sm); }
+  .pd-rail h3 { margin-top: 6px; font-size: 18px; font-weight: 800; line-height: 1.25; letter-spacing: -.02em; }
+  .pd-rail a:hover h3 { color: var(--ds-primary); }
+  @media (max-width: 900px) {
+    .pd { grid-template-columns: 1fr; gap: 28px; }
+    .pd-rail { border-left: 0; padding-left: 0; }
+  }
+</style>

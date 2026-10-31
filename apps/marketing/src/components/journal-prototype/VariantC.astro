@@ -1,0 +1,55 @@
+---
+// PROTOTYPE — variant C: text index. No covers in the list; posts grouped by year, date in a left column, big titles.
+import type { Post } from '../../blog';
+import { formatPostDate, readingMinutes } from '../../blog';
+import { href, topic, year } from './util';
+
+interface Props { posts: Post[] }
+const { posts } = Astro.props;
+const years = [...new Set(posts.map(year))];
+---
+<div class="pc">
+  {years.map((y) => (
+    <section class="pc-year">
+      <h2 class="pc-year-label">{y}</h2>
+      <div>
+        {posts.filter((post) => year(post) === y).map((post) => (
+          <a class="pc-row" href={href(post)}>
+            <div class="pc-date">
+              <time datetime={post.data.publishedAt.toISOString()}>{formatPostDate(post.data.publishedAt).replace(/ \d{4}$/, '')}</time>
+              <span>{readingMinutes(post)} min</span>
+            </div>
+            <div>
+              <p class="pc-topic">{topic(post)}</p>
+              <h3>{post.data.title}</h3>
+              <p class="pc-desc">{post.data.description}</p>
+            </div>
+            <span class="pc-arrow" aria-hidden="true">↗</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+</div>
+
+<style>
+  .pc { margin-top: 40px; }
+  .pc-year { display: grid; grid-template-columns: 120px 1fr; gap: 24px; border-top: 2px solid var(--ds-ink); padding-top: 18px; }
+  .pc-year + .pc-year { margin-top: 40px; }
+  .pc-year-label { font-size: 28px; font-weight: 800; letter-spacing: -.03em; }
+  .pc-row { display: grid; grid-template-columns: 110px 1fr 24px; gap: 24px; padding: 4px 0 26px; color: inherit; text-decoration: none; }
+  .pc-row + .pc-row { padding-top: 22px; border-top: 1px solid var(--ds-line); }
+  .pc-date { display: flex; flex-direction: column; gap: 2px; color: var(--ds-muted); font-size: 13px; }
+  .pc-date time { color: var(--ds-ink); font-weight: 700; }
+  .pc-topic { color: var(--ds-primary); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .pc-row h3 { margin-top: 6px; font-size: clamp(22px, 2.6vw, 32px); font-weight: 800; line-height: 1.15; letter-spacing: -.03em; }
+  .pc-desc { max-width: 62ch; margin-top: 10px; color: var(--ds-muted); font-size: 15px; line-height: 1.6; }
+  .pc-arrow { color: var(--ds-muted); font-size: 20px; }
+  .pc-row:hover h3, .pc-row:hover .pc-arrow { color: var(--ds-primary); }
+  @media (max-width: 720px) {
+    .pc-year { grid-template-columns: 1fr; gap: 8px; }
+    .pc-row { grid-template-columns: 1fr; gap: 6px; }
+    .pc-date { flex-direction: row; gap: 8px; }
+    .pc-arrow { display: none; }
+  }
+</style>

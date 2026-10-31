@@ -1,0 +1,34 @@
+---
+// PROTOTYPE — variant A: featured card + two-column card grid (what PR #678 ships).
+import { Image } from 'astro:assets';
+import Card from '../ds/Card.astro';
+import Button from '../ds/Button.astro';
+import type { Post } from '../../blog';
+import { href, meta } from './util';
+
+interface Props { posts: Post[] }
+const [featured, ...rest] = Astro.props.posts;
+---
+<div class="journal-list">
+  <Card as="article" class="journal-feature">
+    <a class="journal-cover" href={href(featured)}>{featured.data.cover && <Image src={featured.data.cover} alt="" />}</a>
+    <div class="journal-feature-body">
+      <p class="article-meta">{meta(featured)}</p>
+      <h2><a href={href(featured)}>{featured.data.title}</a></h2>
+      <p>{featured.data.description}</p>
+      <Button href={href(featured)} variant="secondary">Read the story <span aria-hidden="true">↗</span></Button>
+    </div>
+  </Card>
+  <div class="journal-grid">
+    {rest.map((post) => (
+      <Card as="article" class="journal-tile">
+        <a class="journal-cover" href={href(post)}>{post.data.cover && <Image src={post.data.cover} alt="" />}</a>
+        <div class="journal-tile-body">
+          <p class="article-meta">{meta(post)}</p>
+          <h2><a href={href(post)}>{post.data.title}</a></h2>
+          <p>{post.data.description}</p>
+        </div>
+      </Card>
+    ))}
+  </div>
+</div>

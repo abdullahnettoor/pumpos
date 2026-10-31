@@ -1,16 +1,24 @@
 ---
+// PROTOTYPE (branch prototype/journal-variants): in dev, /blog?variant=A|B|C|D switches the list layout.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Section from '../../components/ds/Section.astro';
 import Card from '../../components/ds/Card.astro';
-import Button from '../../components/ds/Button.astro';
-import BrandMark from '../../components/marketing-preview/BrandMark.astro';
-import { Image } from 'astro:assets';
-import { formatPostDate as fmt, getLivePosts, readingMinutes, type Post } from '../../blog';
+import VariantA from '../../components/journal-prototype/VariantA.astro';
+import VariantB from '../../components/journal-prototype/VariantB.astro';
+import VariantC from '../../components/journal-prototype/VariantC.astro';
+import VariantD from '../../components/journal-prototype/VariantD.astro';
+import Switcher from '../../components/journal-prototype/Switcher.astro';
+import { getLivePosts } from '../../blog';
 import '../../styles/content-pages.css';
 
-const [featured, ...rest] = await getLivePosts();
-const href = (post: Post) => `/blog/${post.id}`;
-const meta = (post: Post) => `${fmt(post.data.publishedAt)} · ${readingMinutes(post)} min read`;
+const posts = await getLivePosts();
+const prototype = import.meta.env.DEV;
+const variants = [
+  { key: 'A', name: 'Cards (PR #678)' },
+  { key: 'B', name: 'Editorial index' },
+  { key: 'C', name: 'Text index' },
+  { key: 'D', name: 'Magazine split' },
+];
 ---
 <BaseLayout title="Journal | Notes on building PumpOS" description="Product notes and practical explanations of fuel station operations from PumpOS." path="/blog">
   <Section class="journal-section" aria-label="The PumpOS journal">
@@ -20,50 +28,18 @@ const meta = (post: Post) => `${fmt(post.data.publishedAt)} · ${readingMinutes(
         <h1 class="ds-h1">Notes from the build.</h1>
         <p class="ds-lead">What we're building, why it works this way, and the station workflows behind it.</p>
       </header>
-
-      {featured ? (
-        <div class="journal-list" aria-label="Journal articles">
-          <Card as="article" class="journal-feature">
-            <a class="journal-cover" href={href(featured)} tabindex="-1" aria-hidden="true">
-              {featured.data.cover ? (
-                <Image src={featured.data.cover} alt="" loading="eager" />
-              ) : (
-                <span class="journal-cover-fallback"><BrandMark /></span>
-              )}
-            </a>
-            <div class="journal-feature-body">
-              <p class="article-meta">{meta(featured)}</p>
-              <h2><a href={href(featured)}>{featured.data.title}</a></h2>
-              <p>{featured.data.description}</p>
-              <Button href={href(featured)} variant="secondary">
-                Read the story <span aria-hidden="true">↗</span>
-              </Button>
-            </div>
-          </Card>
-
-          {rest.length > 0 && (
-            <div class="journal-grid">
-              {rest.map((post) => (
-                <Card as="article" class="journal-tile">
-                  <a class="journal-cover" href={href(post)} tabindex="-1" aria-hidden="true">
-                    {post.data.cover ? (
-                      <Image src={post.data.cover} alt="" />
-                    ) : (
-                      <span class="journal-cover-fallback"><BrandMark /></span>
-                    )}
-                  </a>
-                  <div class="journal-tile-body">
-                    <p class="article-meta">{meta(post)}</p>
-                    <h2><a href={href(post)}>{post.data.title}</a></h2>
-                    <p>{post.data.description}</p>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
+      {posts.length === 0 ? (
         <Card class="journal-empty">Our first product notes will appear here.</Card>
+      ) : prototype ? (
+        <>
+          <div data-variant="A"><VariantA posts={posts} /></div>
+          <div data-variant="B" hidden><VariantB posts={posts} /></div>
+          <div data-variant="C" hidden><VariantC posts={posts} /></div>
+          <div data-variant="D" hidden><VariantD posts={posts} /></div>
+          <Switcher variants={variants} />
+        </>
+      ) : (
+        <VariantA posts={posts} />
       )}
     </div>
   </Section>

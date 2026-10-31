@@ -1,0 +1,51 @@
+---
+// PROTOTYPE — floating variant switcher. Shows one [data-variant] block chosen by ?variant=; ← / → cycle. Dev builds only.
+interface Props { variants: { key: string; name: string }[] }
+const { variants } = Astro.props;
+---
+<div class="proto-switcher" data-proto-switcher data-variants={JSON.stringify(variants)}>
+  <button type="button" data-step="-1" aria-label="Previous variant">←</button>
+  <span data-label></span>
+  <button type="button" data-step="1" aria-label="Next variant">→</button>
+</div>
+
+<script>
+  const bar = document.querySelector<HTMLElement>('[data-proto-switcher]');
+  if (bar) {
+    const variants: { key: string; name: string }[] = JSON.parse(bar.dataset.variants ?? '[]');
+    const label = bar.querySelector<HTMLElement>('[data-label]')!;
+    const show = (key: string) => {
+      const index = Math.max(0, variants.findIndex((v) => v.key === key));
+      const current = variants[index];
+      document.querySelectorAll<HTMLElement>('[data-variant]').forEach((el) => {
+        el.hidden = el.dataset.variant !== current.key;
+      });
+      label.textContent = `${current.key} · ${current.name}`;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', current.key);
+      history.replaceState(null, '', url);
+      return index;
+    };
+    let index = show(new URLSearchParams(location.search).get('variant') ?? variants[0].key);
+    const step = (by: number) => {
+      index = show(variants[(index + by + variants.length) % variants.length].key);
+    };
+    bar.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-step]');
+      if (button) step(Number(button.dataset.step));
+    });
+    document.addEventListener('keydown', (event) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('input, textarea, [contenteditable]')) return;
+      if (event.key === 'ArrowLeft') step(-1);
+      if (event.key === 'ArrowRight') step(1);
+    });
+  }
+</script>
+
+<style>
+  .proto-switcher { position: fixed; left: 50%; bottom: 20px; z-index: 1000; display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 999px; background: #111; color: #fff; font: 600 13px/1 system-ui, sans-serif; box-shadow: 0 10px 30px rgb(0 0 0 / .35); transform: translateX(-50%); }
+  .proto-switcher button { width: 34px; height: 34px; border: 0; border-radius: 999px; background: #333; color: #fff; font-size: 16px; cursor: pointer; }
+  .proto-switcher button:hover { background: #ff5a1f; }
+  .proto-switcher span { min-width: 190px; padding: 0 10px; text-align: center; white-space: nowrap; }
+</style>
