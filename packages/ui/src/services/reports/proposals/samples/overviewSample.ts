@@ -1,0 +1,187 @@
+import type { OverviewData, OverviewReport } from '../overviewDoc.js';
+
+const PDF_XLS = 'PDF, Excel/CSV';
+
+const r = (
+  nn: string,
+  issue: string,
+  name: string,
+  group: OverviewReport['group'],
+  purpose: string,
+  filters: string,
+): OverviewReport => ({ nn, issue, name, group, purpose, filters, formats: PDF_XLS });
+
+export const OVERVIEW_SAMPLE: OverviewData = {
+  reports: [
+    r(
+      '01',
+      '7',
+      'Product-wise Sales',
+      'A+B',
+      'Qty, rate and tax (GST or VAT) by product and category; fuel traced to nozzle › shift › attendant; daily trend and vs previous period.',
+      'Period, category*, product, shift, nozzle, attendant',
+    ),
+    r(
+      '02',
+      '8',
+      'Product-wise Purchases',
+      'A+B',
+      'Supplier bills by product with GST/VAT split, incl. fuel (VAT) lines the GST register omits.',
+      'Period, supplier, product, category*',
+    ),
+    r(
+      '03',
+      '9',
+      'Stock Report (period statement)',
+      'A+B',
+      'Opening, in, out, variance, closing and stock value per product; low-stock flag.',
+      'Period, category*, product, low stock only*',
+    ),
+    r(
+      '04',
+      '10',
+      'Fuel Tank Stock & Variation Register',
+      'A+B',
+      'Per tank per day: book vs dip, variation L and %, days beyond limit; gain/loss at cost.',
+      'Period, tank, fuel, limit*',
+    ),
+    r(
+      '05',
+      '17',
+      'Cash Book',
+      'A+B',
+      'Cash in Hand day by day with running balance; monthly day-wise summary.',
+      'Period, account, entry type, voucher type*',
+    ),
+    r(
+      '06',
+      '18',
+      'Shift Cash Variance',
+      'A+B',
+      'Per Drawer and office count: expected vs declared/counted, short/excess, day and month totals; denominations.',
+      'Period, shift, attendant, DU, variance only',
+    ),
+    r(
+      '07',
+      '3',
+      'Attendant Cash Variance (Shortage)',
+      'A',
+      'View-only: each attendant’s short, excess and net for the month, with the shifts behind it.',
+      'Period, attendant, DU, non-zero only',
+    ),
+    r(
+      '08',
+      '21',
+      'POS Collection & Reconciliation',
+      'A',
+      'Sales by mode vs handover declarations vs bank settlement and MDR; unsettled highlighted.',
+      'Period, mode, terminal',
+    ),
+    r(
+      '09',
+      '11',
+      'Sundry Debtors with Ageing',
+      'A+B',
+      'Customer balances in 30-day buckets, over-limit flags, bill-wise FIFO detail, upcoming dues.',
+      'As of, customer, type, bucket, over limit',
+    ),
+    r(
+      '10',
+      '12',
+      'Sundry Creditors with Ageing',
+      'A+B',
+      'Supplier payables in buckets, advances apart, bill-wise detail, upcoming dues.',
+      'As of, supplier, bucket',
+    ),
+    r(
+      '11',
+      '23',
+      'Ledger Report',
+      'A+B',
+      'Any ledger with opening, running balance and closing: money account, party, expense/income head.',
+      'Ledger type, ledger, period',
+    ),
+    r(
+      '12',
+      '19',
+      'Expense Report',
+      'A+B',
+      'Expenses by head with subtotals; Direct / Indirect / Grand totals; by funding account.',
+      'Period, head, type*, funding account',
+    ),
+    r(
+      '13',
+      '20',
+      'Income Report',
+      'A+B',
+      'Income by head with taxable, GST and total; Direct / Indirect totals.',
+      'Period, head, type*, funding account',
+    ),
+    r(
+      '14',
+      '13',
+      'GSTR-1 (first version)',
+      'A',
+      'B2B invoices, B2C small by rate, HSN summary and document summary for GST sales.',
+      'Return period',
+    ),
+    r(
+      '15',
+      '14',
+      'GSTR-3B summary (first version)',
+      'A',
+      'Outward tax (3.1) with fuel as non-GST, ITC (4), tax payable by head.',
+      'Return period',
+    ),
+    r(
+      '16',
+      '26',
+      'Profit & Loss (improved)',
+      'A+B',
+      'Revenue, cost of sales, gross profit, other income, Direct/Indirect expenses, net profit vs previous period.',
+      'Period, compare with previous',
+    ),
+    r(
+      '17',
+      '24',
+      'Day Book',
+      'A+B',
+      'Every voucher of one date — sales, office records, stock and transfers — with totals by type.',
+      'Date, voucher type, account/party',
+    ),
+  ],
+  additions: [
+    {
+      addition: 'Direct / Indirect flag',
+      change: 'A type on each expense head and income head.',
+      unlocks: '12, 13, 16',
+    },
+    {
+      addition: 'Product category + reorder level',
+      change:
+        'A category pick-list on products (Fuel, Engine oil, Coolant, Grease, Accessories) and a reorder level per product.',
+      unlocks: '01, 02, 03',
+    },
+    {
+      addition: 'Voucher numbers',
+      change:
+        'A per-station series on Expenses, Income and Supplier Payments (e.g. EXP-0142, INC-0031, SPY-0019).',
+      unlocks: '05, 11, 17',
+    },
+    {
+      addition: 'Denomination count',
+      change: 'Save the note/coin count entered at Handover and Shift close.',
+      unlocks: '06',
+    },
+    {
+      addition: 'Tank variance limit',
+      change: 'A per-station tolerance (today one app-wide 0.5%).',
+      unlocks: '04',
+    },
+    {
+      addition: 'Credit days',
+      change: 'Payment terms on customers and suppliers, giving due dates.',
+      unlocks: '09, 10',
+    },
+  ],
+};
