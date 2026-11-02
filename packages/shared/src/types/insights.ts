@@ -155,6 +155,8 @@ export interface InsightsStockLoss {
    * Null when a day's snapshot carries no cost (frozen before cost was stored).
    */
   valueAtCost: number | null;
+  /** The Station's tank variance limit, as a percentage of litres sold. */
+  tolerancePct: number;
   /** |variance| is at most the Station's tolerance of the litres sold. */
   withinTolerance: boolean;
 }
