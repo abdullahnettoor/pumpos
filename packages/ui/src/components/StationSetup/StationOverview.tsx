@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
+import { patchQueryData } from '../../query/patches/applyPatch.js';
+import { withSavedStation } from '../../query/patches/stations.js';
 import {
   can,
   resolveTankLevelSettings,
@@ -147,6 +149,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     const updated = await updateStation(form, base.id, build(base));
     // The next section in the same Save builds on this one (#604 review).
     latestStation.current = updated;
+    patchQueryData<Station[]>(
+      qc,
+      queryKeys.stations(),
+      (list) => withSavedStation(list, updated) ?? list,
+    );
     onStationSelected(updated);
     runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
     toast.success(saved);
