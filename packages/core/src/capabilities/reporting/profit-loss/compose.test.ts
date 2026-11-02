@@ -147,4 +147,32 @@ describe('P&L head type split', () => {
       }
     }
   });
+
+  it('preserves the former result for paise-precision office totals', () => {
+    for (let n = 0; n < 100; n++) {
+      const directExpenses = n / 100;
+      const indirectExpenses = (137 - n) / 100;
+      const directIncome = (n * 3) / 100;
+      const indirectIncome = (200 - n) / 100;
+      const expenses = round2(directExpenses + indirectExpenses);
+      const otherIncome = round2(directIncome + indirectIncome);
+      const report = composeProfitLoss({
+        from: '2026-09-01',
+        to: '2026-09-01',
+        salesDays: [{ date: '2026-09-01', live: false, pnl: { grossMargin: 12.34 } }],
+        officeDays: [
+          {
+            date: '2026-09-01',
+            expenses,
+            otherIncome,
+            directExpenses,
+            indirectExpenses,
+            directIncome,
+            indirectIncome,
+          },
+        ],
+      });
+      expect(report.totals.netProfit).toBe(round2(12.34 - expenses + otherIncome));
+    }
+  });
 });
