@@ -25,6 +25,12 @@ describe('dssrDayStatus (Business Day Status)', () => {
 });
 
 describe('readDssrDay', () => {
+  it('reads the frozen tank limit and leaves old snapshots unlabelled', () => {
+    expect(
+      readDssrDay({ snapshotData: { stockVarianceTolerancePct: 1.25 } }).stockTolerancePct,
+    ).toBe(1.25);
+    expect(readDssrDay({ snapshotData: {} }).stockTolerancePct).toBeNull();
+  });
   it('reads an empty row without inventing figures', () => {
     const day = readDssrDay({ businessDate: '2026-10-09' });
     expect(day.shiftsIncluded).toBe(0);
