@@ -788,6 +788,8 @@ export const expenseCategories = pgTable(
       .references(() => organizations.id)
       .notNull(),
     name: varchar('name', { length: 100 }).notNull(),
+    // Head type: DIRECT | INDIRECT. Reports read it live, never copied onto an entry.
+    nature: varchar('nature', { length: 10 }).default('INDIRECT').notNull(),
     isSystem: boolean('is_system').default(false).notNull(),
   },
   (t) => ({
@@ -854,6 +856,8 @@ export const incomeCategories = pgTable(
     name: varchar('name', { length: 100 }).notNull(),
     // Optional GST/tax treatment, e.g. { gst_rate: 18, hsn_code: '996601', price_inclusive: true }.
     taxConfig: jsonb('tax_config'),
+    // Head type: DIRECT | INDIRECT. Reports read it live, never copied onto an entry.
+    nature: varchar('nature', { length: 10 }).default('INDIRECT').notNull(),
     isSystem: boolean('is_system').default(false).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
   },
