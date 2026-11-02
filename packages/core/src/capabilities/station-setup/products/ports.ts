@@ -27,6 +27,8 @@ export interface Product {
 export interface ProductRepository extends Repository<Product> {
   existsByCode(organizationId: string, code: string, excludeId?: string): Promise<boolean>;
   listByOrganization(organizationId: string): Promise<Product[]>;
+  /** Distinct categories for an organization (includes archived products). */
+  listCategories(organizationId: string, excludeProductId?: string): Promise<string[]>;
   /** Set the rolling weighted-average cost basis for a product (FB1). */
   updateCostBasis(productId: string, costBasis: string): Promise<void>;
 }
