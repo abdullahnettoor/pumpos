@@ -49,7 +49,10 @@ export function resolveStockVarianceTolerance(settings: unknown): number {
 
 /** Compare raw settings values so invalid changes are still validated. */
 export function stockVarianceToleranceChanged(before: unknown, after: unknown): boolean {
-  return !Object.is(before ?? STOCK_VARIANCE_TOLERANCE_PCT, after ?? STOCK_VARIANCE_TOLERANCE_PCT);
+  return !Object.is(
+    before === undefined ? STOCK_VARIANCE_TOLERANCE_PCT : before,
+    after === undefined ? STOCK_VARIANCE_TOLERANCE_PCT : after,
+  );
 }
 
 /**
