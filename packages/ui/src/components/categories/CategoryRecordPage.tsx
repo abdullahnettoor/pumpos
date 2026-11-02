@@ -139,7 +139,7 @@ const CATEGORY_KEY = {
 // The entries carry their head's Type read live, so a head edit refreshes them too.
 const RECORD_KEY = {
   expense: queryKeys.expenses(),
-  income: ['income'],
+  income: queryKeys.incomeAll(),
 } as const;
 
 const TABS_ID = 'category-records';

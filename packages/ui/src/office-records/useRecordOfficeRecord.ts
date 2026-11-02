@@ -90,7 +90,7 @@ export function useRecordOfficeRecord() {
 
 /** Lookups the drawer already holds, for naming the saved row. */
 export interface OfficeRecordLookups {
-  categories: readonly { id: string; name: string }[];
+  categories: readonly { id: string; name: string; nature?: string | null }[];
   accounts: readonly { id: string; name: string; accountType?: string | null }[];
   parties: readonly { id: string; name: string }[];
 }
@@ -103,8 +103,10 @@ export function officeRecordLabels(
   const v = submission.values as Record<string, unknown>;
   const account = lookups.accounts.find((a) => a.id === v.fundingAccountId);
   const partyId = v.customerId ?? v.supplierId;
+  const category = lookups.categories.find((c) => c.id === v.categoryId);
   return {
-    categoryName: lookups.categories.find((c) => c.id === v.categoryId)?.name ?? null,
+    categoryName: category?.name ?? null,
+    categoryNature: category?.nature ?? null,
     accountName: account?.name ?? null,
     accountType: account?.accountType ?? null,
     partyName: partyId ? (lookups.parties.find((p) => p.id === partyId)?.name ?? null) : null,

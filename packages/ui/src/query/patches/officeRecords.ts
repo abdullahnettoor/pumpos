@@ -12,6 +12,8 @@
  * the background refetch.
  */
 
+import { headNatureOf } from '@pump/shared';
+
 type Row = { id: string; [key: string]: unknown };
 
 /** An Office Record as its write answers it (amounts as strings). */
@@ -29,6 +31,8 @@ export interface AnsweredRecord {
 export interface RecordLabels {
   /** Expense or Income category. */
   categoryName?: string | null;
+  /** That category's current Type (Direct / Indirect), as the lists read it live. */
+  categoryNature?: string | null;
   /** The Funding Account. */
   accountName?: string | null;
   accountType?: string | null;
@@ -73,6 +77,7 @@ export function expenseRow(answer: AnsweredRecord, labels: RecordLabels): Row {
     ...answer,
     // As GET /transactions/expenses names an uncategorised one.
     categoryName: labels.categoryName ?? 'General',
+    categoryNature: headNatureOf(labels.categoryNature),
     accountName: labels.accountName ?? null,
     accountType: labels.accountType ?? null,
   };
@@ -82,6 +87,7 @@ export function incomeRow(answer: AnsweredRecord, labels: RecordLabels): Row {
   return {
     ...answer,
     categoryName: labels.categoryName ?? null,
+    categoryNature: headNatureOf(labels.categoryNature),
     accountName: labels.accountName ?? null,
     accountType: labels.accountType ?? null,
   };
