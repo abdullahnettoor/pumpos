@@ -87,10 +87,10 @@ class ProductRepo implements ProductRepository {
   async listByOrganization() {
     return this.rows;
   }
-  async listCategories(orgId?: string): Promise<string[]> {
+  async listCategories(orgId?: string, excludeProductId?: string): Promise<string[]> {
     const set = new Set<string>();
     for (const r of this.rows) {
-      if ((!orgId || r.organizationId === orgId) && r.category) {
+      if ((!orgId || r.organizationId === orgId) && r.id !== excludeProductId && r.category) {
         set.add(r.category);
       }
     }

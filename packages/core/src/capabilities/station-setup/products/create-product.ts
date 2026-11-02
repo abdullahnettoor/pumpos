@@ -6,7 +6,7 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
-import { createFuelVatConfig, resolveBusinessDate } from '@pump/shared';
+import { canonicalProductCategory, createFuelVatConfig, resolveBusinessDate } from '@pump/shared';
 import type { CreateProductCommand } from './command.js';
 import { validateCreateProduct } from './validator.js';
 import { defaultInventoryType, type Product, type ProductRepository } from './ports.js';
@@ -42,6 +42,8 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
 
     const inventoryType = cmd.inventoryType ?? defaultInventoryType(cmd.productType);
     const taxCategory = cmd.taxCategory ?? (cmd.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
+    const existingCategories = await this.deps.repository.listCategories(ctx.organizationId);
+    const category = canonicalProductCategory(cmd.category, existingCategories);
     const now = ctx.clock.now().toISOString();
     const product: Product = {
       id: ctx.ids.newId(),
@@ -56,7 +58,7 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       taxCategory,
       unit: cmd.unit,
       brand: cmd.brand ?? null,
-      category: cmd.category ?? null,
+      category,
       sellingPrice: cmd.sellingPrice != null ? String(cmd.sellingPrice) : null,
       costBasis: cmd.costBasis != null ? String(cmd.costBasis) : '0',
       taxConfig:

@@ -29,10 +29,10 @@ class InMemoryProductRepo implements ProductRepository {
   async listByOrganization(orgId: string) {
     return this.rows.filter((r) => r.organizationId === orgId);
   }
-  async listCategories(orgId: string): Promise<string[]> {
+  async listCategories(orgId: string, excludeProductId?: string): Promise<string[]> {
     const set = new Set<string>();
     for (const r of this.rows) {
-      if (r.organizationId === orgId && r.category) {
+      if (r.organizationId === orgId && r.id !== excludeProductId && r.category) {
         set.add(r.category);
       }
     }
@@ -216,6 +216,92 @@ describe('CreateProduct', () => {
     expect(result.success).toBe(true);
     expect(movements).toHaveLength(0); // fuel opening stock is seeded via tanks, not here
   });
+
+  it('canonicalises category: reuses existing spelling ignoring case', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Engine Oil 5W30', code: 'OIL-1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+
+    const result = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Engine Oil 10W40', code: 'OIL-2', productType: 'LUBRICANT', unit: 'L', category: 'engine oil' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe('Engine Oil');
+  });
+
+  it('stores a new category trimmed, as typed', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    const result = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Coolant Green', code: 'COOL-1', productType: 'LUBRICANT', unit: 'L', category: '  Coolant  ' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe('Coolant');
+  });
+
+  it('converts blank or whitespace category to null', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    const result = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Grease', code: 'GR-1', productType: 'LUBRICANT', unit: 'kg', category: '   ' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBeNull();
+  });
+
+  it('ignores categories from other organizations', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctxOrg1 = makeContext();
+    const ctxOrg2: ExecutionContext = { ...makeContext(), organizationId: 'org-2' };
+
+    await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Grease Org2', code: 'GR-2', productType: 'LUBRICANT', unit: 'kg', category: 'Heavy Grease' },
+      ctxOrg2,
+    );
+
+    const result = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'Grease Org1', code: 'GR-1', productType: 'LUBRICANT', unit: 'kg', category: 'heavy grease' },
+      ctxOrg1,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe('heavy grease');
+  });
+
+  it('import path: 3 sequential creates with different cases resolve to the first spelling', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+
+    const r1 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P1', code: 'P1', productType: 'LUBRICANT', unit: 'L', category: 'engine oil' },
+      ctx,
+    );
+    const r2 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P2', code: 'P2', productType: 'LUBRICANT', unit: 'L', category: 'ENGINE OIL' },
+      ctx,
+    );
+    const r3 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P3', code: 'P3', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+
+    expect(r1.success && r2.success && r3.success).toBe(true);
+    if (r1.success && r2.success && r3.success) {
+      expect(r1.data.category).toBe('engine oil');
+      expect(r2.data.category).toBe('engine oil');
+      expect(r3.data.category).toBe('engine oil');
+    }
+  });
 });
 
 describe('UpdateProduct', () => {
@@ -238,6 +324,98 @@ describe('UpdateProduct', () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.isActive).toBe(false);
     expect(store.events.some((e) => e.eventType === BusinessEvents.PRODUCT_UPDATED)).toBe(true);
+  });
+
+  it('canonicalises category to existing spelling when another product holds it', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P1', code: 'P1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+    const p2 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P2', code: 'P2', productType: 'LUBRICANT', unit: 'L', category: 'Coolant' },
+      ctx,
+    );
+    const p2Id = p2.success ? p2.data.id : '';
+
+    const result = await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p2Id, category: 'engine oil' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe('Engine Oil');
+  });
+
+  it('allows a product that is the sole holder of a spelling to re-case itself', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    const p1 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P1', code: 'P1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+    const p1Id = p1.success ? p1.data.id : '';
+
+    const result = await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p1Id, category: 'engine oil' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.category).toBe('engine oil');
+  });
+
+  it('clears category when updated with null or blank string', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    const p1 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P1', code: 'P1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+    const p1Id = p1.success ? p1.data.id : '';
+
+    const resNull = await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p1Id, category: null },
+      ctx,
+    );
+    expect(resNull.success).toBe(true);
+    if (resNull.success) expect(resNull.data.category).toBeNull();
+
+    // Reset to category
+    await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p1Id, category: 'Engine Oil' },
+      ctx,
+    );
+
+    const resBlank = await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p1Id, category: '   ' },
+      ctx,
+    );
+    expect(resBlank.success).toBe(true);
+    if (resBlank.success) expect(resBlank.data.category).toBeNull();
+  });
+
+  it('leaves category untouched when omitted (undefined)', async () => {
+    const repo = new InMemoryProductRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const ctx = makeContext();
+    const p1 = await new CreateProduct({ repository: repo, events }).execute(
+      { name: 'P1', code: 'P1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      ctx,
+    );
+    const p1Id = p1.success ? p1.data.id : '';
+
+    const result = await new UpdateProduct({ repository: repo, events }).execute(
+      { id: p1Id, name: 'P1 Renamed' },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.name).toBe('P1 Renamed');
+      expect(result.data.category).toBe('Engine Oil');
+    }
   });
 });
 

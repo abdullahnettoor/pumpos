@@ -8,6 +8,7 @@ import {
   ok,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import { canonicalProductCategory } from '@pump/shared';
 import type { UpdateProductCommand } from './command.js';
 import { validateUpdateProduct } from './validator.js';
 import type { Product, ProductRepository } from './ports.js';
@@ -39,6 +40,17 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
     ) {
       return err(
         conflictError(`A product with code "${cmd.code}" already exists`, { code: cmd.code }),
+      );
+    }
+
+    if (cmd.category !== undefined) {
+      const otherCategories = await this.deps.repository.listCategories(
+        ctx.organizationId,
+        existing.id,
+      );
+      (cmd as unknown as Record<string, unknown>).category = canonicalProductCategory(
+        cmd.category,
+        otherCategories,
       );
     }
 
