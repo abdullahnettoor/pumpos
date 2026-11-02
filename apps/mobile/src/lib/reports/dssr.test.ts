@@ -122,6 +122,18 @@ describe('deriveTankMovement', () => {
   });
 
   describe('a snapshot that carries the tank movement', () => {
+    it('uses the frozen limit and gives a stored tank flag precedence', () => {
+      expect(
+        deriveTankMovement({ stockVarianceTolerancePct: 1, fuelStockVariance: [tank({})] })[0].tone,
+      ).toBe('default');
+      expect(
+        deriveTankMovement({
+          stockVarianceTolerancePct: 1,
+          fuelStockVariance: [tank({ withinTolerance: false })],
+        })[0].tone,
+      ).toBe('bad');
+      expect(deriveTankMovement({ fuelStockVariance: [tank({})] })[0].tone).toBe('bad');
+    });
     it('shows opening → closing, sold, received, the dip and the variance in litres', () => {
       const [row] = deriveTankMovement({ fuelStockVariance: [tank({})] });
       expect(row).toMatchObject({
