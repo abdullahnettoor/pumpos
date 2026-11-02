@@ -488,12 +488,20 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
         isOpen={categoryManagerOpen}
         onClose={() => setCategoryManagerOpen(false)}
         categories={categories}
-        onChanged={() =>
-          Promise.all([
-            qc.invalidateQueries({ queryKey: CATEGORY_KEY[kind] }),
-            qc.invalidateQueries({ queryKey: RECORD_KEY[kind] }),
-          ])
-        }
+        onChanged={() => {
+          refresh(
+            () =>
+              Promise.all([
+                qc.invalidateQueries({ queryKey: CATEGORY_KEY[kind] }, { throwOnError: true }),
+                qc.invalidateQueries({ queryKey: RECORD_KEY[kind] }, { throwOnError: true }),
+                qc.invalidateQueries(
+                  { queryKey: queryKeys.profitLossAll() },
+                  { throwOnError: true },
+                ),
+              ]),
+            'Category saved.',
+          );
+        }}
         canManage={canManageCategories}
       />
     </>
