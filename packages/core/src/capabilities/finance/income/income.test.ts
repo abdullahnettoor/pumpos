@@ -109,6 +109,7 @@ const category = (taxConfig: Record<string, unknown> | null): IncomeCategory => 
   id: 'cat-1',
   organizationId: 'org-1',
   name: 'Tanker Rental',
+  nature: 'INDIRECT',
   taxConfig,
   isSystem: false,
   isActive: true,

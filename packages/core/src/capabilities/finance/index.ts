@@ -4,3 +4,4 @@ export * from './tax/index.js';
 export * from './invoicing/index.js';
 export * from './accounts/index.js';
 export * from './office-entry.js';
+export * from './heads/index.js';

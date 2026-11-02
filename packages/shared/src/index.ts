@@ -56,3 +56,4 @@ export * from './utils/dssr-snapshot.js';
 export * from './utils/quantity-label.js';
 export * from './utils/sales-headline.js';
 export * from './utils/dssr-range-kpis.js';
+export * from './utils/head-nature.js';

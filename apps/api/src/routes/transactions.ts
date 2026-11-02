@@ -3,6 +3,8 @@ import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'driz
 import { schema, type DbClient } from '@pump/db';
 import {
   can,
+  DEFAULT_EXPENSE_HEADS,
+  DEFAULT_INCOME_HEADS,
   hasOrganizationWideStationAccess,
   ATTENDANT_PHONE_HANDOVER_CAPABILITY,
   isAttendant,
@@ -24,6 +26,8 @@ import {
   validationError,
   AddVehicle,
   UpdateVehicle,
+  CreateHead,
+  UpdateHead,
   RecordExpense,
   VoidExpense,
   RecordIncome,
@@ -66,6 +70,8 @@ import {
   DrizzleExpenseRepository,
   DrizzleIncomeRepository,
   DrizzleIncomeCategoryRepository,
+  DrizzleExpenseHeadRepository,
+  DrizzleIncomeHeadRepository,
 } from '../infra/repositories/finance-repositories.js';
 import {
   DrizzleStockMovementRepository,
@@ -261,22 +267,11 @@ async function guardOfficeStation(
   return { ok: true, stationId, clock };
 }
 
-const DEFAULT_EXPENSE_CATEGORIES = [
-  'Staff Tea & Snacks',
-  'Office Stationery',
-  'Generator Diesel',
-  'Cleaning & Hygiene',
-  'General Miscellaneous',
-];
-
-const DEFAULT_INCOME_CATEGORIES = [
-  'Tanker Rental',
-  'Truck Parking',
-  'Commission',
-  'Scrap Sale',
-  'Interest',
-  'Other Income',
-];
+const forbiddenInsufficient = (c: Context) =>
+  c.json(
+    { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+    403,
+  );
 
 // ====================================================
 // MASTER DATA — Suppliers
@@ -999,9 +994,10 @@ transactionsRouter.get('/expense-categories', async (c) => {
     await db
       .insert(schema.expenseCategories)
       .values(
-        DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
+        DEFAULT_EXPENSE_HEADS.map(({ name, nature }) => ({
           organizationId: user.organizationId,
           name,
+          nature,
           isSystem: true,
         })),
       )
@@ -1014,149 +1010,43 @@ transactionsRouter.get('/expense-categories', async (c) => {
   return c.json({ success: true, data: list });
 });
 
-// Create a custom expense category (org-scoped, deduped by name).
+// Create a custom expense head (org-scoped, deduped by name). `nature` (Direct /
+// Indirect) is optional and defaults to INDIRECT.
 transactionsRouter.post(
   '/expense-categories',
   writePolicyGuard('POST /transactions/expense-categories'),
   async (c) => {
-    const db = c.var.db;
     const user = c.var.user;
-    if (!can(user, 'expenses.categories')) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
-        403,
-      );
-    }
+    if (!can(user, 'expenses.categories')) return forbiddenInsufficient(c);
     const body = await c.req.json().catch(() => ({}));
-    const name = String(body?.name ?? '').trim();
-    if (!name) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Category name is required' },
-        },
-        400,
-      );
-    }
-    if (name.length > 100) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' },
-        },
-        400,
-      );
-    }
-    const [dupe] = await db
-      .select({ id: schema.expenseCategories.id })
-      .from(schema.expenseCategories)
-      .where(
-        and(
-          eq(schema.expenseCategories.organizationId, user.organizationId),
-          ilike(schema.expenseCategories.name, name),
-        ),
-      )
-      .limit(1);
-    if (dupe) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'CONFLICT', message: 'A category with this name already exists' },
-        },
-        409,
-      );
-    }
-    const [created] = await db
-      .insert(schema.expenseCategories)
-      .values({ organizationId: user.organizationId, name, isSystem: false })
-      .returning();
-    return c.json({ success: true, data: created });
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new CreateHead('expense', { heads: new DrizzleExpenseHeadRepository(tx), events }).execute(
+        body,
+        buildContext(user),
+      ),
+    );
+    return sendResult(c, result);
   },
 );
 
-// Rename an expense category (custom or seeded default — both are editable).
+// Rename an expense head and/or change its Type (custom or seeded default — both are editable).
 // TODO (archive): add an `is_active` column + PATCH to soft-delete categories
 // (expenses reference categoryId, so hard delete isn't safe). Deferred for now.
 transactionsRouter.put(
   '/expense-categories/:id',
   writePolicyGuard('PUT /transactions/expense-categories/:id'),
   async (c) => {
-    const db = c.var.db;
     const user = c.var.user;
-    if (!can(user, 'expenses.categories')) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
-        403,
-      );
-    }
+    if (!can(user, 'expenses.categories')) return forbiddenInsufficient(c);
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    const name = String(body?.name ?? '').trim();
-    if (!name) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Category name is required' },
-        },
-        400,
-      );
-    }
-    if (name.length > 100) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' },
-        },
-        400,
-      );
-    }
-    const [existing] = await db
-      .select()
-      .from(schema.expenseCategories)
-      .where(
-        and(
-          eq(schema.expenseCategories.id, id),
-          eq(schema.expenseCategories.organizationId, user.organizationId),
-        ),
-      )
-      .limit(1);
-    if (!existing) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } },
-        404,
-      );
-    }
-    const [dupe] = await db
-      .select({ id: schema.expenseCategories.id })
-      .from(schema.expenseCategories)
-      .where(
-        and(
-          eq(schema.expenseCategories.organizationId, user.organizationId),
-          ilike(schema.expenseCategories.name, name),
-          ne(schema.expenseCategories.id, id),
-        ),
-      )
-      .limit(1);
-    if (dupe) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'CONFLICT', message: 'A category with this name already exists' },
-        },
-        409,
-      );
-    }
-    const [updated] = await db
-      .update(schema.expenseCategories)
-      .set({ name })
-      .where(
-        and(
-          eq(schema.expenseCategories.id, id),
-          eq(schema.expenseCategories.organizationId, user.organizationId),
-        ),
-      )
-      .returning();
-    return c.json({ success: true, data: updated });
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateHead('expense', { heads: new DrizzleExpenseHeadRepository(tx), events }).execute(
+        { ...body, id },
+        buildContext(user),
+      ),
+    );
+    return sendResult(c, result);
   },
 );
 
@@ -1176,9 +1066,10 @@ transactionsRouter.get('/income-categories', async (c) => {
     await db
       .insert(schema.incomeCategories)
       .values(
-        DEFAULT_INCOME_CATEGORIES.map((name) => ({
+        DEFAULT_INCOME_HEADS.map(({ name, nature }) => ({
           organizationId: user.organizationId,
           name,
+          nature,
           isSystem: true,
         })),
       )
@@ -1195,53 +1086,16 @@ transactionsRouter.post(
   '/income-categories',
   writePolicyGuard('POST /transactions/income-categories'),
   async (c) => {
-    const db = c.var.db;
     const user = c.var.user;
-    if (!can(user, 'expenses.categories')) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
-        403,
-      );
-    }
+    if (!can(user, 'expenses.categories')) return forbiddenInsufficient(c);
     const body = await c.req.json().catch(() => ({}));
-    const name = String(body?.name ?? '').trim();
-    if (!name || name.length > 100) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Category name is required (max 100)' },
-        },
-        400,
-      );
-    }
-    const [dupe] = await db
-      .select({ id: schema.incomeCategories.id })
-      .from(schema.incomeCategories)
-      .where(
-        and(
-          eq(schema.incomeCategories.organizationId, user.organizationId),
-          ilike(schema.incomeCategories.name, name),
-        ),
-      )
-      .limit(1);
-    if (dupe)
-      return c.json(
-        {
-          success: false,
-          error: { code: 'CONFLICT', message: 'A category with this name already exists' },
-        },
-        409,
-      );
-    const [created] = await db
-      .insert(schema.incomeCategories)
-      .values({
-        organizationId: user.organizationId,
-        name,
-        taxConfig: body?.taxConfig ?? null,
-        isSystem: false,
-      })
-      .returning();
-    return c.json({ success: true, data: created });
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new CreateHead('income', { heads: new DrizzleIncomeHeadRepository(tx), events }).execute(
+        body,
+        buildContext(user),
+      ),
+    );
+    return sendResult(c, result);
   },
 );
 
@@ -1249,49 +1103,17 @@ transactionsRouter.put(
   '/income-categories/:id',
   writePolicyGuard('PUT /transactions/income-categories/:id'),
   async (c) => {
-    const db = c.var.db;
     const user = c.var.user;
-    if (!can(user, 'expenses.categories')) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
-        403,
-      );
-    }
+    if (!can(user, 'expenses.categories')) return forbiddenInsufficient(c);
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    const set: Record<string, unknown> = {};
-    if (body?.name != null) {
-      const name = String(body.name).trim();
-      if (!name || name.length > 100)
-        return c.json(
-          { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid name' } },
-          400,
-        );
-      set.name = name;
-    }
-    if (body?.taxConfig !== undefined) set.taxConfig = body.taxConfig;
-    if (body?.isActive !== undefined) set.isActive = !!body.isActive;
-    if (Object.keys(set).length === 0)
-      return c.json(
-        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Nothing to update' } },
-        400,
-      );
-    const [updated] = await db
-      .update(schema.incomeCategories)
-      .set(set)
-      .where(
-        and(
-          eq(schema.incomeCategories.id, id),
-          eq(schema.incomeCategories.organizationId, user.organizationId),
-        ),
-      )
-      .returning();
-    if (!updated)
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } },
-        404,
-      );
-    return c.json({ success: true, data: updated });
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateHead('income', { heads: new DrizzleIncomeHeadRepository(tx), events }).execute(
+        { ...body, id },
+        buildContext(user),
+      ),
+    );
+    return sendResult(c, result);
   },
 );
 
