@@ -1,0 +1,2 @@
+ALTER TABLE "expense_categories" ADD COLUMN "nature" varchar(10) DEFAULT 'INDIRECT' NOT NULL;--> statement-breakpoint
+ALTER TABLE "income_categories" ADD COLUMN "nature" varchar(10) DEFAULT 'INDIRECT' NOT NULL;
