@@ -513,6 +513,22 @@ export const EventActivityCatalog = {
     BusinessEvents.FINANCIAL_ACCOUNT_UPDATED,
     'Financial account updated',
   ),
+  [BusinessEvents.EXPENSE_CATEGORY_CREATED]: success(
+    BusinessEvents.EXPENSE_CATEGORY_CREATED,
+    'Expense head added',
+  ),
+  [BusinessEvents.EXPENSE_CATEGORY_UPDATED]: info(
+    BusinessEvents.EXPENSE_CATEGORY_UPDATED,
+    'Expense head updated',
+  ),
+  [BusinessEvents.INCOME_CATEGORY_CREATED]: success(
+    BusinessEvents.INCOME_CATEGORY_CREATED,
+    'Income head added',
+  ),
+  [BusinessEvents.INCOME_CATEGORY_UPDATED]: info(
+    BusinessEvents.INCOME_CATEGORY_UPDATED,
+    'Income head updated',
+  ),
   [BusinessEvents.LEDGER_ENTRY_POSTED]: info(
     BusinessEvents.LEDGER_ENTRY_POSTED,
     'Ledger entry posted',

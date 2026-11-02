@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { round2 } from '@pump/shared';
-import type { TaxCategory } from '@pump/shared';
+import type { HeadNature, TaxCategory } from '@pump/shared';
 import {
   BusinessEvents,
   err,
@@ -23,6 +23,7 @@ export interface IncomeCategory {
   id: string;
   organizationId: string;
   name: string;
+  nature: HeadNature;
   taxConfig: Record<string, unknown> | null;
   isSystem: boolean;
   isActive: boolean;

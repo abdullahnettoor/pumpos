@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Icon, StatusChip, type TableColumn } from '../../pump-ds/index.js';
+import { HEAD_NATURE_LABEL, headNatureOf } from '@pump/shared';
+import { Button, Chip, Icon, StatusChip, type TableColumn } from '../../pump-ds/index.js';
 import { formatMoney } from '../../utils/format.js';
 import { accountTypeDetail as accountTypeDetailFor } from '../../utils/ledgerLabels.js';
 import { AccountTypeChip } from '../finance/AccountTypeChip.js';
@@ -12,6 +13,8 @@ export interface CategoryRecord {
   entryDate?: string | null;
   categoryId?: string | null;
   categoryName?: string | null;
+  /** The category's current Type (Direct / Indirect), read live from the category. */
+  categoryNature?: string | null;
   description?: string | null;
   accountName?: string | null;
   accountType?: string | null;
@@ -81,7 +84,7 @@ const AmountCell: React.FC<{ row: CategoryRecord }> = ({ row }) => {
 
 /**
  * The ledger columns Expenses and Income share (Table module): entry date,
- * category, description, Funding Account, amount. Pass `onVoid` for roles
+ * category, Type (Direct / Indirect), description, Funding Account, amount. Pass `onVoid` for roles
  * that may void; a voided row has nothing left to void.
  */
 export function buildCategoryRecordColumns(
@@ -103,6 +106,18 @@ export function buildCategoryRecordColumns(
       emphasis: true,
       value: (r) => r.categoryName ?? FALLBACK_CATEGORY[kind],
       width: '18%',
+    },
+    {
+      id: 'nature',
+      header: 'Type',
+      kind: 'text',
+      value: (r) => HEAD_NATURE_LABEL[headNatureOf(r.categoryNature)],
+      cell: (r) => (
+        <Chip tone="neutral" size="xs">
+          {HEAD_NATURE_LABEL[headNatureOf(r.categoryNature)]}
+        </Chip>
+      ),
+      width: '10%',
     },
     {
       id: 'description',

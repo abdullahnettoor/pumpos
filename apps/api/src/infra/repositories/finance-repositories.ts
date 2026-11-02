@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
+import { headNatureOf } from '@pump/shared';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   Expense,
@@ -7,6 +8,8 @@ import type {
   IncomeRepository,
   IncomeCategory,
   IncomeCategoryRepository,
+  Head,
+  HeadRepository,
 } from '@pump/core';
 
 function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
@@ -169,9 +172,116 @@ export class DrizzleIncomeCategoryRepository implements IncomeCategoryRepository
       id: r.id,
       organizationId: r.organizationId,
       name: r.name,
+      nature: headNatureOf(r.nature),
       taxConfig: (r.taxConfig as Record<string, unknown> | null) ?? null,
       isSystem: r.isSystem,
       isActive: r.isActive,
     };
+  }
+}
+
+export class DrizzleExpenseHeadRepository implements HeadRepository {
+  constructor(private readonly db: DbExecutor) {}
+
+  async findById(id: string): Promise<Head | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.expenseCategories)
+      .where(eq(schema.expenseCategories.id, id))
+      .limit(1);
+    if (!r) return null;
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      name: r.name,
+      nature: headNatureOf(r.nature),
+      isSystem: r.isSystem,
+    };
+  }
+
+  async existsByName(organizationId: string, name: string, excludeId?: string): Promise<boolean> {
+    const [r] = await this.db
+      .select({ id: schema.expenseCategories.id })
+      .from(schema.expenseCategories)
+      .where(
+        and(
+          eq(schema.expenseCategories.organizationId, organizationId),
+          sql`lower(${schema.expenseCategories.name}) = ${name.toLowerCase()}`,
+          excludeId ? ne(schema.expenseCategories.id, excludeId) : undefined,
+        ),
+      )
+      .limit(1);
+    return !!r;
+  }
+
+  async save(head: Head): Promise<void> {
+    await this.db
+      .insert(schema.expenseCategories)
+      .values({
+        id: head.id,
+        organizationId: head.organizationId,
+        name: head.name,
+        nature: head.nature,
+        isSystem: head.isSystem,
+      })
+      .onConflictDoUpdate({
+        target: schema.expenseCategories.id,
+        set: { name: head.name, nature: head.nature },
+      });
+  }
+}
+
+export class DrizzleIncomeHeadRepository implements HeadRepository {
+  constructor(private readonly db: DbExecutor) {}
+
+  async findById(id: string): Promise<Head | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.incomeCategories)
+      .where(eq(schema.incomeCategories.id, id))
+      .limit(1);
+    if (!r) return null;
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      name: r.name,
+      nature: headNatureOf(r.nature),
+      isSystem: r.isSystem,
+      taxConfig: (r.taxConfig as Record<string, unknown> | null) ?? null,
+      isActive: r.isActive,
+    };
+  }
+
+  async existsByName(organizationId: string, name: string, excludeId?: string): Promise<boolean> {
+    const [r] = await this.db
+      .select({ id: schema.incomeCategories.id })
+      .from(schema.incomeCategories)
+      .where(
+        and(
+          eq(schema.incomeCategories.organizationId, organizationId),
+          sql`lower(${schema.incomeCategories.name}) = ${name.toLowerCase()}`,
+          excludeId ? ne(schema.incomeCategories.id, excludeId) : undefined,
+        ),
+      )
+      .limit(1);
+    return !!r;
+  }
+
+  async save(head: Head): Promise<void> {
+    const values = {
+      name: head.name,
+      nature: head.nature,
+      taxConfig: head.taxConfig ?? null,
+      isActive: head.isActive ?? true,
+    };
+    await this.db
+      .insert(schema.incomeCategories)
+      .values({
+        id: head.id,
+        organizationId: head.organizationId,
+        isSystem: head.isSystem,
+        ...values,
+      })
+      .onConflictDoUpdate({ target: schema.incomeCategories.id, set: values });
   }
 }

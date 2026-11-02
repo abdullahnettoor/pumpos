@@ -49,6 +49,7 @@ import {
   OrganizationPayload,
   type RoleChangePreview,
   type UserPermissionsView,
+  type HeadNature,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -1184,14 +1185,17 @@ export class CloudTransactionService {
     return request<any>('/transactions/expense-categories');
   }
 
-  async createExpenseCategory(payload: { name: string }): Promise<any> {
+  async createExpenseCategory(payload: { name: string; nature?: HeadNature }): Promise<any> {
     return request<any>('/transactions/expense-categories', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  async updateExpenseCategory(id: string, payload: { name: string }): Promise<any> {
+  async updateExpenseCategory(
+    id: string,
+    payload: { name?: string; nature?: HeadNature },
+  ): Promise<any> {
     return request<any>(`/transactions/expense-categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -1205,6 +1209,7 @@ export class CloudTransactionService {
   async createIncomeCategory(payload: {
     name: string;
     taxConfig?: Record<string, unknown> | null;
+    nature?: HeadNature;
   }): Promise<any> {
     return request<any>('/transactions/income-categories', {
       method: 'POST',
@@ -1214,7 +1219,12 @@ export class CloudTransactionService {
 
   async updateIncomeCategory(
     id: string,
-    payload: { name?: string; taxConfig?: Record<string, unknown> | null; isActive?: boolean },
+    payload: {
+      name?: string;
+      taxConfig?: Record<string, unknown> | null;
+      isActive?: boolean;
+      nature?: HeadNature;
+    },
   ): Promise<any> {
     return request<any>(`/transactions/income-categories/${id}`, {
       method: 'PUT',
