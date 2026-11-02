@@ -6,6 +6,7 @@ import {
   DEFAULT_EXPENSE_HEADS,
   DEFAULT_INCOME_HEADS,
   hasOrganizationWideStationAccess,
+  headNatureOf,
   ATTENDANT_PHONE_HANDOVER_CAPABILITY,
   isAttendant,
   isAuthorizedForStation,
@@ -1206,6 +1207,7 @@ transactionsRouter.get('/income', async (c) => {
       amount: schema.otherIncome.amount,
       categoryId: schema.otherIncome.categoryId,
       categoryName: schema.incomeCategories.name,
+      categoryNature: schema.incomeCategories.nature,
       fundingAccountId: schema.otherIncome.fundingAccountId,
       accountName: schema.financialAccounts.name,
       accountType: schema.financialAccounts.accountType,
@@ -1234,7 +1236,11 @@ transactionsRouter.get('/income', async (c) => {
     )
     .where(and(...conds))
     .orderBy(desc(schema.otherIncome.createdAt));
-  return c.json({ success: true, data: rows });
+  // The head's current Type, read live: re-classifying a head re-classifies its entries.
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, categoryNature: headNatureOf(r.categoryNature) })),
+  });
 });
 
 /**
@@ -1751,6 +1757,7 @@ transactionsRouter.get('/expenses', async (c) => {
     .select({
       expense: schema.expenses,
       categoryName: schema.expenseCategories.name,
+      categoryNature: schema.expenseCategories.nature,
       accountName: schema.financialAccounts.name,
       accountType: schema.financialAccounts.accountType,
     })
@@ -1767,6 +1774,7 @@ transactionsRouter.get('/expenses', async (c) => {
     data: rows.map((r) => ({
       ...r.expense,
       categoryName: r.categoryName ?? 'General',
+      categoryNature: headNatureOf(r.categoryNature),
       accountName: r.accountName,
       accountType: r.accountType,
     })),

@@ -37,7 +37,7 @@ const headRow = (nature: string) => ({
   isActive: true,
 });
 
-function fakeDb(writes: Write[], table: unknown, existing: unknown[]) {
+function fakeDb(writes: Write[], table: unknown, existing: unknown[], headTable = true) {
   const rows = new Map<unknown, unknown[]>([
     [
       schema.organizations,
@@ -70,7 +70,7 @@ function fakeDb(writes: Write[], table: unknown, existing: unknown[]) {
       leftJoin: step(),
       then: (res: (v: unknown[]) => void, rej?: (e: unknown) => void) => {
         // A projected select on the head table is the name-uniqueness probe: no clash.
-        const out = projected && from === table ? [] : (rows.get(from) ?? []);
+        const out = headTable && projected && from === table ? [] : (rows.get(from) ?? []);
         return Promise.resolve(out).then(res, rej);
       },
     });
@@ -138,6 +138,56 @@ async function call(
     event: Array.isArray(event) ? event[0] : event,
   };
 }
+
+describe.each([
+  {
+    path: 'expenses',
+    table: schema.expenses,
+    row: (nature: string | null) => ({
+      expense: { id: 'e1', amount: '10' },
+      categoryName: 'X',
+      categoryNature: nature,
+    }),
+  },
+  {
+    path: 'income',
+    table: schema.otherIncome,
+    row: (nature: string | null) => ({
+      id: 'i1',
+      amount: '10',
+      categoryName: 'X',
+      categoryNature: nature,
+    }),
+  },
+])('GET /transactions/$path: the head Type on each entry', (list) => {
+  const read = async (nature: string | null) => {
+    const app = new Hono<{ Variables: { db: any; user: any } }>();
+    app.use('*', async (c, next) => {
+      c.set('db', fakeDb([], list.table, [list.row(nature)], false));
+      c.set('user', {
+        id: 'u',
+        email: 'u@e.com',
+        fullName: 'U',
+        organizationId: ORG,
+        role: 'Owner',
+        assignedStationIds: [],
+      });
+      await next();
+    });
+    app.route('/transactions', transactionsRouter);
+    const res = await app.request(`/transactions/${list.path}`);
+    return ((await res.json()) as any).data[0];
+  };
+
+  it("carries the head's current Type, so a re-classified head moves its past entries", async () => {
+    expect((await read('DIRECT')).categoryNature).toBe('DIRECT');
+    expect((await read('INDIRECT')).categoryNature).toBe('INDIRECT');
+  });
+
+  it('reads an entry whose head is gone as Indirect', async () => {
+    expect((await read(null)).categoryNature).toBe('INDIRECT');
+  });
+});
 
 describe.each(KINDS)('$kind heads: Type (Direct / Indirect)', (k) => {
   it('defaults the Type to INDIRECT on create', async () => {
