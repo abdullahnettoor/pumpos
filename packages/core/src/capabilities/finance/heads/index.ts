@@ -68,8 +68,9 @@ const updateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export type CreateHeadCommand = z.input<typeof createSchema>;
-export type UpdateHeadCommand = z.input<typeof updateSchema>;
+/** `nature` is widened to string: the use-case validates it and refuses an unknown value. */
+export type CreateHeadCommand = Omit<z.input<typeof createSchema>, 'nature'> & { nature?: string };
+export type UpdateHeadCommand = Omit<z.input<typeof updateSchema>, 'nature'> & { nature?: string };
 
 const EVENTS = {
   expense: {
