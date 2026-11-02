@@ -107,8 +107,8 @@ describe('ProfitLossView', () => {
     expect(screen.queryByText('In range')).toBeNull();
     expect(document.querySelectorAll('.kpi-value').length).toBeLessThanOrEqual(4);
     expect(screen.queryByText('COGS', { selector: '.truncate' })).toBeNull();
-    expect(screen.getByText('10.0% of revenue')).toBeTruthy();
-    expect(screen.getByText('Other income ₹100.00')).toBeTruthy();
+    expect(screen.getByText('Gross margin ₹3,000.00 · 10.0% of revenue')).toBeTruthy();
+    expect(screen.getByText('Indirect income ₹100.00')).toBeTruthy();
     const net = screen.getByText('Net profit', { selector: 'span' }).closest('[data-alert]');
     expect(net).toBeNull();
   });
@@ -130,9 +130,84 @@ describe('ProfitLossView', () => {
     expect(within(foot).getByText('₹30,000.00')).toBeTruthy();
     expect(within(foot).getByText('₹2,100.00')).toBeTruthy();
     expect(within(table).getAllByText('Live').length).toBe(1);
+    for (const label of [
+      'Direct expenses',
+      'Direct income',
+      'Gross profit',
+      'Indirect expenses',
+      'Indirect income',
+      'Net profit',
+    ]) {
+      expect(within(table).getByRole('columnheader', { name: label })).toBeTruthy();
+    }
     // The provisional note names today as a formatted date, never YYYY-MM-DD.
     const note = screen.getByRole('note');
     expect(note.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it('shows direct items before gross profit and indirect items before net profit in the statement', () => {
+    const split = {
+      ...figures(20000, 18000, 1200, 300),
+      directExpenses: 400,
+      indirectExpenses: 800,
+      directIncome: 100,
+      indirectIncome: 200,
+      grossProfit: 1700,
+    };
+    report = {
+      ...periodReport,
+      days: [{ date: today, live: false, hasSales: true, ...split }],
+      totals: { ...split, marginPct: 10 },
+    };
+    renderWithProviders(<ProfitLossView selectedStation={station} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Report period/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Today/ }));
+    const statement = screen.getByTestId('section-header-statement').parentElement!;
+    const lines = [...statement.querySelectorAll('dl > div')];
+    const labels = lines.map((line) => line.querySelector('dt')?.textContent);
+    expect(labels.map((label) => label?.replace('by entry date', ''))).toEqual([
+      'Fuel revenue',
+      'Product revenue',
+      'Total revenue',
+      'Fuel COGS',
+      'Product COGS',
+      'Gross marginby sales day',
+      'Direct expenses',
+      'Direct income',
+      'Gross profit',
+      'Indirect expenses',
+      'Indirect income',
+      'Net profit',
+    ]);
+    expect(lines[8].textContent).toContain('₹1,700.00');
+    expect(lines[11].textContent).toContain('₹1,100.00');
+  });
+
+  it('renders the split totals in the daily breakdown footer', () => {
+    report = {
+      ...periodReport,
+      totals: {
+        ...periodReport.totals,
+        directExpenses: 300,
+        indirectExpenses: 700,
+        directIncome: 40,
+        indirectIncome: 60,
+        grossProfit: 2740,
+      },
+    };
+    renderWithProviders(<ProfitLossView selectedStation={station} />);
+    const cells = [...sectionTable('section-header-daily-breakdown').querySelectorAll('tfoot td')];
+    expect(cells.map((cell) => cell.textContent)).toEqual([
+      '₹30,000.00',
+      '₹27,000.00',
+      '₹3,000.00',
+      '₹300.00',
+      '₹40.00',
+      '₹2,740.00',
+      '₹700.00',
+      '₹60.00',
+      '₹2,100.00',
+    ]);
   });
 
   it('renders the product margin table with units, percent and a total', () => {
