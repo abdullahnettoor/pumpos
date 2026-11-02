@@ -86,6 +86,7 @@ export const DSSR_PARITY_FIXTURE = {
         },
       ],
     },
+    stockVarianceTolerancePct: 0.5,
     fuelStockVariance: [
       {
         tankName: 'Tank 1',

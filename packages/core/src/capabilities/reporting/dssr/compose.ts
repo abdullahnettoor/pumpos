@@ -1,8 +1,10 @@
 import {
   drawerKey,
   isBalancedQuantity,
+  isStockVarianceWithinTolerance,
   isTwoLevelVarianceSnapshot,
   round2,
+  STOCK_VARIANCE_TOLERANCE_PCT,
   type ProductType,
 } from '@pump/shared';
 import type { DssrSourceData } from './ports.js';
@@ -27,7 +29,11 @@ interface FuelAgg {
  * preview of the open day as well as the frozen snapshot written at close.
  * No I/O, no side effects — same inputs always yield the same payload.
  */
-export function composeDssr(source: DssrSourceData): Record<string, unknown> {
+export function composeDssr(
+  source: DssrSourceData,
+  options: { stockVarianceTolerancePct?: number } = {},
+): Record<string, unknown> {
+  const tolerance = options.stockVarianceTolerancePct ?? STOCK_VARIANCE_TOLERANCE_PCT;
   // --- Fuel (from immutable shift summaries; net-of-testing drives sales) ---
   let grossVolume = 0;
   let testingVolume = 0;
@@ -230,9 +236,22 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
         : {}),
     };
   };
-  const fuelStockVariance = source.stockVariances
-    .filter((v) => v.inventoryType === 'BULK')
-    .map(withStatus);
+  const bulkRows = source.stockVariances.filter((v) => v.inventoryType === 'BULK');
+  const tanksByProduct = new Map<string, number>();
+  for (const v of bulkRows) {
+    if (v.productId) tanksByProduct.set(v.productId, (tanksByProduct.get(v.productId) ?? 0) + 1);
+  }
+  const fuelStockVariance = bulkRows.map((v) => {
+    const sold =
+      v.tankMovement?.soldQuantity ??
+      (v.productId && tanksByProduct.get(v.productId) === 1
+        ? (productAgg[v.productId]?.netVolume ?? null)
+        : null);
+    return {
+      ...withStatus(v),
+      withinTolerance: isStockVarianceWithinTolerance(v.varianceQuantity, sold, tolerance),
+    };
+  });
   const merchandiseStockVariance = source.stockVariances
     .filter((v) => v.inventoryType !== 'BULK')
     .map(withStatus);
@@ -360,6 +379,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       grossMargin,
       byProduct,
     },
+    // ADR 0010 / #687: absent on snapshots frozen before it; readers use 0.5.
+    stockVarianceTolerancePct: tolerance,
     fuelStockVariance,
     merchandiseStockVariance,
     // totalCashVariance = office count variance; attendant variance is the

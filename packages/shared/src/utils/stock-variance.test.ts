@@ -8,6 +8,8 @@ import {
   resolveStockVarianceTolerance,
   stockVarianceToleranceChanged,
   stockVarianceTolerancePctSchema,
+  snapshotStockTolerancePct,
+  frozenStockTolerancePct,
 } from './stock-variance.js';
 
 describe('isBalancedQuantity: the one balanced rule for quantities', () => {
@@ -29,6 +31,19 @@ describe('isBalancedQuantity: the one balanced rule for quantities', () => {
     expect(isBalancedQuantity(-0.001)).toBe(false);
     expect(isBalancedQuantity(0.004)).toBe(false);
     expect(isBalancedQuantity(-1)).toBe(false);
+  });
+});
+
+describe('DSR frozen tank variance limit', () => {
+  it('reads a valid frozen limit and treats absent or invalid values as not recorded', () => {
+    expect(snapshotStockTolerancePct({ stockVarianceTolerancePct: 1.25 })).toBe(1.25);
+    expect(frozenStockTolerancePct({ stockVarianceTolerancePct: 0 })).toBe(0);
+    for (const value of [undefined, -1, NaN, Infinity, '1']) {
+      const snap = { stockVarianceTolerancePct: value };
+      expect(snapshotStockTolerancePct(snap)).toBe(0.5);
+      expect(frozenStockTolerancePct(snap)).toBeNull();
+    }
+    expect(frozenStockTolerancePct(null)).toBeNull();
   });
 });
 

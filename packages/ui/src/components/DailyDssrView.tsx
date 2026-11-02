@@ -31,6 +31,7 @@ import { officeSubmitKeys } from '../office-records/submitKeys.js';
 import {
   dssrDayStatus,
   readDssrDay,
+  stockToleranceSubtitle,
   type DssrDay,
   type DssrRow,
   type FigureLine,
@@ -321,7 +322,10 @@ const DssrBody: React.FC<{ day: DssrDay }> = ({ day }) => {
 
       {day.fuelStock.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionHeader title={DSSR_TITLES.fuelStock} />
+          <SectionHeader
+            title={DSSR_TITLES.fuelStock}
+            subtitle={stockToleranceSubtitle(day.stockTolerancePct)}
+          />
           <InteractiveTable
             columns={FUEL_STOCK_COLUMNS}
             rows={day.fuelStock}

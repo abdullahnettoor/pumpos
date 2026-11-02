@@ -34,6 +34,7 @@ async function buildLiveDssrPreview(
   db: DbClient,
   user: AuthenticatedPrincipal,
   businessDay: { id: string; stationId: string; businessDate: string; status: string },
+  stockVarianceTolerancePct?: number,
 ) {
   const generatedAt = new Date().toISOString();
   const source = await new DrizzleDssrDataReader(db).readBusinessDay(businessDay.id);
@@ -45,7 +46,7 @@ async function buildLiveDssrPreview(
     organizationId: user.organizationId,
     status: businessDay.status,
     live: true,
-    ...composeDssr(source),
+    ...composeDssr(source, { stockVarianceTolerancePct }),
   };
   return { businessDate: businessDay.businessDate, generatedAt, live: true, snapshotData };
 }
@@ -186,10 +187,15 @@ dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate')
     businessDay = bd;
   }
 
+  const clock = await loadStationClock(db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
   if (businessDay.status === 'OPEN') {
     return c.json({
       success: true,
-      data: redactSensitiveDssr(await buildLiveDssrPreview(db, user, businessDay), user),
+      data: redactSensitiveDssr(
+        await buildLiveDssrPreview(db, user, businessDay, clock.stockVarianceTolerancePct),
+        user,
+      ),
     });
   }
 
@@ -201,7 +207,7 @@ dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate')
       events,
     }).execute(
       { businessDayId: businessDayId, force: Boolean(body?.force) },
-      buildContext(user, { stationId, businessDayId }),
+      buildContext(user, { stationId, businessDayId, ...clock }),
     ),
   );
   return sendResult(
@@ -290,9 +296,14 @@ dssrRouter.get('/daily/preview', async (c) => {
     }
     return c.json({ success: true, data: redactSensitiveDssr(snapshot, user) });
   }
+  const clock = await loadStationClock(db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
   return c.json({
     success: true,
-    data: redactSensitiveDssr(await buildLiveDssrPreview(db, user, bd), user),
+    data: redactSensitiveDssr(
+      await buildLiveDssrPreview(db, user, bd, clock.stockVarianceTolerancePct),
+      user,
+    ),
   });
 });
 

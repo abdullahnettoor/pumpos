@@ -61,6 +61,7 @@ exports[`Reports PDF with PumpOS Mark in Letterhead > prints the DSR as the scre
   "N2 | Diesel | 1,605.33 L | 5.00 L | 1,600.33 L",
   "C1 | CNG | 300.00 kg | 0.00 kg | 300.00 kg",
   "TANK DIP AND FUEL STOCK VARIANCE",
+  "Limit: 0.5% of litres sold",
   "TANK | PRODUCT | BOOK | DIP | VARIANCE | STATUS",
   "Tank 1 | Petrol | 8,000.50 L | 7,988.25 L | −12.25 L | Short",
   "Tank 2 | Diesel | 6,000.00 L | 6,004.50 L | +4.50 L | Surplus",

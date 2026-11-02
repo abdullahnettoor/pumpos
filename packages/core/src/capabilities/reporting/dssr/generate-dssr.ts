@@ -75,7 +75,9 @@ export class GenerateDssr implements UseCase<GenerateDssrCommand, DssrSnapshot> 
       stationId: businessDay.stationId,
       organizationId: ctx.organizationId,
       status: businessDay.status,
-      ...composeDssr(source),
+      ...composeDssr(source, {
+        stockVarianceTolerancePct: ctx.stockVarianceTolerancePct ?? undefined,
+      }),
     };
 
     const snapshot: DssrSnapshot = {
