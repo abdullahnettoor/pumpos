@@ -63,6 +63,28 @@ describe('composeProfitLoss (ADR 0005)', () => {
 });
 
 describe('P&L head type split', () => {
+  it('derives missing indirect expenses from the legacy total', () => {
+    const report = composeProfitLoss({
+      from: '2026-09-01',
+      to: '2026-09-01',
+      salesDays: [{ date: '2026-09-01', live: false, pnl: { grossMargin: 1000 } }],
+      officeDays: [{ date: '2026-09-01', expenses: 300, otherIncome: 0, directExpenses: 100 }],
+    });
+    const expected = { directExpenses: 100, indirectExpenses: 200, expenses: 300, netProfit: 700 };
+    expect(report.days[0]).toMatchObject(expected);
+    expect(report.totals).toMatchObject(expected);
+  });
+  it('derives missing indirect income from the legacy total', () => {
+    const report = composeProfitLoss({
+      from: '2026-09-01',
+      to: '2026-09-01',
+      salesDays: [{ date: '2026-09-01', live: false, pnl: { grossMargin: 1000 } }],
+      officeDays: [{ date: '2026-09-01', expenses: 0, otherIncome: 75, directIncome: 50 }],
+    });
+    const expected = { directIncome: 50, indirectIncome: 25, otherIncome: 75, netProfit: 1075 };
+    expect(report.days[0]).toMatchObject(expected);
+    expect(report.totals).toMatchObject(expected);
+  });
   it('places direct items before gross profit and indirect items before net profit', () => {
     const report = composeProfitLoss({
       from: '2026-09-01',

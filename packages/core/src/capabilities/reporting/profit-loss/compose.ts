@@ -109,9 +109,9 @@ export function composeProfitLoss(input: {
       number
     >;
     const directExpenses = round2(o?.directExpenses ?? 0);
-    const indirectExpenses = round2(o?.indirectExpenses ?? o?.expenses ?? 0);
+    const indirectExpenses = round2(o?.indirectExpenses ?? (o?.expenses ?? 0) - directExpenses);
     const directIncome = round2(o?.directIncome ?? 0);
-    const indirectIncome = round2(o?.indirectIncome ?? o?.otherIncome ?? 0);
+    const indirectIncome = round2(o?.indirectIncome ?? (o?.otherIncome ?? 0) - directIncome);
     const expenses = round2(directExpenses + indirectExpenses);
     const otherIncome = round2(directIncome + indirectIncome);
     const grossProfit = round2(figures.grossMargin - directExpenses + directIncome);
