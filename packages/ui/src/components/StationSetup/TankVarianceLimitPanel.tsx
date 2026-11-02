@@ -59,9 +59,7 @@ export const TankVarianceLimitPanel: React.FC<TankVarianceLimitPanelProps> = ({
           aria-label="Tank variance limit"
           className={RULES_FORM}
         >
-          <p className="text-[12px] text-ink-muted">
-            Default 0.5%. Used by Stock loss insights and the DSR tank status.
-          </p>
+          <p className="text-[12px] text-ink-muted">Default 0.5%. Used by Stock loss insights.</p>
           <fieldset disabled={!canEdit} className="m-0 min-w-0 border-0 p-0">
             <div className={RULES_FORM_GRID}>
               <Field

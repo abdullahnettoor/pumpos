@@ -575,12 +575,16 @@ running balance, opening with a "balance brought forward" when earlier entries
 exist. Shared as a PDF from the same range the screen shows.
 _Avoid_: khata, account copy
 
+**Tank variance limit**:
+The Station's threshold for judging a Tank dip Variance, expressed as a
+percentage of litres sold. It defaults to 0.5% and can be set from 0% to 5%.
+_Avoid_: stock allowance, shrinkage target
+
 **Stock Loss**:
-The Insights view of a Tank's dip **Variance**, judged against what it sold:
-within tolerance up to 0.5% of the litres sold, by size (a gain is judged like a
-loss). The tolerance is one app-wide value pending an owner decision, not a
-Station setting (`stock-variance.ts`); a Tank that sold nothing tolerates no
-Variance. The domain term stays Variance; "loss" is only the Insights label.
+The Insights view of a Tank's dip **Variance**, judged against the Station's
+Tank variance limit and what it sold. A gain is judged like a loss; a Tank
+that sold nothing tolerates no Variance. The domain term stays Variance;
+"loss" is only the Insights label.
 _Avoid_: shrinkage, leakage
 
 **Needs Attention**:
