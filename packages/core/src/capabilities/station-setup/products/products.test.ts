@@ -222,12 +222,24 @@ describe('CreateProduct', () => {
     const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
     const ctx = makeContext();
     await new CreateProduct({ repository: repo, events }).execute(
-      { name: 'Engine Oil 5W30', code: 'OIL-1', productType: 'LUBRICANT', unit: 'L', category: 'Engine Oil' },
+      {
+        name: 'Engine Oil 5W30',
+        code: 'OIL-1',
+        productType: 'LUBRICANT',
+        unit: 'L',
+        category: 'Engine Oil',
+      },
       ctx,
     );
 
     const result = await new CreateProduct({ repository: repo, events }).execute(
-      { name: 'Engine Oil 10W40', code: 'OIL-2', productType: 'LUBRICANT', unit: 'L', category: 'engine oil' },
+      {
+        name: 'Engine Oil 10W40',
+        code: 'OIL-2',
+        productType: 'LUBRICANT',
+        unit: 'L',
+        category: 'engine oil',
+      },
       ctx,
     );
     expect(result.success).toBe(true);
@@ -239,7 +251,13 @@ describe('CreateProduct', () => {
     const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
     const ctx = makeContext();
     const result = await new CreateProduct({ repository: repo, events }).execute(
-      { name: 'Coolant Green', code: 'COOL-1', productType: 'LUBRICANT', unit: 'L', category: '  Coolant  ' },
+      {
+        name: 'Coolant Green',
+        code: 'COOL-1',
+        productType: 'LUBRICANT',
+        unit: 'L',
+        category: '  Coolant  ',
+      },
       ctx,
     );
     expect(result.success).toBe(true);
@@ -265,12 +283,24 @@ describe('CreateProduct', () => {
     const ctxOrg2: ExecutionContext = { ...makeContext(), organizationId: 'org-2' };
 
     await new CreateProduct({ repository: repo, events }).execute(
-      { name: 'Grease Org2', code: 'GR-2', productType: 'LUBRICANT', unit: 'kg', category: 'Heavy Grease' },
+      {
+        name: 'Grease Org2',
+        code: 'GR-2',
+        productType: 'LUBRICANT',
+        unit: 'kg',
+        category: 'Heavy Grease',
+      },
       ctxOrg2,
     );
 
     const result = await new CreateProduct({ repository: repo, events }).execute(
-      { name: 'Grease Org1', code: 'GR-1', productType: 'LUBRICANT', unit: 'kg', category: 'heavy grease' },
+      {
+        name: 'Grease Org1',
+        code: 'GR-1',
+        productType: 'LUBRICANT',
+        unit: 'kg',
+        category: 'heavy grease',
+      },
       ctxOrg1,
     );
     expect(result.success).toBe(true);

@@ -33,7 +33,9 @@ describe('canonicalProductCategory', () => {
 describe('distinctCategories', () => {
   it('returns empty array when given no products or products without categories', () => {
     expect(distinctCategories([])).toEqual([]);
-    expect(distinctCategories([{ category: null }, { category: undefined }, { category: '  ' }])).toEqual([]);
+    expect(
+      distinctCategories([{ category: null }, { category: undefined }, { category: '  ' }]),
+    ).toEqual([]);
   });
 
   it('dedupes case-insensitively keeping the first spelling and sorts by localeCompare', () => {

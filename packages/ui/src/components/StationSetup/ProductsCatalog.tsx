@@ -155,7 +155,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterText, setFilterText] = useState('');
-  const categories = useMemo(() => distinctCategories(products), [products]);
+  const categories = useMemo(() => distinctCategories(productsQ.data ?? []), [productsQ.data]);
 
   // Form states
   const [name, setName] = useState('');
@@ -540,11 +540,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             />
           </Field>
 
-          <ProductCategoryField
-            value={category}
-            onChange={setCategory}
-            categories={categories}
-          />
+          <ProductCategoryField value={category} onChange={setCategory} categories={categories} />
 
           <Field
             label={`Selling price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}

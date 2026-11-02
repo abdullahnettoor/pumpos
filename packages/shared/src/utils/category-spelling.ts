@@ -9,10 +9,7 @@
  *    after localeCompare sort.
  * 4. Otherwise returns the trimmed value as typed.
  */
-export function canonicalProductCategory(
-  raw: unknown,
-  existing: readonly string[],
-): string | null {
+export function canonicalProductCategory(raw: unknown, existing: readonly string[]): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (trimmed === '') return null;
@@ -37,9 +34,7 @@ export function canonicalProductCategory(
  * Returns distinct category names across a set of products.
  * Dedupes case-insensitively keeping the first spelling encountered, then sorts using localeCompare.
  */
-export function distinctCategories(
-  products: readonly { category?: string | null }[],
-): string[] {
+export function distinctCategories(products: readonly { category?: string | null }[]): string[] {
   const seen = new Set<string>();
   const distinct: string[] = [];
 
