@@ -4,7 +4,7 @@ import { dssrRouter } from './dssr.js';
 
 /**
  * Statement-budget guard for GET /dssr/daily/preview of an OPEN Business Day
- * (the mobile Home's sales read, #391): one day lookup plus the source reader's
+ * (the mobile Home's sales read, #391): one day lookup, one station clock, plus the source reader's
  * nine selects (day, shift summaries, purchases, sales, sale lines, credit sales,
  * stock variances, products, nozzles), plus one tank-movement aggregate when
  * stock-variance rows have tanks. The count is fixed: it must not grow with
@@ -72,6 +72,7 @@ function dayQueue(n: number): any[][] {
   const rows = <T>(row: T) => Array.from({ length: n }, () => row);
   return [
     [openDay], // route: the day lookup
+    [{ settings: { stock_variance_tolerance_pct: 1 } }], // station clock
     [{ organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15' }], // reader: day
     [
       {
@@ -119,23 +120,29 @@ function dayQueue(n: number): any[][] {
 }
 
 describe('GET /dssr/daily/preview open-day statement budget (#391)', () => {
-  it.each([1, 40])('uses ten selects and no raw statements for %i rows per table', async (n) => {
-    const { db, counter } = makeFakeDb(dayQueue(n));
-    const res = await makeApp(db).request('/daily/preview?stationId=st-1&date=2026-03-15');
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+  it.each([1, 40])(
+    'uses eleven selects and one tank aggregate for %i rows per table',
+    async (n) => {
+      const { db, counter } = makeFakeDb(dayQueue(n));
+      const res = await makeApp(db).request('/daily/preview?stationId=st-1&date=2026-03-15');
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
 
-    expect(counter).toEqual({ selects: 10, executes: 1 });
-    // The Home screen's figures ride on the preview payload.
-    expect(body.data.snapshotData.credit).toMatchObject({ count: n, total: 4000 * n });
-    expect(body.data.snapshotData.omcCard).toEqual({ count: n, total: 250 * n });
-    expect(body.data.snapshotData.purchases).toEqual({ total: 1200 * n, count: n });
-    expect(body.data.snapshotData.shifts[0]).toMatchObject({ fuelSalesValue: 98000 });
-    // Product categories (#392) ride on the same products read: no extra statement.
-    const merch = body.data.snapshotData.pnl.byProduct.filter((r: any) => r.kind === 'merchandise');
-    expect(merch).toHaveLength(1);
-    expect(merch[0]).toMatchObject({ productId: 'p2', productType: 'LUBRICANT' });
-  });
+      expect(counter).toEqual({ selects: 11, executes: 1 });
+      expect(body.data.snapshotData.stockVarianceTolerancePct).toBe(1);
+      // The Home screen's figures ride on the preview payload.
+      expect(body.data.snapshotData.credit).toMatchObject({ count: n, total: 4000 * n });
+      expect(body.data.snapshotData.omcCard).toEqual({ count: n, total: 250 * n });
+      expect(body.data.snapshotData.purchases).toEqual({ total: 1200 * n, count: n });
+      expect(body.data.snapshotData.shifts[0]).toMatchObject({ fuelSalesValue: 98000 });
+      // Product categories (#392) ride on the same products read: no extra statement.
+      const merch = body.data.snapshotData.pnl.byProduct.filter(
+        (r: any) => r.kind === 'merchandise',
+      );
+      expect(merch).toHaveLength(1);
+      expect(merch[0]).toMatchObject({ productId: 'p2', productType: 'LUBRICANT' });
+    },
+  );
 
   it('answers null without reading the day when no Business Day exists yet', async () => {
     const { db, counter } = makeFakeDb([[]]);
