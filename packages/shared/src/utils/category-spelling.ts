@@ -1,4 +1,27 @@
 /**
+ * Normalises a category string to an identity key:
+ * trims whitespace, converts to Unicode NFC, and lowercases.
+ * Returns null if the value is null, undefined, not a string, or blank.
+ */
+export function categoryKey(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  return trimmed.normalize('NFC').toLowerCase();
+}
+
+/**
+ * Returns true if both category values identify the same category,
+ * ignoring surrounding whitespace, Unicode normalization differences, and case.
+ */
+export function sameCategory(a: unknown, b: unknown): boolean {
+  const keyA = categoryKey(a);
+  const keyB = categoryKey(b);
+  if (keyA === null || keyB === null) return false;
+  return keyA === keyB;
+}
+
+/**
  * Canonicalises a raw product category against an organization's existing categories.
  *
  * Rules:
@@ -10,17 +33,11 @@
  * 4. Otherwise returns the trimmed value as typed.
  */
 export function canonicalProductCategory(raw: unknown, existing: readonly string[]): string | null {
-  if (typeof raw !== 'string') return null;
-  const trimmed = raw.trim();
-  if (trimmed === '') return null;
+  const key = categoryKey(raw);
+  if (!key) return null;
+  const trimmed = (raw as string).trim();
 
-  const normalized = trimmed.normalize('NFC').toLowerCase();
-  const matches = existing
-    .filter(
-      (e): e is string =>
-        typeof e === 'string' && e.trim().normalize('NFC').toLowerCase() === normalized,
-    )
-    .map((e) => e.trim());
+  const matches = existing.filter((e): e is string => categoryKey(e) === key).map((e) => e.trim());
 
   if (matches.length > 0) {
     matches.sort();
@@ -39,14 +56,12 @@ export function distinctCategories(products: readonly { category?: string | null
   const distinct: string[] = [];
 
   for (const p of products) {
-    if (typeof p.category !== 'string') continue;
-    const trimmed = p.category.trim();
-    if (trimmed === '') continue;
+    const key = categoryKey(p.category);
+    if (!key) continue;
 
-    const key = trimmed.normalize('NFC').toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
-      distinct.push(trimmed);
+      distinct.push((p.category as string).trim());
     }
   }
 

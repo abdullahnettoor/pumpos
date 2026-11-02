@@ -2,7 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, useProducts } from '../../query/hooks.js';
-import { can, distinctCategories, Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
+import {
+  can,
+  distinctCategories,
+  Product,
+  PRODUCT_UNITS,
+  sameCategory,
+  type TaxCategory,
+} from '@pump/shared';
 import { currentPrincipal } from '../../access/effectivePrincipal.js';
 import {
   Button,
@@ -356,7 +363,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
   const visible = products.filter((p) => {
     if (filterType && p.productType !== filterType) return false;
-    if (filterCategory && (p.category ?? '').toLowerCase() !== filterCategory.toLowerCase()) {
+    if (filterCategory && !sameCategory(p.category, filterCategory)) {
       return false;
     }
     if (filterText) {
