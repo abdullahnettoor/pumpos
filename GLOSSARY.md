@@ -568,6 +568,17 @@ Code and stored names stay `dssr` (the `dssr_snapshots` table, the
 settings key); only the name users see is "DSR".
 _Avoid_: DSSR, Shift Summary, daily report, day summary
 
+**Gross margin**:
+Revenue minus cost of sales, by sales day from the DSR, before office expenses
+and income. Distinct from Gross profit.
+_Avoid_: gross profit as a synonym
+
+**Gross profit**:
+Gross margin minus Direct expenses plus Direct income, using each head's current
+[Type](#head-type-direct--indirect). Net profit is Gross profit minus Indirect
+expenses plus Indirect income.
+_Avoid_: gross margin as a synonym
+
 **Attendant Handover Report**:
 A read-only, date-range report composing one Attendant's Handovers across
 closed Shifts: fuel sales, Billed Sales, Handover Product Sales, Credit Sales,

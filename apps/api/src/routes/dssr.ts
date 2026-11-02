@@ -437,19 +437,42 @@ dssrRouter.get('/profit-loss', async (c) => {
       ),
     db.execute(sql`
       SELECT entry_date AS date,
-             SUM(expense)::float8 AS expenses,
-             SUM(income)::float8 AS "otherIncome"
+             SUM(direct_expense)::float8 AS "directExpenses",
+             SUM(indirect_expense)::float8 AS "indirectExpenses",
+             SUM(direct_income)::float8 AS "directIncome",
+             SUM(indirect_income)::float8 AS "indirectIncome",
+             SUM(direct_expense + indirect_expense)::float8 AS expenses,
+             SUM(direct_income + indirect_income)::float8 AS "otherIncome"
       FROM (
-        SELECT entry_date, amount AS expense, 0 AS income FROM expenses
-         WHERE organization_id = ${org} AND station_id = ${stationId}
-           AND entry_date BETWEEN ${from} AND ${to} AND status <> 'VOIDED'
+        SELECT e.entry_date,
+               CASE WHEN c.nature = 'DIRECT' THEN e.amount ELSE 0 END AS direct_expense,
+               CASE WHEN c.nature = 'DIRECT' THEN 0 ELSE e.amount END AS indirect_expense,
+               0 AS direct_income, 0 AS indirect_income
+          FROM expenses e
+          LEFT JOIN expense_categories c ON c.id = e.category_id AND c.organization_id = e.organization_id
+         WHERE e.organization_id = ${org} AND e.station_id = ${stationId}
+           AND e.entry_date BETWEEN ${from} AND ${to} AND e.status <> 'VOIDED'
         UNION ALL
-        SELECT entry_date, 0, amount FROM other_income
-         WHERE organization_id = ${org} AND station_id = ${stationId}
-           AND entry_date BETWEEN ${from} AND ${to} AND status <> 'VOIDED'
+        SELECT o.entry_date, 0, 0,
+               CASE WHEN c.nature = 'DIRECT' THEN o.amount ELSE 0 END,
+               CASE WHEN c.nature = 'DIRECT' THEN 0 ELSE o.amount END
+          FROM other_income o
+          LEFT JOIN income_categories c ON c.id = o.category_id AND c.organization_id = o.organization_id
+         WHERE o.organization_id = ${org} AND o.station_id = ${stationId}
+           AND o.entry_date BETWEEN ${from} AND ${to} AND o.status <> 'VOIDED'
       ) x
       GROUP BY entry_date
-    `) as unknown as Promise<Array<{ date: string; expenses: number; otherIncome: number }>>,
+    `) as unknown as Promise<
+      Array<{
+        date: string;
+        expenses: number;
+        otherIncome: number;
+        directExpenses: number;
+        indirectExpenses: number;
+        directIncome: number;
+        indirectIncome: number;
+      }>
+    >,
   ]);
   const live = await Promise.all(openDays.map((bd) => buildLiveDssrPreview(db, user, bd)));
   const salesDays = [

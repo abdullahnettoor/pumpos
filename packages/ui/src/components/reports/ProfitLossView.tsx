@@ -56,6 +56,11 @@ const EMPTY_TOTALS: ProfitLossReport['totals'] = {
   cogsMerch: 0,
   cogs: 0,
   grossMargin: 0,
+  directExpenses: 0,
+  indirectExpenses: 0,
+  directIncome: 0,
+  indirectIncome: 0,
+  grossProfit: 0,
   expenses: 0,
   otherIncome: 0,
   netProfit: 0,
@@ -73,7 +78,6 @@ const DAY_COLUMNS: TableColumn<ProfitLossDay>[] = [
     header: 'Date',
     kind: 'date',
     value: (d) => d.date,
-    width: '18%',
     cell: (d) => (
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         {formatDate(d.date)}
@@ -90,8 +94,32 @@ const DAY_COLUMNS: TableColumn<ProfitLossDay>[] = [
     value: (d) => d.grossMargin,
     cell: (d) => <LossAware value={d.grossMargin} />,
   },
-  { id: 'expenses', header: 'Expenses', kind: 'money', value: (d) => d.expenses },
-  { id: 'otherIncome', header: 'Other income', kind: 'money', value: (d) => d.otherIncome },
+  {
+    id: 'directExpenses',
+    header: 'Direct expenses',
+    kind: 'money',
+    value: (d) => d.directExpenses,
+  },
+  { id: 'directIncome', header: 'Direct income', kind: 'money', value: (d) => d.directIncome },
+  {
+    id: 'grossProfit',
+    header: 'Gross profit',
+    kind: 'money',
+    value: (d) => d.grossProfit,
+    cell: (d) => <LossAware value={d.grossProfit} />,
+  },
+  {
+    id: 'indirectExpenses',
+    header: 'Indirect expenses',
+    kind: 'money',
+    value: (d) => d.indirectExpenses,
+  },
+  {
+    id: 'indirectIncome',
+    header: 'Indirect income',
+    kind: 'money',
+    value: (d) => d.indirectIncome,
+  },
   {
     id: 'netProfit',
     header: 'Net profit',
@@ -163,8 +191,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         revenue: totals.revenue,
         cogs: totals.cogs,
         grossMargin: totals.grossMargin,
-        expenses: totals.expenses,
-        otherIncome: totals.otherIncome,
+        directExpenses: totals.directExpenses,
+        directIncome: totals.directIncome,
+        grossProfit: totals.grossProfit,
+        indirectExpenses: totals.indirectExpenses,
+        indirectIncome: totals.indirectIncome,
         netProfit: totals.netProfit,
       },
     }),
@@ -238,10 +269,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           lossAware: true,
           hint: 'by sales day',
         },
-        { label: 'Operating expenses', value: -single.expenses, hint: 'by entry date' },
-        ...(single.otherIncome > 0
-          ? [{ label: 'Other income', value: single.otherIncome, hint: 'by entry date' }]
-          : []),
+        { label: 'Direct expenses', value: -single.directExpenses, hint: 'by entry date' },
+        { label: 'Direct income', value: single.directIncome, hint: 'by entry date' },
+        { label: 'Gross profit', value: single.grossProfit, subtotal: true, lossAware: true },
+        { label: 'Indirect expenses', value: -single.indirectExpenses, hint: 'by entry date' },
+        { label: 'Indirect income', value: single.indirectIncome, hint: 'by entry date' },
       ]
     : [];
 
@@ -265,8 +297,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         info={
           <InfoTip label="About profit and loss" placement="bottom">
             Gross margin is by sales day, from each day's DSR at its own weighted-average cost (live
-            for today). Expenses and other income are by entry date. Days without a generated DSR
-            add no margin.
+            for today). Direct expenses and income are included before gross profit; Indirect items
+            follow it. Office items are by entry date, using each head's current Type even for past
+            entries. Days without a generated DSR add no margin.
           </InfoTip>
         }
       />
@@ -297,16 +330,17 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <KpiStrip columns="auto">
           <KpiTile label="Revenue" value={formatMoney(totals.revenue)} />
           <KpiTile
-            label="Gross margin"
-            value={formatMoney(totals.grossMargin)}
-            hint={`${formatPercent(totals.marginPct)} of revenue`}
+            label="Gross profit"
+            value={formatMoney(totals.grossProfit)}
+            alert={totals.grossProfit < 0 ? 'danger' : undefined}
+            hint={`Gross margin ${formatMoney(totals.grossMargin)} · ${formatPercent(totals.marginPct)} of revenue`}
           />
           <KpiTile
-            label="Operating expenses"
-            value={formatMoney(totals.expenses)}
+            label="Indirect expenses"
+            value={formatMoney(totals.indirectExpenses)}
             hint={
-              totals.otherIncome > 0
-                ? `Other income ${formatMoney(totals.otherIncome)}`
+              totals.indirectIncome > 0
+                ? `Indirect income ${formatMoney(totals.indirectIncome)}`
                 : 'by entry date'
             }
           />
