@@ -5,6 +5,10 @@ import {
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelsChanged,
   tankLevelSettingsSchema,
+  STOCK_VARIANCE_TOLERANCE_KEY,
+  stockVarianceToleranceChanged,
+  stockVarianceTolerancePctSchema,
+  resolveStockVarianceTolerance,
 } from '@pump/shared';
 import {
   actorPrincipal,
@@ -124,6 +128,21 @@ function tankLevelsChangeError(
   return null;
 }
 
+function stockVarianceToleranceChangeError(
+  existing: Record<string, unknown>,
+  next: Record<string, unknown> | undefined,
+  ctx: ExecutionContext,
+) {
+  if (!next || !(STOCK_VARIANCE_TOLERANCE_KEY in next)) return null;
+  const after = next[STOCK_VARIANCE_TOLERANCE_KEY];
+  if (!stockVarianceToleranceChanged(existing[STOCK_VARIANCE_TOLERANCE_KEY], after)) return null;
+  if (!mayChangeTankLevels(ctx))
+    return forbiddenError('Only an Owner or Manager can change the tank variance limit');
+  if (!stockVarianceTolerancePctSchema.safeParse(after).success)
+    return validationError('Tank variance limit must be 0 to 5, up to 2 decimals');
+  return null;
+}
+
 export interface StationDeps {
   repository: StationRepository;
   events: EventPublisher;
@@ -187,13 +206,35 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
       return err(notFoundError('Station', p.data.id));
     const tankLevelsError = tankLevelsChangeError(existing.settings ?? {}, p.data.settings, ctx);
     if (tankLevelsError) return err(tankLevelsError);
+    const varianceError = stockVarianceToleranceChangeError(
+      existing.settings ?? {},
+      p.data.settings,
+      ctx,
+    );
+    if (varianceError) return err(varianceError);
+    const varianceChanged =
+      p.data.settings !== undefined &&
+      STOCK_VARIANCE_TOLERANCE_KEY in p.data.settings &&
+      stockVarianceToleranceChanged(
+        existing.settings[STOCK_VARIANCE_TOLERANCE_KEY],
+        p.data.settings[STOCK_VARIANCE_TOLERANCE_KEY],
+      );
+    const settings =
+      p.data.settings &&
+      !(STOCK_VARIANCE_TOLERANCE_KEY in p.data.settings) &&
+      STOCK_VARIANCE_TOLERANCE_KEY in existing.settings
+        ? {
+            ...p.data.settings,
+            [STOCK_VARIANCE_TOLERANCE_KEY]: existing.settings[STOCK_VARIANCE_TOLERANCE_KEY],
+          }
+        : (p.data.settings ?? existing.settings);
     const updated: Station = {
       ...existing,
       name: p.data.name ?? existing.name,
       code: p.data.code ?? existing.code,
       address: p.data.address !== undefined ? p.data.address : existing.address,
       phone: p.data.phone !== undefined ? p.data.phone : existing.phone,
-      settings: p.data.settings ?? existing.settings,
+      settings,
       onboardingStatus: p.data.onboardingStatus ?? existing.onboardingStatus,
       isActive: p.data.isActive ?? existing.isActive,
       updatedAt: ctx.clock.now().toISOString(),
@@ -205,7 +246,17 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
         aggregateType: 'Station',
         aggregateId: updated.id,
         stationId: updated.id,
-        payload: { stationId: updated.id },
+        payload: {
+          stationId: updated.id,
+          ...(varianceChanged
+            ? {
+                stockVarianceTolerancePct: {
+                  before: resolveStockVarianceTolerance(existing.settings),
+                  after: resolveStockVarianceTolerance(updated.settings),
+                },
+              }
+            : {}),
+        },
       }),
     ]);
     return ok(updated);

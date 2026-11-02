@@ -216,6 +216,7 @@ export const queryKeys = {
     ['insights-attendant-variance', stationId, days] as const,
   insightsStockLoss: (stationId: string, days: number) =>
     ['insights-stock-loss', stationId, days] as const,
+  insightsStockLossStation: (stationId: string) => ['insights-stock-loss', stationId] as const,
   insightsCreditHealth: (stationId: string, days: number) =>
     ['insights-credit-health', stationId, days] as const,
   expenseCategories: () => ['expense-categories'] as const,

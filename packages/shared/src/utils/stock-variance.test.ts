@@ -4,6 +4,10 @@ import {
   isStockVarianceWithinTolerance,
   QUANTITY_EPSILON,
   STOCK_VARIANCE_TOLERANCE_PCT,
+  STOCK_VARIANCE_TOLERANCE_KEY,
+  resolveStockVarianceTolerance,
+  stockVarianceToleranceChanged,
+  stockVarianceTolerancePctSchema,
 } from './stock-variance.js';
 
 describe('isBalancedQuantity: the one balanced rule for quantities', () => {
@@ -29,6 +33,16 @@ describe('isBalancedQuantity: the one balanced rule for quantities', () => {
 });
 
 describe('isStockVarianceWithinTolerance', () => {
+  it('uses the supplied limit, including its boundary and zero', () => {
+    expect(isStockVarianceWithinTolerance(-9, 1000, 1)).toBe(true);
+    expect(isStockVarianceWithinTolerance(10, 1000, 1)).toBe(true);
+    expect(isStockVarianceWithinTolerance(-10, 1000, 1)).toBe(true);
+    expect(isStockVarianceWithinTolerance(10.001, 1000, 1)).toBe(false);
+    expect(isStockVarianceWithinTolerance(-10.001, 1000, 1)).toBe(false);
+    expect(isStockVarianceWithinTolerance(0.001, 1000, 0)).toBe(false);
+    expect(isStockVarianceWithinTolerance(0, 0, 1)).toBe(true);
+    expect(isStockVarianceWithinTolerance(1, null, 1)).toBe(false);
+  });
   it('allows a variance up to the tolerance share of litres sold, in either direction', () => {
     const limit = (20000 * STOCK_VARIANCE_TOLERANCE_PCT) / 100; // 100 L
     expect(isStockVarianceWithinTolerance(-limit, 20000)).toBe(true);
@@ -50,5 +64,31 @@ describe('isStockVarianceWithinTolerance', () => {
     expect(isStockVarianceWithinTolerance(0.0004, 0)).toBe(true);
     expect(isStockVarianceWithinTolerance(-0.0004, null)).toBe(true);
     expect(isStockVarianceWithinTolerance(0.001, 0)).toBe(false);
+  });
+});
+
+describe('Station tank variance limit', () => {
+  it('resolves valid settings and falls back for missing or invalid values', () => {
+    expect(STOCK_VARIANCE_TOLERANCE_KEY).toBe('stock_variance_tolerance_pct');
+    expect(resolveStockVarianceTolerance(undefined)).toBe(0.5);
+    expect(resolveStockVarianceTolerance({})).toBe(0.5);
+    expect(resolveStockVarianceTolerance({ stock_variance_tolerance_pct: 0 })).toBe(0);
+    expect(resolveStockVarianceTolerance({ stock_variance_tolerance_pct: 5 })).toBe(5);
+    expect(resolveStockVarianceTolerance({ stock_variance_tolerance_pct: 'bad' })).toBe(0.5);
+    expect(resolveStockVarianceTolerance({ stock_variance_tolerance_pct: 0.005 })).toBe(0.5);
+  });
+  it('validates the range and precision', () => {
+    for (const value of [-0.1, 5.01, 0.005, 'abc', Infinity]) {
+      expect(stockVarianceTolerancePctSchema.safeParse(value).success).toBe(false);
+    }
+    for (const value of [0, 0.25, 0.5, 5]) {
+      expect(stockVarianceTolerancePctSchema.safeParse(value).success).toBe(true);
+    }
+  });
+  it('compares raw values with missing treated as the default', () => {
+    expect(stockVarianceToleranceChanged(undefined, 0.5)).toBe(false);
+    expect(stockVarianceToleranceChanged(0.25, 0.25)).toBe(false);
+    expect(stockVarianceToleranceChanged(0.5, 1)).toBe(true);
+    expect(stockVarianceToleranceChanged(0.5, 'abc')).toBe(true);
   });
 });

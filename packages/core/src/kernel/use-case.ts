@@ -32,6 +32,8 @@ export interface ExecutionContext {
   timeZone?: string | null;
   /** Business-day start boundary 'HH:MM' (default '00:00'). */
   businessDayStartsAt?: string | null;
+  /** Station tank variance limit, as a percentage of litres sold. */
+  stockVarianceTolerancePct?: number | null;
   clock: Clock;
   ids: IdGenerator;
 }

@@ -79,7 +79,7 @@ export function stockLossLine(t: InsightsStockLoss): StockLossLine {
   }
   const pct = t.pctOfSold === null ? 'nothing sold' : `${trim(Math.abs(t.pctOfSold), 2)}% of sold`;
   const verdict = outside
-    ? `outside ${trim(STOCK_VARIANCE_TOLERANCE_PCT, 2)}% tolerance`
+    ? `outside ${trim(t.tolerancePct ?? STOCK_VARIANCE_TOLERANCE_PCT, 2)}% tolerance`
     : 'within tolerance';
   return {
     litres: signedLitres(t.varianceLitres),

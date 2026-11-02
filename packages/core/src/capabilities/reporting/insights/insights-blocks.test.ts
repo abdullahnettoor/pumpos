@@ -88,6 +88,14 @@ const tank = (over: Partial<InsightsStockLossRow>): InsightsStockLossRow => ({
 });
 
 describe('composeStockLoss', () => {
+  it('uses the Station limit and reports it on each row', () => {
+    const rows = [tank({ varianceLitres: -8, soldLitres: 1000 })];
+    expect(composeStockLoss(rows, 1)[0]).toMatchObject({ tolerancePct: 1, withinTolerance: true });
+    expect(composeStockLoss(rows, 0.1)[0]).toMatchObject({
+      tolerancePct: 0.1,
+      withinTolerance: false,
+    });
+  });
   it('reports the loss in litres, as a share of litres sold, and in rupees at cost', () => {
     const [r] = composeStockLoss([tank({})]);
     expect(r.varianceLitres).toBe(-40);
@@ -209,6 +217,22 @@ describe('composeCreditHealth', () => {
 });
 
 describe('the Insights part 2 use cases', () => {
+  it('honours the context limit and defaults to 0.5%', async () => {
+    const useCase = new GetInsightsStockLoss({
+      reader: { read: async () => [tank({ varianceLitres: -8, soldLitres: 1000 })] },
+    });
+    const input = { stationId: 'st-1', days: 7 };
+    const configured = await useCase.execute(input, { ...ctx, stockVarianceTolerancePct: 2 });
+    const fallback = await useCase.execute(input, ctx);
+    expect(configured.success && configured.data[0]).toMatchObject({
+      tolerancePct: 2,
+      withinTolerance: true,
+    });
+    expect(fallback.success && fallback.data[0]).toMatchObject({
+      tolerancePct: 0.5,
+      withinTolerance: false,
+    });
+  });
   it('read under the caller organization and the requested station and range', async () => {
     const seen: InsightsRangeQuery[] = [];
     const record = async (q: InsightsRangeQuery) => {
