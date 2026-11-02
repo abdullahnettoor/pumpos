@@ -9,6 +9,7 @@ import {
   type Station,
 } from '@pump/shared';
 import { letterheadFromStation, type Letterhead } from '../../services/reports/letterhead.js';
+import { queryKeys } from '../../query/hooks.js';
 
 /**
  * The Station page's in-page forms (#604): each form's values built from the
@@ -41,6 +42,15 @@ export function tankVarianceLimitBody(station: Station, tolerancePct: number) {
   return {
     settings: { ...station.settings, [STOCK_VARIANCE_TOLERANCE_KEY]: tolerancePct },
   };
+}
+
+/**
+ * The live reads that judge tank Variance against the Station's limit (#684,
+ * #687), refreshed after the limit changes. A stored DSR keeps the limit it
+ * froze, so it is not among them.
+ */
+export function tankVarianceLimitDependentKeys(stationId: string) {
+  return [queryKeys.insightsStockLossStation(stationId), queryKeys.dssrPreviewPrefix(stationId)];
 }
 
 export function stationGeneralValues(station: Station | null): StationGeneralValues {

@@ -45,7 +45,11 @@ import { StationBrandingForm } from './StationBrandingForm.js';
 import { DecantationGuidanceForm } from './DecantationGuidanceForm.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
-import { newerStation, tankVarianceLimitBody } from './stationForms.js';
+import {
+  newerStation,
+  tankVarianceLimitBody,
+  tankVarianceLimitDependentKeys,
+} from './stationForms.js';
 import {
   officeSubmitKeys,
   sendKeyed,
@@ -182,8 +186,12 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
       'Tank variance limit saved.',
     );
     runTask(
-      qc.invalidateQueries({ queryKey: queryKeys.insightsStockLossStation(updated.id) }),
-      'Saved, but stock loss insights could not be refreshed.',
+      Promise.all(
+        tankVarianceLimitDependentKeys(updated.id).map((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        ),
+      ),
+      'Saved, but stock loss insights and live DSRs could not be refreshed.',
     );
   };
 
