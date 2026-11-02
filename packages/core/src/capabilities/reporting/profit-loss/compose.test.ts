@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { composeProfitLoss } from './compose.js';
+import { round2 } from '@pump/shared';
 
 describe('composeProfitLoss (ADR 0005)', () => {
   const report = composeProfitLoss({
@@ -58,5 +59,92 @@ describe('composeProfitLoss (ADR 0005)', () => {
     expect(report.byProduct).toEqual([
       expect.objectContaining({ productId: 'ms', revenue: 8000, margin: 1800, marginPct: 22.5 }),
     ]);
+  });
+});
+
+describe('P&L head type split', () => {
+  it('places direct items before gross profit and indirect items before net profit', () => {
+    const report = composeProfitLoss({
+      from: '2026-09-01',
+      to: '2026-09-01',
+      salesDays: [{ date: '2026-09-01', live: false, pnl: { grossMargin: 1000 } }],
+      officeDays: [
+        {
+          date: '2026-09-01',
+          expenses: 300,
+          otherIncome: 75,
+          directExpenses: 100,
+          indirectExpenses: 200,
+          directIncome: 50,
+          indirectIncome: 25,
+        },
+      ],
+    });
+    expect(report.days[0]).toMatchObject({
+      directExpenses: 100,
+      indirectExpenses: 200,
+      directIncome: 50,
+      indirectIncome: 25,
+      grossProfit: 950,
+      netProfit: 775,
+    });
+    expect(report.totals).toMatchObject({ grossProfit: 950, netProfit: 775 });
+  });
+
+  it('sums rounded splits and preserves net profit across fractional-paise inputs', () => {
+    const amounts = [0, 0.005, 0.015, 0.025, 0.099, 1.005, 23.456];
+    for (const amount of amounts) {
+      const report = composeProfitLoss({
+        from: '2026-09-01',
+        to: '2026-09-03',
+        salesDays: [
+          { date: '2026-09-01', live: false, pnl: { grossMargin: 100.005 } },
+          { date: '2026-09-03', live: false, pnl: { grossMargin: 0 } },
+          { date: '2026-08-31', live: false, pnl: { grossMargin: 9999 } },
+        ],
+        officeDays: [
+          {
+            date: '2026-09-01',
+            expenses: 0,
+            otherIncome: 0,
+            directExpenses: amount,
+            indirectExpenses: 1.005,
+            directIncome: 0.015,
+            indirectIncome: 0.025,
+          },
+          {
+            date: '2026-09-02',
+            expenses: 0,
+            otherIncome: 0,
+            directExpenses: 3,
+            indirectExpenses: 4,
+            directIncome: 5,
+            indirectIncome: 6,
+          },
+          { date: '2026-09-03', expenses: 0, otherIncome: 0 },
+          { date: '2026-09-04', expenses: 9999, otherIncome: 0 },
+        ],
+      });
+      expect(report.days).toHaveLength(3);
+      expect(report.days[0]).toMatchObject({ grossProfit: 0, netProfit: 0 });
+      expect(report.days[1]).toMatchObject({ hasSales: false, grossProfit: 2, netProfit: 4 });
+      for (const day of report.days) {
+        expect(day.netProfit).toBe(round2(day.grossMargin - day.expenses + day.otherIncome));
+      }
+      expect(report.totals.netProfit).toBe(
+        round2(report.totals.grossMargin - report.totals.expenses + report.totals.otherIncome),
+      );
+      for (const key of [
+        'directExpenses',
+        'indirectExpenses',
+        'directIncome',
+        'indirectIncome',
+        'grossProfit',
+      ] as const) {
+        expect(report.totals[key]).toBe(
+          round2(report.days.reduce((sum, day) => sum + day[key], 0)),
+        );
+      }
+    }
   });
 });

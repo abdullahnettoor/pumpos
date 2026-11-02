@@ -21,6 +21,10 @@ export interface ProfitLossOfficeDay {
   date: string;
   expenses: number;
   otherIncome: number;
+  directExpenses?: number;
+  indirectExpenses?: number;
+  directIncome?: number;
+  indirectIncome?: number;
 }
 
 export interface ProfitLossProductMargin {
@@ -43,6 +47,11 @@ export interface ProfitLossFigures {
   cogsMerch: number;
   cogs: number;
   grossMargin: number;
+  directExpenses: number;
+  indirectExpenses: number;
+  directIncome: number;
+  indirectIncome: number;
+  grossProfit: number;
   expenses: number;
   otherIncome: number;
   netProfit: number;
@@ -99,13 +108,23 @@ export function composeProfitLoss(input: {
       (typeof SALES_KEYS)[number],
       number
     >;
-    const expenses = round2(o?.expenses ?? 0);
-    const otherIncome = round2(o?.otherIncome ?? 0);
+    const directExpenses = round2(o?.directExpenses ?? 0);
+    const indirectExpenses = round2(o?.indirectExpenses ?? o?.expenses ?? 0);
+    const directIncome = round2(o?.directIncome ?? 0);
+    const indirectIncome = round2(o?.indirectIncome ?? o?.otherIncome ?? 0);
+    const expenses = round2(directExpenses + indirectExpenses);
+    const otherIncome = round2(directIncome + indirectIncome);
+    const grossProfit = round2(figures.grossMargin - directExpenses + directIncome);
     return {
       date,
       live: !!s?.live,
       hasSales: !!s,
       ...figures,
+      directExpenses,
+      indirectExpenses,
+      directIncome,
+      indirectIncome,
+      grossProfit,
       expenses,
       otherIncome,
       netProfit: round2(figures.grossMargin - expenses + otherIncome),
@@ -120,6 +139,11 @@ export function composeProfitLoss(input: {
     cogsMerch: 0,
     cogs: 0,
     grossMargin: 0,
+    directExpenses: 0,
+    indirectExpenses: 0,
+    directIncome: 0,
+    indirectIncome: 0,
+    grossProfit: 0,
     expenses: 0,
     otherIncome: 0,
     netProfit: 0,
