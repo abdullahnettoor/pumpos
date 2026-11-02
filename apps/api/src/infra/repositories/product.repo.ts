@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type { Product, ProductRepository } from '@pump/core';
 
@@ -99,6 +99,22 @@ export class DrizzleProductRepository implements ProductRepository {
       .from(schema.products)
       .where(eq(schema.products.organizationId, organizationId));
     return rows.map(toEntity);
+  }
+
+  async listCategories(organizationId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ category: schema.products.category })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.organizationId, organizationId),
+          isNotNull(schema.products.category),
+        ),
+      )
+      .orderBy(schema.products.category);
+    return rows
+      .map((r) => r.category)
+      .filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
   }
 
   async updateCostBasis(productId: string, costBasis: string): Promise<void> {

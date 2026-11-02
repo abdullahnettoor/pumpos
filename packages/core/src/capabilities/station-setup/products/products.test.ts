@@ -29,6 +29,15 @@ class InMemoryProductRepo implements ProductRepository {
   async listByOrganization(orgId: string) {
     return this.rows.filter((r) => r.organizationId === orgId);
   }
+  async listCategories(orgId: string): Promise<string[]> {
+    const set = new Set<string>();
+    for (const r of this.rows) {
+      if (r.organizationId === orgId && r.category) {
+        set.add(r.category);
+      }
+    }
+    return Array.from(set).sort();
+  }
   async updateCostBasis(productId: string, costBasis: string) {
     const r = this.rows.find((x) => x.id === productId);
     if (r) r.costBasis = costBasis;
@@ -229,5 +238,94 @@ describe('UpdateProduct', () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.isActive).toBe(false);
     expect(store.events.some((e) => e.eventType === BusinessEvents.PRODUCT_UPDATED)).toBe(true);
+  });
+});
+
+describe('ProductRepository.listCategories', () => {
+  it('returns distinct non-null categories scoped to organization including archived products', async () => {
+    const repo = new InMemoryProductRepo();
+    await repo.save({
+      id: 'p1',
+      organizationId: 'org-1',
+      name: 'P1',
+      code: 'C1',
+      productType: 'LUBRICANT',
+      inventoryType: 'ITEM',
+      stockTracked: true,
+      isTaxable: true,
+      taxCategory: 'GST',
+      unit: 'L',
+      brand: null,
+      category: 'Engine Oil',
+      sellingPrice: null,
+      costBasis: null,
+      taxConfig: {},
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await repo.save({
+      id: 'p2',
+      organizationId: 'org-1',
+      name: 'P2',
+      code: 'C2',
+      productType: 'LUBRICANT',
+      inventoryType: 'ITEM',
+      stockTracked: true,
+      isTaxable: true,
+      taxCategory: 'GST',
+      unit: 'L',
+      brand: null,
+      category: 'Coolant',
+      sellingPrice: null,
+      costBasis: null,
+      taxConfig: {},
+      isActive: false, // archived product
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await repo.save({
+      id: 'p3',
+      organizationId: 'org-1',
+      name: 'P3',
+      code: 'C3',
+      productType: 'LUBRICANT',
+      inventoryType: 'ITEM',
+      stockTracked: true,
+      isTaxable: true,
+      taxCategory: 'GST',
+      unit: 'L',
+      brand: null,
+      category: null, // null category ignored
+      sellingPrice: null,
+      costBasis: null,
+      taxConfig: {},
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await repo.save({
+      id: 'p4',
+      organizationId: 'org-2', // other org ignored
+      name: 'P4',
+      code: 'C4',
+      productType: 'LUBRICANT',
+      inventoryType: 'ITEM',
+      stockTracked: true,
+      isTaxable: true,
+      taxCategory: 'GST',
+      unit: 'L',
+      brand: null,
+      category: 'Grease',
+      sellingPrice: null,
+      costBasis: null,
+      taxConfig: {},
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    const categories = await repo.listCategories('org-1');
+    expect(categories).toEqual(['Coolant', 'Engine Oil']);
   });
 });
