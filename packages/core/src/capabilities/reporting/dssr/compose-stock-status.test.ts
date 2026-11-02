@@ -65,6 +65,7 @@ describe('composeDssr frozen tank variance limit', () => {
       ...row(-5),
       productId: 'p1',
       tankMovement: {
+        tankId: 't1',
         openingQuantity: 1000,
         receivedQuantity: 0,
         soldQuantity: 1000,
