@@ -43,15 +43,14 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       );
     }
 
+    let command: UpdateProductCommand = cmd;
     if (cmd.category !== undefined) {
       const otherCategories = await this.deps.repository.listCategories(
         ctx.organizationId,
         existing.id,
       );
-      (cmd as unknown as Record<string, unknown>).category = canonicalProductCategory(
-        cmd.category,
-        otherCategories,
-      );
+      const category = canonicalProductCategory(cmd.category, otherCategories);
+      command = { ...cmd, category };
     }
 
     const changes: Record<string, unknown> = {};
@@ -70,14 +69,14 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       'taxConfig',
       'isActive',
     ] as const) {
-      const value = cmd[key];
+      const value = command[key];
       if (value !== undefined) {
         (updated as unknown as Record<string, unknown>)[key] = value;
         changes[key] = value;
       }
     }
-    if (cmd.sellingPrice !== undefined) {
-      updated.sellingPrice = cmd.sellingPrice === null ? null : String(cmd.sellingPrice);
+    if (command.sellingPrice !== undefined) {
+      updated.sellingPrice = command.sellingPrice === null ? null : String(command.sellingPrice);
       changes.sellingPrice = updated.sellingPrice;
     }
     updated.updatedAt = ctx.clock.now().toISOString();
