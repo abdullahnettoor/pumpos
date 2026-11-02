@@ -234,6 +234,14 @@ A registered card/UPI machine (TID) at a Station, optionally linked to a Shift
 at open; its settlements land in its Merchant Clearing Account.
 _Avoid_: POS machine, swipe machine
 
+**Product Category**:
+An optional, free-text classification on a Product (e.g. Engine Oil, Gear Oil,
+Coolants) finer than Product Type. Its spelling is canonicalised per
+Organization so typing matches an existing spelling ignoring case. Product
+Type, not Category, drives inventory tracking, stock engine behaviour, and tax.
+Distinct from the DSR use of "category", which refers to productType.
+_Avoid_: category (unqualified in DSR context), product group, department
+
 ## Sales
 
 **Nozzle Reading**:
