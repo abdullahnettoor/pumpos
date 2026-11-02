@@ -70,3 +70,17 @@ export function isStockVarianceWithinTolerance(
   const allowed = (Math.max(soldLitres ?? 0, 0) * tolerancePct) / 100;
   return Math.abs(varianceLitres) <= allowed + 1e-9;
 }
+
+/** The frozen limit only when the snapshot carries a valid value. */
+export function frozenStockTolerancePct(snap: unknown): number | null {
+  const value =
+    snap && typeof snap === 'object'
+      ? (snap as Record<string, unknown>).stockVarianceTolerancePct
+      : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** The applied DSR limit, or the historic default for older snapshots. */
+export function snapshotStockTolerancePct(snap: unknown): number {
+  return frozenStockTolerancePct(snap) ?? STOCK_VARIANCE_TOLERANCE_PCT;
+}
