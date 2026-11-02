@@ -46,7 +46,7 @@ describe('profit-loss office totals', () => {
       '/dssr/profit-loss?stationId=station&from=2026-03-01&to=2026-03-31',
     );
     expect(response.status).toBe(200);
-    const body = await response.json();
+    const body = (await response.json()) as { data: { totals: unknown } };
     expect(body.data.totals).toMatchObject({
       directExpenses: 100,
       indirectExpenses: 200,
