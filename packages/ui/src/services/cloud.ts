@@ -2126,6 +2126,11 @@ export interface ProfitLossFigures {
   cogsMerch: number;
   cogs: number;
   grossMargin: number;
+  directExpenses: number;
+  indirectExpenses: number;
+  directIncome: number;
+  indirectIncome: number;
+  grossProfit: number;
   expenses: number;
   otherIncome: number;
   netProfit: number;
