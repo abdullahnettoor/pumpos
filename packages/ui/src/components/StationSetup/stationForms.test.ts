@@ -11,6 +11,8 @@ import {
   stationGeneralBody,
   stationGeneralSchema,
   stationGeneralValues,
+  tankVarianceLimitBody,
+  tankVarianceLimitSchema,
   withDensityBand,
 } from './stationForms.js';
 
@@ -37,6 +39,13 @@ const station: Station = {
 };
 
 describe('Station forms (#604)', () => {
+  it('builds a validated variance-limit save over the latest station settings', () => {
+    expect(tankVarianceLimitSchema.safeParse({ tolerancePct: 0.25 }).success).toBe(true);
+    expect(tankVarianceLimitSchema.safeParse({ tolerancePct: 5.01 }).success).toBe(false);
+    expect(tankVarianceLimitBody(station, 0.25)).toEqual({
+      settings: { ...station.settings, stock_variance_tolerance_pct: 0.25 },
+    });
+  });
   it('starts each form from the saved station, with the page defaults', () => {
     expect(stationGeneralValues(station)).toEqual({
       name: 'Highway Fuels',

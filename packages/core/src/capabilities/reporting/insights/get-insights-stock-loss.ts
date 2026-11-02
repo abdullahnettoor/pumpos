@@ -32,6 +32,6 @@ export class GetInsightsStockLoss implements UseCase<InsightsQueryCommand, Insig
       stationId: p.data.stationId,
       days: p.data.days,
     });
-    return ok(composeStockLoss(rows));
+    return ok(composeStockLoss(rows, ctx.stockVarianceTolerancePct ?? undefined));
   }
 }

@@ -3,10 +3,15 @@ import { schema, type DbClient } from '@pump/db';
 import {
   businessDateSettings,
   resolveDecantationSettings,
+  resolveStockVarianceTolerance,
   type DecantationSettings,
 } from '@pump/shared';
 
-export type StationClock = { timeZone: string; businessDayStartsAt: string };
+export type StationClock = {
+  timeZone: string;
+  businessDayStartsAt: string;
+  stockVarianceTolerancePct: number;
+};
 
 /** Load a station's decantation guidance settings using the org-scoped station lookup. */
 export async function loadStationDecantationSettings(
@@ -28,7 +33,11 @@ export async function loadStationDecantationSettings(
 /** The platform defaults (Asia/Kolkata / 00:00) for routes without a station. */
 export function defaultStationClock(): StationClock {
   const d = businessDateSettings(null);
-  return { timeZone: d.timeZone, businessDayStartsAt: d.dayStartsAt };
+  return {
+    timeZone: d.timeZone,
+    businessDayStartsAt: d.dayStartsAt,
+    stockVarianceTolerancePct: resolveStockVarianceTolerance(null),
+  };
 }
 
 /**
@@ -55,7 +64,11 @@ export async function findStationClock(
     .limit(1);
   if (!row) return null;
   const d = businessDateSettings(row.settings ?? null);
-  return { timeZone: d.timeZone, businessDayStartsAt: d.dayStartsAt };
+  return {
+    timeZone: d.timeZone,
+    businessDayStartsAt: d.dayStartsAt,
+    stockVarianceTolerancePct: resolveStockVarianceTolerance(row.settings),
+  };
 }
 
 /**

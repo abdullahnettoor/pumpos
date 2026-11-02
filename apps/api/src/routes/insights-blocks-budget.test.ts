@@ -17,7 +17,11 @@ import { reportsRouter } from './reports.js';
 const ORG = 'org-1';
 const STATION = 'st-1';
 
-function makeFakeDb(row: unknown[], grants: string[] = ['reports.attendant']) {
+function makeFakeDb(
+  row: unknown[],
+  grants: string[] = ['reports.attendant'],
+  stationSettings?: Record<string, unknown>,
+) {
   const counter = { selects: 0, executes: 0 };
   const statements: unknown[] = [];
   // The four reads of one capability check; a fake shared by several requests cycles through them.
@@ -30,7 +34,9 @@ function makeFakeDb(row: unknown[], grants: string[] = ['reports.attendant']) {
   const db = {
     select: () => {
       counter.selects += 1;
-      const rows = accessReads[(counter.selects - 1) % accessReads.length];
+      const rows = stationSettings
+        ? [{ settings: stationSettings }]
+        : accessReads[(counter.selects - 1) % accessReads.length];
       const builder: any = {
         from: () => builder,
         innerJoin: () => builder,
@@ -240,6 +246,17 @@ describe('GET /reports/insights/attendant-variance', () => {
 describe('GET /reports/insights/stock-loss', () => {
   const url = `/reports/insights/stock-loss?stationId=${STATION}&days=7`;
 
+  it('uses the requested Station limit in the returned judgment', async () => {
+    const { db } = makeFakeDb(TANKS, [], { stock_variance_tolerance_pct: 0.1 });
+    const response = await makeApp(db).request(url);
+    const body = (await response.json()) as any;
+    expect(response.status).toBe(200);
+    expect(body.data.find((row: any) => row.tankId === 't-3')).toMatchObject({
+      tolerancePct: 0.1,
+      withinTolerance: false,
+    });
+  });
+
   it('maps the tank rows to litres, share of sold, rupees at cost and the tolerance flag', async () => {
     const { db } = makeFakeDb(TANKS);
     const body = (await (await makeApp(db).request(url)).json()) as any;
@@ -253,6 +270,7 @@ describe('GET /reports/insights/stock-loss', () => {
         pctOfSold: -0.2,
         dips: 2,
         valueAtCost: -3600,
+        tolerancePct: 0.5,
         withinTolerance: true,
       },
       {
@@ -265,6 +283,7 @@ describe('GET /reports/insights/stock-loss', () => {
         dips: 1,
         // The snapshot froze no cost: unvalued, not zero rupees.
         valueAtCost: null,
+        tolerancePct: 0.5,
         withinTolerance: true,
       },
       {
@@ -276,6 +295,7 @@ describe('GET /reports/insights/stock-loss', () => {
         pctOfSold: null,
         dips: 0,
         valueAtCost: 0,
+        tolerancePct: 0.5,
         withinTolerance: true,
       },
     ]);

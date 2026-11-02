@@ -56,6 +56,7 @@ const tank = (over: Partial<InsightsStockLoss>): InsightsStockLoss => ({
   pctOfSold: -0.28,
   dips: 3,
   valueAtCost: -3780,
+  tolerancePct: 0.5,
   withinTolerance: true,
   ...over,
 });
@@ -81,6 +82,11 @@ describe('stockLossLine', () => {
     expect(
       stockLossLine(tank({ varianceLitres: 90, pctOfSold: 0.6, withinTolerance: false })).tone,
     ).toBe('warn');
+  });
+  it('names the Station limit supplied by the insight', () => {
+    expect(
+      stockLossLine(tank({ tolerancePct: 1, pctOfSold: -1.2, withinTolerance: false })).note,
+    ).toBe('1.2% of sold · outside 1% tolerance');
   });
   it('says no dip was recorded for a tank with none, instead of claiming it is within tolerance', () => {
     expect(

@@ -248,3 +248,37 @@ describe('PUT /setup/stations/:id tank levels (#520)', () => {
     expect(savedSettings(writes)).toBeUndefined();
   });
 });
+
+describe('PUT /setup/stations/:id tank variance limit (#684)', () => {
+  it.each(['Owner', 'Manager'])('lets %s save the limit', async (role) => {
+    const { app, writes } = appAs(role);
+    const response = await put(app, { settings: { stock_variance_tolerance_pct: 0.25 } });
+    expect(response.status).toBe(200);
+    expect(savedSettings(writes)?.stock_variance_tolerance_pct).toBe(0.25);
+  });
+  it.each(['Accountant', 'Staff'])('refuses %s without writing', async (role) => {
+    const { app, writes } = appAs(role);
+    const response = await put(app, { settings: { stock_variance_tolerance_pct: 0.25 } });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as any).error.code).toBe('FORBIDDEN');
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+  it.each([6, -1])('rejects invalid limit %s', async (value) => {
+    const { app, writes } = appAs('Owner');
+    const response = await put(app, { settings: { stock_variance_tolerance_pct: value } });
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as any).error.code).toBe('VALIDATION_ERROR');
+    expect(savedSettings(writes)).toBeUndefined();
+  });
+  it('allows an unchanged limit to be echoed with other settings', async () => {
+    const { app, writes } = appAs('Manager', ['st-1'], { stock_variance_tolerance_pct: 1 });
+    const response = await put(app, {
+      settings: { stock_variance_tolerance_pct: 1, fuel_brand: 'IOCL' },
+    });
+    expect(response.status).toBe(200);
+    expect(savedSettings(writes)).toMatchObject({
+      stock_variance_tolerance_pct: 1,
+      fuel_brand: 'IOCL',
+    });
+  });
+});
