@@ -17,6 +17,7 @@ import type {
   DecantationSettings,
   DecantationSettingsInput,
 } from '../utils/decantation-settings.js';
+import type { HeadNature } from '../utils/head-nature.js';
 
 export interface BaseMetadata {
   id: string;
@@ -544,6 +545,7 @@ export interface ExpenseCategory {
   id: string;
   organizationId: string;
   name: string;
+  nature: HeadNature;
   isSystem: boolean;
 }
 

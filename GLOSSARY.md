@@ -314,6 +314,18 @@ Non-customer money-in (commissions, rent, scrap) recorded into a Financial
 Account with its GST split frozen at capture.
 _Avoid_: other income, misc income
 
+**Head type (Direct / Indirect)**:
+Every expense head and income head has a Type, **Direct** or **Indirect**,
+chosen when the head is created and editable later. Direct heads are costs and
+income tied to selling fuel (they count toward gross profit); Indirect heads
+are overheads and other income (they count after it). New and existing heads are
+Indirect, except the seeded defaults Generator Diesel (expense) and Commission
+(income), which are Direct. Reports read the head's **current** Type, so
+re-classifying a head re-classifies its past entries; the Type is never copied
+onto an entry. Stored as `nature` on the head; the UI calls it "Type". "Head" is
+the glossary term for what the code calls an expense or income category.
+_Avoid_: nature (UI), category type, cost class
+
 **Supplier Payment**:
 Money paid to a supplier. An Office Record; never touches the Drawer.
 _Avoid_: vendor payment, purchase payment

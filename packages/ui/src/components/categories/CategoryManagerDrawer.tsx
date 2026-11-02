@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip, EmptyState, Input, Form, Icon } from '../../pump-ds/index.js';
+import {
+  DEFAULT_HEAD_NATURE,
+  HEAD_NATURES,
+  HEAD_NATURE_LABEL,
+  headNatureOf,
+  type HeadNature,
+} from '@pump/shared';
+import { Button, Chip, EmptyState, Input, Form, Icon, Select } from '../../pump-ds/index.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { CATEGORY_API as API, type CategoryRecordKind, type CategoryTax } from './categoryApi.js';
 
@@ -43,6 +50,27 @@ const COPY = {
   income: { title: 'Manage income categories', placeholder: 'e.g. Tanker rental, commission' },
 } as const;
 
+/** The head's Type: Direct heads count toward gross profit, Indirect ones after it. */
+const NatureSelect: React.FC<{
+  value: HeadNature;
+  onChange: (v: HeadNature) => void;
+  label: string;
+}> = ({ value, onChange, label }) => (
+  <div className="w-[130px]">
+    <Select
+      value={value}
+      onChange={(e) => onChange(headNatureOf(e.target.value))}
+      aria-label={label}
+    >
+      {HEAD_NATURES.map((n) => (
+        <option key={n} value={n}>
+          {HEAD_NATURE_LABEL[n]}
+        </option>
+      ))}
+    </Select>
+  </div>
+);
+
 /** GST % and HSN / SAC inputs of an income category. */
 const TaxInputs: React.FC<{
   gst: string;
@@ -76,8 +104,8 @@ const TaxInputs: React.FC<{
 );
 
 /**
- * Manage the categories of expenses or income: add one and rename any (seeded
- * defaults only differ by a "Default" tag). An income category also carries an
+ * Manage the categories (heads) of expenses or income: add one, rename any and
+ * set its Type, Direct or Indirect (seeded defaults only differ by a "Default" tag). An income category also carries an
  * optional GST rate and HSN/SAC (`tax_config`, the product tax shape).
  * Archiving is deferred; see the API TODO.
  */
@@ -94,11 +122,13 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
   const [newName, setNewName] = useState('');
   const [newGst, setNewGst] = useState('');
   const [newHsn, setNewHsn] = useState('');
+  const [newNature, setNewNature] = useState<HeadNature>(DEFAULT_HEAD_NATURE);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editGst, setEditGst] = useState('');
   const [editHsn, setEditHsn] = useState('');
+  const [editNature, setEditNature] = useState<HeadNature>(DEFAULT_HEAD_NATURE);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const sorted = [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -109,10 +139,11 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
     if (!name) return;
     try {
       setAdding(true);
-      await API[kind].create(name, buildTax(newGst, newHsn));
+      await API[kind].create(name, { taxConfig: buildTax(newGst, newHsn), nature: newNature });
       setNewName('');
       setNewGst('');
       setNewHsn('');
+      setNewNature(DEFAULT_HEAD_NATURE);
       await onChanged();
       toast.success('Category added.');
     } catch (err: any) {
@@ -132,6 +163,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
     setEditName(c.name);
     setEditGst(gstStr(c));
     setEditHsn(hsnStr(c));
+    setEditNature(headNatureOf(c.nature));
   };
   const cancelEdit = () => {
     setEditingId(null);
@@ -144,10 +176,13 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
     if (!name) return;
     try {
       setSavingId(id);
-      await API[kind].update(id, name, buildTax(editGst, editHsn));
+      await API[kind].update(id, name, {
+        taxConfig: buildTax(editGst, editHsn),
+        nature: editNature,
+      });
       cancelEdit();
       await onChanged();
-      toast.success(taxed ? 'Category saved.' : 'Category renamed.');
+      toast.success('Category saved.');
     } catch (err: any) {
       toast.error(
         withNextStep(err.message || "Couldn't save the category", 'Check the name and save again.'),
@@ -172,6 +207,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                   maxLength={100}
                 />
               </div>
+              <NatureSelect value={newNature} onChange={setNewNature} label="Type" />
               {!taxed && (
                 <Button
                   type="submit"
@@ -228,6 +264,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                         maxLength={100}
                         autoFocus
                       />
+                      <NatureSelect value={editNature} onChange={setEditNature} label="Type" />
                       {taxed && (
                         <div className="flex gap-2">
                           <TaxInputs
@@ -268,6 +305,9 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                         </div>
                       )}
                     </div>
+                    <Chip tone="neutral" size="xs">
+                      {HEAD_NATURE_LABEL[headNatureOf(c.nature)]}
+                    </Chip>
                     {c.isSystem && (
                       <Chip tone="neutral" size="xs">
                         Default

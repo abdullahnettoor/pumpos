@@ -41,6 +41,7 @@ export function savingRecordRows(
       entryDate: body.entryDate ?? null,
       categoryId: body.categoryId ?? null,
       categoryName: w.variables.labels.categoryName ?? null,
+      categoryNature: w.variables.labels.categoryNature ?? null,
       description: body.description ?? null,
       accountName: w.variables.labels.accountName ?? null,
       accountType: w.variables.labels.accountType ?? null,

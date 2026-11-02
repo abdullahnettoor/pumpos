@@ -148,6 +148,8 @@ export const queryKeys = {
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
+  /** Every cached Income list, whatever station and range. */
+  incomeAll: () => ['income'] as const,
   /** Every cached Income range of a station. */
   incomePrefix: (stationId: string) => ['income', stationId] as const,
   purchases: (stationId?: string) =>
