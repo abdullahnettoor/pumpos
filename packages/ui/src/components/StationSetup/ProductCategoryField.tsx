@@ -12,11 +12,13 @@ export const ProductCategoryField: React.FC<ProductCategoryFieldProps> = ({
   onChange,
   categories,
 }) => {
+  const inputId = useId();
   const datalistId = useId();
 
   return (
-    <Field label="Category">
+    <Field label="Category" htmlFor={inputId}>
       <TextInput
+        id={inputId}
         type="text"
         list={datalistId}
         value={value}
