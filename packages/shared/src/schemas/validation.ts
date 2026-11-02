@@ -3,6 +3,7 @@ import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-aut
 import { isValidBusinessDate } from '../utils/business-date.js';
 import { decantationSettingsSchema } from '../utils/decantation-settings.js';
 import { tankLevelSettingsSchema } from '../utils/tank-level.js';
+import { stockVarianceTolerancePctSchema } from '../utils/stock-variance.js';
 
 const timeStringSchema = z
   .string()
@@ -148,6 +149,7 @@ export const stationSchema = z.object({
         .nullable(),
       /** Tank-level thresholds (#520); `resolveTankLevelSettings` reads them. */
       tankLevels: tankLevelSettingsSchema.optional(),
+      stock_variance_tolerance_pct: stockVarianceTolerancePctSchema.optional(),
       ...decantationSettingsSchema.shape,
     })
     .default({

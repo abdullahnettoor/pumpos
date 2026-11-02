@@ -162,6 +162,41 @@ function source(): DssrSourceData {
 }
 
 describe('GenerateDssr', () => {
+  it('preserves the applied limit until explicit regeneration', async () => {
+    const data = source();
+    data.stockVariances[0].productId = 'p1';
+    const snapshots = new SnapRepo();
+    const generator = new GenerateDssr({
+      businessDays: new BdRepo([bday()]),
+      snapshots,
+      reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    });
+    const first = await generator.execute(
+      { businessDayId: 'bd-1' },
+      { ...ctx(), stockVarianceTolerancePct: 2 },
+    );
+    const again = await generator.execute(
+      { businessDayId: 'bd-1' },
+      { ...ctx(), stockVarianceTolerancePct: 0.1 },
+    );
+    const forced = await generator.execute(
+      { businessDayId: 'bd-1', force: true },
+      { ...ctx(), stockVarianceTolerancePct: 0.1 },
+    );
+    expect(first.success && again.success && forced.success).toBe(true);
+    if (first.success && again.success && forced.success) {
+      expect(first.data.snapshotData).toMatchObject({
+        stockVarianceTolerancePct: 2,
+        fuelStockVariance: [{ withinTolerance: true }],
+      });
+      expect(again.data.snapshotData).toEqual(first.data.snapshotData);
+      expect(forced.data.snapshotData).toMatchObject({
+        stockVarianceTolerancePct: 0.1,
+        fuelStockVariance: [{ withinTolerance: false }],
+      });
+    }
+  });
   it('composes a sales-only snapshot from shift summaries + business-day sales and stock', async () => {
     const snapshots = new SnapRepo();
     const store = new InMemoryEventStore();

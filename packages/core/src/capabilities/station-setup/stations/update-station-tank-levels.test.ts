@@ -29,6 +29,74 @@ const station = (settings: Record<string, unknown> = {}): Station => ({
   updatedAt: '',
 });
 
+describe('UpdateStation tank variance limit (#684)', () => {
+  it.each(['Owner', 'Manager'])('lets a %s change it and records the change', async (role) => {
+    const { repo, store, useCase } = harness();
+    const result = await useCase.execute(
+      { id: 'st-1', settings: { stock_variance_tolerance_pct: 0.25 } },
+      ctx(role),
+    );
+    expect(result.success).toBe(true);
+    expect(repo.saved[0]?.settings.stock_variance_tolerance_pct).toBe(0.25);
+    expect(store.events[0]?.payload).toMatchObject({
+      stationId: 'st-1',
+      stockVarianceTolerancePct: { before: 0.5, after: 0.25 },
+    });
+  });
+
+  it.each(['Accountant', 'Staff', 'Attendant'])(
+    'refuses a change by %s without saving',
+    async (role) => {
+      const { repo, store, useCase } = harness();
+      const result = await useCase.execute(
+        { id: 'st-1', settings: { stock_variance_tolerance_pct: 1 } },
+        ctx(role),
+      );
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.code).toBe('FORBIDDEN');
+      expect(repo.saved).toHaveLength(0);
+      expect(store.events).toHaveLength(0);
+    },
+  );
+
+  it('lets system actors change it', async () => {
+    const { useCase } = harness();
+    expect(
+      (await useCase.execute({ id: 'st-1', settings: { stock_variance_tolerance_pct: 1 } }, ctx()))
+        .success,
+    ).toBe(true);
+  });
+
+  it.each([-0.1, 5.01, 0.005, 'abc', null])('rejects invalid limit %s', async (value) => {
+    const { repo, useCase } = harness();
+    const result = await useCase.execute(
+      { id: 'st-1', settings: { stock_variance_tolerance_pct: value } },
+      ctx('Owner'),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(repo.saved).toHaveLength(0);
+  });
+
+  it('leaves untouched and equal limits alone for a user without the permission', async () => {
+    const { repo, store, useCase } = harness({ stock_variance_tolerance_pct: 1 });
+    expect(
+      (await useCase.execute({ id: 'st-1', settings: { fuel_brand: 'IOCL' } }, ctx('Accountant')))
+        .success,
+    ).toBe(true);
+    expect(repo.saved[0]?.settings.stock_variance_tolerance_pct).toBe(1);
+    expect(store.events[0]?.payload).toEqual({ stationId: 'st-1' });
+    expect(
+      (
+        await useCase.execute(
+          { id: 'st-1', settings: { stock_variance_tolerance_pct: 1 } },
+          ctx('Accountant'),
+        )
+      ).success,
+    ).toBe(true);
+  });
+});
+
 class Repo {
   saved: Station[] = [];
   constructor(readonly row: Station) {}

@@ -1,4 +1,4 @@
-import { readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
+import { frozenStockTolerancePct, readDssrOmcCard, shiftDisplayLabel } from '@pump/shared';
 import type { PumpStatus } from '../../../pump-ds/index.js';
 import { formatMoney } from '../../../utils/format.js';
 
@@ -105,6 +105,7 @@ export interface DssrDay {
   };
   nozzles: NozzleRow[];
   fuelStock: StockVarianceRow[];
+  stockTolerancePct: number | null;
   merchandiseStock: StockVarianceRow[];
   shifts: ShiftRow[];
   attendants: AttendantRow[];
@@ -117,6 +118,10 @@ const num = (v: unknown): number => {
 };
 const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
 const optionalNum = (v: unknown): number | null => (v == null ? null : num(v));
+
+/** Shared caption for the screen and PDF; older snapshots did not record a limit. */
+export const stockToleranceSubtitle = (limit: number | null): string | undefined =>
+  limit == null ? undefined : `Limit: ${Number(limit.toFixed(2))}% of litres sold`;
 
 /**
  * A stock line's status as the snapshot froze it (`composeDssr`): a DSSR is
@@ -243,6 +248,7 @@ export function readDssrDay(row: DssrRow): DssrDay {
       net: num(n.netVolume),
     })),
     fuelStock: stockRows(list(snap.fuelStockVariance), true, 'L'),
+    stockTolerancePct: frozenStockTolerancePct(snap),
     merchandiseStock: stockRows(list(snap.merchandiseStockVariance), false, 'Nos'),
     shifts: list(snap.shifts).map((s, i) => ({
       key: String(s.shiftId ?? i),

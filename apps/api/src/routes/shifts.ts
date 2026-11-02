@@ -1597,7 +1597,7 @@ shiftsRouter.post(
       );
     }
     const body = await c.req.json().catch(() => ({}));
-    const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
+    const command = { ...body?.payload, shiftId: body?.shiftId };
     const db = c.var.db;
     // Authorize the shift's stored station (matches open/readings/reopen): a
     // Manager assigned to Station A must not close Station B's shift.
@@ -1862,6 +1862,8 @@ shiftsRouter.post(
         403,
       );
     }
+    const clock = await loadStationClock(db, user.organizationId, body.stationId);
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(db, async (tx, events) => {
       const businessDays = new DrizzleBusinessDayRepository(tx);
       return new CloseBusinessDayAndGenerateDssr({
@@ -1872,7 +1874,11 @@ shiftsRouter.post(
         events,
       }).execute(
         body,
-        buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
+        buildContext(user, {
+          stationId: body.stationId,
+          businessDayId: body.businessDayId,
+          ...clock,
+        }),
       );
     });
     return sendResult(c, result);

@@ -7,6 +7,7 @@ import { totalTexts } from '../../pump-ds/table/columns.js';
 import { formatBusinessDate, formatDateTime } from '../../utils/format.js';
 import {
   readDssrDay,
+  stockToleranceSubtitle,
   type DssrDay,
   type DssrRow,
 } from '../../components/reports/dssr/dssrModel.js';
@@ -170,7 +171,10 @@ const builders: Record<DssrSection, (day: DssrDay, cfg: DssrReportConfig) => Rea
   fuelStockVariance: (day) =>
     day.fuelStock.length === 0 ? null : (
       <View key="fuelStockVariance">
-        <Title title={DSSR_TITLES.fuelStock} />
+        <Title
+          title={DSSR_TITLES.fuelStock}
+          subtitle={stockToleranceSubtitle(day.stockTolerancePct)}
+        />
         <Table columns={FUEL_STOCK_COLUMNS} rows={day.fuelStock} empty="" />
       </View>
     ),

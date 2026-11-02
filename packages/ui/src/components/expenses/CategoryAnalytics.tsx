@@ -1,8 +1,12 @@
 import React, { useMemo, useState } from 'react';
+import { HEAD_NATURE_LABEL, headNatureOf } from '@pump/shared';
 import { useExpenses, useIncome } from '../../query/hooks.js';
 import { formatMoney } from '../../utils/format.js';
 import { FALLBACK_CATEGORY } from '../categories/categoryRecordColumns.js';
+import { NatureTotalsBar } from '../categories/NatureTotalsBar.js';
+import { splitByNature } from '../categories/natureTotals.js';
 import {
+  Chip,
   ControlBar,
   DataSection,
   DateRangeMenu,
@@ -51,6 +55,8 @@ function daysInRange({ from, to }: DateRange): number {
 
 interface CategoryRow {
   name: string;
+  /** The category's current Type (Direct / Indirect). */
+  nature: string;
   total: number;
   count: number;
   share: number; // 0..100
@@ -75,6 +81,18 @@ const ShareCell: React.FC<{ pct: number }> = ({ pct }) => (
 /** One row per category: entries, total, share. Plain figures, a brand bar. */
 const COLUMNS: TableColumn<CategoryRow>[] = [
   { id: 'name', header: 'Category', kind: 'text', emphasis: true, value: (r) => r.name },
+  {
+    id: 'nature',
+    header: 'Type',
+    kind: 'text',
+    value: (r) => r.nature,
+    cell: (r) => (
+      <Chip tone="neutral" size="xs">
+        {r.nature}
+      </Chip>
+    ),
+    width: '12%',
+  },
   {
     id: 'count',
     header: 'Entries',
@@ -149,7 +167,13 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     const m = new Map<string, CategoryRow>();
     for (const e of active) {
       const name = e.categoryName || FALLBACK_CATEGORY[kind];
-      const c = m.get(name) || { name, total: 0, count: 0, share: 0 };
+      const c = m.get(name) || {
+        name,
+        nature: HEAD_NATURE_LABEL[headNatureOf(e.categoryNature)],
+        total: 0,
+        count: 0,
+        share: 0,
+      };
       c.total += Number(e.amount || 0);
       c.count += 1;
       m.set(name, c);
@@ -159,6 +183,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
     return rows.sort((a, b) => b.total - a.total);
   }, [active, total, kind]);
 
+  const natureTotals = useMemo(() => splitByNature(active), [active]);
   const days = daysInRange(range);
   const largest = byCategory[0];
 
@@ -220,6 +245,7 @@ export const CategoryAnalytics: React.FC<CategoryAnalyticsProps> = ({
             title={copy.noun}
           />
         </DataSection>
+        {byCategory.length > 0 && <NatureTotalsBar totals={natureTotals} />}
       </section>
     </div>
   );

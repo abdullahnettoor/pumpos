@@ -5,7 +5,7 @@
  * derivers as Home (`deriveTiles`, `deriveSales`), so one day never reads two
  * ways on two screens.
  */
-import { isStockVarianceWithinTolerance } from '@pump/shared';
+import { isStockVarianceWithinTolerance, snapshotStockTolerancePct } from '@pump/shared';
 import type { BusinessDayListItem } from '@pump/shared';
 import { stationTime } from '../dates.js';
 import { num } from '../num.js';
@@ -82,11 +82,12 @@ const signedLitres = (v: number, unit: string) =>
  * sold, closing book): shown as opening → closing with Sold, Received and the
  * Dip. A snapshot frozen earlier has book / dip only, so it shows Book → Dip
  * and "Sold" (the product's net volume) only when the product has one tank. The
- * variance is red when short, amber when over, beyond the shared tolerance
- * (a share of the litres the tank sold; unknown sales tolerate no variance).
+ * variance is red when short, amber when over, beyond the snapshot's frozen
+ * tolerance (older snapshots use 0.5%; unknown sales tolerate no variance).
  */
 export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
   const rows = (snap.fuelStockVariance ?? []) as Snapshot[];
+  const limit = snapshotStockTolerancePct(snap);
   const soldByProduct = new Map<string, Snapshot>(
     ((snap.fuel?.byProduct ?? []) as Snapshot[]).map((p) => [String(p.productName), p]),
   );
@@ -105,6 +106,10 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
       : productSold
         ? num(productSold.netVolume ?? productSold.grossVolume)
         : null;
+    const within =
+      typeof r.withinTolerance === 'boolean'
+        ? r.withinTolerance
+        : isStockVarianceWithinTolerance(v, sold, limit);
 
     let movement: string;
     let detail: string[];
@@ -129,7 +134,7 @@ export function deriveTankMovement(snap: Snapshot): TankMovementRow[] {
       movement,
       detail,
       variance: signedLitres(v, unit),
-      tone: isStockVarianceWithinTolerance(v, sold) ? 'default' : v < 0 ? 'bad' : 'warn',
+      tone: within ? 'default' : v < 0 ? 'bad' : 'warn',
     };
   });
 }

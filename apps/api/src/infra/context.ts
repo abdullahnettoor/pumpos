@@ -12,6 +12,7 @@ export interface ContextOptions {
   groupingRole?: ActivityGroupingRole;
   timeZone?: string | null;
   businessDayStartsAt?: string | null;
+  stockVarianceTolerancePct?: number | null;
 }
 
 export interface CommandTrace {
@@ -58,6 +59,7 @@ export function buildContext(
     groupingRole: opts.groupingRole ?? 'primary',
     timeZone: opts.timeZone ?? null,
     businessDayStartsAt: opts.businessDayStartsAt ?? null,
+    stockVarianceTolerancePct: opts.stockVarianceTolerancePct ?? null,
     clock: new SystemClock(),
     ids,
   };

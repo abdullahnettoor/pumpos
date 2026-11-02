@@ -59,6 +59,8 @@ import {
   isVoided,
   type CategoryRecord,
 } from './categoryRecordColumns.js';
+import { NatureTotalsBar } from './NatureTotalsBar.js';
+import { splitByNature } from './natureTotals.js';
 
 /** Everything that differs between the Expenses and Income pages. */
 const COPY: Record<
@@ -132,6 +134,12 @@ const COPY: Record<
 const CATEGORY_KEY = {
   expense: queryKeys.expenseCategories(),
   income: queryKeys.incomeCategories(),
+} as const;
+
+// The entries carry their head's Type read live, so a head edit refreshes them too.
+const RECORD_KEY = {
+  expense: queryKeys.expenses(),
+  income: queryKeys.incomeAll(),
 } as const;
 
 const TABS_ID = 'category-records';
@@ -310,6 +318,8 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
     };
   }, [rows]);
 
+  const natureTotals = useMemo(() => splitByNature(rows), [rows]);
+
   if (!selectedStation) {
     return (
       <p className="p-6 text-[13px] text-ink-muted">Please select a station to view {copy.noun}.</p>
@@ -460,6 +470,7 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
                     title={copy.noun}
                   />
                 </DataSection>
+                {tableRows.length > 0 && <NatureTotalsBar totals={natureTotals} />}
               </section>
             </>
           )}
@@ -477,7 +488,20 @@ export const CategoryRecordPage: React.FC<CategoryRecordPageProps> = ({
         isOpen={categoryManagerOpen}
         onClose={() => setCategoryManagerOpen(false)}
         categories={categories}
-        onChanged={() => qc.invalidateQueries({ queryKey: CATEGORY_KEY[kind] })}
+        onChanged={() => {
+          refresh(
+            () =>
+              Promise.all([
+                qc.invalidateQueries({ queryKey: CATEGORY_KEY[kind] }, { throwOnError: true }),
+                qc.invalidateQueries({ queryKey: RECORD_KEY[kind] }, { throwOnError: true }),
+                qc.invalidateQueries(
+                  { queryKey: queryKeys.profitLossAll() },
+                  { throwOnError: true },
+                ),
+              ]),
+            'Category saved.',
+          );
+        }}
         canManage={canManageCategories}
       />
     </>

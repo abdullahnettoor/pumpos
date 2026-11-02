@@ -234,6 +234,14 @@ A registered card/UPI machine (TID) at a Station, optionally linked to a Shift
 at open; its settlements land in its Merchant Clearing Account.
 _Avoid_: POS machine, swipe machine
 
+**Product Category**:
+An optional, free-text classification on a Product (e.g. Engine Oil, Gear Oil,
+Coolants) finer than Product Type. Its spelling is canonicalised per
+Organization so typing matches an existing spelling ignoring case. Product
+Type, not Category, drives inventory tracking, stock engine behaviour, and tax.
+Distinct from the DSR use of "category", which refers to productType.
+_Avoid_: category (unqualified in DSR context), product group, department
+
 ## Sales
 
 **Nozzle Reading**:
@@ -305,6 +313,18 @@ _Avoid_: cost, spend
 Non-customer money-in (commissions, rent, scrap) recorded into a Financial
 Account with its GST split frozen at capture.
 _Avoid_: other income, misc income
+
+**Head type (Direct / Indirect)**:
+Every expense head and income head has a Type, **Direct** or **Indirect**,
+chosen when the head is created and editable later. Direct heads are costs and
+income tied to selling fuel (they count toward gross profit); Indirect heads
+are overheads and other income (they count after it). New and existing heads are
+Indirect, except the seeded defaults Generator Diesel (expense) and Commission
+(income), which are Direct. Reports read the head's **current** Type, so
+re-classifying a head re-classifies its past entries; the Type is never copied
+onto an entry. Stored as `nature` on the head; the UI calls it "Type". "Head" is
+the glossary term for what the code calls an expense or income category.
+_Avoid_: nature (UI), category type, cost class
 
 **Supplier Payment**:
 Money paid to a supplier. An Office Record; never touches the Drawer.
@@ -548,6 +568,17 @@ Code and stored names stay `dssr` (the `dssr_snapshots` table, the
 settings key); only the name users see is "DSR".
 _Avoid_: DSSR, Shift Summary, daily report, day summary
 
+**Gross margin**:
+Revenue minus cost of sales, by sales day from the DSR, before office expenses
+and income. Distinct from Gross profit.
+_Avoid_: gross profit as a synonym
+
+**Gross profit**:
+Gross margin minus Direct expenses plus Direct income, using each head's current
+[Type](#head-type-direct--indirect). Net profit is Gross profit minus Indirect
+expenses plus Indirect income.
+_Avoid_: gross margin as a synonym
+
 **Attendant Handover Report**:
 A read-only, date-range report composing one Attendant's Handovers across
 closed Shifts: fuel sales, Billed Sales, Handover Product Sales, Credit Sales,
@@ -575,12 +606,16 @@ running balance, opening with a "balance brought forward" when earlier entries
 exist. Shared as a PDF from the same range the screen shows.
 _Avoid_: khata, account copy
 
+**Tank variance limit**:
+The Station's threshold for judging a Tank dip Variance, expressed as a
+percentage of litres sold. It defaults to 0.5% and can be set from 0% to 5%.
+_Avoid_: stock allowance, shrinkage target
+
 **Stock Loss**:
-The Insights view of a Tank's dip **Variance**, judged against what it sold:
-within tolerance up to 0.5% of the litres sold, by size (a gain is judged like a
-loss). The tolerance is one app-wide value pending an owner decision, not a
-Station setting (`stock-variance.ts`); a Tank that sold nothing tolerates no
-Variance. The domain term stays Variance; "loss" is only the Insights label.
+The Insights view of a Tank's dip **Variance**, judged against the Station's
+Tank variance limit and what it sold. A gain is judged like a loss; a Tank
+that sold nothing tolerates no Variance. The domain term stays Variance;
+"loss" is only the Insights label.
 _Avoid_: shrinkage, leakage
 
 **Needs Attention**:

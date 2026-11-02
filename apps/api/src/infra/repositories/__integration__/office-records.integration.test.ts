@@ -682,4 +682,93 @@ describe.skipIf(!CONNECTION)('Office Records against real Postgres (ADR 0005)', 
     expect(day15).toMatchObject({ expenses: 250, otherIncome: 0 });
     expect(r.data.totals.expenses).toBe(250);
   });
+
+  it('reclassifies past office items using the current head Type', async () => {
+    const [expenseHead] = await db
+      .insert(schema.expenseCategories)
+      .values({
+        organizationId: ORG,
+        name: 'Direct P&L expense',
+        nature: 'DIRECT',
+      })
+      .returning();
+    const [incomeHead] = await db
+      .insert(schema.incomeCategories)
+      .values({
+        organizationId: ORG,
+        name: 'Direct P&L income',
+        nature: 'DIRECT',
+      })
+      .returning();
+    await db.insert(schema.expenses).values([
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-02-01',
+        categoryId: expenseHead.id,
+        amount: '100',
+        fundingAccountId: PETTY,
+      },
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-02-01',
+        categoryId: CATEGORY,
+        amount: '200',
+        fundingAccountId: PETTY,
+      },
+      {
+        organizationId: ORG,
+        stationId: STATION,
+        entryDate: '2026-02-01',
+        categoryId: expenseHead.id,
+        amount: '999',
+        fundingAccountId: PETTY,
+        status: 'VOIDED',
+      },
+      {
+        organizationId: ORG,
+        stationId: OTHER_STATION,
+        entryDate: '2026-02-01',
+        categoryId: expenseHead.id,
+        amount: '999',
+        fundingAccountId: PETTY,
+      },
+    ]);
+    await db.insert(schema.otherIncome).values({
+      organizationId: ORG,
+      stationId: STATION,
+      entryDate: '2026-02-01',
+      categoryId: incomeHead.id,
+      amount: '50',
+      fundingAccountId: PETTY,
+    });
+    const url = `/dssr/profit-loss?stationId=${STATION}&from=2026-02-01&to=2026-02-01`;
+    const before = await get(url);
+    expect(before.data.totals).toMatchObject({
+      directExpenses: 100,
+      indirectExpenses: 200,
+      directIncome: 50,
+      indirectIncome: 0,
+      grossProfit: -50,
+      netProfit: -250,
+    });
+    await db
+      .update(schema.expenseCategories)
+      .set({ nature: 'INDIRECT' })
+      .where(eq(schema.expenseCategories.id, expenseHead.id));
+    await db
+      .update(schema.incomeCategories)
+      .set({ nature: 'INDIRECT' })
+      .where(eq(schema.incomeCategories.id, incomeHead.id));
+    const after = await get(url);
+    expect(after.data.totals).toMatchObject({
+      directExpenses: 0,
+      indirectExpenses: 300,
+      directIncome: 0,
+      indirectIncome: 50,
+      grossProfit: 0,
+      netProfit: -250,
+    });
+  });
 });

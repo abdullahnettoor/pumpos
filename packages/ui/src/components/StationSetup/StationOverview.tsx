@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
 import { queryKeys, useProducts, useStations } from '../../query/hooks.js';
+import { patchQueryData } from '../../query/patches/applyPatch.js';
+import { withSavedStation } from '../../query/patches/stations.js';
 import {
   can,
   resolveTankLevelSettings,
+  resolveStockVarianceTolerance,
   Station,
   TANK_LEVEL_SETTINGS_KEY,
   type TankLevelSettings,
@@ -36,12 +39,17 @@ import {
 import { ConceptIcon } from '../../pump-ds/icon/ConceptIcon.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { TankLevelSettingsPanel } from './TankLevelSettingsPanel.js';
+import { TankVarianceLimitPanel } from './TankVarianceLimitPanel.js';
 import { StationDetailsForm } from './StationDetailsForm.js';
 import { StationBrandingForm } from './StationBrandingForm.js';
 import { DecantationGuidanceForm } from './DecantationGuidanceForm.js';
 import { useRunTask } from '../../utils/runTask.js';
 import { ReportTemplatesPanel } from '../reports/templates/ReportTemplatesPanel.js';
-import { newerStation } from './stationForms.js';
+import {
+  newerStation,
+  tankVarianceLimitBody,
+  tankVarianceLimitDependentKeys,
+} from './stationForms.js';
 import {
   officeSubmitKeys,
   sendKeyed,
@@ -145,6 +153,11 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     const updated = await updateStation(form, base.id, build(base));
     // The next section in the same Save builds on this one (#604 review).
     latestStation.current = updated;
+    patchQueryData<Station[]>(
+      qc,
+      queryKeys.stations(),
+      (list) => withSavedStation(list, updated) ?? list,
+    );
     onStationSelected(updated);
     runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
     toast.success(saved);
@@ -160,9 +173,25 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     await saveForm(
       'tank-levels',
       (saved) => ({
-        settings: { ...(saved.settings || {}), [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
+        settings: { ...saved.settings, [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
       }),
       'Tank levels saved.',
+    );
+  };
+
+  const handleSaveTankVarianceLimit = async (value: number) => {
+    const updated = await saveForm(
+      'stock-variance',
+      (saved) => tankVarianceLimitBody(saved, value),
+      'Tank variance limit saved.',
+    );
+    runTask(
+      Promise.all(
+        tankVarianceLimitDependentKeys(updated.id).map((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        ),
+      ),
+      'Saved, but stock loss insights and live DSRs could not be refreshed.',
     );
   };
 
@@ -171,7 +200,8 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
   // While a form is changed, its bar's Save is the page's one primary.
   const formChanged = useHasUnsavedChanges();
 
-  const canRules = can(principalFor(userRole), 'station.manage');
+  const canRules = can(principalFor(userRole), 'pages.station');
+  const canManageRules = can(principalFor(userRole), 'station.manage');
   const fuelProducts = (productsQ.data ?? []).filter((product) => product.productType === 'FUEL');
   const canAddInfrastructure = can(principalFor(userRole), 'station.infrastructure');
   const canAddProduct = can(principalFor(userRole), 'products.manage');
@@ -329,15 +359,23 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
                     onSave={handleSaveTankLevels}
                     onDiscard={() => openSession('tank-levels')}
                   />
-                  <DecantationGuidanceForm
-                    station={selectedStation}
-                    fuelProducts={fuelProducts}
-                    productsQuery={productsQ}
-                    onSave={(build) =>
-                      saveForm('decantation', build, 'Decantation settings saved.')
-                    }
-                    onDiscard={() => openSession('decantation')}
+                  <TankVarianceLimitPanel
+                    value={resolveStockVarianceTolerance(selectedStation.settings)}
+                    canEdit={can(principalFor(userRole), 'station.tankLevels')}
+                    onSave={handleSaveTankVarianceLimit}
+                    onDiscard={() => openSession('stock-variance')}
                   />
+                  {canManageRules && (
+                    <DecantationGuidanceForm
+                      station={selectedStation}
+                      fuelProducts={fuelProducts}
+                      productsQuery={productsQ}
+                      onSave={(build) =>
+                        saveForm('decantation', build, 'Decantation settings saved.')
+                      }
+                      onDiscard={() => openSession('decantation')}
+                    />
+                  )}
                   <UnsavedSectionsBar />
                 </>
               )}

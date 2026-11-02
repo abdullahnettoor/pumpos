@@ -3,10 +3,13 @@ import {
   decantationSettingsSchema,
   resolveDecantationSettings,
   stationSchema,
+  stockVarianceTolerancePctSchema,
+  STOCK_VARIANCE_TOLERANCE_KEY,
   type DecantationSettings,
   type Station,
 } from '@pump/shared';
 import { letterheadFromStation, type Letterhead } from '../../services/reports/letterhead.js';
+import { queryKeys } from '../../query/hooks.js';
 
 /**
  * The Station page's in-page forms (#604): each form's values built from the
@@ -31,6 +34,24 @@ export const stationGeneralSchema = z.object({
   businessDayStartsAt: z.string().regex(HH_MM, 'Enter a time as HH:MM'),
 });
 export type StationGeneralValues = z.input<typeof stationGeneralSchema>;
+
+export const tankVarianceLimitSchema = z.object({ tolerancePct: stockVarianceTolerancePctSchema });
+export type TankVarianceLimitValues = z.input<typeof tankVarianceLimitSchema>;
+
+export function tankVarianceLimitBody(station: Station, tolerancePct: number) {
+  return {
+    settings: { ...station.settings, [STOCK_VARIANCE_TOLERANCE_KEY]: tolerancePct },
+  };
+}
+
+/**
+ * The live reads that judge tank Variance against the Station's limit (#684,
+ * #687), refreshed after the limit changes. A stored DSR keeps the limit it
+ * froze, so it is not among them.
+ */
+export function tankVarianceLimitDependentKeys(stationId: string) {
+  return [queryKeys.insightsStockLossStation(stationId), queryKeys.dssrPreviewPrefix(stationId)];
+}
 
 export function stationGeneralValues(station: Station | null): StationGeneralValues {
   return {
@@ -58,7 +79,7 @@ export function stationGeneralBody(
     address: values.address,
     phone: values.phone,
     settings: {
-      ...(station.settings || {}),
+      ...station.settings,
       shift_grace_minutes: values.graceMinutes,
       timezone: values.timezone,
       business_day_starts_at: values.businessDayStartsAt,
@@ -108,7 +129,7 @@ export function stationBrandingBody(
 ) {
   return {
     settings: {
-      ...(station.settings || {}),
+      ...station.settings,
       legal: {
         legalName: values.legalName || null,
         gstin: values.gstin || null,
@@ -153,7 +174,7 @@ export function withDensityBand(
 
 /** The update body for Decantation guidance, merged over the saved settings. */
 export function decantationGuidanceBody(station: Station, values: DecantationSettings) {
-  return { settings: { ...(station.settings || {}), ...values } };
+  return { settings: { ...station.settings, ...values } };
 }
 
 /**

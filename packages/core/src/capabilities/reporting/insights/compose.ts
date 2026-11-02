@@ -1,4 +1,9 @@
-import { INSIGHTS_MIN_COMPARABLE_DAYS, isStockVarianceWithinTolerance, round2 } from '@pump/shared';
+import {
+  INSIGHTS_MIN_COMPARABLE_DAYS,
+  isStockVarianceWithinTolerance,
+  round2,
+  STOCK_VARIANCE_TOLERANCE_PCT,
+} from '@pump/shared';
 import type {
   InsightsAttendantVariance,
   InsightsCreditHealth,
@@ -187,10 +192,12 @@ export function composeAttendantVariance(
 /**
  * The stock-loss block. Per tank: the dip variance in litres (negative =
  * loss), against what the tank sold, and its rupee value as frozen in the
- * DSSR snapshots. Tolerance is `isStockVarianceWithinTolerance` (see
- * `STOCK_VARIANCE_TOLERANCE_PCT`, an open owner decision).
+ * DSSR snapshots. The Station's limit determines the tolerance flag.
  */
-export function composeStockLoss(rows: InsightsStockLossRow[]): InsightsStockLoss[] {
+export function composeStockLoss(
+  rows: InsightsStockLossRow[],
+  tolerancePct = STOCK_VARIANCE_TOLERANCE_PCT,
+): InsightsStockLoss[] {
   return rows
     .map((r): InsightsStockLoss => {
       const varianceLitres = round3(r.varianceLitres);
@@ -204,7 +211,8 @@ export function composeStockLoss(rows: InsightsStockLossRow[]): InsightsStockLos
         pctOfSold: soldLitres > 0 ? round2((varianceLitres / soldLitres) * 100) : null,
         dips: r.dips,
         valueAtCost: r.valueAtCost === null ? null : round2(r.valueAtCost),
-        withinTolerance: isStockVarianceWithinTolerance(varianceLitres, soldLitres),
+        tolerancePct,
+        withinTolerance: isStockVarianceWithinTolerance(varianceLitres, soldLitres, tolerancePct),
       };
     })
     .sort((a, b) => a.varianceLitres - b.varianceLitres || a.tankName.localeCompare(b.tankName));

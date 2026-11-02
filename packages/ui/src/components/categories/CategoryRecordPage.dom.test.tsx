@@ -4,7 +4,8 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { renderWithProviders } from '../../test/renderWithProviders.js';
+import { createTestQueryClient, renderWithProviders } from '../../test/renderWithProviders.js';
+import { queryKeys } from '../../query/hooks.js';
 import { computeRange } from '../../pump-ds/index.js';
 import { shortMonth } from '../../utils/format.js';
 import { ExpensesList } from '../ExpensesList.js';
@@ -186,6 +187,76 @@ describe('Expenses and Income read the same apart from the kind (#529)', () => {
     fireEvent.click(about);
     expect(screen.getByRole('tooltip').textContent).toMatch(/never touch(es)? a shift drawer/);
   });
+});
+
+describe('head changes refresh P&L across stations', () => {
+  it.each([
+    ['expense', 'update'],
+    ['income', 'update'],
+    ['expense', 'create'],
+    ['income', 'create'],
+  ] as const)(
+    '%s head %s invalidates every cached P&L without waiting for refresh',
+    async (kind, action) => {
+      const categoryPath =
+        kind === 'expense' ? '/transactions/expense-categories' : '/transactions/income-categories';
+      stubApi({ [categoryPath]: { data: [{ id: 'c1', name: 'Commission', nature: 'INDIRECT' }] } });
+      const client = createTestQueryClient();
+      const pnlA = queryKeys.profitLoss('st-1', '2026-01-01', '2026-01-31');
+      const pnlB = queryKeys.profitLoss('st-2', '2026-02-01', '2026-02-28');
+      client.setQueryData(pnlA, { netProfit: 100 });
+      client.setQueryData(pnlB, { netProfit: 200 });
+      const invalidate = client.invalidateQueries.bind(client);
+      vi.spyOn(client, 'invalidateQueries').mockImplementation((...args) => {
+        void invalidate(...args);
+        return new Promise(() => {});
+      });
+      renderWithProviders(PAGES[kind].render(), { queryClient: client });
+      fireEvent.click(await screen.findByRole('button', { name: 'Categories' }));
+      if (action === 'update') {
+        fireEvent.click(
+          await screen.findByRole('button', { name: kind === 'expense' ? 'Rename' : 'Edit' }),
+        );
+        const types = screen.getAllByLabelText('Type');
+        fireEvent.change(types[types.length - 1], { target: { value: 'DIRECT' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await screen.findByText('Category saved.');
+      } else {
+        const placeholder =
+          kind === 'expense' ? 'e.g. Vehicle maintenance' : 'e.g. Tanker rental, commission';
+        fireEvent.change(screen.getByPlaceholderText(placeholder), {
+          target: { value: 'New head' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        await screen.findByText('Category added.');
+      }
+      expect(client.getQueryState(pnlA)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(pnlB)?.isInvalidated).toBe(true);
+    },
+  );
+
+  it.each(['expense', 'income'] as const)(
+    '%s failed head update leaves P&L cached',
+    async (kind) => {
+      const categoryPath =
+        kind === 'expense' ? '/transactions/expense-categories' : '/transactions/income-categories';
+      stubApi({
+        [categoryPath]: { data: [{ id: 'c1', name: 'Commission', nature: 'INDIRECT' }] },
+        [`${categoryPath}/c1`]: 'fail',
+      });
+      const client = createTestQueryClient();
+      const pnl = queryKeys.profitLoss('st-1', '2026-01-01', '2026-01-31');
+      client.setQueryData(pnl, { netProfit: 100 });
+      renderWithProviders(PAGES[kind].render(), { queryClient: client });
+      fireEvent.click(await screen.findByRole('button', { name: 'Categories' }));
+      fireEvent.click(
+        await screen.findByRole('button', { name: kind === 'expense' ? 'Rename' : 'Edit' }),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await screen.findByText(/boom/);
+      expect(client.getQueryState(pnl)?.isInvalidated).toBe(false);
+    },
+  );
 });
 
 describe('each data region loads on its own (#529)', () => {

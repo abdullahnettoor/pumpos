@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, useProducts } from '../../query/hooks.js';
-import { can, Product, PRODUCT_UNITS, type TaxCategory } from '@pump/shared';
+import {
+  can,
+  distinctCategories,
+  Product,
+  PRODUCT_UNITS,
+  sameCategory,
+  type TaxCategory,
+} from '@pump/shared';
 import { currentPrincipal } from '../../access/effectivePrincipal.js';
 import {
   Button,
@@ -30,6 +37,7 @@ import {
   type SubmitKeySession,
 } from '../../office-records/submitKeys.js';
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
+import { ProductCategoryField } from './ProductCategoryField.js';
 
 const productService = new CloudProductService();
 
@@ -83,6 +91,13 @@ const buildProductColumns = (
         {p.productType}
       </Chip>
     ),
+  },
+  {
+    id: 'category',
+    header: 'Category',
+    kind: 'text',
+    value: (p) => p.category,
+    cell: (p) => (p.category ? <span className="text-ink-muted">{p.category}</span> : <Faint />),
   },
   {
     id: 'tax',
@@ -145,7 +160,9 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
   const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const [filterText, setFilterText] = useState('');
+  const categories = useMemo(() => distinctCategories(productsQ.data ?? []), [productsQ.data]);
 
   // Form states
   const [name, setName] = useState('');
@@ -165,6 +182,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
   const [taxCategory, setTaxCategory] = useState<TaxCategory>('FUEL_VAT');
   const [unit, setUnit] = useState('L');
   const [brand, setBrand] = useState('');
+  const [category, setCategory] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [openingStock, setOpeningStock] = useState('');
@@ -204,6 +222,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
         taxCategory,
         unit,
         brand: brand.trim() || null,
+        category: category.trim() || null,
         sellingPrice: sellingPrice === '' ? null : Number(sellingPrice),
         taxConfig: {
           gst_rate: gstRate,
@@ -262,6 +281,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     setTaxCategory(p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
     setUnit(p.unit);
     setBrand(p.brand ?? '');
+    setCategory(p.category ?? '');
     setSellingPrice(p.sellingPrice != null ? String(p.sellingPrice) : '');
     setCostPrice(p.costBasis != null && Number(p.costBasis) > 0 ? String(p.costBasis) : '');
     // taxConfig is a jsonb column; normalize in case it arrives as a JSON string
@@ -321,6 +341,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     setTaxCategory('FUEL_VAT');
     setUnit('L');
     setBrand('');
+    setCategory('');
     setSellingPrice('');
     setCostPrice('');
     setOpeningStock('');
@@ -342,6 +363,9 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
 
   const visible = products.filter((p) => {
     if (filterType && p.productType !== filterType) return false;
+    if (filterCategory && !sameCategory(p.category, filterCategory)) {
+      return false;
+    }
     if (filterText) {
       const q = filterText.toLowerCase();
       const hay = `${p.name} ${p.code} ${p.brand ?? ''} ${p.category ?? ''}`.toLowerCase();
@@ -349,7 +373,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
     }
     return true;
   });
-  const filtered = !!filterType || !!filterText.trim();
+  const filtered = !!filterType || !!filterCategory || !!filterText.trim();
 
   return (
     <section className="flex flex-col gap-2">
@@ -374,21 +398,35 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
             </div>
           ),
           filters: (
-            <Select
-              aria-label="Product type"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="">All types</option>
-              <option value="FUEL">FUEL</option>
-              <option value="LUBRICANT">LUBRICANT</option>
-              <option value="ADDITIVE">ADDITIVE</option>
-              <option value="ACCESSORY">ACCESSORY</option>
-              <option value="CONSUMABLE">CONSUMABLE</option>
-              <option value="SPARE_PART">SPARE PART</option>
-              <option value="SERVICE">SERVICE</option>
-              <option value="OTHER">OTHER</option>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select
+                aria-label="Product type"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+              >
+                <option value="">All types</option>
+                <option value="FUEL">FUEL</option>
+                <option value="LUBRICANT">LUBRICANT</option>
+                <option value="ADDITIVE">ADDITIVE</option>
+                <option value="ACCESSORY">ACCESSORY</option>
+                <option value="CONSUMABLE">CONSUMABLE</option>
+                <option value="SPARE_PART">SPARE PART</option>
+                <option value="SERVICE">SERVICE</option>
+                <option value="OTHER">OTHER</option>
+              </Select>
+              <Select
+                aria-label="Category"
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+              >
+                <option value="">All categories</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </Select>
+            </div>
           ),
         }}
       />
@@ -410,7 +448,7 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               description={
                 products.length === 0
                   ? 'No products added to the catalogue yet.'
-                  : 'Try a different search or type.'
+                  : 'Try a different search, type, or category.'
               }
             />
           </div>
@@ -508,6 +546,8 @@ export const ProductsCatalog: React.FC<ProductsCatalogProps> = ({
               placeholder="e.g. Castrol, Shell, Exide"
             />
           </Field>
+
+          <ProductCategoryField value={category} onChange={setCategory} categories={categories} />
 
           <Field
             label={`Selling price (₹)${productType === 'FUEL' ? ' — fuel uses price schedule' : ''}`}

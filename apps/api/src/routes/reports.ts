@@ -234,11 +234,13 @@ reportsRouter.get('/insights/stock-loss', async (c) => {
   const scope = requireStationRead(c, 'reports.view', 'Insufficient permissions to view Insights');
   if (scope instanceof Response) return scope;
   const { stationId } = scope;
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
 
   const days = Number(c.req.query('days'));
   const result = await new GetInsightsStockLoss({
     reader: new DrizzleInsightsStockLossReader(c.var.db),
-  }).execute({ stationId, days }, buildContext(user, { stationId }));
+  }).execute({ stationId, days }, buildContext(user, { stationId, ...clock }));
 
   return sendResult(
     c,

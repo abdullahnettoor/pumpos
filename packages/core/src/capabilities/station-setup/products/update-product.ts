@@ -8,6 +8,7 @@ import {
   ok,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import { canonicalProductCategory } from '@pump/shared';
 import type { UpdateProductCommand } from './command.js';
 import { validateUpdateProduct } from './validator.js';
 import type { Product, ProductRepository } from './ports.js';
@@ -42,6 +43,16 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       );
     }
 
+    let command: UpdateProductCommand = cmd;
+    if (cmd.category !== undefined) {
+      const otherCategories = await this.deps.repository.listCategories(
+        ctx.organizationId,
+        existing.id,
+      );
+      const category = canonicalProductCategory(cmd.category, otherCategories);
+      command = { ...cmd, category };
+    }
+
     const changes: Record<string, unknown> = {};
     const updated: Product = { ...existing };
     for (const key of [
@@ -58,14 +69,14 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       'taxConfig',
       'isActive',
     ] as const) {
-      const value = cmd[key];
+      const value = command[key];
       if (value !== undefined) {
         (updated as unknown as Record<string, unknown>)[key] = value;
         changes[key] = value;
       }
     }
-    if (cmd.sellingPrice !== undefined) {
-      updated.sellingPrice = cmd.sellingPrice === null ? null : String(cmd.sellingPrice);
+    if (command.sellingPrice !== undefined) {
+      updated.sellingPrice = command.sellingPrice === null ? null : String(command.sellingPrice);
       changes.sellingPrice = updated.sellingPrice;
     }
     updated.updatedAt = ctx.clock.now().toISOString();

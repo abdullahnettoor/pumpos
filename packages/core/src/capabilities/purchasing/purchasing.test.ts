@@ -87,6 +87,15 @@ class ProductRepo implements ProductRepository {
   async listByOrganization() {
     return this.rows;
   }
+  async listCategories(orgId?: string, excludeProductId?: string): Promise<string[]> {
+    const set = new Set<string>();
+    for (const r of this.rows) {
+      if ((!orgId || r.organizationId === orgId) && r.id !== excludeProductId && r.category) {
+        set.add(r.category);
+      }
+    }
+    return Array.from(set).sort();
+  }
   async updateCostBasis(productId: string, costBasis: string) {
     const r = this.rows.find((x) => x.id === productId);
     if (r) r.costBasis = costBasis;

@@ -38,6 +38,16 @@ describe('Validation Schemas Tests', () => {
   });
 
   describe('stationSchema', () => {
+    it('preserves a valid tank variance limit and rejects invalid values on updates', () => {
+      const schema = stationSchema.partial();
+      const result = schema.parse({ settings: { stock_variance_tolerance_pct: 0.25 } });
+      expect(result.settings?.stock_variance_tolerance_pct).toBe(0.25);
+      for (const value of [-1, 6, 0.005, 'abc']) {
+        expect(
+          schema.safeParse({ settings: { stock_variance_tolerance_pct: value } }).success,
+        ).toBe(false);
+      }
+    });
     it('should validate correct station inputs', () => {
       const valid = {
         name: 'Main Station A',

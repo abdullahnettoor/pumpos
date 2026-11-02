@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Quantities (litres, kg, counted items) are recorded to 3 decimals, so a
  * quantity variance smaller than half that step (half a millilitre) is float
@@ -23,13 +25,35 @@ export const isBalancedQuantity = (q: number) => Math.abs(q) < QUANTITY_EPSILON;
  * The single rule shared by the DSSR page (#395) and the Insights stock-loss
  * block (#402).
  *
- * NEEDS OWNER DECISION. The repository defines no stock-variance tolerance
- * (GLOSSARY.md, the ADRs, `record-stock-count` and the DSSR all report variance
- * as a raw figure), so 0.5% of litres sold is a provisional default. It is one
- * constant so that confirming or changing it is a one-line edit, and it is a
- * Station default, not configurable per Station.
+ * Default when the Station's tank variance limit is not configured.
  */
 export const STOCK_VARIANCE_TOLERANCE_PCT = 0.5;
+export const STOCK_VARIANCE_TOLERANCE_KEY = 'stock_variance_tolerance_pct';
+
+export const stockVarianceTolerancePctSchema = z
+  .number({ invalid_type_error: 'Enter a number' })
+  .finite()
+  .min(0, 'Must be 0% or more')
+  .max(5, 'Must be 5% or less')
+  .refine((value) => Math.round(value * 100) / 100 === value, 'Use at most 2 decimals');
+
+/** Read the Station limit, using the default for absent or invalid settings. */
+export function resolveStockVarianceTolerance(settings: unknown): number {
+  const value =
+    settings && typeof settings === 'object'
+      ? (settings as Record<string, unknown>)[STOCK_VARIANCE_TOLERANCE_KEY]
+      : undefined;
+  const parsed = stockVarianceTolerancePctSchema.safeParse(value);
+  return parsed.success ? parsed.data : STOCK_VARIANCE_TOLERANCE_PCT;
+}
+
+/** Compare raw settings values so invalid changes are still validated. */
+export function stockVarianceToleranceChanged(before: unknown, after: unknown): boolean {
+  return !Object.is(
+    before === undefined ? STOCK_VARIANCE_TOLERANCE_PCT : before,
+    after === undefined ? STOCK_VARIANCE_TOLERANCE_PCT : after,
+  );
+}
 
 /**
  * Whether a tank's dip variance (signed, dip - book) is inside tolerance.
@@ -40,8 +64,23 @@ export const STOCK_VARIANCE_TOLERANCE_PCT = 0.5;
 export function isStockVarianceWithinTolerance(
   varianceLitres: number,
   soldLitres: number | null,
+  tolerancePct = STOCK_VARIANCE_TOLERANCE_PCT,
 ): boolean {
   if (isBalancedQuantity(varianceLitres)) return true;
-  const allowed = (Math.max(soldLitres ?? 0, 0) * STOCK_VARIANCE_TOLERANCE_PCT) / 100;
+  const allowed = (Math.max(soldLitres ?? 0, 0) * tolerancePct) / 100;
   return Math.abs(varianceLitres) <= allowed + 1e-9;
+}
+
+/** The frozen limit only when the snapshot carries a valid value. */
+export function frozenStockTolerancePct(snap: unknown): number | null {
+  const value =
+    snap && typeof snap === 'object'
+      ? (snap as Record<string, unknown>).stockVarianceTolerancePct
+      : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** The applied DSR limit, or the historic default for older snapshots. */
+export function snapshotStockTolerancePct(snap: unknown): number {
+  return frozenStockTolerancePct(snap) ?? STOCK_VARIANCE_TOLERANCE_PCT;
 }
