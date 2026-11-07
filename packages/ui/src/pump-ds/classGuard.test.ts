@@ -629,15 +629,56 @@ describe('style check: mono-weight (#701)', () => {
     );
   });
 
-  it('inline style: mono family with fontWeight 600+, also via a spread const', () => {
+  it('inline style: mono family with fontWeight 600+', () => {
     expect(mono("<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }} />")).toEqual([
       'style: fontFamily mono + fontWeight 700',
     ]);
-    const spread =
-      "const M = { fontFamily: 'var(--font-mono)' };\n<i style={{ ...M, fontWeight: 600 }} />";
-    expect(mono(spread)).toEqual(['style: fontFamily mono + fontWeight 600']);
     expect(mono("<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }} />")).toEqual([]);
     expect(mono("<i style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }} />")).toEqual([]);
+  });
+
+  it('inline style: the last property wins, spreads included', () => {
+    const M = "const M = { fontFamily: 'var(--font-mono)' };\n";
+    const W5 = 'const W = { fontWeight: 500 };\n';
+    // A later spread overrides the heavy weight.
+    expect(
+      mono(`${W5}<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, ...W }} />`),
+    ).toEqual([]);
+    // A later sans family overrides the spread mono family.
+    expect(
+      mono(`${M}<i style={{ ...M, fontFamily: 'var(--font-sans)', fontWeight: 700 }} />`),
+    ).toEqual([]);
+    // A later heavy weight overrides a spread light one.
+    expect(
+      mono(`${W5}<i style={{ ...W, fontFamily: 'var(--font-mono)', fontWeight: 700 }} />`),
+    ).toEqual(['style: fontFamily mono + fontWeight 700']);
+  });
+
+  it('inline style: resolves same-file const spreads recursively, through as / satisfies', () => {
+    const chain =
+      "const W = { fontWeight: 700 };\nconst M = { ...W };\n<i style={{ fontFamily: 'var(--font-mono)', ...M }} />";
+    expect(mono(chain)).toEqual(['style: fontFamily mono + fontWeight 700']);
+    const wrapped = [
+      'const W = { fontWeight: 600 } as const;',
+      'const M = ({ ...W }) satisfies React.CSSProperties;',
+      "<i style={{ fontFamily: 'var(--font-mono)', ...(M as React.CSSProperties) }} />",
+    ].join('\n');
+    expect(mono(wrapped)).toEqual(['style: fontFamily mono + fontWeight 600']);
+  });
+
+  it('inline style: an unresolvable spread (import, call, parameter) is unknown, not flagged', () => {
+    const imported =
+      "import { W } from './w';\n<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, ...W }} />";
+    expect(mono(imported)).toEqual([]);
+    expect(
+      mono("<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, ...f() }} />"),
+    ).toEqual([]);
+  });
+
+  it('inline style: react-pdf files are exempt (their own fonts)', () => {
+    const pdf =
+      "import { Text } from '@react-pdf/renderer';\n<Text style={{ fontFamily: 'Courier', fontWeight: 700 }} />;\nconst s = { fontFamily: 'var(--font-mono)', fontWeight: 700 };";
+    expect(mono(pdf)).toEqual([]);
   });
 
   it('CSS: mono family with weight 600+', () => {

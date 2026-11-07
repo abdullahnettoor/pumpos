@@ -210,66 +210,61 @@ export function findMonoWeightMismatches(classString: string): string[] {
   return utilities.includes('font-mono') && heavy ? [`font-mono + ${heavy}`] : [];
 }
 
+const unwrap = (e: ts.Expression): ts.Expression =>
+  ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isParenthesizedExpression(e)
+    ? unwrap(e.expression)
+    : e;
+
 /**
- * A style object that sets the mono family and a weight of 600+ (`fontFamily:
- * 'var(--font-mono)', fontWeight: 700`). A spread of a same-file const object
- * counts as its properties. Returns the weight when it offends.
+ * The `fontFamily` / `fontWeight` a style object ends up with, in declaration
+ * order (the last property wins, spreads included). Same-file const spreads
+ * resolve recursively. A value is `null` when unknown: an unresolvable spread
+ * (imported const, function call, parameter) may set either property, so
+ * nothing before it counts and the guard stays quiet rather than guess.
+ */
+type StyleProps = { fontFamily?: string | null; fontWeight?: string | null };
+function effectiveStyle(
+  obj: ts.ObjectLiteralExpression,
+  consts: ReadonlyMap<string, ts.Expression>,
+  seen: ReadonlySet<string> = new Set(),
+): StyleProps {
+  const out: StyleProps = {};
+  for (const p of obj.properties) {
+    if (ts.isSpreadAssignment(p)) {
+      const arg = unwrap(p.expression);
+      const init = ts.isIdentifier(arg) && !seen.has(arg.text) ? consts.get(arg.text) : undefined;
+      const inner = init && unwrap(init);
+      if (inner && ts.isObjectLiteralExpression(inner))
+        Object.assign(
+          out,
+          effectiveStyle(inner, consts, new Set([...seen, (arg as ts.Identifier).text])),
+        );
+      else Object.assign(out, { fontFamily: null, fontWeight: null });
+    } else if (ts.isPropertyAssignment(p)) {
+      const name = propertyName(p.name);
+      if (name === 'fontFamily' || name === 'fontWeight')
+        out[name] = unwrap(p.initializer).getText();
+    }
+  }
+  return out;
+}
+
+/**
+ * A style object whose effective `fontFamily` is mono and `fontWeight` is 600+
+ * (`fontFamily: 'var(--font-mono)', fontWeight: 700`). Returns the weight.
  */
 function inlineMonoHeavyWeight(
   obj: ts.ObjectLiteralExpression,
   consts: ReadonlyMap<string, ts.Expression>,
-  depth = 0,
 ): string | null {
-  let mono = false;
-  let weight: string | null = null;
-  for (const p of obj.properties) {
-    if (ts.isSpreadAssignment(p) && depth < 3 && ts.isIdentifier(p.expression)) {
-      const init = consts.get(p.expression.text);
-      const inner = init && ts.isObjectLiteralExpression(init) ? init : undefined;
-      if (inner) {
-        mono ||= objectSetsMono(inner, consts, depth + 1);
-        weight ??= heavyWeightOf(inner);
-      }
-    } else if (ts.isPropertyAssignment(p)) {
-      const name = propertyName(p.name);
-      if (name === 'fontFamily' && /mono/i.test(p.initializer.getText())) mono = true;
-      if (name === 'fontWeight') weight = heavyWeight(p.initializer) ?? null;
-    }
-  }
-  return mono ? weight : null;
+  const { fontFamily, fontWeight } = effectiveStyle(obj, consts);
+  if (!fontFamily || !/mono/i.test(fontFamily) || !fontWeight) return null;
+  return heavyWeight(fontWeight) ?? null;
 }
-function objectSetsMono(
-  obj: ts.ObjectLiteralExpression,
-  consts: ReadonlyMap<string, ts.Expression>,
-  depth: number,
-): boolean {
-  return obj.properties.some(
-    (p) =>
-      (ts.isPropertyAssignment(p) &&
-        propertyName(p.name) === 'fontFamily' &&
-        /mono/i.test(p.initializer.getText())) ||
-      (ts.isSpreadAssignment(p) &&
-        depth < 3 &&
-        ts.isIdentifier(p.expression) &&
-        (() => {
-          const init = consts.get(p.expression.text);
-          return (
-            !!init && ts.isObjectLiteralExpression(init) && objectSetsMono(init, consts, depth + 1)
-          );
-        })()),
-  );
-}
-function heavyWeight(node: ts.Expression): string | undefined {
-  const text = node.getText();
+function heavyWeight(text: string): string | undefined {
   const n = Number(text.replace(/['"]/g, ''));
   if (Number.isFinite(n) ? n >= 600 : /^['"](bold|bolder)['"]$/.test(text)) return text;
   return undefined;
-}
-function heavyWeightOf(obj: ts.ObjectLiteralExpression): string | null {
-  for (const p of obj.properties)
-    if (ts.isPropertyAssignment(p) && propertyName(p.name) === 'fontWeight')
-      return heavyWeight(p.initializer) ?? null;
-  return null;
 }
 
 /**
