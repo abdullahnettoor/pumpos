@@ -49,7 +49,7 @@ export const CustomerRow: React.FC<{
           <span className="block truncate text-[13px] font-semibold text-text-high">
             {customer.name}
           </span>
-          <span className="block truncate text-[11px] text-text-muted">{metaOf(customer)}</span>
+          <span className="block truncate text-xs text-text-muted">{metaOf(customer)}</span>
         </span>
         <BalanceFigure balance={s.balance} over={s.state === 'over'} caption={caption} />
         <span className="flex-shrink-0 text-text-faint">

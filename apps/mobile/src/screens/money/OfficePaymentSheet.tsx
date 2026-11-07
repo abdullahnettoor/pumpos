@@ -161,7 +161,7 @@ const Form = <F extends OfficePaymentFields>({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={amountId} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={amountId} className="text-xs font-semibold text-text-muted">
           {amountLabel}
         </label>
         <input
@@ -177,7 +177,7 @@ const Form = <F extends OfficePaymentFields>({
         />
         <p
           id={amountHint}
-          className={`m-0 text-[11px] ${errors.amount ? 'text-bad-fg' : 'text-text-muted'}`}
+          className={`m-0 text-xs ${errors.amount ? 'text-bad-fg' : 'text-text-muted'}`}
         >
           {errors.amount?.message ?? preview ?? idleHint}
         </p>
@@ -185,7 +185,7 @@ const Form = <F extends OfficePaymentFields>({
 
       {methods && (
         <fieldset className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
-          <legend className="mb-1.5 p-0 text-[11.5px] font-semibold text-text-muted">Method</legend>
+          <legend className="mb-1.5 p-0 text-xs font-semibold text-text-muted">Method</legend>
           <SegmentedControl
             label="Payment method"
             options={methods}
@@ -200,7 +200,7 @@ const Form = <F extends OfficePaymentFields>({
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={accountId} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={accountId} className="text-xs font-semibold text-text-muted">
           {accountLabel}
         </label>
         <select
@@ -221,7 +221,7 @@ const Form = <F extends OfficePaymentFields>({
         {(accountProblem || accountNote) && (
           <p
             id={accountHint}
-            className={`m-0 text-[11px] ${accountProblem ? 'text-bad-fg' : 'text-text-muted'}`}
+            className={`m-0 text-xs ${accountProblem ? 'text-bad-fg' : 'text-text-muted'}`}
           >
             {accountProblem ?? accountNote}
           </p>
@@ -230,7 +230,7 @@ const Form = <F extends OfficePaymentFields>({
           <button
             type="button"
             onClick={() => void accountsQ.refetch()}
-            className="self-start text-[11px] font-bold text-accent"
+            className="self-start text-xs font-bold text-accent"
           >
             Retry
           </button>
@@ -239,7 +239,7 @@ const Form = <F extends OfficePaymentFields>({
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <label htmlFor={dateId} className="text-[11.5px] font-semibold text-text-muted">
+          <label htmlFor={dateId} className="text-xs font-semibold text-text-muted">
             Entry date
           </label>
           <span className="num text-xs font-semibold text-text-high" data-testid="entry-date-shown">
@@ -257,14 +257,14 @@ const Form = <F extends OfficePaymentFields>({
         />
         <p
           id={dateHint}
-          className={`m-0 text-[11px] ${errors.entryDate ? 'text-bad-fg' : 'text-text-muted'}`}
+          className={`m-0 text-xs ${errors.entryDate ? 'text-bad-fg' : 'text-text-muted'}`}
         >
           {errors.entryDate?.message ?? dateHelp}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={refId} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={refId} className="text-xs font-semibold text-text-muted">
           Reference (optional)
         </label>
         <input
@@ -278,7 +278,7 @@ const Form = <F extends OfficePaymentFields>({
           {...register('notes', { onChange: clearRefusal })}
         />
         {errors.notes && (
-          <p id={`${refId}-hint`} className="m-0 text-[11px] text-bad-fg">
+          <p id={`${refId}-hint`} className="m-0 text-xs text-bad-fg">
             {errors.notes.message}
           </p>
         )}

@@ -29,7 +29,7 @@ const DrawerRow: React.FC<{ d: DrawerLine }> = ({ d }) => (
     <DuChip name={d.du} />
     <div className="min-w-0 flex-1">
       <p className="truncate text-[13px] font-semibold text-text-high">{d.attendant}</p>
-      <p className="num truncate text-[11px] text-text-muted">{declaredLabel(d)}</p>
+      <p className="num truncate text-xs text-text-muted">{declaredLabel(d)}</p>
     </div>
     <DrawerBadge variance={d.variance} />
   </div>
@@ -53,7 +53,7 @@ export const DrawerReconciliation: React.FC<{
       <div className="flex items-center gap-2.5 bg-card-alt px-3 py-[11px]">
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-text-high">{office.label}</p>
-          <p className="num truncate text-[11px] text-text-muted">
+          <p className="num truncate text-xs text-text-muted">
             Counted {rupees(office.counted)} · expected {rupees(office.expected)}
           </p>
         </div>

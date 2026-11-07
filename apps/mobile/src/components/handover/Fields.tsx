@@ -54,7 +54,7 @@ export const NumberField: React.FC<{
   return (
     <div className="flex flex-col gap-1.5">
       <label className="flex flex-col gap-1.5">
-        <span className="text-[11.5px] font-semibold text-text-muted">{label}</span>
+        <span className="text-xs font-semibold text-text-muted">{label}</span>
         <input
           type="number"
           inputMode="decimal"
@@ -71,11 +71,11 @@ export const NumberField: React.FC<{
         />
       </label>
       {error ? (
-        <p id={noteId} className="text-[11px] text-bad-fg">
+        <p id={noteId} className="text-xs text-bad-fg">
           {error}
         </p>
       ) : meta || sub ? (
-        <div id={noteId} className="flex flex-col text-[11px] text-text-muted">
+        <div id={noteId} className="flex flex-col text-xs text-text-muted">
           {meta ? <span className="num">{meta}</span> : null}
           {sub ? <span>{sub}</span> : null}
         </div>
@@ -92,7 +92,7 @@ export const TextField: React.FC<{
   ariaLabel?: string;
 }> = ({ label, value, onChange, placeholder, ariaLabel }) => (
   <label className="flex flex-col gap-1.5">
-    <span className="text-[11.5px] font-semibold text-text-muted">{label}</span>
+    <span className="text-xs font-semibold text-text-muted">{label}</span>
     <input
       type="text"
       value={value}
@@ -111,7 +111,7 @@ export const SelectField: React.FC<{
   children: React.ReactNode;
 }> = ({ label, value, onChange, children }) => (
   <label className="flex flex-col gap-1.5">
-    <span className="text-[11.5px] font-semibold text-text-muted">{label}</span>
+    <span className="text-xs font-semibold text-text-muted">{label}</span>
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}

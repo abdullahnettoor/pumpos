@@ -176,7 +176,7 @@ export const ReportDayPage: React.FC<Props> = ({ station, businessDate }) => {
           </>
         )}
 
-        <p className="px-4 pt-4 text-[11px] text-text-muted">
+        <p className="px-4 pt-4 text-xs text-text-muted">
           Sales only. Collections, expenses and supplier payments are office records by entry date.
         </p>
       </>

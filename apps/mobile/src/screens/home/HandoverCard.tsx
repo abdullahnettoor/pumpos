@@ -40,7 +40,7 @@ export const HandoverCard: React.FC = () => {
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-extrabold">{own.title}</span>
         <span
-          className={`block text-[11.5px] font-semibold leading-snug ${own.saved ? 'text-text-muted' : 'opacity-80'}`}
+          className={`block text-xs font-semibold leading-snug ${own.saved ? 'text-text-muted' : 'opacity-80'}`}
         >
           {meta}
         </span>

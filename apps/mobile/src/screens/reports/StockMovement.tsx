@@ -22,7 +22,7 @@ export const StockMovement: React.FC<{ tanks: readonly TankMovementRow[] }> = ({
         }
         end={
           <div>
-            <div className="text-[10px] font-medium text-text-muted">Variance</div>
+            <div className="text-xs font-medium text-text-muted">Variance</div>
             <div className={`num ${TONE_TEXT[t.tone]}`}>{t.variance}</div>
           </div>
         }

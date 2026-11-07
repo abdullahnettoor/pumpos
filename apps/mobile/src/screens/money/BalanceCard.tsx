@@ -68,17 +68,15 @@ export const BalanceCard: React.FC<{
         ) : undefined
       }
     >
-      {s.state === 'settled' && <p className="mt-1 text-[11.5px] text-text-muted">Nothing due.</p>}
+      {s.state === 'settled' && <p className="mt-1 text-xs text-text-muted">Nothing due.</p>}
       {s.state === 'advance' && (
-        <p className="mt-1 text-[11.5px] text-text-muted">
-          Paid ahead; it clears against credit sales.
-        </p>
+        <p className="mt-1 text-xs text-text-muted">Paid ahead; it clears against credit sales.</p>
       )}
 
       {owes && hasLimit && s.usedPct !== null && s.tone && (
         <div className="mt-3">
           <LimitBar usedPct={s.usedPct} tone={s.tone} className="!h-2" />
-          <div className="mt-1.5 flex justify-between text-[11.5px] text-text-muted">
+          <div className="mt-1.5 flex justify-between text-xs text-text-muted">
             <span className="num">Limit {inr(s.limit)}</span>
             {s.state === 'over' ? (
               <span className="num font-semibold text-bad-fg">
@@ -92,9 +90,7 @@ export const BalanceCard: React.FC<{
           </div>
         </div>
       )}
-      {owes && !hasLimit && (
-        <p className="mt-3 text-[11.5px] text-text-muted">No credit limit set.</p>
-      )}
+      {owes && !hasLimit && <p className="mt-3 text-xs text-text-muted">No credit limit set.</p>}
       {owes && <AgingSplit aging={aging} showBar={false} divided />}
       {(paymentAction || limitAction) && (
         <div className="mt-2.5 flex flex-col gap-1 border-t border-line pt-2">

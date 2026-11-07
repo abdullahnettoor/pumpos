@@ -33,7 +33,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
               <div key={p.productCode} style={{ flex: p.litres, background: colour(i) }} />
             ))}
           </div>
-          <ul className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] text-text-muted">
+          <ul className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-text-muted">
             {productMix.map((p, i) => (
               <li key={p.productCode}>
                 <span
@@ -52,7 +52,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
         <p className="text-xs text-text-muted">No fuel sold by the litre in this range.</p>
       )}
       {otherUnitFuels.length > 0 && (
-        <p className="mt-2 text-[11px] text-text-muted">
+        <p className="mt-2 text-xs text-text-muted">
           Not in the litre mix:{' '}
           {otherUnitFuels.map((f, i) => (
             <span key={`${f.productCode}-${f.unit}`}>
@@ -70,12 +70,12 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
           className={`flex items-center justify-between ${hasFuel ? 'mt-3 border-t border-line pt-2.5' : ''}`}
         >
           <div>
-            <p className="text-[11px] font-medium text-text-muted">Lubes &amp; others</p>
+            <p className="text-xs font-medium text-text-muted">Lubes &amp; others</p>
             <p className="num mt-0.5 text-base font-semibold text-text-high">
               {compactRupees(o.total)}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1 text-[11px] text-text-muted">
+          <div className="flex flex-col items-end gap-1 text-xs text-text-muted">
             <ChangeBadge changePct={o.changePct} days={days} />
             {o.top && (
               <span>

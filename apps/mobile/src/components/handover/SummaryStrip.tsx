@@ -16,7 +16,7 @@ const Cell: React.FC<{ label: string; value: string; tone?: string; first?: bool
   first,
 }) => (
   <div className={first ? 'min-w-0' : 'min-w-0 border-l border-line pl-2.5'}>
-    <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">{label}</p>
+    <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-faint">{label}</p>
     <p className={`num mt-0.5 truncate text-[15px] font-semibold ${tone}`}>{value}</p>
   </div>
 );
@@ -48,7 +48,7 @@ export const SummaryStrip: React.FC<{
         <Cell label="Declared" value={inr(summary.declaredTotal)} />
         <Cell label="Variance" value={variance.text} tone={TONE_TEXT[variance.tone]} />
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold">
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-xs font-semibold">
         <span className={`uppercase tracking-wide ${accepted ? 'text-good' : 'text-text-faint'}`}>
           {accepted ? 'Accepted by server' : 'Live preview'}
         </span>

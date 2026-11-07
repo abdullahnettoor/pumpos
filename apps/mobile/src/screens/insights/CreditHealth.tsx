@@ -82,12 +82,12 @@ export const CreditHealth: React.FC<{ stationId: string; days: InsightsRangeDays
           <Bar label="Collected" amount={d.collected} width={bars.collected} fill="bg-good" />
           <Summary d={d} days={days} />
           {d.creditGivenChangePct !== null && (
-            <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
+            <div className="mt-2 flex items-center gap-2 text-xs text-text-muted">
               Credit given
               <ChangeBadge changePct={d.creditGivenChangePct} days={days} inverse />
             </div>
           )}
-          <p className="mt-2 text-[11px] text-text-faint">
+          <p className="mt-2 text-xs text-text-faint">
             Credit by Business Date, collections by the date they were entered.
           </p>
         </div>

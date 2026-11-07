@@ -20,7 +20,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
     const noteId = `${id}-note`;
     return (
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={id} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={id} className="text-xs font-semibold text-text-muted">
           {label}
         </label>
         <input
@@ -32,7 +32,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
           {...input}
         />
         {(error || hint) && (
-          <p id={noteId} className={`m-0 text-[11px] ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
+          <p id={noteId} className={`m-0 text-xs ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
             {error ?? hint}
           </p>
         )}
@@ -64,7 +64,7 @@ export function ChoiceChips<T extends string>({
   const noteId = `${id}-note`;
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={id} className="text-[11.5px] font-semibold text-text-muted">
+      <span id={id} className="text-xs font-semibold text-text-muted">
         {label}
       </span>
       <div
@@ -95,7 +95,7 @@ export function ChoiceChips<T extends string>({
         })}
       </div>
       {(error || hint) && (
-        <p id={noteId} className={`m-0 text-[11px] ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
+        <p id={noteId} className={`m-0 text-xs ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
           {error ?? hint}
         </p>
       )}
@@ -120,7 +120,7 @@ export const StationChecks: React.FC<{
       className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0"
       aria-describedby={error ? noteId : undefined}
     >
-      <legend className="mb-1.5 p-0 text-[11.5px] font-semibold text-text-muted">{label}</legend>
+      <legend className="mb-1.5 p-0 text-xs font-semibold text-text-muted">{label}</legend>
       {stations.length === 0 ? (
         <p className="m-0 text-[12px] text-text-muted">No stations to choose from.</p>
       ) : (
@@ -143,7 +143,7 @@ export const StationChecks: React.FC<{
         </div>
       )}
       {error && (
-        <p id={noteId} className="m-0 text-[11px] text-bad-fg">
+        <p id={noteId} className="m-0 text-xs text-bad-fg">
           {error}
         </p>
       )}
@@ -165,7 +165,7 @@ export const SwitchField: React.FC<{
         <label htmlFor={id} className="block text-[13.5px] font-semibold text-text-high">
           {label}
         </label>
-        {hint && <p className="m-0 mt-0.5 text-[11.5px] text-text-muted">{hint}</p>}
+        {hint && <p className="m-0 mt-0.5 text-xs text-text-muted">{hint}</p>}
       </div>
       <input
         id={id}

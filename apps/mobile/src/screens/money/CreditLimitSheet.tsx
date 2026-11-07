@@ -89,7 +89,7 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
       </p>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={fieldId} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={fieldId} className="text-xs font-semibold text-text-muted">
           New limit (₹)
         </label>
         <input
@@ -103,13 +103,13 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
           className={inputClass(Boolean(error))}
           {...register('creditLimit', { onChange: () => setRefusal(null) })}
         />
-        <p id={hintId} className={`m-0 text-[11px] ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
+        <p id={hintId} className={`m-0 text-xs ${error ? 'text-bad-fg' : 'text-text-muted'}`}>
           {error ?? preview ?? 'Leave blank for no limit.'}
         </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={noteId} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={noteId} className="text-xs font-semibold text-text-muted">
           Note (optional)
         </label>
         <textarea
@@ -124,7 +124,7 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
         />
         <p
           id={noteHintId}
-          className={`m-0 text-[11px] ${noteError ? 'text-bad-fg' : 'text-text-muted'}`}
+          className={`m-0 text-xs ${noteError ? 'text-bad-fg' : 'text-text-muted'}`}
         >
           {noteError ?? 'Kept with the change in the activity log.'}
         </p>

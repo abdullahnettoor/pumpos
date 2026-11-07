@@ -15,7 +15,7 @@ export const SupplierMonthTiles: React.FC<{ summary: SupplierPayableSummary }> =
           { tile: paidThisMonthTile(summary.month, summary.lastPayment), tone: 'good' },
         ]}
       />
-      {caption && <p className="mt-1.5 px-4 text-[11px] text-text-muted">{caption}</p>}
+      {caption && <p className="mt-1.5 px-4 text-xs text-text-muted">{caption}</p>}
     </>
   );
 };
