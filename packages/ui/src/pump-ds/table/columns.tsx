@@ -136,7 +136,7 @@ const NUMERIC = 'text-right font-mono tabular-nums';
  * Every header, in both adapters: 10px uppercase, weight 500, faint sans. A
  * number's header changes only its alignment; mono sits in the body.
  */
-const HEADER = 'text-[10px] font-medium uppercase tracking-[0.04em] text-ink-faint';
+export const HEADER = 'text-[10px] font-medium uppercase tracking-[0.04em] text-ink-faint';
 
 const isEmpty = (v: unknown): boolean => v == null || v === '';
 
