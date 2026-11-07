@@ -15,8 +15,9 @@ import { closeQuickEntry, useQuickEntry } from '../../quick-entry/store.js';
  * actions shared by every tab, and the idle state. The figures themselves are
  * pinned in liveShiftModel.test.ts; these pin what each role sees.
  */
+const stationDay = vi.hoisted(() => ({ current: '2026-10-14' }));
 vi.mock('../../hooks/useStationBusinessDate.js', () => ({
-  useStationBusinessDate: () => '2026-10-14',
+  useStationBusinessDate: () => stationDay.current,
 }));
 
 const openShift = vi.fn();
@@ -150,6 +151,7 @@ beforeEach(() => {
   getShiftStatus.mockReset();
   closeShift.mockReset();
   sessionStorage.clear();
+  stationDay.current = '2026-10-14';
   // 17:30 IST on the shift's day: before its 22:00 scheduled end.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-14T12:00:00.000Z'));
@@ -339,6 +341,37 @@ describe('opening a shift (#533 review)', () => {
     // Said once, where the operator is looking: not also as a toast.
     expect(screen.queryByText('Shift not opened')).toBeNull();
     expect(screen.getByText('Shift details')).toBeDefined();
+  });
+
+  it('follows the new Business Day at Day Start while the page stays open', async () => {
+    openShift.mockResolvedValueOnce({ id: 'sh-new' });
+    getShiftStatus.mockReturnValue(new Promise(() => {}));
+    const client = seed(null);
+    client.setQueryData(queryKeys.businessDayStatus('st-1', '2026-10-15'), {
+      requestedState: 'NOT_CREATED',
+      openBusinessDays: [{ id: 'bd-1', businessDate: '2026-10-14' }],
+    });
+    // A new element each time: the real hook re-renders the page at Day Start.
+    const page = () => (
+      <ShiftsManagement
+        selectedStation={STATION}
+        userRole="Manager"
+        userName="Anita"
+        onNavigate={vi.fn()}
+      />
+    );
+    const view = renderWithProviders(page(), { queryClient: client });
+    fireEvent.click(screen.getByRole('button', { name: /Open shift/ }));
+
+    // Day Start passes: the station's current Business Day moves on.
+    stationDay.current = '2026-10-15';
+    view.rerender(page());
+
+    const start = () => screen.getByRole('button', { name: /Start shift operations/ });
+    await waitFor(() => expect((start() as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(openShift).toHaveBeenCalledTimes(1));
+    expect(openShift.mock.calls[0][0]).toMatchObject({ businessDate: '2026-10-15' });
   });
 });
 
