@@ -92,6 +92,10 @@ one thing it decides, so a page never decides it again.
    a gauge's fill height, a grid's column count. Positioning a new popover?
    Use `useAnchoredPopover` (placement, flip, follow on scroll, dismiss on a
    press outside); never hand-roll another `getBoundingClientRect` placer.
+   The class guard's `inline-style` rule counts JSX `style={{…}}` objects per
+   source file, including computed values, against the committed allow-list.
+   Remaining counts are a migration ceiling, not permission for static looks.
+   New objects fail; removals require `test:classes:update` to lower the ceiling.
 
 8. **Tooltips need the one `TooltipProvider`.** Each app mounts it once around
    the app (next to `ToastProvider`), and `renderWithProviders` does in tests.

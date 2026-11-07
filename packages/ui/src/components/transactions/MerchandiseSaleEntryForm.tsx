@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -134,21 +135,9 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
   const hasTax = taxValue > 0;
 
   return (
-    <Form
-      onSubmit={handleSubmit((values) => onSubmit(values))}
-      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-    >
+    <Form onSubmit={handleSubmit((values) => onSubmit(values))} className="flex flex-col gap-3">
       {error && (
-        <div
-          style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            fontWeight: 500,
-          }}
-        >
+        <div className="rounded-input bg-danger-bg px-3 py-2.5 text-[12px] font-medium text-danger-fg">
           {error}
         </div>
       )}
@@ -178,23 +167,13 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       )}
 
       {products.length === 0 ? (
-        <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
+        <div className="py-1.5 text-[12px] text-warning-fg">
           No non-fuel products found. Add products in Station → Products first.
         </div>
       ) : (
         <div>
-          <label
-            style={{
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              fontWeight: 600,
-              display: 'block',
-              marginBottom: '6px',
-            }}
-          >
-            Items
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <label className="mb-1.5 block text-[12px] font-semibold text-ink-muted">Items</label>
+          <div className="flex flex-col gap-2.5">
             {fields.map((f, i) => {
               const line = watchedLines[i];
               const p = products.find((x) => x.id === line?.productId);
@@ -207,14 +186,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
               return (
                 <div
                   key={f.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-input)',
-                    padding: '8px 10px',
-                  }}
+                  className="flex flex-col gap-1.5 rounded-input border border-border-soft px-2.5 py-2"
                 >
                   <Combobox
                     options={products.map((pr) => {
@@ -252,8 +224,8 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                     invalid={!!errors.lines?.[i]?.productId}
                     disabled={submitting}
                   />
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
                       <NumberInput
                         placeholder={`Qty${p?.unit ? ` (${p.unit})` : ''}`}
                         disabled={submitting}
@@ -261,7 +233,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                         {...register(`lines.${i}.quantity` as const)}
                       />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div className="flex-1">
                       <NumberInput
                         placeholder="₹ Price"
                         disabled={submitting}
@@ -274,7 +246,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                       variant="secondary"
                       size="sm"
                       iconOnly
-                      style={{ height: 34 }}
+                      className="h-8.5"
                       disabled={submitting || fields.length <= 1}
                       onClick={() => remove(i)}
                       aria-label="Remove line"
@@ -283,21 +255,13 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
                     </Button>
                   </div>
                   {t && (
-                    <div
-                      style={{ fontSize: '12px', color: 'var(--text-faint)', paddingLeft: '2px' }}
-                    >
+                    <div className="pl-0.5 text-[12px] text-ink-faint">
                       {inr(t.taxable)}
                       {t.hasTax ? ` + tax ${inr(t.tax)}` : ''} = {inr(t.total)}
                     </div>
                   )}
                   {oversell && (
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: 'var(--brand-warning)',
-                        paddingLeft: '2px',
-                      }}
-                    >
+                    <div className="pl-0.5 text-[12px] text-warning-fg">
                       Only {formatQty(Number(stock))}
                       {p?.unit ? ` ${p.unit}` : ''} on hand — stock will go negative.
                     </div>
@@ -311,7 +275,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
             variant="secondary"
             size="sm"
             leftIcon={<Icon name="plus" size="xs" />}
-            style={{ marginTop: '8px' }}
+            className="mt-2"
             disabled={submitting}
             onClick={() =>
               append({
@@ -324,9 +288,7 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
             Add item
           </Button>
           {typeof errors.lines?.message === 'string' && (
-            <div style={{ fontSize: '12px', color: 'var(--brand-danger)', marginTop: '4px' }}>
-              {errors.lines.message}
-            </div>
+            <div className="mt-1 text-[12px] text-brand-danger">{errors.lines.message}</div>
           )}
         </div>
       )}
@@ -368,34 +330,17 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
       </Field>
 
       {!isCredit && !customerId && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-input)',
-            padding: '10px 12px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-            }}
-          >
+        <div className="flex flex-col gap-2.5 rounded-input border border-border-soft px-3 py-2.5">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
             Buyer details (optional)
           </span>
-          <span style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '-6px' }}>
+          <span className="-mt-1.5 text-[12px] text-ink-faint">
             For a walk-in not in your registry — used on the bill/invoice.
           </span>
           <Field label="Name">
             <TextInput placeholder="Buyer name" disabled={submitting} {...register('buyerName')} />
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Phone">
               <TextInput placeholder="Phone" disabled={submitting} {...register('buyerPhone')} />
             </Field>
@@ -423,69 +368,32 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
         <TextInput placeholder="Optional reference" disabled={submitting} {...register('notes')} />
       </Field>
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-          backgroundColor: 'var(--bg-surface-alt)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-input)',
-          padding: '10px 12px',
-        }}
-      >
+      <div className="flex flex-col gap-1 rounded-input border border-border-soft bg-surface-alt px-3 py-2.5">
         {hasTax && (
           <>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-              }}
-            >
+            <div className="flex justify-between text-[12px] text-ink-muted">
               <span>Taxable</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxableValue)}</span>
+              <span className="font-mono">{inr(taxableValue)}</span>
             </div>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-              }}
-            >
+            <div className="flex justify-between text-[12px] text-ink-muted">
               <span>Tax</span>
-              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxValue)}</span>
+              <span className="font-mono">{inr(taxValue)}</span>
             </div>
           </>
         )}
         <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderTop: hasTax ? '1px solid var(--border-soft)' : 'none',
-            paddingTop: hasTax ? '4px' : 0,
-          }}
+          className={cn(
+            'flex items-center justify-between',
+            hasTax && 'border-t border-border-soft pt-1',
+          )}
         >
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-            Sale total
-          </span>
-          <strong
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '15px',
-              color: 'var(--text-strong)',
-            }}
-          >
-            {inr(grossTotal)}
-          </strong>
+          <span className="text-[12px] font-semibold text-ink-muted">Sale total</span>
+          <strong className="font-mono text-[15px] text-ink-strong">{inr(grossTotal)}</strong>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-        <Button type="submit" variant="primary" size="md" style={{ flex: 1 }} loading={submitting}>
+      <div className="mt-1 flex gap-2">
+        <Button type="submit" variant="primary" size="md" className="flex-1" loading={submitting}>
           {`Record ${isCredit ? 'Credit ' : ''}Sale`}
         </Button>
         <Button

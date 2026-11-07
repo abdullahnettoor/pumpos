@@ -39,56 +39,17 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     if (this.props.fallback) return this.props.fallback(error, this.reset);
 
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 'var(--space-6)',
-          fontFamily: 'var(--font-sans)',
-          backgroundColor: 'var(--bg-canvas)',
-        }}
-      >
-        <div
-          style={{
-            maxWidth: '440px',
-            width: '100%',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            padding: 'var(--space-6)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-4)',
-            textAlign: 'center',
-          }}
-        >
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            Something went wrong
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+      <div className="flex min-h-screen items-center justify-center bg-canvas p-6 font-sans">
+        <div className="flex w-full max-w-110 flex-col gap-4 rounded-card border border-border-soft bg-surface p-6 text-center">
+          <h1 className="text-[18px] font-bold text-ink-strong">Something went wrong</h1>
+          <p className="text-[13px] leading-[1.5] text-ink-muted">
             An unexpected error interrupted this screen. Your data is safe — reloading usually
             clears it.
           </p>
-          <pre
-            style={{
-              fontSize: '12px',
-              fontFamily: 'var(--font-mono)',
-              color: 'var(--state-danger-fg)',
-              backgroundColor: 'var(--state-danger-bg)',
-              borderRadius: 'var(--radius-input)',
-              padding: 'var(--space-3)',
-              textAlign: 'left',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: '120px',
-              overflow: 'auto',
-            }}
-          >
+          <pre className="max-h-30 overflow-auto whitespace-pre-wrap break-words rounded-input bg-danger-bg p-3 text-left font-mono text-[12px] text-danger-fg">
             {error.message}
           </pre>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center' }}>
+          <div className="flex justify-center gap-2">
             <Button variant="secondary" size="md" onClick={this.reset}>
               Try again
             </Button>

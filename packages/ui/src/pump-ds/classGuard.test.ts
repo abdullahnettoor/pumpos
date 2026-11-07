@@ -15,6 +15,8 @@
  * - `off-scale-text` an arbitrary `text-[Npx]` size not on the DESIGN.md type
  *                    scale (the `fontSize` values in DESIGN.md's frontmatter), e.g. `text-[12.5px]` (#700).
  * - `untokenized-depth` default radii, pixel radii and default shadows (#699).
+ * - `inline-style`   JSX style object literals (#697), including computed values.
+ *                    Counts ratchet remaining inline styles; static looks belong in classes.
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
@@ -40,6 +42,8 @@
  * (may raise entries): one-off rebaselines only, never in a normal PR.
  *
  * Documented exceptions (the only entries the list may keep, #539):
+ * - `inline-style` (#697): a per-file migration ceiling for existing objects,
+ *   including runtime positions/sizes and PDF styles. Only decreases are allowed.
  * - `theme/config.ts` raw-color 2: `THEME_COLORS` is the canvas as literal hex
  *   because the pre-paint script sets `<meta name="theme-color">` before any
  *   CSS loads. `theme/tokens.test.ts` keeps it equal to `--bg-canvas`.
@@ -202,6 +206,15 @@ describe('style check: packages/ui/src stays within the design system', () => {
 const fake = (ok: string[]) => ({ generates: (t: string) => ok.includes(t) });
 
 describe('style check rules', () => {
+  it('inline-style: counts every JSX object, including computed positions, but not comments or forwarded props', () => {
+    const fixture =
+      "// style={{ color: 'red' }}\n<i style={{ top: pos.top }} />; <b style = { { width: size } } />; <u style={style} />;";
+    expect(scanSource(fixture, 'x.tsx', { generates: () => true })['inline-style']).toEqual([
+      '{ top: pos.top }',
+      '{ width: size }',
+    ]);
+  });
+
   it('untokenized-depth: rejects default and pixel radii and default shadows, including variants and maps', () => {
     const fixture =
       "<i className='rounded-sm rounded-md hover:rounded-lg rounded-xl rounded-[6px] rounded-[7.5px] shadow-sm md:shadow-md shadow-lg' />; const T = 'rounded-[8px]';";
@@ -551,6 +564,17 @@ describe('style check: strings outside className', () => {
 });
 
 describe('style check ratchet', () => {
+  it('inline-style: rejects growth and new files, and its update can only lower the recorded count', () => {
+    const ceiling: Counts = { 'inline-style': { 'popover.tsx': 1 } };
+    const grown: Counts = { 'inline-style': { 'popover.tsx': 2, 'new.tsx': 1 } };
+    expect(compareToAllowList(grown, ceiling)).toEqual([
+      { rule: 'inline-style', file: 'new.tsx', allowed: 0, actual: 1 },
+      { rule: 'inline-style', file: 'popover.tsx', allowed: 1, actual: 2 },
+    ]);
+    expect(lowerAllowList(grown, ceiling)).toEqual(ceiling);
+    expect(lowerAllowList({ 'inline-style': { 'popover.tsx': 0 } }, ceiling)).toEqual({});
+  });
+
   const allowed: Counts = { 'dead-class': { 'a.tsx': 2, 'b.tsx': 1 } };
 
   it('passes when every count equals its entry', () => {

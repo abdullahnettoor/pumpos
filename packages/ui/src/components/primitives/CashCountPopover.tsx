@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { createPortal } from 'react-dom';
 import { Calculator } from 'lucide-react';
 import { Button } from '../../pump-ds/button/index.js';
@@ -138,75 +139,36 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
     onBreakdownChange({});
   };
 
-  const numInputStyle: React.CSSProperties = {
-    width: '64px',
-    height: '28px',
-    padding: '0 6px',
-    textAlign: 'right',
-    border: '1px solid var(--border-strong)',
-    borderRadius: 'var(--radius-input)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '12px',
-    background: 'var(--bg-surface)',
-    color: 'var(--text-strong)',
-  };
+  const numInputClass =
+    'h-7 w-16 rounded-input border border-border-strong bg-surface px-1.5 py-0 text-right font-mono text-[12px] text-ink-strong';
 
   const panel = pos && (
     <div
       ref={panelRef}
       role="dialog"
       aria-label="Cash denomination counter"
-      style={{
-        position: 'fixed',
-        top: pos.top,
-        left: pos.left,
-        width: PANEL_W,
-        transform: pos.placement === 'top' ? 'translateY(-100%)' : undefined,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-popover)',
-        zIndex: 1100,
-        padding: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-      }}
+      className={cn(
+        'fixed z-[1100] flex w-68 flex-col gap-1.5 rounded-card border border-border-strong bg-surface p-2.5 shadow-(--shadow-popover)',
+        pos.placement === 'top' && '-translate-y-full',
+      )}
+      style={{ top: pos.top, left: pos.left }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: 'var(--text-muted)',
-          }}
-        >
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-bold uppercase tracking-[0.04em] text-ink-muted">
           Count cash
         </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>
+        <span className="text-[12px] text-ink-faint">
           {countedCount} note{countedCount === 1 ? '' : 's'}/coins
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+      <div className="flex flex-col gap-0.75">
         {denominations.map((d, i) => {
           const count = Number(breakdown[String(d)]) || 0;
           const bad = refused[String(d)];
           return (
-            <div
-              key={d}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '52px 64px 1fr',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                ₹{d}
-              </span>
+            <div key={d} className="grid grid-cols-[52px_64px_1fr] items-center gap-2">
+              <span className="text-[12px] font-semibold text-ink-strong">₹{d}</span>
               <input
                 type="number"
                 inputMode="numeric"
@@ -219,17 +181,13 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
                 aria-label={`Count of ₹${d}`}
                 aria-invalid={bad ? true : undefined}
                 aria-describedby={bad ? `count-error-${d}` : undefined}
-                style={
-                  bad ? { ...numInputStyle, borderColor: 'var(--state-danger-fg)' } : numInputStyle
-                }
+                className={cn(numInputClass, bad && 'border-danger-fg')}
               />
               <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  textAlign: 'right',
-                  color: count > 0 ? 'var(--text-default)' : 'var(--text-faint)',
-                }}
+                className={cn(
+                  'text-right font-mono text-[12px]',
+                  count > 0 ? 'text-ink-default' : 'text-ink-faint',
+                )}
               >
                 {inr(d * count)}
               </span>
@@ -247,35 +205,18 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         })}
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderTop: '1px solid var(--border-soft)',
-          paddingTop: '6px',
-        }}
-      >
-        <span style={{ fontSize: '12px', fontWeight: 600 }}>Total</span>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: 'var(--text-strong)',
-          }}
-        >
-          {inr(total)}
-        </span>
+      <div className="flex items-center justify-between border-t border-border-soft pt-1.5">
+        <span className="text-[12px] font-semibold">Total</span>
+        <span className="font-mono text-[14px] font-medium text-ink-strong">{inr(total)}</span>
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
+        <div className="text-[12px] text-warning-fg">
           Field shows {inr(currentValue)} — Apply to replace with the counted total.
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+      <div className="mt-0.5 flex gap-1.5">
         <Button variant="secondary" size="sm" onClick={clear} className="flex-none">
           Clear
         </Button>
@@ -297,20 +238,12 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         aria-label={title}
         title={title}
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '32px',
-          width: '32px',
-          flex: '0 0 auto',
-          borderRadius: 'var(--radius-input)',
-          border: '1px solid var(--border-strong)',
-          background: open ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
-          color: total > 0 ? 'var(--brand-primary)' : 'var(--text-muted)',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.5 : 1,
-        }}
+        className={cn(
+          'inline-flex h-8 w-8 flex-none items-center justify-center rounded-input border border-border-strong disabled:cursor-not-allowed disabled:opacity-50',
+          open ? 'bg-surface-alt' : 'bg-surface',
+          total > 0 ? 'text-brand' : 'text-ink-muted',
+          !disabled && 'cursor-pointer',
+        )}
       >
         <Calculator size={15} />
       </button>

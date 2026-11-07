@@ -1,4 +1,5 @@
 import React, { useId, useMemo, useState } from 'react';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { Controller } from 'react-hook-form';
 import { Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, DatePickerButton, Form } from '../../pump-ds/index.js';
@@ -65,20 +66,9 @@ interface OpenShiftFormProps {
 /** Without a station clock: the default zone and Day Start. */
 const DEFAULT_CLOCK = businessDateSettings(undefined);
 
-const sectionHeading: React.CSSProperties = {
-  fontSize: '12px',
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--text-muted)',
-  marginBottom: '6px',
-};
-
-const sectionNote: React.CSSProperties = {
-  fontSize: '12px',
-  color: 'var(--text-muted)',
-  marginBottom: '12px',
-};
+const sectionHeading =
+  'mb-1.5 text-[12px] font-semibold uppercase tracking-[0.05em] text-ink-muted';
+const sectionNote = 'mb-3 text-[12px] text-ink-muted';
 
 /** The dispenser fields this form reads. Narrower than the API row on purpose. */
 interface DispenserOption {
@@ -197,9 +187,9 @@ const DispenserAssignmentCard: React.FC<{
       )}
 
       {terminals && terminals.length > 0 && (
-        <div style={{ marginTop: '10px' }}>
+        <div className="mt-2.5">
           {mine.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+            <div className="mb-2 flex flex-wrap gap-1.5">
               {mine.map((term) => (
                 <Chip
                   key={term.id}
@@ -396,13 +386,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
       ? openRefusal.message
       : null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="flex flex-col gap-4">
       {/* Main open-shift form */}
-      <Form
-        onSubmit={handleSubmit(onSubmit)}
-        noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-      >
+      <Form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
         <ShiftBusinessDateContext
           businessDate={formBusinessDate}
           currentBusinessDate={currentBusinessDate}
@@ -410,13 +396,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           scheduledEndTime={selectedTemplate?.endTime}
         />
         <Panel title="Shift details">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '16px',
-            }}
-          >
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <Field label="Shift template" error={errors.shiftTemplateId?.message} required>
               <Select {...register('shiftTemplateId')} invalid={!!errors.shiftTemplateId}>
                 {templates &&
@@ -498,17 +478,14 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                   )}
                 />
                 {futureDate && (
-                  <div
-                    id={futureDateId}
-                    style={{ marginTop: '5px', color: 'var(--state-danger-fg)', fontSize: '12px' }}
-                  >
+                  <div id={futureDateId} className="mt-1.25 text-[12px] text-danger-fg">
                     Unavailable: future Business Dates cannot be used to open a Shift.
                   </div>
                 )}
               </Field>
             )}
             <Field label="Opening cash (Σ floats)">
-              <div className="font-mono" style={{ padding: '6px 0' }}>
+              <div className="py-1.5 font-mono">
                 {inr(
                   staffAssignments
                     .filter((a) => a.userId)
@@ -536,32 +513,14 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
 
         {!lastShift && nozzles && nozzles.length > 0 && (
           <Panel title="Opening nozzle readings">
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8px',
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                marginBottom: '12px',
-              }}
-            >
-              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+            <div className="mb-3 flex items-start gap-2 rounded-input bg-info-bg px-3 py-2.5 text-[12px] text-info-fg">
+              <Info size={14} className="mt-0.25 shrink-0" />
               <span>
                 <strong>First operational shift:</strong> no previous history for this station, so
                 enter the initial opening readings for all nozzles.
               </span>
             </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '14px',
-              }}
-            >
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5">
               {[...nozzles]
                 .sort(compareByDispenserThenNozzle(dispenserLabel, (n: any) => n.name))
                 .map((nz: any) => {
@@ -589,19 +548,13 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           // A plain section, not a Panel: each card below is already one, and
           // nesting draws a second bordered box inside the first.
           <section>
-            <h3 style={sectionHeading}>Dispenser assignment</h3>
-            <p style={sectionNote}>
+            <h3 className={sectionHeading}>Dispenser assignment</h3>
+            <p className={sectionNote}>
               Who is on each pump, and which POS is with them. Every pump in service needs an
               attendant — it cannot be given one after the shift opens. A POS is optional, and one
               left shift-wide is shared across pumps.
             </p>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '12px',
-              }}
-            >
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3">
               {dispensers.map((du: any) => (
                 <DispenserAssignmentCard
                   key={du.id}
@@ -623,11 +576,11 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
 
         {sharedTerminals.length > 0 && (
           <Panel title="Shift-wide POS" role="group" aria-label="Shift-wide POS">
-            <p style={sectionNote}>
+            <p className={sectionNote}>
               Not tied to a pump. Any attendant can declare these at handover — attach one to a
               dispenser above if only that pump uses it.
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            <div className="flex flex-wrap gap-1.5">
               {sharedTerminals.map((term: any) => (
                 <Chip key={term.id} size="sm" tone="neutral" variant="soft">
                   {terminalLabel(term)}
@@ -647,20 +600,13 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           </Banner>
         )}
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
+        <div className="flex items-center justify-end gap-3">
           {unattendedDispensers.length > 0 && (
             <p
               // A blocking validation message: announced, and the only stable
               // handle on it — the text spans several nodes.
               role="alert"
-              style={{ ...sectionNote, marginBottom: 0, textAlign: 'right' }}
+              className={cn(sectionNote, 'mb-0 text-right')}
             >
               {/* Named, not counted: the operator has to know which card to go
                   back to, and on a wide grid "2 dispensers" does not say. */}
@@ -696,7 +642,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               unattendedDispensers.length > 0 ||
               rateBlock != null
             }
-            leftIcon={<Play style={{ fill: 'currentColor' }} />}
+            leftIcon={<Play className="fill-current" />}
           >
             Start shift operations
           </Button>

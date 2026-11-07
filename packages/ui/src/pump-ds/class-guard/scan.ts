@@ -17,6 +17,7 @@ export const RULES = [
   'raw-color',
   'palette-class',
   'untokenized-depth',
+  'inline-style',
   'fill-text-pair',
   'small-text',
   'off-scale-text',
@@ -552,6 +553,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'raw-color': [],
     'palette-class': [],
     'untokenized-depth': [],
+    'inline-style': [],
     'fill-text-pair': [],
     'small-text': [],
     'off-scale-text': [],
@@ -592,7 +594,15 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
         if (ts.isStringLiteral(node.initializer) && node.initializer.text.includes('${'))
           findings['quoted-interpolation'].push(node.initializer.text);
       }
-      if (name === 'style') collectInto(node.initializer, styleLits);
+      if (name === 'style') {
+        collectInto(node.initializer, styleLits);
+        if (
+          ts.isJsxExpression(node.initializer) &&
+          node.initializer.expression &&
+          ts.isObjectLiteralExpression(node.initializer.expression)
+        )
+          findings['inline-style'].push(node.initializer.expression.getText(sf));
+      }
     } else if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&

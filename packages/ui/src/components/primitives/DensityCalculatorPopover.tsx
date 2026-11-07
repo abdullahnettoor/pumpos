@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { createPortal } from 'react-dom';
 import { Calculator } from 'lucide-react';
 import { Button } from '../../pump-ds/button/index.js';
@@ -175,65 +176,26 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
     setTempInput('');
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    height: '28px',
-    padding: '0 8px',
-    textAlign: 'left',
-    border: '1px solid var(--border-strong)',
-    borderRadius: 'var(--radius-input)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '12px',
-    background: 'var(--bg-surface)',
-    color: 'var(--text-strong)',
-    boxSizing: 'border-box',
-  };
+  const inputClass =
+    'box-border h-7 w-full rounded-input border border-border-strong bg-surface px-2 py-0 text-left font-mono text-[12px] text-ink-strong';
 
   const panel = pos && (
     <div
       ref={panelRef}
       role="dialog"
       aria-label="Density calculator"
-      style={{
-        position: 'fixed',
-        top: pos.top,
-        left: pos.left,
-        width: PANEL_W,
-        transform: pos.placement === 'top' ? 'translateY(-100%)' : undefined,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-popover)',
-        zIndex: 1100,
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        boxSizing: 'border-box',
-      }}
+      className={cn(
+        'fixed z-[1100] box-border flex w-74 flex-col gap-2 rounded-card border border-border-strong bg-surface p-3 shadow-(--shadow-popover)',
+        pos.placement === 'top' && '-translate-y-full',
+      )}
+      style={{ top: pos.top, left: pos.left }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            color: 'var(--text-muted)',
-          }}
-        >
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-bold uppercase tracking-[0.04em] text-ink-muted">
           15 °C Density calculator
         </span>
         <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 500,
-            padding: '2px 5px',
-            borderRadius: '4px',
-            background: 'var(--bg-surface-alt)',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-          }}
+          className="rounded-input bg-surface-alt px-1.25 py-0.5 font-mono text-[12px] font-medium text-ink-muted"
           title={
             method === 'OMC_TABLE_53B'
               ? 'OMC Table 53B (with glass correction)'
@@ -244,17 +206,11 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div className="flex flex-col gap-1.5">
         <div>
           <label
             htmlFor="density-calc-obs"
-            style={{
-              display: 'block',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginBottom: '2px',
-            }}
+            className="mb-0.5 block text-[12px] font-semibold text-ink-strong"
           >
             Observed density (kg/m³)
           </label>
@@ -266,7 +222,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             placeholder="e.g. 828.0"
             value={observedInput}
             onChange={(e) => setObservedInput(e.target.value)}
-            style={inputStyle}
+            className={inputClass}
             autoFocus
           />
         </div>
@@ -274,13 +230,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         <div>
           <label
             htmlFor="density-calc-temp"
-            style={{
-              display: 'block',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-strong)',
-              marginBottom: '2px',
-            }}
+            className="mb-0.5 block text-[12px] font-semibold text-ink-strong"
           >
             Temperature (°C)
           </label>
@@ -292,76 +242,39 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             placeholder="e.g. 32.0"
             value={tempInput}
             onChange={(e) => setTempInput(e.target.value)}
-            style={inputStyle}
+            className={inputClass}
           />
         </div>
       </div>
 
       {/* Computed result box */}
-      <div
-        style={{
-          borderRadius: 'var(--radius-input)',
-          border: '1px solid var(--border-soft)',
-          background: 'var(--bg-surface-alt)',
-          padding: '8px 10px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
-      >
+      <div className="flex flex-col gap-1 rounded-input border border-border-soft bg-surface-alt px-2.5 py-2">
         {roundedRho15 != null && calculatedVcf != null ? (
           <>
-            <div
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}
-            >
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Density at 15 °C:
-              </span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '15px',
-                  fontWeight: 500,
-                  color: 'var(--text-strong)',
-                }}
-              >
+            <div className="flex items-baseline justify-between">
+              <span className="text-[12px] text-ink-muted">Density at 15 °C:</span>
+              <span className="font-mono text-[15px] font-medium text-ink-strong">
                 {roundedRho15.toFixed(2)} kg/m³
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>VCF (CTL):</span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
-                }}
-              >
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-ink-faint">VCF (CTL):</span>
+              <span className="font-mono text-[12px] text-ink-muted">
                 {calculatedVcf.toFixed(4)}
               </span>
             </div>
 
             {invoiceDensity != null && deviation != null && (
-              <div
-                style={{
-                  marginTop: '4px',
-                  paddingTop: '4px',
-                  borderTop: '1px dashed var(--border-soft)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  fontSize: '12px',
-                }}
-              >
-                <span style={{ color: 'var(--text-muted)' }}>
+              <div className="mt-1 flex items-center justify-between border-t border-border-soft pt-1 text-[12px] [border-top-style:dashed]">
+                <span className="text-ink-muted">
                   Δ {deviation >= 0 ? '+' : ''}
                   {deviation.toFixed(2)} kg/m³
                 </span>
                 <span
-                  style={{
-                    fontWeight: 600,
-                    color: isWithinTol ? 'var(--state-success-fg)' : 'var(--state-warning-fg)',
-                  }}
+                  className={cn(
+                    'font-semibold',
+                    isWithinTol ? 'text-success-fg' : 'text-warning-fg',
+                  )}
                 >
                   {isWithinTol ? 'Within tolerance' : 'Outside tolerance'} (±{tolerance})
                 </span>
@@ -369,30 +282,21 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
             )}
           </>
         ) : calculationError ? (
-          <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
-            {calculationError}
-          </div>
+          <div className="text-[12px] text-warning-fg">{calculationError}</div>
         ) : (
-          <div
-            style={{
-              fontSize: '12px',
-              color: 'var(--text-faint)',
-              textAlign: 'center',
-              padding: '4px 0',
-            }}
-          >
+          <div className="py-1 text-center text-[12px] text-ink-faint">
             Enter observed hydrometer density & temperature
           </div>
         )}
       </div>
 
       {hasManualMismatch && (
-        <div style={{ fontSize: '12px', color: 'var(--state-warning-fg)' }}>
+        <div className="text-[12px] text-warning-fg">
           Field shows {currentValue} — Apply to replace with {roundedRho15?.toFixed(2)}.
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+      <div className="mt-0.5 flex gap-1.5">
         <Button variant="secondary" size="sm" onClick={clear} className="flex-none">
           Clear
         </Button>
@@ -414,20 +318,12 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         aria-label={title}
         title={title}
         onClick={toggleOpen}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '32px',
-          width: '32px',
-          flex: '0 0 auto',
-          borderRadius: 'var(--radius-input)',
-          border: '1px solid var(--border-strong)',
-          background: open ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
-          color: roundedRho15 != null ? 'var(--brand-primary)' : 'var(--text-muted)',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.5 : 1,
-        }}
+        className={cn(
+          'inline-flex h-8 w-8 flex-none items-center justify-center rounded-input border border-border-strong disabled:cursor-not-allowed disabled:opacity-50',
+          open ? 'bg-surface-alt' : 'bg-surface',
+          roundedRho15 != null ? 'text-brand' : 'text-ink-muted',
+          !disabled && 'cursor-pointer',
+        )}
       >
         <Calculator size={15} />
       </button>
