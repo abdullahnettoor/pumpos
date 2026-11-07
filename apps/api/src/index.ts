@@ -15,7 +15,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { can, type PermissionId, type Role } from '@pump/shared';
+import { can, type Role } from '@pump/shared';
 import {
   BusinessEvents,
   SystemClock,
@@ -54,7 +54,7 @@ import {
   type ActivityGroupSummary,
 } from './infra/activity-events.js';
 
-import { getCachedAuthUser, setCachedAuthUser, type CachedAuthUser } from './infra/auth-cache.js';
+import { getCachedAuthUser, setCachedAuthUser } from './infra/auth-cache.js';
 
 type Bindings = {
   HYPERDRIVE: Hyperdrive;

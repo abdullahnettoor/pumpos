@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { DbClient, DbExecutor } from '@pump/db';
+import type { DbExecutor } from '@pump/db';
 import type { CreditSaleRecord, DrawerReconciliation, ShiftReconciliationTotals } from '@pump/core';
 
 /**

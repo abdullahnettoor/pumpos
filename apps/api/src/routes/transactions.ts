@@ -45,7 +45,6 @@ import {
   GenerateInvoice,
   RecordMerchandiseHandover,
   GetTankDaysOfCover,
-  type Result,
 } from '@pump/core';
 import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';

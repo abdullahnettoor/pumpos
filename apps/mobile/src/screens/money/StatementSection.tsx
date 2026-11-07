@@ -40,7 +40,7 @@ interface Props {
 const CarriedForward: React.FC<{ period: StatementWindow }> = ({ period }) => {
   const settled = isBalancedVariance(period.openingBalance);
   return (
-    <div className="flex items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5 text-[11.5px] text-text-muted">
+    <div className="flex items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5 text-xs text-text-muted">
       <p className="min-w-0 flex-1">
         {settled
           ? `Nothing owed before ${fullDayLabel(period.from)}.`
@@ -97,7 +97,7 @@ export const StatementSection: React.FC<Props> = ({
       >
         Statement
       </SectionLabel>
-      {period && <p className="-mt-1 px-4 pb-2 text-[11.5px] text-text-muted">{period.label}</p>}
+      {period && <p className="-mt-1 px-4 pb-2 text-xs text-text-muted">{period.label}</p>}
       {isLoading ? (
         <Note>Loading statement…</Note>
       ) : isError ? (

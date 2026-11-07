@@ -15,7 +15,7 @@ export const IncludedShifts: React.FC<Props> = ({ shifts, onOpen }) => (
       <ListRow
         key={s.shiftId}
         leading={
-          <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-[10px] bg-track text-[11px] font-bold text-text-high">
+          <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-[10px] bg-track text-xs font-bold text-text-high">
             {s.chip}
           </span>
         }

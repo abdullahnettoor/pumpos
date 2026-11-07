@@ -16,7 +16,7 @@ export const CashVarianceCard: React.FC<{ variance: CashVariance; wide?: boolean
   wide,
 }) => (
   <StatTileShell role="group" aria-label="Cash variance" wide={wide}>
-    <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-muted">
+    <p className="flex items-center gap-1.5 text-xs font-medium text-text-muted">
       {v.levels.length > 0 && (
         <span
           aria-hidden="true"
@@ -29,7 +29,7 @@ export const CashVarianceCard: React.FC<{ variance: CashVariance; wide?: boolean
     {v.levels.length === 0 ? (
       <>
         <p className="num mt-1 text-xl font-semibold text-text-high">—</p>
-        {v.empty && <p className="mt-0.5 text-[11px] text-text-muted">{v.empty}</p>}
+        {v.empty && <p className="mt-0.5 text-xs text-text-muted">{v.empty}</p>}
       </>
     ) : (
       <div className={`mt-1.5 grid gap-2 ${wide ? 'grid-cols-2 gap-x-4' : ''}`}>
@@ -37,11 +37,11 @@ export const CashVarianceCard: React.FC<{ variance: CashVariance; wide?: boolean
           <div key={l.key} data-variance-level={l.key}>
             <dl>
               <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-[11px] font-medium text-text-muted">{l.label}</dt>
+                <dt className="text-xs font-medium text-text-muted">{l.label}</dt>
                 <dd className={`num text-base font-semibold ${TONE_TEXT[l.tone]}`}>{l.text}</dd>
               </div>
             </dl>
-            <p className="text-[11px] text-text-faint">{l.note}</p>
+            <p className="text-xs text-text-faint">{l.note}</p>
           </div>
         ))}
       </div>

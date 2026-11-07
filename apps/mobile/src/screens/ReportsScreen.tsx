@@ -40,7 +40,7 @@ const DayRow: React.FC<{
   const body = (
     <>
       <div className="w-10 flex-shrink-0 text-center">
-        <div className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-text-faint">
+        <div className="text-xs font-bold uppercase tracking-[0.06em] text-text-faint">
           {v.weekday}
         </div>
         <div className="text-[19px] font-extrabold leading-[1.1] text-text-high">
@@ -64,7 +64,7 @@ const DayRow: React.FC<{
             />
           </div>
         )}
-        <div className="num mt-[5px] flex justify-between text-[11px] text-text-muted">
+        <div className="num mt-[5px] flex justify-between text-xs text-text-muted">
           <span>{v.volume}</span>
           <span className={v.noteTone === 'plain' ? '' : TONE_TEXT[v.noteTone]}>{v.note}</span>
         </div>

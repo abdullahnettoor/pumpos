@@ -11,7 +11,6 @@ import {
   Select,
   StatusChip,
   VarianceChip,
-  type TableColumn,
 } from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 import { Checkbox } from '../primitives/Toggle.js';

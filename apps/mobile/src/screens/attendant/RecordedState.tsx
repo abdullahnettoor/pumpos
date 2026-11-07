@@ -104,7 +104,7 @@ export const RecordedState: React.FC<{
           Edit before shift closes
         </button>
       )}
-      <p className="m-0 px-9 text-center text-[11px] text-text-muted">
+      <p className="m-0 px-9 text-center text-xs text-text-muted">
         {shiftName ? `Your manager closes ${shiftName}.` : 'Your manager closes the shift.'} You can
         sign out now.
       </p>

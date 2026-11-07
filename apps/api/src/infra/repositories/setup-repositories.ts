@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, desc, lte } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
 import { fuelPricesNewestFirst } from './fuel-price-queries.js';

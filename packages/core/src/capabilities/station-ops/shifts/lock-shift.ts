@@ -3,7 +3,6 @@ import {
   err,
   eventFromContext,
   invariantViolation,
-  notFoundError,
   ok,
   validationError,
 } from '../../../kernel/index.js';

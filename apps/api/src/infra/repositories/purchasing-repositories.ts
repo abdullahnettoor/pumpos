@@ -1,4 +1,4 @@
-import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { schema, type DbExecutor } from '@pump/db';
 import type {
   Purchase,
   PurchaseItem,

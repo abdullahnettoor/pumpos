@@ -7,7 +7,7 @@ import {
   shiftSummaryDocConfig,
 } from './reportConfig.js';
 import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
-import { DSR_LABEL, formatShiftLabel, shiftDisplayLabel } from '@pump/shared';
+import { DSR_LABEL, formatShiftLabel } from '@pump/shared';
 import type { AttendantReportEntry } from '@pump/shared';
 import { ledgerFileName } from './ledgerFileName.js';
 import {

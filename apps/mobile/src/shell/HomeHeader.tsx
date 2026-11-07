@@ -23,7 +23,7 @@ export const HomeHeader: React.FC = () => {
           data-station-button=""
           className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-card py-1.5 pl-1.5 pr-2.5"
         >
-          <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-[7px] bg-accent text-[11px] font-extrabold text-on-accent">
+          <span className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-[7px] bg-accent text-xs font-extrabold text-on-accent">
             {initialsOf(stationName)}
           </span>
           <span className="truncate text-[13px] font-semibold text-text-high">{stationName}</span>

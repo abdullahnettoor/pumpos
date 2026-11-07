@@ -8,7 +8,7 @@ import { StatusBadge } from '../../ui/index.js';
 
 const Figure: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="min-w-0 border-l border-line px-2.5 first:border-l-0">
-    <p className="text-[11px] font-medium text-text-muted">{label}</p>
+    <p className="text-xs font-medium text-text-muted">{label}</p>
     <p className="num mt-0.5 text-base font-semibold text-text-high">{value}</p>
   </div>
 );
@@ -20,7 +20,7 @@ const DuRow: React.FC<{ du: LiveDu }> = ({ du }) => {
       <DuChip name={du.duName} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-semibold text-text-high">{du.attendant}</p>
-        <p className="num truncate text-[11px] text-text-muted">
+        <p className="num truncate text-xs text-text-muted">
           {du.declared === null
             ? `${du.duName} · Not handed over yet`
             : `Declared ${rupees(du.declared)} · ${variance?.balanced ? 'balanced' : `var ${variance?.text}`}`}
@@ -50,7 +50,7 @@ export const LiveShiftCard: React.FC<{ shift: LiveCard }> = ({ shift }) => (
       </div>
       <div className="ml-auto flex-shrink-0 text-right">
         <p className="num text-xl font-semibold text-accent">{shift.elapsed}</p>
-        <p className="text-[10px] uppercase tracking-[0.08em] text-text-muted">open</p>
+        <p className="text-xs uppercase tracking-[0.08em] text-text-muted">open</p>
       </div>
     </div>
 
@@ -63,7 +63,7 @@ export const LiveShiftCard: React.FC<{ shift: LiveCard }> = ({ shift }) => (
     {shift.total > 0 && (
       <div className="px-3.5 pb-3">
         <div className="mb-1.5 flex justify-between">
-          <span className="text-[11px] font-medium text-text-muted">Handovers</span>
+          <span className="text-xs font-medium text-text-muted">Handovers</span>
           <span className="num text-xs text-text-muted">
             {shift.recorded} / {shift.total}
           </span>

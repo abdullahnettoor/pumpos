@@ -44,7 +44,7 @@ export const ListRow: React.FC<Props> = ({
       <div className="min-w-0 flex-1 text-left">
         <div className="truncate text-[13px] font-semibold text-text-high">{title}</div>
         {meta && (
-          <div className={`text-[11px] text-text-muted ${wrapMeta ? 'break-words' : 'truncate'}`}>
+          <div className={`text-xs text-text-muted ${wrapMeta ? 'break-words' : 'truncate'}`}>
             {meta}
           </div>
         )}

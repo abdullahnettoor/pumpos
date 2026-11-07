@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
+import { CloudPaymentTerminalService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
 import {
   Button,
@@ -28,7 +28,6 @@ import {
 import { useCreateRequest, type CreateRequestProps } from './useCreateRequest.js';
 
 const terminalService = new CloudPaymentTerminalService();
-const financeSvc = new CloudFinanceService();
 
 export interface PaymentTerminalsPanelProps extends CreateRequestProps {
   stationId: string;

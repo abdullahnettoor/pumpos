@@ -1,0 +1,65 @@
+{
+  "utc-date-slice": {
+    "packages/core/src/capabilities/organization-access/resolve-access.ts": 1
+  },
+  "role-literal": {},
+  "awaited-invalidation": {
+    "apps/desktop/src/App.tsx": 1,
+    "packages/ui/src/components/CustomersList.tsx": 1,
+    "packages/ui/src/components/StationSetup/StationOverview.tsx": 1,
+    "packages/ui/src/components/customers/CustomerFormDrawer.tsx": 1,
+    "packages/ui/src/components/customers/VehicleDrawer.tsx": 1,
+    "packages/ui/src/components/finance/AccountDrawers.tsx": 11,
+    "packages/ui/src/components/purchases/SupplierFormDrawer.tsx": 1
+  },
+  "inline-query-key": {
+    "apps/mobile/src/screens/money/useCreditLimitEdit.ts": 3,
+    "packages/ui/src/components/CustomersList.tsx": 1,
+    "packages/ui/src/components/StationSetup/PermissionsDrawer.tsx": 1,
+    "packages/ui/src/components/StationSetup/TeamMemberDrawers.tsx": 1,
+    "packages/ui/src/components/customers/VehicleDrawer.tsx": 1,
+    "packages/ui/src/components/finance/AccountDrawers.tsx": 1,
+    "packages/ui/src/components/reports/InvoicesPanel.tsx": 1
+  },
+  "local-format": {
+    "apps/desktop/src/updates/UpdateNotice.tsx": 1,
+    "apps/mobile/src/components/HandoverPanel.tsx": 1,
+    "apps/mobile/src/components/handover/CustomerSaleForm.tsx": 5,
+    "apps/mobile/src/components/handover/ProductsFields.tsx": 1,
+    "apps/mobile/src/lib/dates.ts": 1,
+    "apps/mobile/src/lib/format.ts": 1,
+    "apps/mobile/src/lib/handover/steps.ts": 2,
+    "apps/mobile/src/lib/home/figures.ts": 1,
+    "apps/mobile/src/lib/insights/format.ts": 2,
+    "apps/mobile/src/lib/money/officePayment.ts": 1,
+    "apps/mobile/src/lib/money/payables.ts": 1,
+    "apps/mobile/src/lib/money/quantity.ts": 1,
+    "apps/mobile/src/lib/money/receivables.ts": 1,
+    "apps/mobile/src/lib/reports/dssr.ts": 2,
+    "apps/mobile/src/screens/attendant/RecordedState.tsx": 1,
+    "apps/mobile/src/screens/density/DensityRegister.tsx": 2,
+    "apps/mobile/src/screens/density/DensityToday.tsx": 2,
+    "apps/mobile/src/screens/density/RecordDensitySheet.tsx": 2,
+    "apps/mobile/src/screens/insights/ProductMix.tsx": 1,
+    "apps/mobile/src/screens/shift-summary/NozzleTable.tsx": 1,
+    "packages/ui/src/components/Dashboard/cards/money/moneyModel.ts": 3,
+    "packages/ui/src/components/Dashboard/cards/timeline/timelineModel.ts": 1,
+    "packages/ui/src/components/Dashboard/columns/FuelsColumn.tsx": 1,
+    "packages/ui/src/components/Shifts/HandoverDrawer.tsx": 8,
+    "packages/ui/src/components/Shifts/closeShiftModel.ts": 1,
+    "packages/ui/src/components/StationSetup/fuelPriceRows.ts": 1,
+    "packages/ui/src/components/inventory/decantation/decantationForm.ts": 1,
+    "packages/ui/src/components/inventory/density/printDensityBoard.ts": 1,
+    "packages/ui/src/components/primitives/DensityCalculatorPopover.tsx": 5,
+    "packages/ui/src/components/reports/ProfitLossView.tsx": 1,
+    "packages/ui/src/components/reports/dssr/dssrModel.ts": 1,
+    "packages/ui/src/office-records/forms/PurchaseEntryForm.tsx": 2,
+    "packages/ui/src/office-records/forms/SupplierPaymentForm.tsx": 1,
+    "packages/ui/src/pump-ds/sparkline/Sparkline.tsx": 2,
+    "packages/ui/src/query/useStationAlerts.ts": 2,
+    "packages/ui/src/utils/ledgerQuantity.ts": 1
+  },
+  "local-send-result": {
+    "apps/api/src/routes/platform-demos.ts": 1
+  }
+}

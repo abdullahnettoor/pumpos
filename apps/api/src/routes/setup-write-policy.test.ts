@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Role } from '@pump/shared';
 import { stationSetupRouter } from './station-setup.js';
 import { productsRouter } from './products.js';
 import { paymentTerminalsRouter } from './payment-terminals.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
 import {
-  fakeAccessDb,
   guardCoverage,
   policyRequest,
-  refusalsAcross,
   ACTIVE,
-  IN_GRACE,
   LAPSED_GRACE,
   RESTRICTED,
   SUSPENDED,
@@ -33,8 +29,6 @@ const ROUTERS: ReadonlyArray<[string, any]> = [
   ['/setup', productsRouter],
   ['/setup', paymentTerminalsRouter],
 ];
-
-type Subscription = { status: string; accessUntil?: string | null };
 
 /** One representative mutation per family the ticket covers. */
 const BLOCKED_UNDER_RESTRICTED: ReadonlyArray<[string, string, string]> = [

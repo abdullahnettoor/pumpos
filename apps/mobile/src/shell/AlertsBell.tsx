@@ -23,6 +23,7 @@ export const AlertsBell: React.FC = () => {
       {count > 0 && (
         <span
           aria-hidden="true"
+          /* min-text exception: bell badge count in a 16px dot; the button label carries the count */
           className={`num absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full border-2 border-background px-0.5 text-[9px] font-bold text-on-accent ${
             danger ? 'bg-bad' : 'bg-warn'
           }`}

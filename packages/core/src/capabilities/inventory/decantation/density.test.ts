@@ -12,7 +12,7 @@ import type {
   DensityReadingRepository,
   DensityReadingWithContext,
 } from './ports.js';
-import { RecordDensityReading, type RecordDensityReadingDeps } from './record-density-reading.js';
+import { RecordDensityReading } from './record-density-reading.js';
 import { ListDensityReadings } from './list-density-readings.js';
 import { GetDensityTodaySummary } from './get-density-today-summary.js';
 import { buildDensityTodaySummary } from './build-density-today-summary.js';

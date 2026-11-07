@@ -3,9 +3,6 @@ import {
   comparisonView,
   deriveComparison,
   deriveSales,
-  deriveSplitBar,
-  deriveTrend,
-  sparklinePath,
   businessWeekday,
 } from './sales-headline.js';
 import { readSnapshot } from './dssr-snapshot.js';

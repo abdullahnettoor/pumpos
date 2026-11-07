@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, gte, inArray, desc, ne, or, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, gte, inArray, desc, or, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type {
   BusinessDay,

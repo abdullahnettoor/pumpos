@@ -70,7 +70,7 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
         <Avatar name={member.fullName} size="lg" />
         <div className="min-w-0">
           <p className="m-0 truncate text-[15px] font-bold text-text-high">{member.fullName}</p>
-          <p className="m-0 truncate text-[11.5px] text-text-muted">
+          <p className="m-0 truncate text-xs text-text-muted">
             {member.role} · {stationSummary(member, stations)}
           </p>
         </div>
@@ -131,7 +131,7 @@ export const MemberPage: React.FC<{ memberId: string }> = ({ memberId }) => {
           </ListGroup>
           {gate.reason && (
             <div className="mt-2">
-              <PausedReason id={gate.reasonId} className="px-1 text-center text-[11.5px]">
+              <PausedReason id={gate.reasonId} className="px-1 text-center text-xs">
                 {gate.reason}
               </PausedReason>
             </div>

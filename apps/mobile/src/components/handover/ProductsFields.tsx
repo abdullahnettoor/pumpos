@@ -74,7 +74,7 @@ export const ProductsFields: React.FC<{
                 placeholder="Select product…"
                 searchPlaceholder="Search product…"
               />
-              {caption && <p className="num truncate text-[11px] text-text-muted">{caption}</p>}
+              {caption && <p className="num truncate text-xs text-text-muted">{caption}</p>}
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" data-stepper-row>
                 <div aria-hidden="true" />
                 <div className="flex items-center justify-center gap-2" data-stepper>

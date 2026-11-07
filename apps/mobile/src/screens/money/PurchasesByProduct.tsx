@@ -28,7 +28,7 @@ export const PurchasesByProduct: React.FC<{ products: readonly SupplierProductPu
             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text-high">
               {p.name}
             </span>
-            <span className="num text-[11.5px] text-text-muted">{p.quantity}</span>
+            <span className="num text-xs text-text-muted">{p.quantity}</span>
             <span className="num min-w-[56px] text-right text-[13px] font-semibold text-text-high">
               {p.value}
             </span>

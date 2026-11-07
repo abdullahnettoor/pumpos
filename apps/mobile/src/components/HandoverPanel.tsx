@@ -455,20 +455,16 @@ export const HandoverPanel: React.FC<{
         </p>
       )}
       {formInvalid && !error && (
-        <p className="text-center text-[11px] text-bad-fg">
-          Fix {failingSteps.join(', ')} to save.
-        </p>
+        <p className="text-center text-xs text-bad-fg">Fix {failingSteps.join(', ')} to save.</p>
       )}
       {savedAt && !saving && (
-        <p className="text-center text-[11px] text-good">
+        <p className="text-center text-xs text-good">
           Saved at {savedAt}. You can edit and save again until the shift closes.
         </p>
       )}
       <div className="flex items-center gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
-            Variance
-          </p>
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-faint">Variance</p>
           <p className={`num text-[17px] font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
             {shownVariance.text}
           </p>
@@ -521,7 +517,7 @@ export const HandoverPanel: React.FC<{
 
         return (
           <div key={du.duId} className="flex flex-col gap-2">
-            <h2 className="px-1 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
+            <h2 className="px-1 pt-1 text-xs font-bold uppercase tracking-[0.08em] text-text-muted">
               {du.duName}
               {du.duCode && du.duCode !== du.duName ? (
                 <span className="text-text-faint"> · {du.duCode}</span>
@@ -629,7 +625,7 @@ export const HandoverPanel: React.FC<{
                 onChange={(v) => setDrops(du.duId, v)}
                 error={errors[fieldId.drops]}
               />
-              <p className="text-[11px] leading-relaxed text-text-muted">
+              <p className="text-xs leading-relaxed text-text-muted">
                 Expected cash:{' '}
                 <b className="num text-text-high">{inr(reconciliation.expectedCash)}</b> = float{' '}
                 <span className="num">{inr(reconciliation.openingFloat)}</span> + cash sales{' '}
@@ -641,7 +637,7 @@ export const HandoverPanel: React.FC<{
                   Product sales: counted in {productsCountedIn}
                 </p>
               ) : null}
-              <p className="text-[11px] text-text-faint">
+              <p className="text-xs text-text-faint">
                 Confirm physical cash at close. Hand over everything in the pouch, float included.
               </p>
             </StepCard>

@@ -51,7 +51,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
       <div className="flex items-start justify-between px-4 pb-3 pt-1">
         <div>
           <h3 className="text-[15px] font-semibold text-text-high">{title}</h3>
-          <p className="text-[11px] text-text-faint">Enter the number of notes &amp; coins</p>
+          <p className="text-xs text-text-faint">Enter the number of notes &amp; coins</p>
         </div>
         <button
           type="button"
@@ -109,7 +109,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
       {/* Footer */}
       <div className="mt-1 flex flex-col gap-2 px-4 pt-2">
         {hasMismatch && (
-          <p className="text-[11px] text-warn-fg">
+          <p className="text-xs text-warn-fg">
             Field shows {inr(currentValue)} — Apply to replace it.
           </p>
         )}

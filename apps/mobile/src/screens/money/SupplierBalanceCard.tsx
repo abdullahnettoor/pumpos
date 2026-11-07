@@ -48,8 +48,8 @@ export const SupplierBalanceCard: React.FC<{
       label={LABEL[state]}
       value={inr(amount)}
     >
-      {NOTE[state] && <p className="mt-1 text-[11.5px] text-text-muted">{NOTE[state]}</p>}
-      {oldest && <p className="mt-1 text-[11.5px] text-text-muted">{oldest}</p>}
+      {NOTE[state] && <p className="mt-1 text-xs text-text-muted">{NOTE[state]}</p>}
+      {oldest && <p className="mt-1 text-xs text-text-muted">{oldest}</p>}
       {paymentAction && (
         <div className="mt-2.5 flex flex-col gap-1 border-t border-line pt-2">
           <div className="flex items-center justify-between gap-2">

@@ -15,7 +15,7 @@ import {
   type EventPublisher,
   type ExecutionContext,
 } from '@pump/core';
-import { resolveBusinessDate } from '@pump/shared';
+import { resolveBusinessDate, shiftBusinessDate } from '@pump/shared';
 import { createDensityHelpers } from './demo-density.js';
 import { createDecantationHelpers } from './demo-decantations.js';
 import { DemoSeedError, must, type DemoContext } from './demo-context.js';
@@ -95,12 +95,6 @@ export interface DemoHistoryResult {
   eveningShiftId: string;
   pendingHandoverId: string;
   closedBusinessDays: number;
-}
-
-function shiftDate(date: string, days: number): string {
-  const [year, month, day] = date.split('-').map(Number);
-  const shifted = new Date(Date.UTC(year, month - 1, day + days));
-  return shifted.toISOString().slice(0, 10);
 }
 
 /** Offset (ms) of `timeZone` from UTC at `instant`. */
@@ -312,7 +306,7 @@ export async function seedDemoHistory(
   const readings = new DrizzleNozzleReadingRepository(tx);
 
   // Fuel prices take effect before the first historical shift.
-  const firstDay = shiftDate(today, -DEMO_HISTORY_DAYS);
+  const firstDay = shiftBusinessDate(today, -DEMO_HISTORY_DAYS);
   for (const product of [petrol, diesel]) {
     must(
       await new RecordFuelPrice({ repository: new DrizzleFuelPriceRepository(tx), events }).execute(
@@ -574,7 +568,7 @@ export async function seedDemoHistory(
   let closedBusinessDays = 0;
   const pendingDips: Array<{ tankId: string; productId: string; actual: number }> = [];
   for (let age = DEMO_HISTORY_DAYS; age >= 1; age -= 1) {
-    const date = shiftDate(today, -age);
+    const date = shiftBusinessDate(today, -age);
     const at = (time: string) => stationInstant(date, time, timeZone);
     const dayIndex = DEMO_HISTORY_DAYS - age;
 

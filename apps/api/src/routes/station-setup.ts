@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { schema, DbClient, type DbExecutor } from '@pump/db';
 import {
   can,
@@ -60,9 +60,6 @@ import {
   UpdateShiftTemplate,
   DeleteShiftTemplate,
   FinalizeStationOnboarding,
-  BusinessEvents,
-  eventFromContext,
-  type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import {
@@ -1468,7 +1465,6 @@ stationSetupRouter.get('/onboarding/status', async (c) => {
 
     // Minimal fuel products
     const fuelCount = prodList.filter((p) => p.productType === 'FUEL' && p.isActive).length;
-    const totalProducts = prodList.length;
 
     const tankList = await db
       .select()

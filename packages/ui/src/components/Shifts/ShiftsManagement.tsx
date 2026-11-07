@@ -1,15 +1,10 @@
 import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
-import {
-  ROUTES,
-  parseShiftCloseRoute,
-  shiftCloseRoute,
-  type ShiftCloseStep,
-} from '../../nav-intent/routes.js';
+import { ROUTES, parseShiftCloseRoute } from '../../nav-intent/routes.js';
 import type { RouteNavigate } from '../../nav-intent/useRoutePath.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { formatShortDay, inr } from '../../utils/format.js';
-import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
+import { formatShortDay } from '../../utils/format.js';
+import { CloudShiftService } from '../../services/cloud.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { handoverProductCash } from './handoverFigures.js';
@@ -43,7 +38,6 @@ import {
 } from '../../pump-ds/index.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
 import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
-import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   useShiftStatus,
   useShiftTransactions,
@@ -69,7 +63,6 @@ import {
 
 const shiftService = new CloudShiftService();
 const TABS_ID = 'shifts';
-const transactionService = new CloudTransactionService();
 
 interface ShiftTotals {
   cashCollections: number;
@@ -123,7 +116,6 @@ interface ShiftsManagementProps {
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   selectedStation,
   userRole,
-  userName,
   onNavigate,
   route: shellRoute,
   onRouteChange,
@@ -168,10 +160,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const refresh = useRefreshTask();
   const qc = useQueryClient();
   const toast = useToast();
-  const confirm = useConfirm();
   const data = statusQ.data ?? null;
-  const loading = statusQ.isLoading;
-  const error = statusQ.error;
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
@@ -226,6 +215,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(currentBusinessDate);
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
+  // The Open shift form's date follows the station's current Business Day: on
+  // a station switch, and at Day Start unless a shift is open or "Start next"
+  // pinned the date. Adjusted during render, so the form never shows the old day.
+  const [dateSyncStationId, setDateSyncStationId] = useState(stationId);
+  const [dateSyncBusinessDate, setDateSyncBusinessDate] = useState(currentBusinessDate);
+  if (stationId !== dateSyncStationId) {
+    setDateSyncStationId(stationId);
+    setDateSyncBusinessDate(currentBusinessDate);
+    setPreserveNextShiftDate(false);
+    setBusinessDate(currentBusinessDate);
+  } else if (currentBusinessDate !== dateSyncBusinessDate) {
+    setDateSyncBusinessDate(currentBusinessDate);
+    if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
+  }
   const [staffAssignments, setStaffAssignments] = useState<
     { userId: string; duId: string; openingFloat: number }[]
   >([]);

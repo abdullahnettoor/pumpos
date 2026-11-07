@@ -9,7 +9,6 @@ import {
   FixedClock,
   LinkDecantationPurchase,
   RecordDecantation,
-  RecordStockCount,
   UnlinkDecantationPurchase,
   UuidGenerator,
 } from '@pump/core';
@@ -20,19 +19,9 @@ import {
   createDecantationLinker,
   createDecantationMeasurement,
   DrizzleDecantationLinkRepository,
-  DrizzleDecantationPurchaseRepository,
   DrizzleDecantationRepository,
   DrizzleDensityReadingRepository,
-  DrizzleTankSalesReader,
 } from '../decantation-repositories.js';
-import {
-  DrizzleStockMovementRepository,
-  DrizzleStockVarianceRepository,
-} from '../inventory-repositories.js';
-import {
-  DrizzleShiftRepository,
-  DrizzleShiftWriteGateReader,
-} from '../station-ops-repositories.js';
 import { DrizzleTankRepository } from '../setup-repositories.js';
 import { DrizzleBusinessDayRepository } from '../station-ops-repositories.js';
 
@@ -201,29 +190,6 @@ describe.skipIf(!CONNECTION)(
             settlingTimeMinutes: 30,
           }),
         }).execute(cmd, c),
-      );
-
-    const dip = (tankId: string, actualQuantity: number, c = ctx(ORG, STATION)) =>
-      runInTransaction(db, (tx, events) =>
-        new RecordStockCount({
-          movements: new DrizzleStockMovementRepository(tx),
-          variances: new DrizzleStockVarianceRepository(tx),
-          tanks: new DrizzleTankRepository(tx),
-          shifts: new DrizzleShiftRepository(tx),
-          businessDays: new DrizzleBusinessDayRepository(tx),
-          shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
-          events,
-          decantationMeasurement: createDecantationMeasurement(tx, events),
-        }).execute({ stationId: STATION, tankId, actualQuantity }, c),
-      );
-
-    const stock = async (tankId: string) =>
-      Number(
-        (
-          await sql.unsafe(
-            `select coalesce(sum(quantity),0) q from stock_movements where tank_id = '${tankId}'`,
-          )
-        )[0].q,
       );
 
     const linkUc = (decantationId: string, productId: string, purchaseId: string) =>

@@ -5,7 +5,6 @@ import {
   VarianceChip,
   TopBarIconButton,
   Icon,
-  STATUS_MAP,
   Dot,
   Delta,
   KpiTile,

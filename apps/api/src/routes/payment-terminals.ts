@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
 import { canWriteStationSetup, normalizeProvider } from '@pump/shared';
-import { RegisterPaymentTerminal, UpdatePaymentTerminal, type Result } from '@pump/core';
+import { RegisterPaymentTerminal, UpdatePaymentTerminal } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
