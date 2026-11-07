@@ -78,7 +78,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
               }`}
             >
               <span
-                className={`num grid h-8 w-12 flex-shrink-0 place-items-center rounded-lg text-[13px] font-bold ${
+                className={`num grid h-8 w-12 flex-shrink-0 place-items-center rounded-lg text-[13px] font-medium ${
                   active ? 'bg-accent text-on-accent' : 'bg-card-alt text-text-muted'
                 }`}
               >
@@ -115,7 +115,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
         )}
         <div className="flex items-center justify-between rounded-xl bg-card-alt px-3 py-2.5">
           <span className="text-[13px] font-medium text-text-muted">Total counted</span>
-          <span className="num text-lg font-bold text-text-high">{inr(total)}</span>
+          <span className="num text-lg font-medium text-text-high">{inr(total)}</span>
         </div>
         <div className="flex gap-2">
           <button

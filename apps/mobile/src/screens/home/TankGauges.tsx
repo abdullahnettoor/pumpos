@@ -54,7 +54,7 @@ export const TankGauges: React.FC<{ tanks: readonly TankGauge[] }> = ({ tanks })
         <div className="min-w-0">
           <p className="truncate text-xs font-bold text-text-high">{t.title}</p>
           <p
-            className={`num mt-1.5 whitespace-nowrap text-sm font-semibold leading-tight ${TEXT[t.level]}`}
+            className={`num mt-1.5 whitespace-nowrap text-sm font-medium leading-tight ${TEXT[t.level]}`}
           >
             {t.pct === null ? '—' : t.stock}
             {TANK_TONE_LABEL[t.level] && (

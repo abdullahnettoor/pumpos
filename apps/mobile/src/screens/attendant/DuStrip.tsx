@@ -39,7 +39,7 @@ export const DuStrip: React.FC<{
       </div>
       {minutes != null ? (
         <div className="flex-shrink-0 text-right">
-          <p className="num m-0 text-sm font-semibold text-text-high">{formatOnShift(minutes)}</p>
+          <p className="num m-0 text-sm font-medium text-text-high">{formatOnShift(minutes)}</p>
           <p className="m-0 text-xs text-text-muted">on shift</p>
         </div>
       ) : null}

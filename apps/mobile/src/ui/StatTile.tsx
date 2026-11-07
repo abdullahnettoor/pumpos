@@ -2,7 +2,7 @@ import React from 'react';
 import { HERO_FIGURE } from './typography.js';
 import { TONE_TEXT, type Tone } from './tones.js';
 
-const STAT_FIGURE = 'num text-xl font-semibold';
+const STAT_FIGURE = 'num text-xl font-medium';
 
 interface Props {
   label: string;

@@ -465,7 +465,7 @@ export const HandoverPanel: React.FC<{
       <div className="flex items-center gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-faint">Variance</p>
-          <p className={`num text-lg font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
+          <p className={`num text-lg font-medium ${TONE_TEXT[shownVariance.tone]}`}>
             {shownVariance.text}
           </p>
         </div>
@@ -627,8 +627,8 @@ export const HandoverPanel: React.FC<{
               />
               <p className="text-xs leading-relaxed text-text-muted">
                 Expected cash:{' '}
-                <b className="num text-text-high">{inr(reconciliation.expectedCash)}</b> = float{' '}
-                <span className="num">{inr(reconciliation.openingFloat)}</span> + cash sales{' '}
+                <b className="num font-medium text-text-high">{inr(reconciliation.expectedCash)}</b>{' '}
+                = float <span className="num">{inr(reconciliation.openingFloat)}</span> + cash sales{' '}
                 <span className="num">{inr(reconciliation.cashSales)}</span> − drops{' '}
                 <span className="num">{inr(reconciliation.cashDrops)}</span>
               </p>

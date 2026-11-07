@@ -26,7 +26,7 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
           <p className="text-xs font-medium text-text-muted">
             Total sales · {rangeLabel(data.range.from, data.range.to)}
           </p>
-          <p className="num mt-1 text-2xl font-semibold tracking-[-0.03em] text-text-high">
+          <p className="num mt-1 text-2xl font-medium tracking-[-0.03em] text-text-high">
             {compactRupees(data.total)}
           </p>
         </div>
@@ -67,7 +67,7 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
             ·{' '}
           </>
         )}
-        avg <b className="num font-semibold text-text-high">{rupees(data.average)}</b> a closed day
+        avg <b className="num font-medium text-text-high">{rupees(data.average)}</b> a closed day
         {data.previousAverage > 0 && <> (prior {rupees(data.previousAverage)})</>}
       </p>
       {data.changePct === null && data.previousClosedDays > 0 && (

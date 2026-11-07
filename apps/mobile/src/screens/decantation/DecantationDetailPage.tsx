@@ -100,7 +100,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
             {t.receivedQty == null ? (
               <StatusBadge tone="info">Pending measurement</StatusBadge>
             ) : (
-              <span className="num text-[13px] font-semibold text-text-high">
+              <span className="num text-[13px] font-medium text-text-high">
                 +{formatQuantity(t.receivedQty, 'L')}
               </span>
             )}

@@ -17,9 +17,7 @@ export const ShiftPerformance: React.FC<{ data: InsightsSales }> = ({ data }) =>
           <p className="truncate text-xs font-medium text-text-muted">
             {s.name} · {s.shifts} {s.shifts === 1 ? 'shift' : 'shifts'}
           </p>
-          <p className="num mt-1 text-lg font-semibold text-text-high">
-            {compactRupees(s.avgSales)}
-          </p>
+          <p className="num mt-1 text-lg font-medium text-text-high">{compactRupees(s.avgSales)}</p>
           <p className="num text-xs text-text-muted">
             {litres(s.avgVolume)} · var{' '}
             <span className={TONE_TEXT[varianceTone(s.avgCashVariance)]}>

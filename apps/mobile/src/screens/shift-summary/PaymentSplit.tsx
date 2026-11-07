@@ -42,7 +42,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
               />
               {s.label}
             </dt>
-            <dd className="num ml-auto font-semibold text-text-high">{rupees(s.amount)}</dd>
+            <dd className="num ml-auto font-medium text-text-high">{rupees(s.amount)}</dd>
           </div>
         ))}
       </dl>
@@ -52,7 +52,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
             <dl>
               <div className={`flex items-center gap-1.5 ${TONE_TEXT[gap.tone]}`}>
                 <dt className="font-semibold">{gap.label}</dt>
-                <dd className="num ml-auto font-semibold">{rupees(gap.amount)}</dd>
+                <dd className="num ml-auto font-medium">{rupees(gap.amount)}</dd>
               </div>
             </dl>
             <p className="text-xs text-text-muted">{gap.note}</p>
@@ -63,7 +63,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
             <dl>
               <div className={`flex items-center gap-1.5 ${TONE_TEXT.warn}`}>
                 <dt className="font-semibold">Not itemised</dt>
-                <dd className="num ml-auto font-semibold">{signedRupees(unitemised.amount)}</dd>
+                <dd className="num ml-auto font-medium">{signedRupees(unitemised.amount)}</dd>
               </div>
             </dl>
             <p className="text-xs text-text-muted">{unitemised.note}</p>
@@ -72,7 +72,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
         <dl>
           <div className="flex items-center gap-1.5 text-text-muted">
             <dt>Total sales</dt>
-            <dd className="num ml-auto font-semibold text-text-high">{rupees(total)}</dd>
+            <dd className="num ml-auto font-medium text-text-high">{rupees(total)}</dd>
           </div>
         </dl>
       </div>

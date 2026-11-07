@@ -242,7 +242,7 @@ const Form = <F extends OfficePaymentFields>({
           <label htmlFor={dateId} className="text-xs font-semibold text-text-muted">
             Entry date
           </label>
-          <span className="num text-xs font-semibold text-text-high" data-testid="entry-date-shown">
+          <span className="num text-xs font-medium text-text-high" data-testid="entry-date-shown">
             {pickedDateLabel(String(entries.entryDate ?? ''))}
           </span>
         </div>

@@ -44,7 +44,7 @@ const DateField: React.FC<{
         <label htmlFor={id} className="text-xs font-semibold text-text-muted">
           {label}
         </label>
-        <span className="num truncate text-xs font-semibold text-text-high">
+        <span className="num truncate text-xs font-medium text-text-high">
           {pickedDateLabel(value)}
         </span>
       </div>

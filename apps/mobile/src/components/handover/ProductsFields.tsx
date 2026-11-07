@@ -92,7 +92,7 @@ export const ProductsFields: React.FC<{
                     placeholder="0"
                     aria-label="Quantity"
                     onChange={(e) => patch(idx, { quantity: e.target.value })}
-                    className="num h-9 w-14 flex-shrink-0 rounded-xl border border-line-strong bg-card px-0 text-center text-[15px] font-semibold leading-none text-text-high placeholder:text-center focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/20"
+                    className="num h-9 w-14 flex-shrink-0 rounded-xl border border-line-strong bg-card px-0 text-center text-[15px] font-medium leading-none text-text-high placeholder:text-center focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent/20"
                   />
                   <StepperButton
                     label="Increase quantity"

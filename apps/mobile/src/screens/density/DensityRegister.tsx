@@ -93,7 +93,7 @@ const RegisterReading: React.FC<{ reading: DensityReadingWithContext; tolerance:
             ? 'Direct 15 °C'
             : `${reading.observedDensity.toFixed(1)} kg/m³ · ${reading.observedTempC?.toFixed(1) ?? '—'} °C`}
         </span>
-        <span className="num font-bold text-text-high">{reading.density15.toFixed(2)} kg/m³</span>
+        <span className="num font-medium text-text-high">{reading.density15.toFixed(2)} kg/m³</span>
       </div>
       {flags.length > 0 && <p className="text-xs text-warn-fg">{flags.join(', ')}</p>}
       <p className="text-xs text-text-faint">

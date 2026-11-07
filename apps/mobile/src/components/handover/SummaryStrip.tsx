@@ -17,7 +17,7 @@ const Cell: React.FC<{ label: string; value: string; tone?: string; first?: bool
 }) => (
   <div className={first ? 'min-w-0' : 'min-w-0 border-l border-line pl-2.5'}>
     <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-faint">{label}</p>
-    <p className={`num mt-0.5 truncate text-[15px] font-semibold ${tone}`}>{value}</p>
+    <p className={`num mt-0.5 truncate text-[15px] font-medium ${tone}`}>{value}</p>
   </div>
 );
 

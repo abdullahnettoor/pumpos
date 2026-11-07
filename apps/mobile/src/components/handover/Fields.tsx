@@ -8,7 +8,7 @@ import React, { useId } from 'react';
  */
 
 const INPUT_BASE =
-  'num min-w-0 w-full rounded-xl border bg-card-alt px-3 text-lg font-semibold text-text-high ' +
+  'num min-w-0 w-full rounded-xl border bg-card-alt px-3 text-lg font-medium text-text-high ' +
   'placeholder:font-normal placeholder:text-text-faint focus:outline-none focus:ring-[3px]';
 
 const inputTone = (error: boolean) =>
