@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { buttonClass, EmptyState, Icon } from '@pump/ui';
 
 /**
  * Client-side fallback for the edge mobile gate (see `worker/index.ts`).
@@ -46,51 +47,24 @@ function mobileUrl(): string | null {
 export const MobileBlock: React.FC = () => {
   const mUrl = mobileUrl();
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        gap: 16,
-        padding: 24,
-        textAlign: 'center',
-        backgroundColor: 'var(--bg-canvas)',
-        color: 'var(--text-primary)',
-        fontFamily: 'var(--font-sans)',
-      }}
-    >
-      <div style={{ fontSize: 40, lineHeight: 1 }}>🖥️</div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>PumpOS Console is desktop-only</h1>
-      <p style={{ maxWidth: 380, color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>
-        The full operations console is built for a desktop browser. On your phone, use the PumpOS
-        mobile app for owner reports and live data.
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-        {mUrl && (
-          <a
-            href={mUrl}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              backgroundColor: 'var(--brand, #2563eb)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 500,
-              textDecoration: 'none',
-            }}
-          >
-            Open PumpOS mobile
-          </a>
-        )}
-        <a
-          href="?desktop=1"
-          style={{ color: 'var(--text-muted)', fontSize: 13, textDecoration: 'underline' }}
-        >
-          Continue to desktop version anyway
-        </a>
-      </div>
+    <div className="flex min-h-screen items-center justify-center bg-canvas font-sans text-ink-strong">
+      <EmptyState
+        icon={<Icon name="monitor" />}
+        title={<h1>PumpOS Console is desktop-only</h1>}
+        description="The full operations console is built for a desktop browser. On your phone, use the PumpOS mobile app for owner reports and live data."
+        action={
+          <div className="flex flex-col items-center gap-2">
+            {mUrl && (
+              <a href={mUrl} className={buttonClass()}>
+                Open PumpOS mobile
+              </a>
+            )}
+            <a href="?desktop=1" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
+              Continue to desktop version anyway
+            </a>
+          </div>
+        }
+      />
     </div>
   );
 };

@@ -80,6 +80,16 @@ const buttonVariants = cva(
   },
 );
 
+/**
+ * Button look for an element that is not a `<button>`, e.g. a navigation
+ * `<a href>` that must stay a real link (middle-click, open in new tab).
+ */
+export function buttonClass(
+  options: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean } = {},
+): string {
+  return buttonVariants({ ...options, iconOnly: false });
+}
+
 export interface ButtonProps
   extends
     Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'onClick'>,
