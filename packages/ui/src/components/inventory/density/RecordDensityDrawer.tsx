@@ -199,7 +199,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
       <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4">
         {error && (
           <div
-            className="rounded-md bg-danger-bg px-3 py-2 text-[13px] text-danger-fg"
+            className="rounded-card bg-danger-bg px-3 py-2 text-[13px] text-danger-fg"
             role="alert"
           >
             {error}
@@ -281,7 +281,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
         </div>
 
         {entryMethod === 'HYDROMETER' ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-border-soft bg-surface-alt p-3">
+          <div className="flex flex-col gap-3 rounded-card border border-border-soft bg-surface-alt p-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor={ids.observed} className={LABEL_SM}>
@@ -327,7 +327,7 @@ export const RecordDensityDrawer: React.FC<RecordDensityDrawerProps> = ({
 
             <div
               className={cn(
-                'flex items-center justify-between rounded-md border border-border-soft px-3 py-2',
+                'flex items-center justify-between rounded-card border border-border-soft px-3 py-2',
                 hasCalc ? 'bg-info-bg' : 'bg-surface',
               )}
             >

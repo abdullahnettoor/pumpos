@@ -114,6 +114,7 @@ export const TYPOGRAPHY_SOURCES = {
 /** Spacing keys checked against index.css; other keys are component sizes. */
 export const SPACING_SOURCES = {
   'status-bar': { variable: '--status-bar-height' },
+  'timeline-popover': { variable: '--timeline-popover-width' },
   drawer: { css: '.drawer-container', prop: 'max-width' },
   'drawer-wide': { css: '.drawer-container--wide', prop: 'max-width' },
 };

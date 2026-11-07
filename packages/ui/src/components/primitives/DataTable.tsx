@@ -92,7 +92,7 @@ export function DataTable<T>({
   rowLabel,
   flashRowIds,
 }: DataTableProps<T>) {
-  const cellPad = dense ? '6px 6px' : '9px 12px';
+  const cellPad = dense ? 'px-1.5 py-1.5' : 'px-3 py-[9px]';
   const runTask = useRunTask();
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
   const scrolledToRef = React.useRef<string | null>(null);
@@ -110,23 +110,13 @@ export function DataTable<T>({
   // Render a totals row only when some column defines a footer.
   const hasFooter = columns.some((c) => c.footer != null);
 
-  const wrap: React.CSSProperties = bare
-    ? { backgroundColor: 'transparent', overflow: 'hidden' }
-    : {
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-soft)',
-        borderRadius: 'var(--radius-card)',
-        overflow: 'hidden',
-      };
-  const stateBox: React.CSSProperties = {
-    padding: 'var(--space-8)',
-    textAlign: 'center',
-    fontSize: '13px',
-    color: 'var(--text-muted)',
-  };
-
   return (
-    <div style={{ ...wrap, overflowX: 'auto' }}>
+    <div
+      className={cn(
+        'overflow-hidden overflow-x-auto',
+        bare ? 'bg-transparent' : 'rounded-card border border-border-soft bg-surface',
+      )}
+    >
       <DataSection
         shape="bare"
         title={title}
@@ -139,15 +129,12 @@ export function DataTable<T>({
         }}
         placeholderHeight={placeholderHeight}
         isEmpty={!data || data.length === 0}
-        empty={<div style={stateBox}>{emptyMessage}</div>}
+        empty={<div className="p-8 text-center text-[13px] text-ink-muted">{emptyMessage}</div>}
       >
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table className="w-full border-collapse text-[13px]">
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr
-                key={hg.id}
-                style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left' }}
-              >
+              <tr key={hg.id} className="border-b border-border-strong text-left">
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
@@ -156,7 +143,13 @@ export function DataTable<T>({
                     <th
                       key={header.id}
                       scope="col"
-                      className={cn(HEADER, meta.headerClassName ?? meta.className)}
+                      className={cn(
+                        HEADER,
+                        meta.headerClassName ?? meta.className,
+                        'select-none whitespace-nowrap',
+                        cellPad,
+                        canSort ? 'cursor-pointer' : 'cursor-default',
+                      )}
                       aria-sort={
                         sorted === 'asc'
                           ? 'ascending'
@@ -165,13 +158,7 @@ export function DataTable<T>({
                             : undefined
                       }
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                      style={{
-                        padding: cellPad,
-                        cursor: canSort ? 'pointer' : 'default',
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                        width: meta.width,
-                      }}
+                      style={{ width: meta.width }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sorted === 'asc' ? ' ↑' : sorted === 'desc' ? ' ↓' : ''}
@@ -191,6 +178,16 @@ export function DataTable<T>({
                   key={row.id}
                   aria-current={isSelected ? 'true' : undefined}
                   data-flash={isFlashing ? 'true' : undefined}
+                  className={cn(
+                    'border-b border-border-soft transition-colors duration-150 ease-[ease] motion-reduce:transition-none',
+                    onRowClick ? 'cursor-pointer' : 'cursor-default',
+                    onRowClick &&
+                      rowLabel &&
+                      'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand',
+                    isFlashing && 'bg-success-bg',
+                    (isHighlighted || isSelected) &&
+                      'bg-info-bg inset-shadow-[2px_0_0_var(--state-info-fg)]',
+                  )}
                   onClick={
                     onRowClick
                       ? () => runTask(onRowClick(row.original), 'Could not open that row.')
@@ -200,10 +197,6 @@ export function DataTable<T>({
                     ? {
                         tabIndex: 0,
                         'aria-label': rowLabel(row.original),
-                        className: cn(
-                          'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand',
-                          isFlashing && 'bg-success-bg',
-                        ),
                         onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
                           if (e.target !== e.currentTarget) return;
                           if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -211,36 +204,22 @@ export function DataTable<T>({
                           runTask(onRowClick(row.original), 'Could not open that row.');
                         },
                       }
-                    : isFlashing
-                      ? { className: 'bg-success-bg' }
-                      : {})}
+                    : {})}
                   ref={(el) => {
                     if (el && isHighlighted && scrolledToRef.current !== row.id) {
                       scrolledToRef.current = row.id;
                       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                   }}
-                  style={{
-                    borderBottom: '1px solid var(--border-soft)',
-                    cursor: onRowClick ? 'pointer' : 'default',
-                    backgroundColor:
-                      isHighlighted || isSelected ? 'var(--state-info-bg)' : undefined,
-                    boxShadow:
-                      isHighlighted || isSelected
-                        ? 'inset 2px 0 0 var(--state-info-fg)'
-                        : undefined,
-                    transition: 'background-color 0.4s ease',
-                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={cell.column.columnDef.meta?.className}
-                      style={{
-                        padding: cellPad,
-                        color: 'var(--text-default)',
-                        verticalAlign: 'middle',
-                      }}
+                      className={cn(
+                        cell.column.columnDef.meta?.className,
+                        'align-middle text-ink-default',
+                        cellPad,
+                      )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

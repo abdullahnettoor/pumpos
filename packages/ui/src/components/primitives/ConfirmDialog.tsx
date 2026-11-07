@@ -119,39 +119,14 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
             aria-modal="true"
             aria-label={state.title}
             onMouseDown={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '420px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              boxShadow: 'var(--shadow-dialog)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              fontFamily: 'var(--font-sans)',
-            }}
+            className="flex w-full max-w-105 flex-col gap-3 rounded-card border border-border-soft bg-surface p-5 font-sans shadow-(--shadow-dialog)"
           >
-            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              {state.title}
-            </h2>
+            <h2 className="text-[15px] font-semibold text-ink-strong">{state.title}</h2>
             {state.message != null && (
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                {state.message}
-              </div>
+              <div className="text-[13px] leading-[1.5] text-ink-muted">{state.message}</div>
             )}
             {state.input && (
-              <label
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--text-strong)',
-                }}
-              >
+              <label className="flex flex-col gap-1.5 text-[12px] font-semibold text-ink-strong">
                 {state.input.label}
                 <Input
                   inputSize="sm"
@@ -165,9 +140,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 />
               </label>
             )}
-            <div
-              style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}
-            >
+            <div className="mt-1 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"

@@ -353,20 +353,10 @@ export const AppShell: React.FC<AppShellProps> = ({
   return (
     <div
       ref={shellRef}
-      className="app-shell"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        width: '100vw',
-        backgroundColor: 'var(--bg-canvas)',
-        color: 'var(--text-default)',
-        fontFamily: 'var(--font-sans)',
-        overflow: 'hidden',
-      }}
+      className="app-shell flex h-screen w-screen flex-col overflow-hidden bg-canvas font-sans text-ink-default"
     >
       {/* Full-width top bar (pump-ds): hamburger + brand · station · search · + New · notifications · user */}
-      <div className="no-print" style={{ flexShrink: 0 }}>
+      <div className="no-print shrink-0">
         <AppTopBar
           selectedStation={selectedStation}
           navItems={navItems}
@@ -388,30 +378,24 @@ export const AppShell: React.FC<AppShellProps> = ({
       </div>
 
       {/* Body: sidebar rail + content canvas */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+      <div className="relative flex min-h-0 flex-1">
         {/* Sidebar Rail */}
         <aside
-          className="no-print relative"
-          style={{
-            // A narrow shell always reserves the 60px rail; the overlay floats over it.
-            width: narrow || collapsed ? '60px' : '220px',
-            transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-            flexShrink: 0,
-          }}
+          // A narrow shell always reserves the 60px rail; the overlay floats over it.
+          className={cn(
+            'no-print relative shrink-0 transition-[width] duration-150 ease-in-out motion-reduce:transition-none',
+            narrow || collapsed ? 'w-15' : 'w-55',
+          )}
         >
           <div
             ref={panelRef}
             data-testid="sidebar-panel"
-            className={showOverlay ? 'z-30 shadow-(--shadow-drawer)' : undefined}
-            style={{
-              ...(showOverlay
-                ? { position: 'absolute', left: 0, top: 0, bottom: 0, width: '220px' }
-                : { height: '100%' }),
-              backgroundColor: 'var(--bg-surface-alt)',
-              borderRight: '1px solid var(--border-soft)',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
+            className={cn(
+              'flex flex-col border-r border-border-soft bg-surface-alt',
+              showOverlay
+                ? 'absolute inset-y-0 left-0 z-30 w-55 shadow-(--shadow-drawer)'
+                : 'h-full',
+            )}
           >
             {/* Navigation links — grouped, collapsible-friendly */}
             <nav
@@ -525,17 +509,9 @@ export const AppShell: React.FC<AppShellProps> = ({
 
         {/* Content canvas */}
         <main
-          className="app-shell__main"
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            // Keep the full padding on every side: full-bleed children (e.g. the
-            // sticky shift control bar's backdrop) extend by exactly
-            // var(--space-6), so a trimmed right padding would overflow and add a
-            // horizontal scroll.
-            padding: 'var(--space-6)',
-            position: 'relative',
-          }}
+          // Keep full padding on every side: full-bleed children extend by
+          // var(--space-6), so trimming the right adds horizontal scroll.
+          className="app-shell__main relative flex-1 overflow-y-auto p-6"
         >
           {/* Subscription state is app-wide, so the notice sits above every
               screen rather than being remembered on each one. */}
@@ -545,7 +521,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       </div>
 
       {/* Bottom status bar (pump-ds): sync · business day · warnings · shift · version/update */}
-      <div className="no-print" style={{ flexShrink: 0 }}>
+      <div className="no-print shrink-0">
         <AppStatusBar
           selectedStation={selectedStation}
           syncStatus={syncStatus}

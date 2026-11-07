@@ -113,7 +113,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
 
   return (
     <article
-      className={`overflow-hidden rounded-lg border bg-surface ${
+      className={`overflow-hidden rounded-card border bg-surface ${
         alert ? 'border-danger-fg/40' : 'border-border-soft'
       }`}
       data-testid={`fuel-${p.code}`}
@@ -121,7 +121,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
     >
       <header className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className={`size-2 shrink-0 rounded-[3px] ${p.swatch}`} aria-hidden="true" />
+          <span className={`size-2 shrink-0 rounded-chip ${p.swatch}`} aria-hidden="true" />
           <h3 className="text-[14px] font-semibold text-ink">{p.name}</h3>
           <span className="text-[12px] text-ink-muted">{p.code}</span>
         </div>

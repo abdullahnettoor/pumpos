@@ -44,7 +44,7 @@ const DuLine: React.FC<{ du: DuRow }> = ({ du }) => (
 );
 
 const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
-  <div className="rounded-lg border border-border-soft bg-surface">
+  <div className="rounded-card border border-border-soft bg-surface">
     <div className="border-b border-border-soft px-3.5 py-3">
       <div className="flex items-center gap-2 text-[13px] font-semibold">
         <Dot
@@ -93,7 +93,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
 
 const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ last, onOpen }) => (
   <div
-    className="mt-2 rounded-lg border border-border-soft bg-surface px-3.5 py-3"
+    className="mt-2 rounded-card border border-border-soft bg-surface px-3.5 py-3"
     data-testid="last-closed"
   >
     <div className="flex items-center">
@@ -156,8 +156,8 @@ export const ForecourtCard: React.FC = () => {
         </>
       ) : model ? (
         <>
-          <div className="rounded-lg border border-border-soft bg-surface px-4 py-5 text-center">
-            <div className="mx-auto grid size-11 place-items-center rounded-xl bg-surface-alt text-ink-muted">
+          <div className="rounded-card border border-border-soft bg-surface px-4 py-5 text-center">
+            <div className="mx-auto grid size-11 place-items-center rounded-card bg-surface-alt text-ink-muted">
               <Fuel className="size-[22px]" aria-hidden="true" />
             </div>
             <div className="mt-2.5 text-[13px] font-semibold text-ink">

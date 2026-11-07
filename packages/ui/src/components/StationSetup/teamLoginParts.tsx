@@ -171,7 +171,7 @@ const CredentialRow: React.FC<{ label: string; value: string; onCopy: () => void
   value,
   onCopy,
 }) => (
-  <div className="flex items-center justify-between gap-2 rounded-[8px] border border-border-soft bg-surface-alt px-2.5 py-2">
+  <div className="flex items-center justify-between gap-2 rounded-input border border-border-soft bg-surface-alt px-2.5 py-2">
     <div className="flex min-w-0 flex-col">
       <span className="text-[12px] text-ink-muted">{label}</span>
       <span className="truncate font-mono text-[13px] text-ink-strong">{value}</span>
@@ -190,7 +190,7 @@ export const CredentialsCard: React.FC<{
   <div className="flex flex-col gap-3.5">
     <div
       role="status"
-      className="flex items-center gap-2 rounded-[8px] bg-success-bg px-3 py-2.5 text-[12px] font-semibold text-success-fg"
+      className="flex items-center gap-2 rounded-input bg-success-bg px-3 py-2.5 text-[12px] font-semibold text-success-fg"
     >
       <Icon name="check" size="xs" />
       Login ready. Copy and hand these over — the password is shown only once.

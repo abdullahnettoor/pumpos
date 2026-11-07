@@ -353,7 +353,7 @@ export function DateRangeMenu({
                     tabIndex={-1}
                     onClick={() => choose(p)}
                     className={cn(
-                      'flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-left text-[13px] outline-none',
+                      'flex w-full items-center justify-between gap-3 rounded-button px-2.5 py-1.5 text-left text-[13px] outline-none',
                       'hover:bg-surface-alt focus-visible:bg-surface-alt',
                       checked ? 'font-semibold text-brand' : 'text-ink-default',
                     )}

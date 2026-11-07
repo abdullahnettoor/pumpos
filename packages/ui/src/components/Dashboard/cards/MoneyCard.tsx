@@ -76,7 +76,7 @@ export const MoneyCard: React.FC = () => {
       variant="plain"
     >
       <div
-        className="flex flex-col gap-3 rounded-lg border border-brand/25 bg-linear-to-r from-success-bg to-surface p-3.5"
+        className="flex flex-col gap-3 rounded-card border border-border-soft bg-surface p-3.5"
         data-testid="money-hero"
       >
         {!hasClosedShift ? (
