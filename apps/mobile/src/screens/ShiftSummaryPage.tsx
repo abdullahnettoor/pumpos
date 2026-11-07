@@ -112,7 +112,7 @@ export const ShiftSummaryPage: React.FC<Props> = ({ station, shiftId, initial })
       </SectionLabel>
       <DrawerReconciliation drawers={f.drawers} office={f.office} />
       {v.twoLevel && (
-        <p className="px-4 pt-2 text-[11px] text-text-muted">
+        <p className="px-4 pt-2 text-xs text-text-muted">
           Attendant variance is each drawer against its expected cash{' '}
           <span className="num">({signedRupees(v.attendant ?? 0)})</span>. Office count is the cash
           counted at close against what the drawers declared.

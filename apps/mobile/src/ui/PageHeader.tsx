@@ -27,7 +27,7 @@ export const PageHeader: React.FC<Props> = ({ title, right, stationName, onStati
           onClick={onStationPress}
           aria-label={`${stationName}, open account`}
           data-station-button=""
-          className="block max-w-full truncate text-left text-[11px] font-semibold text-text-muted"
+          className="block max-w-full truncate text-left text-xs font-semibold text-text-muted"
         >
           {stationName}
         </button>

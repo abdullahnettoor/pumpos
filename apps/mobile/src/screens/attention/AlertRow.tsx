@@ -32,9 +32,7 @@ export const AlertRow: React.FC<Props> = ({ alert, onOpen, showAction = false })
         <span className="block truncate text-[13px] font-semibold text-text-high">
           {alert.title}
         </span>
-        {alert.meta && (
-          <span className="block truncate text-[11px] text-text-muted">{alert.meta}</span>
-        )}
+        {alert.meta && <span className="block truncate text-xs text-text-muted">{alert.meta}</span>}
       </span>
       {onOpen && (
         <span className={`flex flex-shrink-0 items-center gap-0.5 text-xs font-bold ${tone.text}`}>

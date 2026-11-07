@@ -10,7 +10,7 @@ const COLS = 'grid grid-cols-[1.1fr_1fr_1fr_0.9fr] items-baseline gap-1 px-3';
 export const NozzleTable: React.FC<{ nozzles: readonly NozzleLine[] }> = ({ nozzles }) => (
   <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
     <div
-      className={`${COLS} py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint [&>:not(:first-child)]:text-right`}
+      className={`${COLS} py-2 text-xs font-bold uppercase tracking-[0.08em] text-text-faint [&>:not(:first-child)]:text-right`}
     >
       <span>Nozzle</span>
       <span>Opening</span>
@@ -29,16 +29,14 @@ export const NozzleTable: React.FC<{ nozzles: readonly NozzleLine[] }> = ({ nozz
       >
         <span className="min-w-0">
           <b className="block text-[13px] text-text-high">{n.nozzle}</b>
-          {n.detail && (
-            <span className="block truncate text-[10px] text-text-muted">{n.detail}</span>
-          )}
+          {n.detail && <span className="block truncate text-xs text-text-muted">{n.detail}</span>}
         </span>
         <span className="num text-text-muted">{reading(n.opening)}</span>
         <span className="num text-text-muted">{reading(n.closing)}</span>
         <span className="num font-semibold text-text-high">
           {reading(n.litres)}
           {n.testing > 0 && (
-            <span className="block text-[10px] font-normal text-text-muted">
+            <span className="block text-xs font-normal text-text-muted">
               −{reading(n.testing)} test
             </span>
           )}

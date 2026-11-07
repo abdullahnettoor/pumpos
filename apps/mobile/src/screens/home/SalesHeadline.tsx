@@ -53,11 +53,11 @@ export const SalesHeadline: React.FC<Props> = ({ sales, split, openShift, trend 
     <div className="col-span-2 rounded-[14px] border border-line bg-card p-3">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium text-text-muted">Sales so far today</p>
+          <p className="text-xs font-medium text-text-muted">Sales so far today</p>
           <p className="num mt-1 text-[30px] font-semibold tracking-[-0.03em] text-text-high">
             {rupees(sales.total)}
           </p>
-          <p className="num text-[11px] text-text-muted">
+          <p className="num text-xs text-text-muted">
             {sales.fuelVolumeLabel} fuel · {rupees(sales.productsValue)} products
           </p>
         </div>
@@ -77,7 +77,7 @@ export const SalesHeadline: React.FC<Props> = ({ sales, split, openShift, trend 
               />
             ))}
           </div>
-          <div className="mt-1.5 flex justify-between gap-3 text-[11px] text-text-muted">
+          <div className="mt-1.5 flex justify-between gap-3 text-xs text-text-muted">
             <span className="truncate">{closedLabel}</span>
             {openShift && (
               <span className="flex-shrink-0">{openShift.name} fuel · counted at close</span>

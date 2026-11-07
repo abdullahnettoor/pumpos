@@ -54,9 +54,7 @@ export const ToCollect: React.FC<Props> = ({ stationId, query, onOpenCustomer })
         value={inr(totalOwed(customers))}
       >
         {overCount > 0 && (
-          <p className="mt-1 text-[11.5px] font-semibold text-bad-fg">
-            {overCount} over credit limit
-          </p>
+          <p className="mt-1 text-xs font-semibold text-bad-fg">{overCount} over credit limit</p>
         )}
         <AgingSplit aging={receivables.summary?.aging} />
       </HeroCard>

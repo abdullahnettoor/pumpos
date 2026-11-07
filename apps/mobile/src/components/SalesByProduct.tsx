@@ -53,7 +53,7 @@ const Note: React.FC<{ note: GroupNote }> = ({ note }) => (
 );
 
 const GroupHeader: React.FC<{ title: string; note: GroupNote }> = ({ title, note }) => (
-  <div className="flex justify-between border-t border-line bg-card-alt px-3 pb-1.5 pt-2.5 text-[10px] font-bold uppercase tracking-[0.1em] text-text-faint">
+  <div className="flex justify-between border-t border-line bg-card-alt px-3 pb-1.5 pt-2.5 text-xs font-bold uppercase tracking-[0.1em] text-text-faint">
     <span>{title}</span>
     <Note note={note} />
   </div>
@@ -68,7 +68,7 @@ const Row: React.FC<{
   <div className="grid grid-cols-[12px_1fr_auto_auto] items-center gap-2.5 border-t border-line px-3 py-2.5 first:border-t-0">
     <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-[3px] ${swatch}`} />
     <div className="min-w-0 truncate text-[13px] font-semibold text-text-high">{name}</div>
-    <span className="num text-right text-[11.5px] text-text-muted">{quantity}</span>
+    <span className="num text-right text-xs text-text-muted">{quantity}</span>
     <span className="num min-w-[78px] text-right text-[13.5px] font-semibold text-text-high">
       {rupees(value)}
     </span>
@@ -113,7 +113,7 @@ export const SalesByProduct: React.FC<Props> = ({
     <div className="mx-3 overflow-hidden rounded-[14px] border border-line bg-card">
       <div className="px-3 pb-2.5 pt-3">
         <div className="flex items-baseline justify-between">
-          <span className="text-[11px] font-medium text-text-muted">Total sales</span>
+          <span className="text-xs font-medium text-text-muted">Total sales</span>
           <span className="num text-[17px] font-semibold text-text-high">{rupees(total)}</span>
         </div>
         {segments.length > 0 && (
@@ -164,7 +164,7 @@ export const SalesByProduct: React.FC<Props> = ({
         <div className="grid grid-cols-[12px_1fr_auto_auto] items-center gap-2.5 border-t border-line bg-card-alt px-3 py-2.5">
           <span />
           <span className="text-[13px] font-semibold text-text-high">Products total</span>
-          <span className="num text-right text-[11.5px] text-text-muted">
+          <span className="num text-right text-xs text-text-muted">
             {units > 0 ? unitsLabel(units) : ''}
           </span>
           <span className="num min-w-[78px] text-right text-[13.5px] font-semibold text-text-high">

@@ -85,7 +85,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
         <Avatar name={userName} size="lg" />
         <div className="min-w-0">
           <p className="truncate text-[15px] font-bold text-text-high">{userName}</p>
-          <p className="truncate text-[11px] text-text-muted">
+          <p className="truncate text-xs text-text-muted">
             {role}
             {orgName ? ` · ${orgName}` : ''}
           </p>
@@ -106,7 +106,7 @@ const SheetBody: React.FC<Omit<Props, 'open'>> = ({
               chevron={false}
               leading={
                 <span
-                  className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-[9px] border text-[11px] font-bold ${
+                  className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-[9px] border text-xs font-bold ${
                     on
                       ? 'border-accent bg-accent text-on-accent'
                       : 'border-line bg-card-alt text-text-muted'

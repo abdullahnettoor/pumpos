@@ -43,7 +43,7 @@ export const CredentialsCard: React.FC<Props> = ({ title, name, login, password,
           <dd className="num m-0 text-[13.5px] font-semibold text-text-high">{password}</dd>
         </div>
       </dl>
-      <p className="m-0 text-[11.5px] text-text-muted">
+      <p className="m-0 text-xs text-text-muted">
         Share these now: the password cannot be shown again. They can change it after signing in.
       </p>
       <div className="grid grid-cols-2 gap-2.5">

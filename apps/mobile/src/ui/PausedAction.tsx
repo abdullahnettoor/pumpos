@@ -31,7 +31,7 @@ export const PausedReason: React.FC<{
   id: string;
   children: React.ReactNode;
   className?: string;
-}> = ({ id, children, className = 'text-[11px]' }) => (
+}> = ({ id, children, className = 'text-xs' }) => (
   <p id={id} className={`m-0 text-text-muted ${className}`}>
     {children}
   </p>

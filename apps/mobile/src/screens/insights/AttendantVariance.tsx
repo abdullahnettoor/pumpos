@@ -34,7 +34,7 @@ const Block: React.FC<{ stationId: string; days: InsightsRangeDays }> = ({ stati
               <Avatar name={a.name} size="sm" />
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-semibold text-text-high">{a.name}</p>
-                <p className="truncate text-[11px] text-text-muted">{attendantNote(a)}</p>
+                <p className="truncate text-xs text-text-muted">{attendantNote(a)}</p>
               </div>
               {/* Decorative: the signed net beside it says the same in words and figures. */}
               <div aria-hidden="true" className="relative h-2 rounded-full bg-track">

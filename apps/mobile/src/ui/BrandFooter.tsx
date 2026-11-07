@@ -12,7 +12,7 @@ const APP_VERSION: string | undefined =
  * left out rather than faked when a build did not provide one.
  */
 export const BrandFooter: React.FC = () => (
-  <p className="m-0 flex items-center justify-center gap-1.5 px-4 pb-1 pt-4 text-[11px] text-text-muted">
+  <p className="m-0 flex items-center justify-center gap-1.5 px-4 pb-1 pt-4 text-xs text-text-muted">
     <PumpOSMark className="h-3.5" />
     <span>{APP_VERSION ? `PumpOS · v${APP_VERSION}` : 'PumpOS'}</span>
   </p>

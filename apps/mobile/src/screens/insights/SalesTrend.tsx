@@ -23,7 +23,7 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
     <div className="mx-3 rounded-[14px] border border-line bg-card p-3.5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] font-medium text-text-muted">
+          <p className="text-xs font-medium text-text-muted">
             Total sales · {rangeLabel(data.range.from, data.range.to)}
           </p>
           <p className="num mt-1 text-[26px] font-semibold tracking-[-0.03em] text-text-high">
@@ -48,18 +48,16 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
               className={`w-full rounded-t-[3px] ${b.best ? 'bg-accent' : 'bg-track'} ${b.closed ? '' : 'border-t border-dashed border-line'}`}
               style={{ height: b.closed ? `${b.heightPct}%` : '2px' }}
             />
-            {labelled && (
-              <span className="text-[9.5px] text-text-muted">{weekdayInitial(b.date)}</span>
-            )}
+            {labelled && <span className="text-xs text-text-muted">{weekdayInitial(b.date)}</span>}
           </div>
         ))}
       </div>
       {weekly && (
-        <p className="mt-1.5 text-[10.5px] text-text-faint">
+        <p className="mt-1.5 text-xs text-text-faint">
           Each bar is a week&rsquo;s average per closed day.
         </p>
       )}
-      <p className="mt-2 text-[11px] text-text-muted">
+      <p className="mt-2 text-xs text-text-muted">
         {data.best && (
           <>
             Best day:{' '}
@@ -73,7 +71,7 @@ export const SalesTrend: React.FC<{ data: InsightsSales; days: number }> = ({ da
         {data.previousAverage > 0 && <> (prior {rupees(data.previousAverage)})</>}
       </p>
       {data.changePct === null && data.previousClosedDays > 0 && (
-        <p className="mt-1 text-[11px] text-text-faint">
+        <p className="mt-1 text-xs text-text-faint">
           Not compared with the prior {days} days: that needs {INSIGHTS_MIN_COMPARABLE_DAYS}+ closed
           days in each period ({data.closedDays} now, {data.previousClosedDays} before).
         </p>

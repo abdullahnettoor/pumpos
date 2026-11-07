@@ -175,7 +175,7 @@ export const CustomerSaleForm: React.FC<{
   const renderList = (label: string, lines: CreditLine[], ch: 'credit' | 'omc') =>
     lines.length > 0 ? (
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.08em] text-text-faint">
+        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.08em] text-text-faint">
           <span>{label}</span>
           <span className="num text-text-high">
             {inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}
@@ -191,7 +191,7 @@ export const CustomerSaleForm: React.FC<{
                 <p className="truncate text-[13px] font-semibold text-text-high">
                   {l.customerName || 'Fuel card (no customer)'}
                 </p>
-                <p className="num truncate text-[11px] text-text-muted">
+                <p className="num truncate text-xs text-text-muted">
                   {[
                     l.vehicleLabel,
                     [
@@ -261,13 +261,13 @@ export const CustomerSaleForm: React.FC<{
             ))}
           </div>
           {isOmc && (
-            <p className="text-[11px] text-text-muted">
+            <p className="text-xs text-text-muted">
               Settled to CMS by the Oil Company — not a receivable. Customer optional.
             </p>
           )}
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-text-muted">
+            <span className="text-xs font-semibold text-text-muted">
               Customer or vehicle{isOmc ? ' (optional)' : ''}
             </span>
             <Combobox

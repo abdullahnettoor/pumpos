@@ -26,7 +26,7 @@ export const AttendantHeader: React.FC<{
     </span>
     <div className="min-w-0 flex-1 leading-tight">
       <h1 className="m-0 truncate text-[15px] font-extrabold text-text-high">{stationName}</h1>
-      <p className="m-0 truncate text-[11px] text-text-muted">{userName} · Attendant</p>
+      <p className="m-0 truncate text-xs text-text-muted">{userName} · Attendant</p>
     </div>
     <button
       type="button"

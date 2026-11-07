@@ -27,14 +27,14 @@ export const BalanceFigure: React.FC<Props> = ({ balance, over = false, caption 
       </span>
       {kind === 'owes' && caption && (
         <span
-          className={`block text-[11px] font-normal ${TONE_TEXT[caption.tone]}`}
+          className={`block text-xs font-normal ${TONE_TEXT[caption.tone]}`}
           data-tone={caption.tone}
         >
           {caption.text}
         </span>
       )}
       {kind !== 'owes' && (
-        <span className="block text-[11px] font-normal text-text-muted">
+        <span className="block text-xs font-normal text-text-muted">
           {kind === 'advance' ? MONEY_TERMS.advance : 'Settled'}
         </span>
       )}
