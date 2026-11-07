@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { schema, type DbExecutor } from '@pump/db';
 import {
   DEFAULT_ACCOUNT_NAME,
   type FinancialAccountType,

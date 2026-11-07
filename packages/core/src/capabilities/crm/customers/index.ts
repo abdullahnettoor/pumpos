@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { can, creditLimitSchema } from '@pump/shared';
-import type { CustomerType, Role } from '@pump/shared';
+import type { CustomerType } from '@pump/shared';
 import {
   actorPrincipal,
   BusinessEvents,

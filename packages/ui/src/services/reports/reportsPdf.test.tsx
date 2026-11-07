@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vite-plus/test';
 import React from 'react';
 import path from 'node:path';
-import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { Font, pdf, Text } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
@@ -141,7 +140,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const [leftBox, rightLogo] = row.props.children;
 
     // Left box contains vector Svg mark and titles
-    const [svg, textGroup] = leftBox.props.children;
+    const [svg] = leftBox.props.children;
     expect(svg.props.viewBox).toBe(MARK_VIEWBOX);
     // Aspect ratio 21.3 / 24 = 0.8875 closely matches MARK_VIEWBOX 676.7 / 762.3 = 0.8877
     expect(svg.props.width).toBe(21.3);

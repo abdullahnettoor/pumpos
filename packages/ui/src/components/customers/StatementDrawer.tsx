@@ -39,7 +39,6 @@ interface StatementDrawerProps {
  */
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({
   customer,
-  stationId,
   clock,
   onClose,
   onEdit,

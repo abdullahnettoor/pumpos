@@ -86,7 +86,6 @@ import type {
   SupplierPayableSummary,
   InsightsStockLoss,
   DecantationView,
-  LinkablePurchase,
   OrganizationPayload,
 } from '@pump/shared';
 

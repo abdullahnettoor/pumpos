@@ -14,7 +14,7 @@ import {
   type Cell,
 } from './shiftSummaryDoc.js';
 import { shiftDisplayLabel } from '@pump/shared';
-import type { AttendantReportDispenser, AttendantReportShift } from '@pump/shared';
+import type { AttendantReportShift } from '@pump/shared';
 import type { AttendantStatementData } from './attendantStatementData.js';
 import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
 import { creditChitRows, shiftShowsCreditBreakdown } from './attendantCreditLines.js';

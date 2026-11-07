@@ -2,6 +2,7 @@ import {
   INSIGHTS_MIN_COMPARABLE_DAYS,
   isStockVarianceWithinTolerance,
   round2,
+  shiftBusinessDate,
   STOCK_VARIANCE_TOLERANCE_PCT,
 } from '@pump/shared';
 import type {
@@ -30,14 +31,8 @@ export function percentChange(current: number, previous: number): number | null 
 
 /** Every calendar date from `from` to `to`, inclusive (plain `YYYY-MM-DD`, no timezone). */
 export function eachDate(from: string, to: string): string[] {
-  const [y, m, d] = from.split('-').map(Number);
-  const cursor = new Date(Date.UTC(y, m - 1, d));
   const out: string[] = [];
-  for (let date = from; date <= to;) {
-    out.push(date);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-    date = cursor.toISOString().slice(0, 10);
-  }
+  for (let date = from; date <= to; date = shiftBusinessDate(date, 1)) out.push(date);
   return out;
 }
 

@@ -3,7 +3,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { can, customerCreateSchema, resolveEntryDate } from '@pump/shared';
 import { principalFor } from '../../access/effectivePrincipal.js';
-import type { Role } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';

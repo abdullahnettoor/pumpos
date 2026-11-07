@@ -1,5 +1,5 @@
 import { and, eq, ne, or, sql } from 'drizzle-orm';
-import { schema, type DbClient, type DbExecutor } from '@pump/db';
+import { schema, type DbExecutor } from '@pump/db';
 import { productCategoryOf, type ProductType } from '@pump/shared';
 import { dssrFuelSalesValue, dssrNetVolume, dssrProductSalesValue } from '../dssr-snapshot-sql.js';
 import { shiftSummaryNetVolumeSql } from '../shift-summary-sql.js';

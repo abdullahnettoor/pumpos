@@ -8,7 +8,6 @@ import {
   RecordTransfer,
   RecordSettlement,
   RecordLedgerAdjustment,
-  type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';

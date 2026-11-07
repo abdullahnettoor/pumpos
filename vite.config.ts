@@ -178,7 +178,7 @@ export default defineConfig({
         rules: {
           'no-undef': 'off',
           'no-unused-vars': [
-            'warn',
+            'error',
             {
               argsIgnorePattern: '^_',
               varsIgnorePattern: '^_',

@@ -225,7 +225,6 @@ export const AppShell: React.FC<AppShellProps> = ({
   stations = [],
   selectedStation = null,
   onStationChange,
-  stationsLoading = false,
   environmentTag = null,
   stationReady = true,
   userMenuExtras,

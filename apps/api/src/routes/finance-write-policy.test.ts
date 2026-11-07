@@ -1,19 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';
 import { financeRouter } from './finance.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
-import {
-  fakeAccessDb,
-  guardCoverage,
-  policyRequest,
-  refusalsAcross,
-  ACTIVE,
-  IN_GRACE,
-  LAPSED_GRACE,
-  RESTRICTED,
-  SUSPENDED,
-} from './write-policy-harness.js';
+import { policyRequest, LAPSED_GRACE, RESTRICTED, SUSPENDED } from './write-policy-harness.js';
 
 /**
  * Financial operations under Restricted Access.
@@ -30,8 +19,6 @@ const ROUTERS: ReadonlyArray<[string, any]> = [
   ['/transactions', transactionsRouter],
   ['/finance', financeRouter],
 ];
-
-type Subscription = { status: string; accessUntil?: string | null };
 
 /** Money that has already moved. */
 const ENTRIES: ReadonlyArray<[string, string, string]> = [

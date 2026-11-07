@@ -53,8 +53,6 @@ const CASH_ACCOUNT = id(41);
 const OTHER_BANK_ACCOUNT = id(42);
 const BIG_BANK_ACCOUNT = id(43);
 
-/** The Current Business Date the list is read on. */
-const TODAY = '2026-10-30';
 const MONTH = { from: '2026-10-01', to: '2026-10-31' };
 
 const BOOTSTRAP = `

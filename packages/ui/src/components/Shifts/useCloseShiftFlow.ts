@@ -18,7 +18,7 @@ import {
 import { inr } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast, withNextStep } from '../primitives/ToastProvider.js';
-import { useRefreshTask, useRunTask } from '../../utils/runTask.js';
+import { useRefreshTask } from '../../utils/runTask.js';
 import type { DrawerRow } from './DrawerReconciliationTable.js';
 import {
   EMPTY_CLOSE_DRAFT,
@@ -120,7 +120,6 @@ export function useCloseShiftFlow(input: CloseShiftFlowInput) {
   } = input;
   const toast = useToast();
   const confirm = useConfirm();
-  const runTask = useRunTask();
   const refresh = useRefreshTask();
   const data = statusQ.data ?? null;
   const activeShift = data?.activeShift ?? null;

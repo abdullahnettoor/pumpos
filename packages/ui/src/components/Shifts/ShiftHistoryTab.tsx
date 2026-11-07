@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { can } from '@pump/shared';
 import { principalFor } from '../../access/effectivePrincipal.js';
 import {

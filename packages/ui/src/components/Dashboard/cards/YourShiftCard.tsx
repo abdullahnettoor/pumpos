@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ClipboardCheck, Gauge, Play, TriangleAlert, type LucideIcon } from 'lucide-react';
-import { nextShiftToOpen, type TimelineTemplate } from '@pump/shared';
+import { nextShiftToOpen } from '@pump/shared';
 import { Button } from '../../../pump-ds/index.js';
 import {
   useDensityTodaySummary,

@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import React from 'react';
 import { cn } from '../lib/cn.js';
 import { Dot } from '../dot/Dot.js';
 import { Icon } from '../icon/index.js';
