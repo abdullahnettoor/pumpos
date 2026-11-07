@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Role } from '@pump/shared';
 import { shiftsRouter } from './shifts.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
 import {
-  fakeAccessDb,
   guardCoverage,
   policyRequest,
-  refusalsAcross,
-  ACTIVE,
-  IN_GRACE,
   LAPSED_GRACE,
   RESTRICTED,
   SUSPENDED,
@@ -28,8 +23,6 @@ import {
  */
 
 const ROUTERS: ReadonlyArray<[string, any]> = [['/shifts', shiftsRouter]];
-
-type Subscription = { status: string; accessUntil?: string | null };
 
 /** The path a station must be able to walk to finish its day. */
 const CLOSE_PATH: ReadonlyArray<[string, string, string]> = [

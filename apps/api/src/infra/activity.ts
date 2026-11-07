@@ -128,15 +128,6 @@ export function resolveActivityActor(
   };
 }
 
-function humanizeEventType(eventType: string): string {
-  const words = eventType
-    .split('_')
-    .filter(Boolean)
-    .map((word) => word.toLowerCase());
-  if (words.length === 0) return 'Business event';
-  return words.map((word) => word[0]?.toUpperCase() + word.slice(1)).join(' ');
-}
-
 export function renderActivityFallback(input: ActivityRenderInput): RenderedActivity {
   const rendered = renderEventActivity({
     eventType: input.eventType,

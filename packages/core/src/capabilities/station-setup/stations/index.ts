@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   can,
-  type Role,
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelsChanged,
   tankLevelSettingsSchema,

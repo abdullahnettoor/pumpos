@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  FinalizeOnboardingResult,
   OnboardingDispenserDraft,
   OnboardingDraft,
   OnboardingNozzleDraft,
@@ -134,7 +133,6 @@ function wait(ms: number) {
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onOnboardingComplete,
   onExit,
-  userName,
 }) => {
   const runTask = useRunTask();
   const [stored] = useState(() => loadStoredOnboardingDraft());

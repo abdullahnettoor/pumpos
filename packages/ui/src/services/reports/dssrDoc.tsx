@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
-import { C, s, TableView, LetterheadBand } from './shiftSummaryDoc.js';
+import { C, s, LetterheadBand } from './shiftSummaryDoc.js';
 import { DSR_FULL_NAME, DSR_LABEL } from '@pump/shared';
 import type { TableColumn, TotalRow } from '../../pump-ds/table/columns.js';
 import { totalTexts } from '../../pump-ds/table/columns.js';

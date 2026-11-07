@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   attendantHandoverSchema,
@@ -26,7 +26,6 @@ import {
   GetBusinessDayStatus,
   RecordHandover,
   expectedShiftDrawerCash,
-  type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { requireCapabilityGuard } from '../infra/capability-guard.js';

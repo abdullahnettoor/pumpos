@@ -18,7 +18,7 @@ import {
   useStationSuppliers,
 } from '../query/hooks.js';
 import { isIdempotencyKeyConflict, keepsIdempotencyKey } from '../utils/idempotency.js';
-import { useRefreshTask, useRunTask } from '../utils/runTask.js';
+import { useRefreshTask } from '../utils/runTask.js';
 import { OfficeRecordContext, type OfficeRecordContextValue } from './context.js';
 import { typedAmount, type FormDraft } from './draft.js';
 import type { PartyOption } from './fields/PartyField.js';
@@ -138,7 +138,6 @@ const OfficeRecordSession: React.FC<
     dayStartsAt: settings.business_day_starts_at,
   });
   const toast = useToast();
-  const runTask = useRunTask();
   const refresh = useRefreshTask();
   const invalidateOperational = useInvalidateOperational();
   const side = useMediaQuery(PREVIEW_SIDE_QUERY);

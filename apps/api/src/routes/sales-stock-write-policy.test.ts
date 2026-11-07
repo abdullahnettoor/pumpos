@@ -1,21 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';
 import { decantationsRouter } from './decantations.js';
 import { densityRouter } from './density.js';
 import { dssrRouter } from './dssr.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
-import {
-  fakeAccessDb,
-  guardCoverage,
-  policyRequest,
-  refusalsAcross,
-  ACTIVE,
-  IN_GRACE,
-  LAPSED_GRACE,
-  RESTRICTED,
-  SUSPENDED,
-} from './write-policy-harness.js';
+import { policyRequest, LAPSED_GRACE, RESTRICTED, SUSPENDED } from './write-policy-harness.js';
 
 /**
  * Sales, stock and reporting under Restricted Access.
@@ -34,8 +23,6 @@ const ROUTERS: ReadonlyArray<[string, any]> = [
   ['/transactions', densityRouter],
   ['/dssr', dssrRouter],
 ];
-
-type Subscription = { status: string; accessUntil?: string | null };
 
 /** Recording work that has already physically happened. */
 const RECORDING: ReadonlyArray<[string, string, string]> = [
