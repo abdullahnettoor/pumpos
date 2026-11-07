@@ -52,7 +52,7 @@ one thing it decides, so a page never decides it again.
    with our naming, our tokens, and our a11y contract. Do not ship an
    anonymous `Calendar4` or `Browser2` into product screens.
 
-5. **Naming maps to the domain, not the catalog.** `BusinessDayPill`, not
+5. **Naming maps to the domain, not the catalog.** `BusinessDayChip`, not
    `DatePill4`. `StatusChip`, not `Badge12`.
 
 6. **Never show an empty state for a failed query.** "No expenses yet" when

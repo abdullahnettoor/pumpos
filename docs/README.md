@@ -17,8 +17,9 @@ Use these sources in this order when they disagree:
   screenshots against the current application before using it as a test script.
 - [`mobile-revamp-decisions.md`](mobile-revamp-decisions.md) — product decisions
   and current defaults from the mobile revamp (#388), with where to change each.
-- [`PUMP-ERP-DESIGN-SYSTEM.md`](PUMP-ERP-DESIGN-SYSTEM.md) and the root
-  [`DESIGN.md`](../DESIGN.md) — product design language and tokens.
+- The root [`DESIGN.md`](../DESIGN.md) — the design source of truth: tokens,
+  rules and page patterns. The old long-form spec is archived at
+  [`archive/PUMP-ERP-DESIGN-SYSTEM.md`](archive/PUMP-ERP-DESIGN-SYSTEM.md).
 - [`DATA-CACHING.md`](DATA-CACHING.md) — current client caching practice.
 - [`roadmap/`](roadmap/) — phase plans and design context. GitHub Issues track
   active task status; roadmap status notes are snapshots, not live state.
