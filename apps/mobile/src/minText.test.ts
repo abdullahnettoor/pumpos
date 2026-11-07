@@ -21,7 +21,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vite-plus/test';
-import { readTypeScale } from '../../../packages/ui/src/pump-ds/class-guard/scan.ts';
+import { readTypeScale } from '@pump/ui/src/pump-ds/class-guard/scan.ts';
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 const MIN_TEXT_PX = 12;
@@ -30,8 +30,11 @@ const EXCEPTION = /min-text exception:\s*[^\s*/}]/;
 
 const toPx = (n: string, unit: string) => Number(n) * (unit === 'rem' ? 16 : 1);
 
-/** Every sub-12px text size on one line, as written. */
-function smallTextOn(
+/**
+ * Every text size on one line that breaks the rules, as written: anything under
+ * 12px, and an arbitrary `text-[Npx]` that is not a DESIGN.md type-scale size.
+ */
+function textSizeViolationsOn(
   line: string,
   kind: 'source' | 'css',
   scale: ReadonlySet<number> = TYPE_SCALE_PX,
@@ -70,7 +73,7 @@ function scanText(
   const out: string[] = [];
   lines.forEach((line, i) => {
     if (EXCEPTION.test(line) || (i > 0 && EXCEPTION.test(lines[i - 1]!))) return;
-    for (const hit of smallTextOn(line, kind, scale)) out.push(`${i + 1}: ${hit}`);
+    for (const hit of textSizeViolationsOn(line, kind, scale)) out.push(`${i + 1}: ${hit}`);
   });
   return out;
 }
@@ -84,8 +87,8 @@ function walk(dir: string): string[] {
 
 const isTest = (f: string) => /\.test\.tsx?$/.test(f);
 
-describe('mobile text floor (12px)', () => {
-  it('no text below 12px in apps/mobile/src, outside marked exceptions', () => {
+describe('mobile text floor (12px) and type scale', () => {
+  it('no text below 12px or off the type scale in apps/mobile/src, outside marked exceptions', () => {
     const problems: string[] = [];
     for (const abs of walk(SRC)) {
       const rel = path.relative(SRC, abs).split(path.sep).join('/');
