@@ -214,9 +214,8 @@ The list holds documented exceptions and nothing else:
 `theme/config.ts` keeps the canvas colour as literal hex (`THEME_COLORS`),
 because the pre-paint script sets `<meta name="theme-color">` before any CSS
 loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. Under
-`small-text`, the two 10px table-header constants (`table/columns.tsx`
-`HEADER`, `primitives/DataTable.tsx` `HEADER_CLASS`) are the only lasting
-entries. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
+`small-text`, the shared 10px table-header constant (`table/columns.tsx`
+`HEADER`, also used by `DataTable`) is the only lasting entry. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
 `classGuard.test.ts` and a test that keeps the literal in step.
 
 **Lowering an entry.** After fixing violations, run `test:classes:update` and

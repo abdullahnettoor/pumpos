@@ -37,8 +37,8 @@
  *   because the pre-paint script sets `<meta name="theme-color">` before any
  *   CSS loads. `theme/tokens.test.ts` keeps it equal to `--bg-canvas`.
  * - `small-text` (#602), table headers only (10px uppercase, the one exception
- *   to the 12px floor): `pump-ds/table/columns.tsx` 1 (`HEADER`) and
- *   `components/primitives/DataTable.tsx` 1 (`HEADER_CLASS`).
+ *   to the 12px floor): `pump-ds/table/columns.tsx` 1 (`HEADER`), which
+ *   `components/primitives/DataTable.tsx` reuses.
  * - `small-text` `components/Shifts/OpenShiftForm.tsx` 1: temporary, swept once
  *   #619 (which rewrites that form) merges. Remove the entry then.
  *
