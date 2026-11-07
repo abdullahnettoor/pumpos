@@ -381,8 +381,8 @@ semantic tokens and the swap happens in `index.css`.
 Rules:
 
 - **Nothing on screen is below 12px.** The only exception is the 10px
-  uppercase table header (`table/columns.tsx` `HEADER`,
-  `primitives/DataTable.tsx` `HEADER_CLASS`). The class guard's `small-text`
+  uppercase table header (`table/columns.tsx` `HEADER`, which `DataTable`
+  also uses). The class guard's `small-text`
   rule enforces it; write `text-[12px]` for captions, chips and counts.
   Mobile follows the same minimum (`text-xs`); its one exception is the
   alerts-bell badge count, marked `min-text exception` in code.

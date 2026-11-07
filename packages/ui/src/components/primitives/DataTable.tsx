@@ -11,9 +11,7 @@ import {
 import { useRunTask } from '../../utils/runTask.js';
 import { DataSection } from '../../pump-ds/data-section/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
-
-/** Header type for a column without meta; a kind-styled column's meta overrides it. */
-const HEADER_CLASS = 'text-[10px] font-semibold uppercase tracking-[0.04em] text-ink-muted';
+import { HEADER } from '../../pump-ds/table/columns.js';
 
 declare module '@tanstack/react-table' {
   /**
@@ -158,7 +156,7 @@ export function DataTable<T>({
                     <th
                       key={header.id}
                       scope="col"
-                      className={cn(HEADER_CLASS, meta.headerClassName ?? meta.className)}
+                      className={cn(HEADER, meta.headerClassName ?? meta.className)}
                       aria-sort={
                         sorted === 'asc'
                           ? 'ascending'

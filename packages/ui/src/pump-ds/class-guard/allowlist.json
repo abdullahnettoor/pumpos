@@ -3,7 +3,6 @@
     "theme/config.ts": 2
   },
   "small-text": {
-    "components/primitives/DataTable.tsx": 1,
     "pump-ds/table/columns.tsx": 1
   }
 }
