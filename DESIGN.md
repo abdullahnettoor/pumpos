@@ -302,7 +302,8 @@ Scope and sources:
   in-app gallery is the Design System screen (`components/DesignSystem.tsx`).
 - The mobile app (`apps/mobile`) has its own "Control room" token set in
   `apps/mobile/src/theme/tokens.css`; its light colours reuse the values below
-  (`tokens.test.ts` reads this file), the rest of this document targets
+  (`tokens.test.ts` reads this file). The 12px minimum applies there too
+  (`apps/mobile/src/minText.test.ts`); the rest of this document targets
   desktop and web.
 
 ## Colors
@@ -383,6 +384,8 @@ Rules:
   uppercase table header (`table/columns.tsx` `HEADER`,
   `primitives/DataTable.tsx` `HEADER_CLASS`). The class guard's `small-text`
   rule enforces it; write `text-[12px]` for captions, chips and counts.
+  Mobile follows the same minimum (`text-xs`); its one exception is the
+  alerts-bell badge count, marked `min-text exception` in code.
 - Use the scale above; a size outside it needs a reason.
 - **Mono for figures, sans for words.** Money, litres, meter readings,
   variance and counts are mono with tabular digits, right-aligned in tables at
