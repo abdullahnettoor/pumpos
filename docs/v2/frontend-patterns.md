@@ -119,9 +119,10 @@ multiple screens. Prefer the editing pattern **List → Drawer → Edit** over m
 
 ## Design system
 
-Source of truth: [`docs/PUMP-ERP-DESIGN-SYSTEM.md`](../PUMP-ERP-DESIGN-SYSTEM.md) and the
-`pump-erp-design-system` skill. "Calm Industrial Precision": compact, light-first,
-state-forward, operator-speed.
+Source of truth: the root [`DESIGN.md`](../../DESIGN.md) (tokens and rules) and
+[`packages/ui/src/pump-ds/README.md`](../../packages/ui/src/pump-ds/README.md) (components),
+applied through the `pump-erp-design-system` skill. "Calm Industrial Precision": compact,
+light-first, state-forward, operator-speed.
 
 - **Tokens** (`index.css`): `--bg-*`, `--text-*`, `--brand-primary` (Petrol Green),
   `--brand-secondary` (Diesel Blue), `--brand-warning` (Amber), `--brand-danger` (Red),

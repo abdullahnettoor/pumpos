@@ -42,7 +42,7 @@ Three words: **precise, practical, confident.**
 - **Emotional target:** the calm of a well-labeled instrument panel. Trust under pressure. The interface should feel _familiar on first use, fast after one day, and unshakeable during a shortage investigation._
 - **Not:** casual, playful, luxury-marketing, "delightful" in the SaaS sense. Premium is earned through restraint and correctness, not decoration.
 
-The design language name we use internally is **"Calm Industrial Precision"** (see [docs/PUMP-ERP-DESIGN-SYSTEM.md](docs/PUMP-ERP-DESIGN-SYSTEM.md)). Petrol green as the committed brand color; the rest of the surface is disciplined light neutrals.
+The design language name we use internally is **"Calm Industrial Precision"** (see [DESIGN.md](DESIGN.md)). Petrol green as the committed brand color; the rest of the surface is disciplined light neutrals.
 
 ## Anti-references
 

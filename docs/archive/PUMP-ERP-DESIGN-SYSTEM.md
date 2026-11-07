@@ -1,3 +1,5 @@
+> **Archived — superseded by the root [`DESIGN.md`](../../DESIGN.md), which is the design source of truth.**
+
 # Pump ERP Design System
 
 ## Purpose

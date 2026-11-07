@@ -1,4 +1,4 @@
-> **Archived historical proposal — not current product guidance.** Current UI guidance lives in `/docs/PUMP-ERP-DESIGN-SYSTEM.md`, `/DESIGN.md`, and the implementation in `packages/ui`.
+> **Archived historical proposal — not current product guidance.** Current UI guidance lives in `/DESIGN.md` and the implementation in `packages/ui`.
 
 ## Purpose
 
