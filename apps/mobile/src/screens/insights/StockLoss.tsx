@@ -32,18 +32,18 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
             >
               <span
                 title={t.productCode}
-                className="grid h-[30px] min-w-0 place-items-center overflow-hidden rounded-[9px] bg-track px-1 text-[10.5px] font-bold text-text-high"
+                className="grid h-[30px] min-w-0 place-items-center overflow-hidden rounded-[9px] bg-track px-1 text-xs font-bold text-text-high"
               >
                 <span className="block max-w-full truncate">{t.productCode}</span>
               </span>
               <div className="min-w-0">
                 <p className={`num truncate text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
                   {line.litres}
-                  <span className="ml-1.5 font-sans text-[11px] font-medium text-text-muted">
+                  <span className="ml-1.5 font-sans text-xs font-medium text-text-muted">
                     {t.tankName}
                   </span>
                 </p>
-                <p className="truncate text-[11px] text-text-muted">{line.note}</p>
+                <p className="truncate text-xs text-text-muted">{line.note}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <span className={`num text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
@@ -57,7 +57,7 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
           );
         })}
       </ListGroup>
-      <p className="px-4 pt-1.5 text-[11px] text-text-faint">
+      <p className="px-4 pt-1.5 text-xs text-text-faint">
         Same figures as each day's report. Rupees at the cost frozen with the day; — where the
         report has none.
       </p>

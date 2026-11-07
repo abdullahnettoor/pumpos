@@ -68,7 +68,7 @@ export const StepCard: React.FC<{
               <span className="sr-only"> — {STATUS_LABEL[status]}</span>
             </span>
             <span
-              className={`block truncate text-[11px] ${status === 'error' ? 'text-bad-fg' : 'text-text-muted'}`}
+              className={`block truncate text-xs ${status === 'error' ? 'text-bad-fg' : 'text-text-muted'}`}
             >
               {summary}
             </span>

@@ -24,7 +24,7 @@ export const DetailHeader: React.FC<Props> = ({ title, subtitle, right }) => {
           <h1 className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-high">
             {title}
           </h1>
-          {subtitle && <p className="mt-px truncate text-[11.5px] text-text-muted">{subtitle}</p>}
+          {subtitle && <p className="mt-px truncate text-xs text-text-muted">{subtitle}</p>}
         </div>
         {right}
       </header>

@@ -41,7 +41,7 @@ const DateField: React.FC<{
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-[11.5px] font-semibold text-text-muted">
+        <label htmlFor={id} className="text-xs font-semibold text-text-muted">
           {label}
         </label>
         <span className="num truncate text-xs font-semibold text-text-high">
@@ -60,7 +60,7 @@ const DateField: React.FC<{
       <p
         id={errorId}
         role={error ? 'alert' : undefined}
-        className="m-0 text-[11px] text-bad-fg empty:hidden"
+        className="m-0 text-xs text-bad-fg empty:hidden"
       >
         {error}
       </p>

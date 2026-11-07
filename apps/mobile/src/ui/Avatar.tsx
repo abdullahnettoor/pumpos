@@ -3,8 +3,8 @@ import { initialsOf } from '@pump/ui';
 
 const SIZE = {
   /** In a stacked group of people. */
-  sm: 'h-[30px] w-[30px] border-2 border-card text-[11px]',
-  md: 'h-[34px] w-[34px] text-[11px]',
+  sm: 'h-[30px] w-[30px] border-2 border-card text-xs',
+  md: 'h-[34px] w-[34px] text-xs',
   lg: 'h-11 w-11 text-[15px]',
 } as const;
 

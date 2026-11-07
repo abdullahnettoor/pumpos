@@ -57,7 +57,7 @@ export const TeamPage: React.FC = () => {
   const actions = canAdd ? (
     <>
       {gate.reason && (
-        <PausedReason id={gate.reasonId} className="px-1 text-center text-[11.5px]">
+        <PausedReason id={gate.reasonId} className="px-1 text-center text-xs">
           {gate.reason}
         </PausedReason>
       )}

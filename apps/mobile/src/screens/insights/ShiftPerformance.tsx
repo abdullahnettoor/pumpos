@@ -14,13 +14,13 @@ export const ShiftPerformance: React.FC<{ data: InsightsSales }> = ({ data }) =>
     >
       {t.map((s) => (
         <div key={s.templateId ?? s.name} className="bg-card p-3">
-          <p className="truncate text-[11px] font-medium text-text-muted">
+          <p className="truncate text-xs font-medium text-text-muted">
             {s.name} · {s.shifts} {s.shifts === 1 ? 'shift' : 'shifts'}
           </p>
           <p className="num mt-1 text-lg font-semibold text-text-high">
             {compactRupees(s.avgSales)}
           </p>
-          <p className="num text-[11px] text-text-muted">
+          <p className="num text-xs text-text-muted">
             {litres(s.avgVolume)} · var{' '}
             <span className={TONE_TEXT[varianceTone(s.avgCashVariance)]}>
               {signedRupees(s.avgCashVariance, { plus: true })}

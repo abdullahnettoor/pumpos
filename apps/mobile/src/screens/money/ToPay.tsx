@@ -59,7 +59,7 @@ export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => 
         value={inr(totalOwed(suppliers))}
       >
         {payables.summary && (
-          <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-2.5 text-[11px] text-text-muted">
+          <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-2.5 text-xs text-text-muted">
             <div>
               <dt>Paid this month</dt>
               <dd className="num text-[12.5px] font-semibold text-text-high">
@@ -74,7 +74,7 @@ export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => 
             </div>
           </dl>
         )}
-        {caption && <p className="mt-1.5 text-[11px] text-text-muted">{caption}</p>}
+        {caption && <p className="mt-1.5 text-xs text-text-muted">{caption}</p>}
       </HeroCard>
       <SectionLabel>Suppliers</SectionLabel>
       {rows.length === 0 ? (

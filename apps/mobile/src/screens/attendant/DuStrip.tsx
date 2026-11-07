@@ -35,12 +35,12 @@ export const DuStrip: React.FC<{
         <p className="m-0 truncate text-sm font-bold text-text-high">
           You&apos;re on {dus.map((du) => du.duName).join(', ')}
         </p>
-        <p className="m-0 truncate text-[11px] text-text-muted">{meta}</p>
+        <p className="m-0 truncate text-xs text-text-muted">{meta}</p>
       </div>
       {minutes != null ? (
         <div className="flex-shrink-0 text-right">
           <p className="num m-0 text-sm font-semibold text-text-high">{formatOnShift(minutes)}</p>
-          <p className="m-0 text-[10px] text-text-muted">on shift</p>
+          <p className="m-0 text-xs text-text-muted">on shift</p>
         </div>
       ) : null}
     </section>

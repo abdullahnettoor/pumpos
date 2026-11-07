@@ -24,7 +24,7 @@ export const StatementList: React.FC<{
     {!statement.reconciled && (
       <p
         role="note"
-        className="border-b border-warn-line bg-warn-soft px-3 py-2 text-[11.5px] text-text-high"
+        className="border-b border-warn-line bg-warn-soft px-3 py-2 text-xs text-text-high"
       >
         Partial statement: these entries don’t add up to the current balance, so running balances
         are hidden. The balance above is the one on record.
@@ -32,7 +32,7 @@ export const StatementList: React.FC<{
     )}
     {statement.months.map((m) => (
       <section key={m.key} aria-label={m.label}>
-        <h3 className="border-b border-line bg-card-alt px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-muted [section:not(:first-child)>&]:border-t">
+        <h3 className="border-b border-line bg-card-alt px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-text-muted [section:not(:first-child)>&]:border-t">
           {m.label}
         </h3>
         <ul className="[&>li+li]:border-t [&>li+li]:border-line">
@@ -51,8 +51,8 @@ export const StatementList: React.FC<{
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-semibold text-text-high">{e.label}</p>
-                  {e.meta && <p className="truncate text-[11px] text-text-muted">{e.meta}</p>}
-                  {e.detail && <p className="truncate text-[11px] text-text-muted">{e.detail}</p>}
+                  {e.meta && <p className="truncate text-xs text-text-muted">{e.meta}</p>}
+                  {e.detail && <p className="truncate text-xs text-text-muted">{e.detail}</p>}
                 </div>
                 <div className="flex-shrink-0 text-right">
                   <p className={`num text-[13.5px] font-semibold ${tone.amount}`}>
@@ -60,7 +60,7 @@ export const StatementList: React.FC<{
                     {inr(Math.abs(e.delta))}
                   </p>
                   {e.balance !== null && (
-                    <p className="num text-[11px] text-text-muted">Bal {signedMoney(e.balance)}</p>
+                    <p className="num text-xs text-text-muted">Bal {signedMoney(e.balance)}</p>
                   )}
                 </div>
               </li>
@@ -70,7 +70,7 @@ export const StatementList: React.FC<{
       </section>
     ))}
     {!statement.hasMore && trailing}
-    <div className="border-t border-line px-3 py-3 text-center text-[11.5px] text-text-muted">
+    <div className="border-t border-line px-3 py-3 text-center text-xs text-text-muted">
       Showing {statement.shown} of {statement.total} {statement.total === 1 ? 'entry' : 'entries'}
       {statement.hasMore && (
         <>

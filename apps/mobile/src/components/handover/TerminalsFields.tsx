@@ -74,7 +74,7 @@ export const TerminalsFields: React.FC<{
             error={errors[fieldId.aggregateUpi]}
           />
         </div>
-        <p className="text-[11px] text-text-muted">
+        <p className="text-xs text-text-muted">
           Aggregate declaration used because no Payment Terminal is configured.
         </p>
       </>

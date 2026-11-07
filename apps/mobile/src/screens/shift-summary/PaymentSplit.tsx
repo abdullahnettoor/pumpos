@@ -55,7 +55,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
                 <dd className="num ml-auto font-semibold">{rupees(gap.amount)}</dd>
               </div>
             </dl>
-            <p className="text-[11px] text-text-muted">{gap.note}</p>
+            <p className="text-xs text-text-muted">{gap.note}</p>
           </div>
         )}
         {unitemised && (
@@ -66,7 +66,7 @@ export const PaymentSplit: React.FC<{ split: PaymentSplitView }> = ({ split }) =
                 <dd className="num ml-auto font-semibold">{signedRupees(unitemised.amount)}</dd>
               </div>
             </dl>
-            <p className="text-[11px] text-text-muted">{unitemised.note}</p>
+            <p className="text-xs text-text-muted">{unitemised.note}</p>
           </div>
         )}
         <dl>
