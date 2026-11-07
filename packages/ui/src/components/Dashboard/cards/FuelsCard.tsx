@@ -59,7 +59,7 @@ export const FuelsCard: React.FC = () => {
       placeholderHeight={320}
     >
       <div className="flex flex-col gap-3">
-        {fuels.length === 0 && <p className="text-[12.5px] text-ink-muted">No fuels set up yet.</p>}
+        {fuels.length === 0 && <p className="text-[12px] text-ink-muted">No fuels set up yet.</p>}
         {fuels.map((f, idx) => {
           const density: Part<{ state: DensityState; trend: number[] }> = densityQ.isError
             ? { status: 'error', retry: () => void densityQ.refetch() }

@@ -54,7 +54,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
         <b className="font-semibold text-ink">{liveHeadline(m)}</b>
         {m.window && <span className="font-semibold text-ink-muted">{m.window}</span>}
       </div>
-      <div className="mt-2.5 flex items-center justify-between text-[12.5px]">
+      <div className="mt-2.5 flex items-center justify-between text-[13px]">
         <span className="text-ink-muted">Handovers</span>
         <b className="font-mono font-medium tabular-nums text-ink">
           {m.recorded} / {m.total}
@@ -102,13 +102,13 @@ const LastClosedBlock: React.FC<{ last: LastClosed; onOpen: () => void }> = ({ l
       </span>
       <button
         type="button"
-        className="ml-auto text-[12.5px] font-medium text-brand hover:underline"
+        className="ml-auto text-[13px] font-medium text-brand hover:underline"
         onClick={onOpen}
       >
         Summary ›
       </button>
     </div>
-    <div className="mt-1.5 flex gap-[18px] text-[12.5px]">
+    <div className="mt-1.5 flex gap-[18px] text-[13px]">
       <div>
         <div className="text-[12px] text-ink-muted">Sales</div>
         <div className="font-mono text-[13px] tabular-nums">
@@ -167,7 +167,7 @@ export const ForecourtCard: React.FC = () => {
                   ? 'Day’s shifts done'
                   : 'No shift running'}
             </div>
-            {model.hint && <div className="mt-1 text-[12.5px] text-ink-muted">{model.hint}</div>}
+            {model.hint && <div className="mt-1 text-[12px] text-ink-muted">{model.hint}</div>}
             {model.kind === 'done' ? null : canAct ? (
               <Button
                 className="mt-3"

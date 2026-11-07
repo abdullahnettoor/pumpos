@@ -170,7 +170,7 @@ export const TimelineCard: React.FC = () => {
     >
       {model &&
         (collapsed ? (
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12.5px] text-ink-muted">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] text-ink-muted">
             <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
               Today
             </span>

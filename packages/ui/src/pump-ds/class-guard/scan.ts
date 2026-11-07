@@ -16,6 +16,7 @@ export const RULES = [
   'palette-class',
   'fill-text-pair',
   'small-text',
+  'off-scale-text',
 ] as const;
 export type Rule = (typeof RULES)[number];
 export type Findings = Record<Rule, string[]>;
@@ -79,6 +80,15 @@ export function isSmallTextUtility(utility: string): boolean {
   if (!m) return false;
   const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
   return px < MIN_TEXT_PX;
+}
+/** DESIGN.md type scale (px), 12 and up; the 10px table header is allow-listed under `small-text`. */
+const TYPE_SCALE_PX = new Set([12, 13, 14, 15, 16, 18, 20, 24, 28]);
+/** `text-[Npx]` at or above the 12px floor whose size is not on the DESIGN.md type scale (#700). */
+export function isOffScaleTextUtility(utility: string): boolean {
+  const m = ARBITRARY_SIZE.exec(utility);
+  if (!m) return false;
+  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  return px >= MIN_TEXT_PX && !TYPE_SCALE_PX.has(px);
 }
 /** A px/rem length under 12px, as px, or null (`'11px'`, `'0.6rem'`). */
 function smallLength(value: string): number | null {
@@ -425,6 +435,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'palette-class': [],
     'fill-text-pair': [],
     'small-text': [],
+    'off-scale-text': [],
     'side-only-dash': [],
     'quoted-interpolation': [],
   };
@@ -511,6 +522,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
       if (!looksLikeClass(token) || !checkable(token)) continue;
       if (RAW_COLOR.test(token)) findings['raw-color'].push(token);
       if (isSmallTextUtility(utilityOf(token).utility)) findings['small-text'].push(token);
+      if (isOffScaleTextUtility(utilityOf(token).utility)) findings['off-scale-text'].push(token);
       if (PALETTE_CLASS.test(utilityOf(token).utility)) {
         findings['palette-class'].push(token);
         continue;

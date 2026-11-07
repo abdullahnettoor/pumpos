@@ -12,6 +12,8 @@
  *                    values, constants, ternaries, SVG attributes, and
  *                    fallbacks like `var(--text-on-brand, #fff)`.
  * - `palette-class`  Tailwind's default palette (`text-gray-500`, `text-white`).
+ * - `off-scale-text` an arbitrary `text-[Npx]` size not on the DESIGN.md type
+ *                    scale (12/13/14/15/16/18/20/24/28), e.g. `text-[12.5px]` (#700).
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
@@ -336,6 +338,26 @@ describe('style check rules', () => {
     expect(pair("<i className={cn('bg-danger-fg text-on-brand', 'p-2')} />")).toEqual([
       'bg-danger-fg + text-on-brand',
     ]);
+  });
+});
+
+describe('style check: off-scale-text (#700)', () => {
+  const off = (src: string) => scanSource(src, 'x.tsx', fake([]))['off-scale-text'];
+
+  it('flags arbitrary sizes off the type scale, with variants', () => {
+    expect(
+      off(
+        "<i className='text-[12.5px] hover:text-[17px] text-[13.5px] text-[19px] text-[0.8125rem]' />",
+      ),
+    ).toEqual(['text-[12.5px]', 'hover:text-[17px]', 'text-[13.5px]', 'text-[19px]']);
+  });
+
+  it('passes scale sizes and non-size text utilities', () => {
+    expect(
+      off(
+        "<i className='text-[12px] text-[13px] text-[14px] text-[15px] text-[18px] text-[20px] text-[24px] text-ink-muted text-sm' />",
+      ),
+    ).toEqual([]);
   });
 });
 

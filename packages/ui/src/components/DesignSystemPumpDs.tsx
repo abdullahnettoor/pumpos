@@ -81,7 +81,7 @@ const Group: React.FC<{ title: string; description?: string; children: React.Rea
         {title}
       </div>
       {description && (
-        <p className="mt-1.5 max-w-[620px] text-[12.5px] leading-relaxed text-ink-muted">
+        <p className="mt-1.5 max-w-[620px] text-[12px] leading-relaxed text-ink-muted">
           {description}
         </p>
       )}

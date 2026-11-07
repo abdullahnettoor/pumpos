@@ -73,7 +73,7 @@ export const YourShiftCard: React.FC = () => {
       footer={
         <button
           type="button"
-          className="text-[12.5px] text-brand hover:underline"
+          className="text-[13px] text-brand hover:underline"
           onClick={() => onNavigate('/shifts')}
         >
           Shift workspace ›
@@ -93,7 +93,7 @@ export const YourShiftCard: React.FC = () => {
           </span>
         </div>
         {todos.length === 0 ? (
-          <p className="px-3.5 py-2.5 text-[12.5px] text-ink-muted">Nothing to do.</p>
+          <p className="px-3.5 py-2.5 text-[12px] text-ink-muted">Nothing to do.</p>
         ) : (
           <ul className="flex flex-col divide-y divide-border-soft">
             {todos.map((a) => (
@@ -167,7 +167,7 @@ const TodoRow: React.FC<{
         {tileIcon}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12.5px] font-semibold text-ink">{alert.title}</div>
+        <div className="truncate text-[13px] font-semibold text-ink">{alert.title}</div>
         {meta && <div className="truncate text-[12px] text-ink-muted">{meta}</div>}
       </div>
       {action && (

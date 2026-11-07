@@ -61,7 +61,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
           <Globe size={24} />
         </div>
 
-        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink-strong">
+        <h2 className="text-[18px] font-semibold tracking-[-0.01em] text-ink-strong">
           {canOnboard ? "Let's finish setting up on the web" : 'Station setup isn’t finished yet'}
         </h2>
 
@@ -83,7 +83,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
 
         {/* Selectable console URL + copy (works even if in-app open is blocked) */}
         <div className="mt-[18px] flex items-center gap-2 rounded-input border border-border-soft bg-canvas py-2 pl-3 pr-2.5">
-          <span className="flex-1 select-all truncate text-left font-mono text-[12.5px] text-ink-default">
+          <span className="flex-1 select-all truncate text-left font-mono text-[13px] text-ink-default">
             {webUrl.replace(/^https?:\/\//, '')}
           </span>
           <Button

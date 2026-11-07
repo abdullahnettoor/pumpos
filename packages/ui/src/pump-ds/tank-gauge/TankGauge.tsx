@@ -78,7 +78,7 @@ const TUBE = {
   md: {
     gap: 'gap-3',
     tube: 'h-[30px] w-3 rounded-sm',
-    name: 'text-[12.5px]',
+    name: 'text-[13px]',
     pct: 'text-[13px]',
     stock: 'whitespace-nowrap text-[12px]',
   },
@@ -129,7 +129,7 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
     return (
       <div className={cn('min-w-0', className)} data-tone={level.tone}>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 truncate text-[12.5px] font-semibold text-ink">{name}</span>
+          <span className="min-w-0 truncate text-[13px] font-semibold text-ink">{name}</span>
           <span className="shrink-0">
             {pct}
             {word && <span className="sr-only"> {word}</span>}
