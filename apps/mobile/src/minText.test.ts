@@ -10,7 +10,8 @@
  * Type scale (#707): an arbitrary `text-[Npx]` must also be a DESIGN.md
  * typography `fontSize` (read from its front matter by the same
  * `readTypeScale` the console's `off-scale-text` guard uses), so a size like
- * 13.5px or 22px fails. Prefer the scale classes (`text-xs` 12, `text-sm` 14,
+ * 13.5px or 28px fails. DESIGN.md's `mobile-` keys (22px page title, 30px hero
+ * figure) count on mobile only; the console guard still rejects them. Prefer the scale classes (`text-xs` 12, `text-sm` 14,
  * `text-lg` 18, `text-xl` 20).
  *
  * Exception: non-essential decoration where 12px cannot fit (a badge count in

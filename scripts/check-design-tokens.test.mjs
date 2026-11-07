@@ -94,49 +94,70 @@ describe('DESIGN.md token guard', () => {
         readSource: (f) => (f === file ? text.replace(from, to) : readFileSync(f, 'utf8')),
       });
     };
-    const hero = 'apps/mobile/src/screens/home/SalesHeadline.tsx';
+    const heroConst = 'apps/mobile/src/ui/typography.ts';
+    const heroSites = [
+      'apps/mobile/src/screens/home/SalesHeadline.tsx',
+      'apps/mobile/src/screens/money/HeroCard.tsx',
+      'apps/mobile/src/ui/StatTile.tsx',
+    ];
     const page = 'apps/mobile/src/ui/PageHeader.tsx';
 
     it('fails when the hero figure drifts in code (size, weight, tracking)', () => {
-      expect(withFile(hero, 'text-[30px]', 'text-[28px]').join('\n')).toMatch(
-        /typography\.mobile-hero-figure\.fontSize is 30px but .*SalesHeadline\.tsx has 28px/,
+      expect(withFile(heroConst, 'text-[30px]', 'text-[28px]').join('\n')).toMatch(
+        /mobile-hero-figure\.fontSize is 30px but .*typography\.ts .* has 28px/,
       );
-      expect(
-        withFile(hero, 'text-[30px] font-medium', 'text-[30px] font-semibold').join('\n'),
-      ).toMatch(/mobile-hero-figure\.fontWeight is 500 but .* has 600/);
-      expect(
-        withFile(hero, 'font-medium tracking-[-0.03em]', 'font-medium tracking-[-0.02em]').join(
-          '\n',
-        ),
-      ).toMatch(/mobile-hero-figure\.letterSpacing is -0\.03em/);
+      expect(withFile(heroConst, 'font-medium', 'font-semibold').join('\n')).toMatch(
+        /mobile-hero-figure\.fontWeight is 500 but .* has 600/,
+      );
+      expect(withFile(heroConst, 'tracking-[-0.03em]', 'tracking-[-0.02em]').join('\n')).toMatch(
+        /mobile-hero-figure\.letterSpacing is -0\.03em/,
+      );
     });
 
-    it('fails when the other hero sites drift', () => {
-      expect(
-        withFile('apps/mobile/src/screens/money/HeroCard.tsx', 'text-[30px]', 'text-xl').join('\n'),
-      ).toMatch(/mobile-hero-figure\.fontSize/);
-      expect(
-        withFile('apps/mobile/src/ui/StatTile.tsx', 'font-medium', 'font-bold').join('\n'),
-      ).toMatch(/mobile-hero-figure\.fontWeight is 500 but .*StatTile\.tsx has 700/);
+    it('fails when a hero site adds its own line height, size or weight', () => {
+      const [headline, card] = heroSites;
+      const use = ['${HERO_FIGURE}', '${HERO_FIGURE}', '? HERO_FIGURE'];
+      for (const extra of ['leading-[1.25]', 'leading-[30px]', 'leading-9']) {
+        heroSites.forEach((file, i) => {
+          expect(withFile(file, use[i], `${use[i]} ${extra}`).join('\n')).toMatch(
+            new RegExp(`mobile-hero-figure\\.lineHeight .* but .*${file.split('/').pop()}`),
+          );
+        });
+      }
+      expect(withFile(headline, '${HERO_FIGURE}', '${HERO_FIGURE} font-bold').join('\n')).toMatch(
+        /mobile-hero-figure\.fontWeight is 500 but .*SalesHeadline\.tsx has 700/,
+      );
+      expect(withFile(card, '${HERO_FIGURE}', '${HERO_FIGURE} text-[28px]').join('\n')).toMatch(
+        /mobile-hero-figure\.fontSize/,
+      );
     });
 
-    it('fails when the page title drifts in code (size, weight, tracking)', () => {
+    it('fails when the page title drifts in code (size, weight, tracking, line height)', () => {
       expect(withFile(page, '[&_h1]:text-[22px]', '[&_h1]:text-[20px]').join('\n')).toMatch(
         /mobile-page-title\.fontSize is 22px but .* has 20px/,
       );
-      expect(withFile(page, 'font-extrabold', 'font-bold').join('\n')).toMatch(
-        /mobile-page-title\.fontWeight is 800 but .* has 700/,
+      expect(withFile(page, '[&_h1]:font-bold', '[&_h1]:font-semibold').join('\n')).toMatch(
+        /mobile-page-title\.fontWeight is 700 but .* has 600/,
       );
       expect(withFile(page, 'tracking-[-0.03em]', 'tracking-[-0.02em]').join('\n')).toMatch(
         /mobile-page-title\.letterSpacing/,
       );
+      for (const extra of [
+        '[&_h1]:leading-[1.5]',
+        '[&_h1]:leading-[40px]',
+        '[&_h1]:leading-none',
+      ]) {
+        expect(withFile(page, '[&_h1]:truncate', `[&_h1]:truncate ${extra}`).join('\n')).toMatch(
+          /mobile-page-title\.lineHeight/,
+        );
+      }
     });
 
     it('fails when the DESIGN.md entries drift (line height, family, weight)', () => {
       expect(withDesign('    lineHeight: 1.42857\n', '    lineHeight: 1.25\n').join('\n')).toMatch(
         /mobile-hero-figure\.lineHeight/,
       );
-      expect(withDesign('    fontWeight: 800\n', '    fontWeight: 600\n').join('\n')).toMatch(
+      expect(withDesign('    fontWeight: 700\n', '    fontWeight: 600\n').join('\n')).toMatch(
         /mobile-page-title\.fontWeight is 600 but/,
       );
       expect(withDesign('    fontSize: 30px', '    fontSize: 32px').join('\n')).toMatch(

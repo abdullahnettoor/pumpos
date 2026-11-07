@@ -146,7 +146,7 @@ typography:
   mobile-page-title:
     fontFamily: Plus Jakarta Sans
     fontSize: 22px
-    fontWeight: 800
+    fontWeight: 700
     lineHeight: 1.25
     letterSpacing: -0.03em
 rounded:
@@ -401,7 +401,7 @@ semantic tokens and the swap happens in `index.css`.
 | `amount-input`       | mono 20 / 500, tnum          | The ₹ amount of an Office Record drawer                                        |
 | `kpi-figure-lg`      | mono 24 / 500                | `KpiTile` value at `size="lg"`                                                 |
 | `mobile-hero-figure` | mono 30 / 500, -0.03em, tnum | **Mobile only.** Headline figure: `SalesHeadline`, `HeroCard`, wide `StatTile` |
-| `mobile-page-title`  | 22 / 800, -0.03em            | **Mobile only.** `PageHeader` h1 in `apps/mobile`                              |
+| `mobile-page-title`  | 22 / 700, -0.03em            | **Mobile only.** `PageHeader` h1 in `apps/mobile`                              |
 
 **Mobile-only type.** Keys prefixed `mobile-` belong to `apps/mobile` and are
 not part of the desktop scale: the class guard's `off-scale-text` rule still

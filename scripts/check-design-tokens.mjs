@@ -63,6 +63,7 @@ const COLOR_VAR_FAMILY = /^--(bg|border|text|brand|state)-/;
 const BUTTON = 'packages/ui/src/pump-ds/button/Button.tsx';
 const CHIP = 'packages/ui/src/pump-ds/chip/Chip.tsx';
 const COLUMNS = 'packages/ui/src/pump-ds/table/columns.tsx';
+const HERO_CONST = { file: 'apps/mobile/src/ui/typography.ts', match: 'export const HERO_FIGURE' };
 const KPI = 'packages/ui/src/pump-ds/kpi/KpiTile.tsx';
 
 /**
@@ -113,9 +114,12 @@ export const TYPOGRAPHY_SOURCES = {
   // every listed place must match the token on its own.
   'mobile-hero-figure': {
     variants: [
-      [{ file: 'apps/mobile/src/screens/home/SalesHeadline.tsx', match: '"num mt-1 ' }],
-      [{ file: 'apps/mobile/src/screens/money/HeroCard.tsx', match: '"num mt-1 ' }],
-      [{ file: 'apps/mobile/src/ui/StatTile.tsx', match: 'const WIDE_FIGURE' }],
+      [
+        HERO_CONST,
+        { file: 'apps/mobile/src/screens/home/SalesHeadline.tsx', match: '${HERO_FIGURE}' },
+      ],
+      [HERO_CONST, { file: 'apps/mobile/src/screens/money/HeroCard.tsx', match: '${HERO_FIGURE}' }],
+      [HERO_CONST, { file: 'apps/mobile/src/ui/StatTile.tsx', match: '? HERO_FIGURE' }],
     ],
   },
   // The shared h1 supplies `leading-tight`; the mobile overrides sit on top.
@@ -227,7 +231,7 @@ function declsFor(rules, selector, media = null) {
   return out;
 }
 
-const WEIGHTS = { normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800 };
+const WEIGHTS = { normal: 400, medium: 500, semibold: 600, bold: 700 };
 const LEADING = { none: 1, tight: 1.25, snug: 1.375, normal: 1.5, relaxed: 1.625 };
 const TRACKING = { tight: '-0.025em', normal: '0em', wide: '0.025em', wider: '0.05em' };
 
@@ -239,12 +243,17 @@ export function classTypography(line) {
     const cls = token.replace(/^(?:\[[^\]]*\]:|[a-z-]+:)+/, '');
     let m;
     if ((m = /^text-\[(\d+(?:\.\d+)?)px\]$/.exec(cls))) props.fontSize = Number(m[1]);
-    else if ((m = /^font-(normal|medium|semibold|bold|extrabold)$/.exec(cls)))
+    else if ((m = /^font-(normal|medium|semibold|bold)$/.exec(cls)))
       props.fontWeight = WEIGHTS[m[1]];
     else if (cls === 'font-mono') props.family = 'mono';
     else if (cls === 'font-sans') props.family = 'sans';
     else if ((m = /^leading-(none|tight|snug|normal|relaxed)$/.exec(cls)))
       props.lineHeight = LEADING[m[1]];
+    else if ((m = /^leading-\[(\d*\.?\d+)(px|rem)?\]$/.exec(cls)))
+      props.lineHeight = m[2]
+        ? `${m[2] === 'rem' ? Number(m[1]) * 16 : Number(m[1])}px`
+        : Number(m[1]);
+    else if ((m = /^leading-(\d+)$/.exec(cls))) props.lineHeight = `${Number(m[1]) * 4}px`;
     else if ((m = /^tracking-(tight|normal|wide|wider)$/.exec(cls)))
       props.letterSpacing = TRACKING[m[1]];
     else if ((m = /^tracking-\[([^\]]+)\]$/.exec(cls))) props.letterSpacing = m[1];
