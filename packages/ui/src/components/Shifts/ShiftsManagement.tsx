@@ -226,6 +226,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(currentBusinessDate);
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
+  // The Open shift form's date follows the station's current Business Day: on
+  // a station switch, and at Day Start unless a shift is open or "Start next"
+  // pinned the date. Adjusted during render, so the form never shows the old day.
+  const [dateSyncStationId, setDateSyncStationId] = useState(stationId);
+  const [dateSyncBusinessDate, setDateSyncBusinessDate] = useState(currentBusinessDate);
+  if (stationId !== dateSyncStationId) {
+    setDateSyncStationId(stationId);
+    setDateSyncBusinessDate(currentBusinessDate);
+    setPreserveNextShiftDate(false);
+    setBusinessDate(currentBusinessDate);
+  } else if (currentBusinessDate !== dateSyncBusinessDate) {
+    setDateSyncBusinessDate(currentBusinessDate);
+    if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
+  }
   const [staffAssignments, setStaffAssignments] = useState<
     { userId: string; duId: string; openingFloat: number }[]
   >([]);
