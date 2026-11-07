@@ -33,7 +33,7 @@ export const DiscardDraft: React.FC<{ stationId: string; decantationId: string }
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="h-11 rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-bad-fg"
+        className="h-11 rounded-[13px] border border-line bg-card text-sm font-bold text-bad-fg"
       >
         Discard draft
       </button>
@@ -52,14 +52,14 @@ export const DiscardDraft: React.FC<{ stationId: string; decantationId: string }
           type="button"
           disabled={discard.isPending}
           onClick={() => void run()}
-          className="h-11 flex-1 rounded-[13px] bg-bad text-[13.5px] font-bold text-on-accent disabled:opacity-60"
+          className="h-11 flex-1 rounded-[13px] bg-bad text-sm font-bold text-on-accent disabled:opacity-60"
         >
           Confirm discard
         </button>
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="h-11 flex-1 rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
+          className="h-11 flex-1 rounded-[13px] border border-line bg-card text-sm font-bold text-text-high"
         >
           Keep
         </button>

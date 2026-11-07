@@ -90,17 +90,31 @@ function lengthPx(num: string, unit: string): number {
   return Number(num) * (unit === 'rem' ? 16 : 1);
 }
 
+/** Typography keys with this prefix are mobile-only (DESIGN.md "Mobile-only type"). */
+export const MOBILE_ONLY_PREFIX = 'mobile-';
+
 /**
  * Every `fontSize` (px) under `typography:` in DESIGN.md's front matter, so the
  * scale cannot drift. Examples in the document body are ignored; a missing or
- * empty block throws rather than letting every size through.
+ * empty block throws rather than letting every size through. Keys starting
+ * `mobile-` are the mobile app's own sizes: only `platform: 'mobile'` includes
+ * them, so the desktop scale never widens to 22 or 30px.
  */
-export function readTypeScale(markdown: string): Set<number> {
+export function readTypeScale(
+  markdown: string,
+  platform: 'desktop' | 'mobile' = 'desktop',
+): Set<number> {
   const front = /^---\n([\s\S]*?)\n---\n/.exec(markdown)?.[1];
   const block = front && /^typography:\n((?:[ \t]+.*\n?)*)/m.exec(front)?.[1];
-  const sizes = [...(block ?? '').matchAll(/^\s+fontSize:\s*(\d*\.?\d+)px\s*$/gm)].map((m) =>
-    Number(m[1]),
-  );
+  const sizes: number[] = [];
+  let key = '';
+  for (const line of (block ?? '').split('\n')) {
+    const k = /^ {1,4}([\w-]+):\s*$/.exec(line);
+    if (k) key = k[1];
+    const m = /^\s+fontSize:\s*(\d*\.?\d+)px\s*$/.exec(line);
+    if (m && (platform === 'mobile' || !key.startsWith(MOBILE_ONLY_PREFIX)))
+      sizes.push(Number(m[1]));
+  }
   if (sizes.length === 0) throw new Error('DESIGN.md front matter has no typography fontSize');
   return new Set(sizes);
 }

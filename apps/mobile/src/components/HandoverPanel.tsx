@@ -465,7 +465,7 @@ export const HandoverPanel: React.FC<{
       <div className="flex items-center gap-3">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-text-faint">Variance</p>
-          <p className={`num text-[17px] font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
+          <p className={`num text-lg font-semibold ${TONE_TEXT[shownVariance.tone]}`}>
             {shownVariance.text}
           </p>
         </div>

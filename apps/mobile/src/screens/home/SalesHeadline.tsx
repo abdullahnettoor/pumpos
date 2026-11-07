@@ -1,4 +1,5 @@
 import React from 'react';
+import { HERO_FIGURE } from '../../ui/typography.js';
 import { rupees } from '../../lib/format.js';
 import type { LiveShift } from '../../lib/home/live.js';
 import {
@@ -54,9 +55,7 @@ export const SalesHeadline: React.FC<Props> = ({ sales, split, openShift, trend 
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-text-muted">Sales so far today</p>
-          <p className="num mt-1 text-[30px] font-semibold tracking-[-0.03em] text-text-high">
-            {rupees(sales.total)}
-          </p>
+          <p className={`mt-1 ${HERO_FIGURE} text-text-high`}>{rupees(sales.total)}</p>
           <p className="num text-xs text-text-muted">
             {sales.fuelVolumeLabel} fuel · {rupees(sales.productsValue)} products
           </p>

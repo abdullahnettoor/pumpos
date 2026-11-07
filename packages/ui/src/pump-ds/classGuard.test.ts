@@ -432,6 +432,33 @@ describe('style check: off-scale-text (#700)', () => {
     expect(() => readTypeScale('# no front matter\n  fontSize: 16px\n')).toThrow();
   });
 
+  it('keeps mobile-only typography keys out of the desktop scale', () => {
+    const md = [
+      '---',
+      'typography:',
+      '  body:',
+      '    fontSize: 14px',
+      '  mobile-hero-figure:',
+      '    fontSize: 30px',
+      '  mobile-page-title:',
+      '    fontSize: 22px',
+      '---',
+      '',
+    ].join('\n');
+    expect([...readTypeScale(md)]).toEqual([14]);
+    expect([...readTypeScale(md, 'mobile')].sort()).toEqual([14, 22, 30]);
+    expect(() =>
+      readTypeScale('---\ntypography:\n  mobile-x:\n    fontSize: 30px\n---\n'),
+    ).toThrow();
+  });
+
+  it('desktop rejects the mobile hero and page-title sizes in the real scale', () => {
+    expect(off("<i className='text-[22px] text-[30px] text-[24px]' />")).toEqual([
+      'text-[22px]',
+      'text-[30px]',
+    ]);
+  });
+
   it('flags arbitrary sizes off the type scale, with variants', () => {
     expect(
       off(

@@ -63,6 +63,7 @@ const COLOR_VAR_FAMILY = /^--(bg|border|text|brand|state)-/;
 const BUTTON = 'packages/ui/src/pump-ds/button/Button.tsx';
 const CHIP = 'packages/ui/src/pump-ds/chip/Chip.tsx';
 const COLUMNS = 'packages/ui/src/pump-ds/table/columns.tsx';
+const HERO_CONST = { file: 'apps/mobile/src/ui/typography.ts', match: 'export const HERO_FIGURE' };
 const KPI = 'packages/ui/src/pump-ds/kpi/KpiTile.tsx';
 
 /**
@@ -108,6 +109,23 @@ export const TYPOGRAPHY_SOURCES = {
   'kpi-figure-lg': [
     { file: KPI, match: "lg: '[&_.kpi-value]" },
     { file: KPI, match: "'kpi-value " },
+  ],
+  // Mobile-only (`mobile-` prefix, kept out of the desktop scale). `variants`:
+  // every listed place must match the token on its own.
+  'mobile-hero-figure': {
+    variants: [
+      [
+        HERO_CONST,
+        { file: 'apps/mobile/src/screens/home/SalesHeadline.tsx', match: '${HERO_FIGURE}' },
+      ],
+      [HERO_CONST, { file: 'apps/mobile/src/screens/money/HeroCard.tsx', match: '${HERO_FIGURE}' }],
+      [HERO_CONST, { file: 'apps/mobile/src/ui/StatTile.tsx', match: '? HERO_FIGURE' }],
+    ],
+  },
+  // The shared h1 supplies `leading-tight`; the mobile overrides sit on top.
+  'mobile-page-title': [
+    { file: 'packages/ui/src/pump-ds/page-header/PageHeader.tsx', match: '<h1 ' },
+    { file: 'apps/mobile/src/ui/PageHeader.tsx', match: '[&_h1]:truncate' },
   ],
 };
 
@@ -220,6 +238,7 @@ const TRACKING = { tight: '-0.025em', normal: '0em', wide: '0.025em', wider: '0.
 /** Typography read off Tailwind classes; variant prefixes are dropped. */
 export function classTypography(line) {
   const props = {};
+  let num = false;
   for (const token of line.match(/[^\s'"`{}(),]+/g) ?? []) {
     const cls = token.replace(/^(?:\[[^\]]*\]:|[a-z-]+:)+/, '');
     let m;
@@ -230,11 +249,23 @@ export function classTypography(line) {
     else if (cls === 'font-sans') props.family = 'sans';
     else if ((m = /^leading-(none|tight|snug|normal|relaxed)$/.exec(cls)))
       props.lineHeight = LEADING[m[1]];
+    else if ((m = /^leading-\[(\d*\.?\d+)(px|rem)?\]$/.exec(cls)))
+      props.lineHeight = m[2]
+        ? `${m[2] === 'rem' ? Number(m[1]) * 16 : Number(m[1])}px`
+        : Number(m[1]);
+    else if ((m = /^leading-(\d+)$/.exec(cls))) props.lineHeight = `${Number(m[1]) * 4}px`;
     else if ((m = /^tracking-(tight|normal|wide|wider)$/.exec(cls)))
       props.letterSpacing = TRACKING[m[1]];
     else if ((m = /^tracking-\[([^\]]+)\]$/.exec(cls))) props.letterSpacing = m[1];
     else if (cls === 'tabular-nums') props.tnum = true;
+    else if (cls === 'num') {
+      props.family = 'mono';
+      props.tnum = true;
+      num = true;
+    }
   }
+  // `.num` sets -0.02em tracking unless a tracking class overrides it.
+  if (num && props.letterSpacing === undefined) props.letterSpacing = '-0.02em';
   return props;
 }
 
@@ -329,11 +360,16 @@ export function checkDesignTokens({ design, css, tailwind, readSource }) {
   }
   const body = cssTypography(declsFor(rules, 'body'));
   for (const [name, doc] of Object.entries(typography)) {
-    const sources = TYPOGRAPHY_SOURCES[name];
-    if (!sources) {
+    const entry = TYPOGRAPHY_SOURCES[name];
+    if (!entry) {
       errors.push(`typography.${name}: no source in TYPOGRAPHY_SOURCES`);
       continue;
     }
+    for (const sources of Array.isArray(entry) ? [entry] : entry.variants)
+      checkTypography(name, doc, sources);
+  }
+
+  function checkTypography(name, doc, sources) {
     const actual = { family: 'sans', fontWeight: 400 };
     let missing = false;
     for (const src of sources) {
@@ -354,7 +390,7 @@ export function checkDesignTokens({ design, css, tailwind, readSource }) {
         } else Object.assign(actual, classTypography(line));
       }
     }
-    if (missing) continue;
+    if (missing) return;
     const where = sources.map((s) => s.css ?? s.file).join(' + ');
     const fail = (what, docValue, codeValue) =>
       errors.push(`typography.${name}.${what} is ${docValue} but ${where} has ${codeValue}`);

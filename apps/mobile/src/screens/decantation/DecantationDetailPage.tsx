@@ -90,7 +90,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
             className="flex items-center justify-between rounded-xl border border-line bg-card p-3"
           >
             <span className="min-w-0">
-              <span className="block text-[12.5px] font-bold text-text-high">
+              <span className="block text-[13px] font-bold text-text-high">
                 {t.tankName} · {t.productName}
               </span>
               <span className="num block text-[12px] text-text-muted">
@@ -100,7 +100,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
             {t.receivedQty == null ? (
               <StatusBadge tone="info">Pending measurement</StatusBadge>
             ) : (
-              <span className="num text-[12.5px] font-semibold text-text-high">
+              <span className="num text-[13px] font-semibold text-text-high">
                 +{formatQuantity(t.receivedQty, 'L')}
               </span>
             )}
@@ -114,7 +114,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
               className="flex items-center justify-between gap-2 rounded-xl border border-line bg-card p-3"
             >
               <span className="min-w-0">
-                <span className="block text-[12.5px] font-bold text-text-high">
+                <span className="block text-[13px] font-bold text-text-high">
                   {productName(p)} invoice
                 </span>
                 <span className="num block truncate text-[12px] text-text-muted">
@@ -171,7 +171,7 @@ export const DecantationDetailPage: React.FC<{ station: Station; decantationId: 
           <button
             type="button"
             onClick={() => setLinking(null)}
-            className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
+            className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-sm font-bold text-text-high"
           >
             Cancel
           </button>

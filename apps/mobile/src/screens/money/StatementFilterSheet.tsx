@@ -149,13 +149,13 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ onClose, today, choice, onApply }
         <button
           type="button"
           onClick={onClose}
-          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
+          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-sm font-bold text-text-high"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-[13.5px] font-bold text-on-accent"
+          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-sm font-bold text-on-accent"
         >
           Apply
         </button>

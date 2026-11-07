@@ -136,6 +136,19 @@ typography:
     fontWeight: 500
     lineHeight: 1.25
     letterSpacing: -0.01em
+  mobile-hero-figure:
+    fontFamily: Geist Mono
+    fontSize: 30px
+    fontWeight: 500
+    lineHeight: 1.42857
+    letterSpacing: -0.03em
+    fontFeature: '"tnum" 1'
+  mobile-page-title:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 22px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.03em
 rounded:
   input: 8px
   button: 8px
@@ -311,7 +324,8 @@ Scope and sources:
 - The mobile app (`apps/mobile`) has its own "Control room" token set in
   `apps/mobile/src/theme/tokens.css`; its light colours reuse the values below
   (`tokens.test.ts` reads this file). The 12px minimum applies there too
-  (`apps/mobile/src/minText.test.ts`); the rest of this document targets
+  (`apps/mobile/src/minText.test.ts`), as does the type scale below plus its
+  `mobile-` keys; the rest of this document targets
   desktop and web.
 
 ## Colors
@@ -369,23 +383,31 @@ semantic tokens and the swap happens in `index.css`.
 - **Geist Mono** (`font-mono`) is the data font. Weights 400/500 ship.
 - Both are self-hosted (`/fonts`) so the desktop shell renders offline.
 
-| Token           | Size / weight               | Where                                                         |
-| --------------- | --------------------------- | ------------------------------------------------------------- |
-| `page-title`    | 18 / 600, -0.01em           | `PageHeader` h1 (one per page)                                |
-| `drawer-title`  | 15 / 600                    | Drawer and dialog titles                                      |
-| `body-md`       | 14 / 400, 20px line         | `body` default, toasts                                        |
-| `body-sm`       | 13 / 400                    | Inputs, table rows, tabs, nav items, messages                 |
-| `label-md`      | 13 / 600                    | Buttons (`md`; `xs`/`sm` are 12px, `lg` 14px)                 |
-| `field-label`   | 12 / 600, muted             | `Field` / `.field-label`                                      |
-| `caption`       | 12 / 400                    | Hints, errors, status bar, subtitles, counts, kbd hints       |
-| `chip`          | 12 / 500                    | `Chip` / `StatusChip` (sentence case)                         |
-| `section-label` | 12 / 600, uppercase         | `SectionHeader` and `Panel` titles                            |
-| `table-header`  | 10 / 500, uppercase         | Table column headers, faint ink                               |
-| `data-md`       | mono 13 / 400, tnum         | Money and quantity cells in `InteractiveTable`/`GroupedTable` |
-| `data-dense`    | mono 12 / 400, tnum         | `StatementTable` (screen and print)                           |
-| `kpi-figure`    | mono 20 / 500 (18/24 sm/lg) | `KpiTile` value                                               |
-| `amount-input`  | mono 20 / 500, tnum         | The ₹ amount of an Office Record drawer                       |
-| `kpi-figure-lg` | mono 24 / 500               | `KpiTile` value at `size="lg"`                                |
+| Token                | Size / weight                | Where                                                                          |
+| -------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| `page-title`         | 18 / 600, -0.01em            | `PageHeader` h1 (one per page)                                                 |
+| `drawer-title`       | 15 / 600                     | Drawer and dialog titles                                                       |
+| `body-md`            | 14 / 400, 20px line          | `body` default, toasts                                                         |
+| `body-sm`            | 13 / 400                     | Inputs, table rows, tabs, nav items, messages                                  |
+| `label-md`           | 13 / 600                     | Buttons (`md`; `xs`/`sm` are 12px, `lg` 14px)                                  |
+| `field-label`        | 12 / 600, muted              | `Field` / `.field-label`                                                       |
+| `caption`            | 12 / 400                     | Hints, errors, status bar, subtitles, counts, kbd hints                        |
+| `chip`               | 12 / 500                     | `Chip` / `StatusChip` (sentence case)                                          |
+| `section-label`      | 12 / 600, uppercase          | `SectionHeader` and `Panel` titles                                             |
+| `table-header`       | 10 / 500, uppercase          | Table column headers, faint ink                                                |
+| `data-md`            | mono 13 / 400, tnum          | Money and quantity cells in `InteractiveTable`/`GroupedTable`                  |
+| `data-dense`         | mono 12 / 400, tnum          | `StatementTable` (screen and print)                                            |
+| `kpi-figure`         | mono 20 / 500 (18/24 sm/lg)  | `KpiTile` value                                                                |
+| `amount-input`       | mono 20 / 500, tnum          | The ₹ amount of an Office Record drawer                                        |
+| `kpi-figure-lg`      | mono 24 / 500                | `KpiTile` value at `size="lg"`                                                 |
+| `mobile-hero-figure` | mono 30 / 500, -0.03em, tnum | **Mobile only.** Headline figure: `SalesHeadline`, `HeroCard`, wide `StatTile` |
+| `mobile-page-title`  | 22 / 700, -0.03em            | **Mobile only.** `PageHeader` h1 in `apps/mobile`                              |
+
+**Mobile-only type.** Keys prefixed `mobile-` belong to `apps/mobile` and are
+not part of the desktop scale: the class guard's `off-scale-text` rule still
+rejects `text-[22px]` and `text-[30px]` in `packages/ui`, while the mobile
+guard (`apps/mobile/src/minText.test.ts`) accepts them. `check-design-tokens`
+ties each to the mobile component that sets it.
 
 Rules:
 

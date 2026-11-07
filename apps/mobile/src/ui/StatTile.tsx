@@ -1,5 +1,8 @@
 import React from 'react';
+import { HERO_FIGURE } from './typography.js';
 import { TONE_TEXT, type Tone } from './tones.js';
+
+const STAT_FIGURE = 'num text-xl font-semibold';
 
 interface Props {
   label: string;
@@ -47,11 +50,7 @@ export const StatTile: React.FC<Props> = ({
   <StatTileShell wide={wide} className={wide ? 'flex items-end justify-between gap-3' : ''}>
     <div className="min-w-0">
       <p className="text-xs font-medium text-text-muted">{label}</p>
-      <p
-        className={`num mt-1 font-semibold ${wide ? 'text-[30px] tracking-[-0.03em]' : 'text-xl'} ${TONE_TEXT[tone]}`}
-      >
-        {value}
-      </p>
+      <p className={`mt-1 ${wide ? HERO_FIGURE : STAT_FIGURE} ${TONE_TEXT[tone]}`}>{value}</p>
       {sub && <p className="mt-0.5 text-xs text-text-muted">{sub}</p>}
       {note && <p className="text-xs text-text-faint">{note}</p>}
     </div>
