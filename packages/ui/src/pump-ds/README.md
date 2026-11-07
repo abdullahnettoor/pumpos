@@ -109,7 +109,7 @@ one thing it decides, so a page never decides it again.
   `StatementTable` (screen and print).
 - **Money and qty cells** are right-aligned mono with tabular digits, at
   regular weight. Only the total row is semibold, so it stands out from the
-  figures above it. Don't set `emphasis` on a column that has a total row.
+  figures above it; its mono figures stay at 500, since no 600 face ships. Don't set `emphasis` on a column that has a total row.
 - **Dates** are sans with tabular digits.
 - **Quantities** take their unit's decimals (2 for litres). Only meter
   readings take 3 (`decimals: 3`), and they set `total: false`.
@@ -221,10 +221,8 @@ The list holds documented exceptions and nothing else:
 because the pre-paint script sets `<meta name="theme-color">` before any CSS
 loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. Under
 `small-text`, the shared 10px table-header constant (`table/columns.tsx`
-`HEADER`, also used by `DataTable`) is the only lasting entry. Under
-`off-scale-text`, the `lg` KPI figure (`kpi/KpiTile.tsx`, 24px) is the one
-entry: DESIGN.md's type table lists it (`kpi-figure` 18/24) but the front
-matter has no 24px `fontSize`. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
+`HEADER`, also used by `DataTable`) is the only lasting entry. The
+off-scale-text and fill/text pair rules have no entries. Any new entry needs the same: a reason in
 `classGuard.test.ts` and a test that keeps the literal in step.
 
 **Lowering an entry.** After fixing violations, run `test:classes:update` and

@@ -58,7 +58,7 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
                     <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
                       Hours
                     </span>
-                    <span className="font-mono text-[14px] font-semibold text-ink-strong">
+                    <span className="font-mono text-[14px] font-medium text-ink-strong">
                       {template.startTime} - {template.endTime}
                     </span>
                   </div>

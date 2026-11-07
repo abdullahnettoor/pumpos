@@ -332,9 +332,9 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
                               'h-8 w-full rounded-md font-mono text-[12px] tabular-nums outline-none transition-colors',
                               'focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:text-ink-faint',
                               d === value
-                                ? 'bg-brand font-semibold text-on-brand'
+                                ? 'bg-brand font-medium text-on-brand'
                                 : 'text-ink-default hover:bg-surface-alt',
-                              d === max && d !== value && 'font-semibold text-brand',
+                              d === max && d !== value && 'font-medium text-brand',
                             )}
                           >
                             {Number(d.slice(8))}

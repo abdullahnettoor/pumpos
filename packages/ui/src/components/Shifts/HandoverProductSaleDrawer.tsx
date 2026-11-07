@@ -443,7 +443,7 @@ const SaleForm: React.FC<SaleFormProps> = ({
         )}
         <div className="flex items-center justify-between border-t border-border-soft pt-1">
           <dt className="font-semibold">Cash to drawer</dt>
-          <dd className="font-mono text-[14px] font-semibold text-ink-strong">
+          <dd className="font-mono text-[14px] font-medium text-ink-strong">
             {formatMoney(cashToDrawer(totals.total, nonCash))}
           </dd>
         </div>

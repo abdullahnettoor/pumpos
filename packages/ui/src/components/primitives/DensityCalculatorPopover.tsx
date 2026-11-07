@@ -227,7 +227,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
         <span
           style={{
             fontSize: '12px',
-            fontWeight: 600,
+            fontWeight: 500,
             padding: '2px 5px',
             borderRadius: '4px',
             background: 'var(--bg-surface-alt)',
@@ -321,7 +321,7 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '15px',
-                  fontWeight: 700,
+                  fontWeight: 500,
                   color: 'var(--text-strong)',
                 }}
               >

@@ -17,7 +17,7 @@ export type DeltaSize = 'xs' | 'sm' | 'md';
 
 const deltaVariants = cva(
   [
-    'inline-flex items-center gap-1 font-mono font-semibold leading-none rounded whitespace-nowrap',
+    'inline-flex items-center gap-1 font-mono font-medium leading-none rounded whitespace-nowrap',
     'transition-colors',
   ].join(' '),
   {

@@ -29,7 +29,7 @@ const Line: React.FC<{ label: string; value: number | null; strong?: boolean }> 
     <dd
       className={
         strong
-          ? 'font-mono font-semibold tabular-nums text-ink-strong'
+          ? 'font-mono font-medium tabular-nums text-ink-strong'
           : 'font-mono tabular-nums text-ink-default'
       }
     >

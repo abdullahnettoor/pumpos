@@ -410,7 +410,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                       <span className="text-[12px] font-normal text-ink-faint">{line.hint}</span>
                     )}
                   </dt>
-                  <dd className="m-0 font-mono tabular-nums">
+                  <dd className="m-0 font-mono font-medium tabular-nums">
                     {line.lossAware ? <LossAware value={line.value} /> : formatMoney(line.value)}
                   </dd>
                 </div>
@@ -418,7 +418,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
               {single && (
                 <div className="flex items-baseline justify-between gap-4 bg-surface-alt px-4 py-3 font-semibold text-ink-strong">
                   <dt>Net profit</dt>
-                  <dd className="m-0 font-mono text-[15px] tabular-nums">
+                  <dd className="m-0 font-mono text-[15px] font-medium tabular-nums">
                     <LossAware value={single.netProfit} />
                   </dd>
                 </div>

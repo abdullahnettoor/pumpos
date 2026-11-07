@@ -46,7 +46,7 @@ export const ReceivablesPayablesCard: React.FC = () => {
               {MONEY_TERMS.receivable}
             </span>
             <span
-              className={`font-mono text-base font-semibold ${
+              className={`font-mono text-base font-medium ${
                 totalReceivables > 0 ? 'text-warning-fg' : 'text-ink'
               }`}
               data-testid="receivables-total"

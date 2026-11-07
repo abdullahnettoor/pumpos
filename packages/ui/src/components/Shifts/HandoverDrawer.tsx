@@ -196,7 +196,7 @@ const ReconLine: React.FC<{
     )}
   >
     <dt className="flex items-center gap-1.5">{label}</dt>
-    <dd className="font-mono tabular-nums">{value}</dd>
+    <dd className="font-mono font-medium tabular-nums">{value}</dd>
   </div>
 );
 
@@ -1302,7 +1302,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                             placeholder="0"
                             name="ccAmount"
                             aria-label="Customer sale amount"
-                            className="text-right font-mono font-semibold"
+                            className="text-right font-mono font-medium"
                             value={ccAmount}
                             onChange={(e) => handleCcAmountChange(e.target.value)}
                             disabled={ccBusy}
@@ -1594,7 +1594,7 @@ const SaleLines: React.FC<{
   <div className="flex flex-col gap-1.5">
     <div className="flex items-baseline justify-between px-0.5 text-[12px] font-semibold text-ink-muted">
       <span>{title}</span>
-      <span className="font-mono text-ink-strong">{formatMoney(total)}</span>
+      <span className="font-mono font-medium text-ink-strong">{formatMoney(total)}</span>
     </div>
     <ul className="flex flex-col overflow-hidden rounded-input border border-border-soft bg-surface">
       {lines.map((l, idx) => (
@@ -1614,7 +1614,7 @@ const SaleLines: React.FC<{
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="font-mono text-[13px] font-semibold text-ink-strong">
+            <span className="font-mono text-[13px] font-medium text-ink-strong">
               {formatMoney(l.amount)}
             </span>
             <Button

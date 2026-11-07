@@ -395,7 +395,7 @@ const CashReconciliation: React.FC<{ lines: CashLine[] }> = ({ lines }) => (
           }
         >
           <dt className="text-ink-default">{line.label}</dt>
-          <dd className="m-0 font-mono tabular-nums text-ink-strong">
+          <dd className="m-0 font-mono font-medium tabular-nums text-ink-strong">
             {line.role === 'variance' ? (
               <VarianceChip amount={line.amount} size="md" />
             ) : (

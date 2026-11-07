@@ -1268,7 +1268,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     key={t.label}
                     className="rounded-card border border-border-soft bg-surface-alt p-3 text-center"
                   >
-                    <div className="font-mono text-[18px] font-semibold text-ink-strong">
+                    <div className="font-mono text-[18px] font-medium text-ink-strong">
                       {t.value}
                     </div>
                     <div className="text-[12px] text-ink-muted">{t.label}</div>

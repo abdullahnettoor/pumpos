@@ -65,7 +65,7 @@ export const DensityReading: React.FC<DensityReadingProps> = ({
             />
           )}
           <div className="shrink-0 text-right">
-            <div className="font-mono text-[13px] font-semibold tabular-nums text-ink">
+            <div className="font-mono text-[13px] font-medium tabular-nums text-ink">
               {display.value}
             </div>
             <div className={cn('text-[12px]', jump ? 'text-danger-fg' : 'text-ink-muted')}>

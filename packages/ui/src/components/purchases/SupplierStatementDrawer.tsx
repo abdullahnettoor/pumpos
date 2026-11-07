@@ -34,7 +34,7 @@ export const SupplierBalance: React.FC<{ balance: number }> = ({ balance }) => (
     <span className="text-[12px] text-ink-muted">
       {balance < 0 ? `${MONEY_TERMS.advance} paid` : MONEY_TERMS.youOwe}
     </span>
-    <span className="font-mono text-[18px] font-semibold text-ink-strong">
+    <span className="font-mono text-[18px] font-medium text-ink-strong">
       {formatMoney(Math.abs(balance))}
     </span>
   </div>

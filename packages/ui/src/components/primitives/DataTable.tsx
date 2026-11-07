@@ -11,7 +11,7 @@ import {
 import { useRunTask } from '../../utils/runTask.js';
 import { DataSection } from '../../pump-ds/data-section/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
-import { HEADER } from '../../pump-ds/table/columns.js';
+import { HEADER, totalCellClass } from '../../pump-ds/table/columns.js';
 
 declare module '@tanstack/react-table' {
   /**
@@ -266,7 +266,7 @@ export function DataTable<T>({
                         // A kind-styled column aligns its total like its cells.
                         className={cn(
                           dense ? 'px-1.5 py-1.5' : 'px-3 py-[9px]',
-                          className ?? 'text-left',
+                          totalCellClass(className ?? 'text-left'),
                         )}
                       >
                         {header.isPlaceholder

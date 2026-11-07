@@ -338,7 +338,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({
                               {tank?.name || 'No tank'} ({prod?.name || 'No fuel'})
                             </span>
                           </span>
-                          <span className="font-mono font-semibold text-ink-strong">
+                          <span className="font-mono font-medium text-ink-strong">
                             {formatQuantity(n.currentReading, prod?.unit || 'L', { decimals: 3 })}
                           </span>
                         </div>

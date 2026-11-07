@@ -20,7 +20,8 @@ interface ColumnBase<T> {
    */
   text?: (row: T) => string;
   /**
-   * The figure the row is about, set in semibold. Not for a column with a
+   * The figure the row is about, set in semibold; a mono (money, qty) column
+   * stays at 500, the heaviest mono face that ships. Not for a column with a
    * total row: money cells are regular weight so the total stands out.
    */
   emphasis?: boolean;
@@ -255,7 +256,17 @@ export const headerClass = <T,>(col: TableColumn<T>): string => cn(HEADER, kindO
 
 /** Cell classes shared by both adapters: kind alignment plus emphasis. */
 export const columnClass = <T,>(col: TableColumn<T>): string =>
-  cn(kindClass(col), col.emphasis && 'font-semibold');
+  cn(kindClass(col), col.emphasis && (isMono(kindClass(col)) ? 'font-medium' : 'font-semibold'));
+
+/** Mono figures only ship at 400/500 (#701), so they never take a 600 weight. */
+const isMono = (classes: string): boolean => /(^|\s)font-mono(\s|$)/.test(classes);
+
+/**
+ * A total-row cell's classes. The row is semibold; a mono figure in it keeps
+ * 500 (no 600 face ships), while sans text inherits the row's weight.
+ */
+export const totalCellClass = (classes: string): string =>
+  cn(classes, isMono(classes) && 'font-medium');
 
 /** The body of a cell: the caller's override, else its text, else the kind's. */
 export function renderCell<T>(col: TableColumn<T>, row: T, mode: TableMode): ReactNode {

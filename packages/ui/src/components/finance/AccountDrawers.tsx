@@ -470,7 +470,7 @@ export const SettleDrawer: React.FC<
         </div>
         <div className="flex items-center justify-between rounded-input border border-border-soft bg-surface-alt px-3 py-2.5 text-[13px]">
           <span className="font-semibold text-ink-muted">Net to bank</span>
-          <strong className="font-mono text-ink-strong">
+          <strong className="font-mono font-medium text-ink-strong">
             {formatMoney(Math.max(0, (Number(gross) || 0) - (Number(fee) || 0)))}
           </strong>
         </div>

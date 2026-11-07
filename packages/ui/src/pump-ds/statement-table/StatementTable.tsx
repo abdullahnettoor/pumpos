@@ -4,6 +4,7 @@ import {
   columnClass,
   headerClass,
   kindClass,
+  totalCellClass,
   renderCell,
   totalCells,
   type TableColumn,
@@ -93,11 +94,15 @@ export function StatementTable<T>({
           <tr className="border-t border-border-strong font-semibold text-ink-strong print:break-inside-avoid">
             {columns.map((col, i) =>
               i === 0 ? (
-                <th key={col.id} scope="row" className={cn(CELL_PAD, kindClass(col))}>
+                <th
+                  key={col.id}
+                  scope="row"
+                  className={cn(CELL_PAD, totalCellClass(kindClass(col)))}
+                >
                   {totals[i]}
                 </th>
               ) : (
-                <td key={col.id} className={cn(CELL_PAD, kindClass(col))}>
+                <td key={col.id} className={cn(CELL_PAD, totalCellClass(kindClass(col)))}>
                   {totals[i]}
                 </td>
               ),

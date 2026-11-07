@@ -153,7 +153,7 @@ export const TodayView: React.FC<TodayViewProps> = ({
                           {sampled && <div className="truncate text-ink-muted">{sampled}</div>}
                         </div>
                         <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                          <span className="font-mono font-semibold tabular-nums text-ink">
+                          <span className="font-mono font-medium tabular-nums text-ink">
                             {formatDensity(reading.density15)}
                           </span>
                           <DeltaChip
