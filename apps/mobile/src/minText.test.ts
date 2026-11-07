@@ -25,7 +25,10 @@ import { readTypeScale } from '@pump/ui/src/pump-ds/class-guard/scan.ts';
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 const MIN_TEXT_PX = 12;
-const TYPE_SCALE_PX = readTypeScale(readFileSync(path.join(SRC, '../../../DESIGN.md'), 'utf8'));
+const TYPE_SCALE_PX = readTypeScale(
+  readFileSync(path.join(SRC, '../../../DESIGN.md'), 'utf8'),
+  'mobile',
+);
 const EXCEPTION = /min-text exception:\s*[^\s*/}]/;
 
 const toPx = (n: string, unit: string) => Number(n) * (unit === 'rem' ? 16 : 1);
@@ -166,12 +169,19 @@ describe('mobile type scale', () => {
   });
 
   it('reads the real DESIGN.md scale', () => {
-    expect([...TYPE_SCALE_PX].sort((a, b) => a - b)).toEqual([10, 12, 13, 14, 15, 18, 20, 24]);
+    expect([...TYPE_SCALE_PX].sort((a, b) => a - b)).toEqual([
+      10, 12, 13, 14, 15, 18, 20, 22, 24, 30,
+    ]);
+  });
+
+  it('accepts the mobile-only 22px page title and 30px hero figure', () => {
+    const src = '<h1 className="text-[22px]" /><p className="text-[30px] text-[28px]" />';
+    expect(scanText(src, 'source')).toEqual(['1: text-[28px]']);
   });
 
   it('takes the scale from front matter only, ignoring body examples', () => {
     const md = '---\ntypography:\n  a:\n    fontSize: 14px\n---\n\n    fontSize: 99px\n';
-    expect([...readTypeScale(md)]).toEqual([14]);
+    expect([...readTypeScale(md, 'mobile')]).toEqual([14]);
   });
 
   it('fails on an empty scale rather than letting every size through', () => {

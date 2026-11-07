@@ -20,7 +20,7 @@ interface Props {
 export const PageHeader: React.FC<Props> = ({ title, right, stationName, onStationPress }) => (
   <PinnedHeader>
     <DsPageHeader
-      className="flex-nowrap items-center px-4 pb-3 pt-1.5 [&_h1]:truncate [&_h1]:text-xl [&_h1]:font-extrabold [&_h1]:tracking-[-0.03em] [&_h1]:text-text-high"
+      className="flex-nowrap items-center px-4 pb-3 pt-1.5 [&_h1]:truncate [&_h1]:text-[22px] [&_h1]:font-extrabold [&_h1]:tracking-[-0.03em] [&_h1]:text-text-high"
       eyebrow={
         <button
           type="button"
