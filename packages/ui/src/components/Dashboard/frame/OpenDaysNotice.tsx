@@ -21,7 +21,7 @@ export const OpenDaysNotice: React.FC = () => {
     return (
       <div
         role="alert"
-        className="flex items-center gap-3 rounded-input border border-border-soft bg-surface-alt px-3.5 py-2 text-[12.5px] text-ink-muted"
+        className="flex items-center gap-3 rounded-input border border-border-soft bg-surface-alt px-3.5 py-2 text-[12px] text-ink-muted"
       >
         Couldn&apos;t load open days ·
         <Button variant="secondary" size="xs" onClick={() => void q.refetch()}>
@@ -51,7 +51,7 @@ export const OpenDaysNotice: React.FC = () => {
       role="status"
       data-dashboard-card="openDaysNotice"
       data-tone={text.info ? 'info' : 'warning'}
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-input border px-3.5 py-2 text-[12.5px] ${
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-input border px-3.5 py-2 text-[13px] ${
         text.info
           ? 'border-info-fg/30 bg-info-bg text-info-fg'
           : 'border-warning-fg/30 bg-warning-bg text-warning-fg'

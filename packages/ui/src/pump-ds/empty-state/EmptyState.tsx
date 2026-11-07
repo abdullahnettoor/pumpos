@@ -40,7 +40,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
           </span>
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-[12.5px] font-semibold text-ink-strong">{title}</div>
+          <div className="text-[13px] font-semibold text-ink-strong">{title}</div>
           {description && (
             <div className="text-[12px] leading-snug text-ink-muted">{description}</div>
           )}
@@ -69,7 +69,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
       )}
       <div className="text-[14px] font-semibold text-ink-strong">{title}</div>
       {description && (
-        <div className="max-w-[380px] text-[12.5px] leading-relaxed text-ink-muted">
+        <div className="max-w-[380px] text-[12px] leading-relaxed text-ink-muted">
           {description}
         </div>
       )}

@@ -53,7 +53,7 @@ const COLUMNS: ColumnDef<Row, any>[] = [
 ];
 
 const CardBody: React.FC = () => (
-  <div className="flex flex-col gap-2 text-[12.5px]">
+  <div className="flex flex-col gap-2 text-[13px]">
     {ROWS.map((r) => (
       <div key={r.customer} className="flex justify-between gap-2">
         <span className="truncate text-ink-strong">{r.customer}</span>

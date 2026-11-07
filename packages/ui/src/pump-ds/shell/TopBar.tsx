@@ -327,7 +327,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                     type="button"
                     data-testid="topbar-station"
                     aria-label={`Station: ${stationName}. Switch station`}
-                    className="inline-flex h-7 min-w-0 items-center gap-1 rounded-button px-1.5 text-[12.5px] font-medium text-ink-default transition-colors hover:bg-surface-alt"
+                    className="inline-flex h-7 min-w-0 items-center gap-1 rounded-button px-1.5 text-[13px] font-medium text-ink-default transition-colors hover:bg-surface-alt"
                     title={stationName}
                   >
                     <span className="truncate">{stationName}</span>
@@ -348,7 +348,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               <span
                 data-testid="topbar-station"
                 className={cn(
-                  'select-none truncate text-[12.5px] font-medium text-ink-default',
+                  'select-none truncate text-[13px] font-medium text-ink-default',
                   titleBar && 'pointer-events-none',
                 )}
                 title={stationName}
@@ -365,7 +365,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   data-testid="topbar-page"
                   aria-current="page"
                   className={cn(
-                    'select-none truncate text-[12.5px] text-ink-muted',
+                    'select-none truncate text-[12px] text-ink-muted',
                     titleBar && 'pointer-events-none',
                   )}
                 >
@@ -384,7 +384,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <button
           onClick={onOpenSearch}
           aria-label="Search"
-          className="group absolute left-1/2 top-1/2 flex h-8 w-[min(420px,38vw)] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
+          className="group absolute left-1/2 top-1/2 flex h-8 w-[min(420px,38vw)] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
         >
           <Icon name="search" size="sm" />
           <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
@@ -465,7 +465,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                       {n.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-medium text-ink-strong">
+                      <span className="block text-[13px] font-medium text-ink-strong">
                         {n.title}
                       </span>
                       {n.meta && <span className="block text-[12px] text-ink-muted">{n.meta}</span>}

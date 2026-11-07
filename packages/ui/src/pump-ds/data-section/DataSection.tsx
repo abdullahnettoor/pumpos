@@ -194,7 +194,7 @@ const ErrorRow: React.FC<{
   const retryable = failed.filter((q) => q.refetch && !refused.includes(q));
   const text = allRefused ? refusalMessage(refused[0], label) : `Couldn't load ${label}`;
   return (
-    <div className="flex items-center gap-3 text-[12.5px] text-ink-muted" role="alert">
+    <div className="flex items-center gap-3 text-[12px] text-ink-muted" role="alert">
       <span>
         {text}
         {retryable.length > 0 && ' ·'}

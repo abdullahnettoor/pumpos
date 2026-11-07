@@ -98,7 +98,7 @@ export const PreviewCards: React.FC<PreviewViewProps> = ({
             {preview.moves.map((m) => (
               <li
                 key={m.label}
-                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[12.5px]"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[13px]"
               >
                 <span className="text-ink-default">{m.label}</span>
                 <Move move={m} />
@@ -109,7 +109,7 @@ export const PreviewCards: React.FC<PreviewViewProps> = ({
         {preview.lines.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1 border-t border-border-soft pt-2">
             {preview.lines.map((l) => (
-              <li key={l.label} className="flex justify-between gap-3 text-[12.5px]">
+              <li key={l.label} className="flex justify-between gap-3 text-[13px]">
                 <span className="text-ink-muted">{l.label}</span>
                 <span className="font-mono tabular-nums">
                   {l.amount == null ? '' : inr(l.amount)}
@@ -171,7 +171,7 @@ export const PreviewStrip: React.FC<
         <span className="grid size-7 shrink-0 place-items-center rounded-input border border-border-soft bg-surface text-brand">
           <ConceptIcon concept={def.concept} size="sm" />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-px text-[12.5px]">
+        <span className="flex min-w-0 flex-1 flex-col gap-px text-[13px]">
           <span className="truncate font-semibold text-ink-strong">{what ?? def.label}</span>
           {move ? (
             <span className="flex min-w-0 items-center gap-1.5 text-ink-muted">

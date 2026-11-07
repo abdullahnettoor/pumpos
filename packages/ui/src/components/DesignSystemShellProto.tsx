@@ -44,7 +44,7 @@ const Group: React.FC<{ title: string; description?: string; children: React.Rea
         {title}
       </div>
       {description && (
-        <p className="mt-1.5 max-w-[620px] text-[12.5px] leading-relaxed text-ink-muted">
+        <p className="mt-1.5 max-w-[620px] text-[12px] leading-relaxed text-ink-muted">
           {description}
         </p>
       )}
@@ -243,7 +243,7 @@ export const DesignSystemShellProtoPanel: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-8 rounded-card border border-border-soft bg-surface-alt px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">
+      <div className="mb-8 rounded-card border border-border-soft bg-surface-alt px-4 py-3 text-[12px] leading-relaxed text-ink-muted">
         <strong className="text-ink-strong">Shell prototype — now live.</strong> The real pump-ds
         primitives (TopBar, CommandPalette, Radix menus) driven by demo data. Click{' '}
         <strong>Search</strong> or press <strong>⌘K</strong>; open <strong>+ New</strong>, the{' '}

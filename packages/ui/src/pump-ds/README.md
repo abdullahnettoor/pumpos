@@ -166,6 +166,7 @@ excluded) and counts, per file:
 | `raw-color`      | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                      |
 | `palette-class`  | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)            |
 | `fill-text-pair` | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too) |
+| `off-scale-text` | an arbitrary `text-[Npx]` not on the DESIGN.md type scale (see below)                |
 
 **What counts as a class string.** `className` / `class` values and every
 argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string
@@ -198,6 +199,11 @@ prop of an element imported from `@react-pdf/renderer`): it is a print scale in
 points. An HTML element in a PDF-importing file still counts. Use
 `text-[12px]` for captions, chips, counts and kbd hints.
 
+**Off-scale text (#700).** An arbitrary `text-[Npx]` / `text-[Nrem]` at 12px or
+more must be a `fontSize` from DESIGN.md's front-matter `typography` block
+(read at test time, so the scale cannot drift). `text-[12.5px]`,
+`text-[16px]` and `text-[17px]` count; `text-[13px]` does not.
+
 Plain CSS classes defined in `index.css` are allowed.
 
 ```sh
@@ -215,7 +221,10 @@ The list holds documented exceptions and nothing else:
 because the pre-paint script sets `<meta name="theme-color">` before any CSS
 loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. Under
 `small-text`, the shared 10px table-header constant (`table/columns.tsx`
-`HEADER`, also used by `DataTable`) is the only lasting entry. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
+`HEADER`, also used by `DataTable`) is the only lasting entry. Under
+`off-scale-text`, the `lg` KPI figure (`kpi/KpiTile.tsx`, 24px) is the one
+entry: DESIGN.md's type table lists it (`kpi-figure` 18/24) but the front
+matter has no 24px `fontSize`. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
 `classGuard.test.ts` and a test that keeps the literal in step.
 
 **Lowering an entry.** After fixing violations, run `test:classes:update` and

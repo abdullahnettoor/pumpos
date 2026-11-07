@@ -655,7 +655,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   </div>
                 </section>
 
-                <div className="rounded-card border border-border-soft bg-surface-alt px-4 py-3.5 text-[12.5px] leading-[1.55] text-ink-muted">
+                <div className="rounded-card border border-border-soft bg-surface-alt px-4 py-3.5 text-[12px] leading-[1.55] text-ink-muted">
                   <span className="font-semibold text-ink-strong">
                     Set the infrastructure carefully.{' '}
                   </span>
