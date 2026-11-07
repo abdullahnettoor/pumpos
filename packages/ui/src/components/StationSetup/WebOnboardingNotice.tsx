@@ -56,8 +56,8 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
 
   return (
     <div className="flex min-h-[100vh] items-center justify-center bg-canvas p-6">
-      <div className="w-full max-w-[480px] animate-fade-in rounded-card border border-border-soft bg-surface p-7 text-center shadow-lg">
-        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-info-bg text-info-fg">
+      <div className="w-full max-w-[480px] animate-fade-in rounded-card border border-border-soft bg-surface p-7 text-center">
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-card bg-info-bg text-info-fg">
           <Globe size={24} />
         </div>
 

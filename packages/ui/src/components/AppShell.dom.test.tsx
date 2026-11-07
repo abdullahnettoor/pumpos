@@ -463,11 +463,12 @@ describe('AppShell overlay sidebar below 1200px (#657)', () => {
   it('floats over the content: the rail keeps its 60px slot', () => {
     shell();
     const aside = screen.getByRole('complementary');
-    expect(aside.style.width).toBe('60px');
+    expect(aside.className.split(' ')).toContain('w-15');
+    expect(aside.className.split(' ')).toContain('motion-reduce:transition-none');
     expand();
-    expect(aside.style.width).toBe('60px');
-    expect(screen.getByTestId('sidebar-panel').style.width).toBe('220px');
-    expect(screen.getByTestId('sidebar-panel').style.position).toBe('absolute');
+    expect(aside.className.split(' ')).toContain('w-15');
+    expect(screen.getByTestId('sidebar-panel').className.split(' ')).toContain('w-55');
+    expect(screen.getByTestId('sidebar-panel').className.split(' ')).toContain('absolute');
   });
 
   it('toggles with Ctrl+\\', () => {

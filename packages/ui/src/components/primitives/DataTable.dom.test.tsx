@@ -53,6 +53,13 @@ describe('DataTable states', () => {
     expect(screen.getByText('Diesel')).toBeTruthy();
   });
 
+  it('row colour transitions stay brief and stop under reduced motion', () => {
+    render(<DataTable columns={columns} data={[{ name: 'Diesel' }]} />);
+    const classes = screen.getByText('Diesel').closest('tr')!.className.split(' ');
+    expect(classes).toContain('duration-150');
+    expect(classes).toContain('motion-reduce:transition-none');
+  });
+
   it('access refusal: the server message, no Retry', () => {
     const err = Object.assign(new Error('Your plan does not include this report.'), {
       code: 'CAPABILITY_NOT_ENTITLED',

@@ -16,6 +16,8 @@ export const RULES = [
   'undefined-var',
   'raw-color',
   'palette-class',
+  'untokenized-depth',
+  'inline-style',
   'fill-text-pair',
   'small-text',
   'off-scale-text',
@@ -318,7 +320,12 @@ export function utilityOf(token: string): { variant: string; utility: string } {
 /** A token with a utility prefix: a colour utility, a palette class, or a variant. */
 const hasUtilityPrefix = (t: string) => {
   const { utility } = utilityOf(t);
-  return VARIANT_PREFIX.test(t) || COLOR_UTILITY.test(utility) || PALETTE_CLASS.test(utility);
+  return (
+    VARIANT_PREFIX.test(t) ||
+    COLOR_UTILITY.test(utility) ||
+    PALETTE_CLASS.test(utility) ||
+    /^(rounded|shadow)-/.test(utility)
+  );
 };
 
 /**
@@ -545,6 +552,8 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'undefined-var': [],
     'raw-color': [],
     'palette-class': [],
+    'untokenized-depth': [],
+    'inline-style': [],
     'fill-text-pair': [],
     'small-text': [],
     'off-scale-text': [],
@@ -585,7 +594,15 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
         if (ts.isStringLiteral(node.initializer) && node.initializer.text.includes('${'))
           findings['quoted-interpolation'].push(node.initializer.text);
       }
-      if (name === 'style') collectInto(node.initializer, styleLits);
+      if (name === 'style') {
+        collectInto(node.initializer, styleLits);
+        if (
+          ts.isJsxExpression(node.initializer) &&
+          node.initializer.expression &&
+          ts.isObjectLiteralExpression(node.initializer.expression)
+        )
+          findings['inline-style'].push(node.initializer.expression.getText(sf));
+      }
     } else if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
@@ -634,6 +651,12 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     for (const token of classTokens(lit)) {
       if (!looksLikeClass(token) || !checkable(token)) continue;
       if (RAW_COLOR.test(token)) findings['raw-color'].push(token);
+      if (
+        /^(rounded-(sm|md|lg|xl)|rounded-\[\d*\.?\d+px\]|shadow-(sm|md|lg))$/.test(
+          utilityOf(token).utility,
+        )
+      )
+        findings['untokenized-depth'].push(token);
       if (isSmallTextUtility(utilityOf(token).utility)) findings['small-text'].push(token);
       if (isOffScaleTextUtility(utilityOf(token).utility)) findings['off-scale-text'].push(token);
       if (PALETTE_CLASS.test(utilityOf(token).utility)) {

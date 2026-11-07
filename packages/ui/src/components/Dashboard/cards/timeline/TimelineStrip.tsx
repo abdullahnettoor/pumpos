@@ -21,10 +21,8 @@ const PIN_TONE: Record<string, string> = {
   danger: 'border-danger-fg text-danger-fg',
 };
 
-const HATCH =
-  'repeating-linear-gradient(45deg, color-mix(in srgb, var(--brand-primary) 35%, transparent) 0 4px, color-mix(in srgb, var(--brand-primary) 12%, transparent) 4px 8px)';
-
-const POPOVER_W = 224;
+const HATCH_CLASS =
+  'bg-[repeating-linear-gradient(45deg,color-mix(in_srgb,var(--brand-primary)_35%,transparent)_0_4px,color-mix(in_srgb,var(--brand-primary)_12%,transparent)_4px_8px)] bg-no-repeat';
 const EDGE = 8;
 /** Keep pin centres this far inside the strip so the 20px chip never clips. */
 const PIN_INSET_PCT = 1.5;
@@ -48,9 +46,14 @@ interface PopoverPos {
 /** Anchor-relative position of the list, clamped inside the viewport. */
 function popoverPos(anchor: HTMLElement): PopoverPos {
   const r = anchor.getBoundingClientRect();
+  // The CSS token owns the list width; placement reads that same value.
+  const width =
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--timeline-popover-width'),
+    ) || 0;
   const left = Math.min(
-    Math.max(EDGE, r.left + r.width / 2 - POPOVER_W / 2),
-    window.innerWidth - POPOVER_W - EDGE,
+    Math.max(EDGE, r.left + r.width / 2 - width / 2),
+    window.innerWidth - width - EDGE,
   );
   return { left, top: r.bottom + 4 };
 }
@@ -68,8 +71,8 @@ const PinPopover: React.FC<{
       ref={listRef}
       role="list"
       data-testid="timeline-pin-list"
-      className="fixed z-50 m-0 list-none rounded-input border border-border-soft bg-surface p-1 shadow-lg"
-      style={{ left: pos.left, top: pos.top, width: POPOVER_W }}
+      className="fixed z-50 m-0 w-(--timeline-popover-width) list-none rounded-card border border-border-soft bg-surface p-1 shadow-(--shadow-popover)"
+      style={{ left: pos.left, top: pos.top }}
     >
       {events.map((ev) => (
         <li key={ev.id}>
@@ -204,7 +207,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
   const chipOf = new Map(chips.map((c) => [c.id, c]));
   return (
     <div className="relative mt-1 h-[70px] select-none" data-testid="timeline-strip">
-      <div className="absolute inset-x-0 top-[26px] h-6 rounded-[7px] bg-surface-alt" />
+      <div className="absolute inset-x-0 top-[26px] h-6 rounded-input bg-surface-alt" />
       {bars.map((b) => {
         const chip = chipOf.get(b.id);
         return (
@@ -212,18 +215,16 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             key={b.id}
             data-testid={`timeline-bar-${b.kind}`}
             title={b.times ? `${b.text} · ${b.times}` : b.text}
-            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[12px] ${
+            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-input px-2 text-[12px] ${
               b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
-            } ${BAR_CLASS[b.kind]}`}
+            } ${BAR_CLASS[b.kind]} ${b.kind === 'running' ? HATCH_CLASS : ''}`}
             style={{
               left: `${b.leftPct}%`,
               width: `${b.widthPct}%`,
               // The live shift is hatched up to now; the rest of its window stays open.
               ...(b.kind === 'running'
                 ? {
-                    backgroundImage: HATCH,
                     backgroundSize: `${(b.progress ?? 1) * 100}% 100%`,
-                    backgroundRepeat: 'no-repeat',
                   }
                 : {}),
             }}

@@ -77,7 +77,7 @@ const Status: React.FC<{ level: TankLevel }> = ({ level }) => (
 const TUBE = {
   md: {
     gap: 'gap-3',
-    tube: 'h-[30px] w-3 rounded-sm',
+    tube: 'h-[30px] w-3 rounded-input',
     name: 'text-[13px]',
     pct: 'text-[13px]',
     stock: 'whitespace-nowrap text-[12px]',

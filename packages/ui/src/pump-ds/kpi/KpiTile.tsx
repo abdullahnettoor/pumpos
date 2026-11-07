@@ -88,7 +88,7 @@ export const KpiTile = forwardRef<HTMLDivElement, KpiTileProps>(function KpiTile
       <div className="flex min-h-5 min-w-0 items-center gap-1.5 text-[12px] font-medium text-ink-muted">
         <span className="truncate">{label}</span>
         {chip && (
-          <span className="ml-auto shrink-0 whitespace-nowrap rounded-sm border border-border-soft bg-surface-alt px-1.5 text-[12px] leading-normal text-ink-muted">
+          <span className="ml-auto shrink-0 whitespace-nowrap rounded-chip border border-border-soft bg-surface-alt px-1.5 text-[12px] leading-normal text-ink-muted">
             {chip}
           </span>
         )}

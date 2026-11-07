@@ -106,7 +106,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       keywords={item.keywords}
                       onSelect={() => run(item.onSelect)}
                       className={cn(
-                        'flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px]',
+                        'flex cursor-pointer items-center gap-2.5 rounded-button px-2.5 py-2 text-[13px]',
                         'text-ink-default data-[selected=true]:bg-brand/10 data-[selected=true]:text-ink-strong',
                       )}
                     >

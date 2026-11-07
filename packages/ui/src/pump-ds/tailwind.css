@@ -104,6 +104,7 @@
   --radius-button: 8px;
   --radius-chip: 999px;
   --radius-drawer: 12px;
+  --radius-tooltip: 6px;
 
   /* -------- Spacing (4px grid) -------- */
   /* Tailwind v4 keeps its default `--spacing` scale (0.25rem step). We add

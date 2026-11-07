@@ -162,7 +162,7 @@ const TodoRow: React.FC<{
     <div className="flex items-center gap-2.5">
       <span
         aria-hidden="true"
-        className={`flex size-7 shrink-0 items-center justify-center rounded-md ${TILE_TONE[alert.severity]}`}
+        className={`flex size-7 shrink-0 items-center justify-center rounded-button ${TILE_TONE[alert.severity]}`}
       >
         {tileIcon}
       </span>

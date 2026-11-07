@@ -33,7 +33,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
       >
         {icon && (
           <span
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border-soft bg-surface text-ink-muted [&_svg]:size-4"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-card border border-border-soft bg-surface text-ink-muted [&_svg]:size-4"
             aria-hidden="true"
           >
             {icon}
@@ -61,7 +61,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
     >
       {icon && (
         <span
-          className="mb-1 inline-flex size-11 items-center justify-center rounded-xl border border-border-soft bg-surface-alt text-ink-muted [&_svg]:size-5"
+          className="mb-1 inline-flex size-11 items-center justify-center rounded-card border border-border-soft bg-surface-alt text-ink-muted [&_svg]:size-5"
           aria-hidden="true"
         >
           {icon}

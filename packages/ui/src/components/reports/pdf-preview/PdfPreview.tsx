@@ -41,7 +41,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
             width={page.width}
             height={page.height}
             alt={pages.length > 1 ? `${alt}, page ${i + 1} of ${pages.length}` : alt}
-            className="h-auto w-full rounded-[4px] border border-border-soft shadow-sm"
+            className="h-auto w-full rounded-card border border-border-soft"
           />
         ))}
         {updating ? (

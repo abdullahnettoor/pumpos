@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Info, CheckCircle, X } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
 
 export type BannerSeverity = 'info' | 'success' | 'warning' | 'danger';
 
-const STYLE: Record<BannerSeverity, { bg: string; fg: string }> = {
-  info: { bg: 'var(--state-info-bg)', fg: 'var(--state-info-fg)' },
-  success: { bg: 'var(--state-success-bg)', fg: 'var(--state-success-fg)' },
-  warning: { bg: 'var(--state-warning-bg)', fg: 'var(--state-warning-fg)' },
-  danger: { bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },
+const TONE: Record<BannerSeverity, string> = {
+  info: 'bg-info-bg text-info-fg border-info-fg',
+  success: 'bg-success-bg text-success-fg border-success-fg',
+  warning: 'bg-warning-bg text-warning-fg border-warning-fg',
+  danger: 'bg-danger-bg text-danger-fg border-danger-fg',
 };
 
 const DEFAULT_ICON: Record<BannerSeverity, React.ReactNode> = {
@@ -72,39 +73,25 @@ export const Banner: React.FC<BannerProps> = ({
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
-  const { bg, fg } = STYLE[severity];
   const showIcon = icon !== null;
 
   return (
     <div
       role="status"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px',
-        padding: '10px 14px',
-        borderRadius: 'var(--radius-input)',
-        fontSize: '13px',
-        fontWeight: 500,
-        backgroundColor: bg,
-        color: fg,
-        border: `1px solid ${fg}`,
-        ...style,
-      }}
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-input border px-3.5 py-2.5 text-[13px] font-medium',
+        TONE[severity],
+      )}
+      style={style}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        {showIcon && (
-          <span style={{ flexShrink: 0, display: 'inline-flex' }}>
-            {icon ?? DEFAULT_ICON[severity]}
-          </span>
-        )}
-        <span style={{ minWidth: 0, overflowWrap: 'break-word' }}>
-          {title && <strong style={{ marginRight: children ? '6px' : 0 }}>{title}</strong>}
+      <span className="flex min-w-0 items-center gap-2">
+        {showIcon && <span className="inline-flex shrink-0">{icon ?? DEFAULT_ICON[severity]}</span>}
+        <span className="min-w-0 break-words">
+          {title && <strong className={children ? 'mr-1.5' : undefined}>{title}</strong>}
           {children}
         </span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <span className="flex shrink-0 items-center gap-2">
         {actions}
         {actionLabel && onAction && (
           <Button variant="secondary" size="sm" onClick={onAction}>
@@ -119,14 +106,7 @@ export const Banner: React.FC<BannerProps> = ({
               setDismissed(true);
               onDismiss?.();
             }}
-            style={{
-              display: 'inline-flex',
-              background: 'transparent',
-              border: 'none',
-              color: 'inherit',
-              cursor: 'pointer',
-              padding: '2px',
-            }}
+            className="inline-flex cursor-pointer border-0 bg-transparent p-0.5 text-inherit"
           >
             <X size={15} />
           </button>
