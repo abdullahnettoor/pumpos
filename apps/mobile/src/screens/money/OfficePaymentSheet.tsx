@@ -287,7 +287,7 @@ const Form = <F extends OfficePaymentFields>({
       {refusal && (
         <p
           role="alert"
-          className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[12.5px] text-bad-fg"
+          className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[13px] text-bad-fg"
         >
           {refusal}
         </p>
@@ -296,7 +296,7 @@ const Form = <F extends OfficePaymentFields>({
       {maybeRecorded && (
         <p
           role="status"
-          className="m-0 rounded-xl border border-warn-line bg-warn-soft px-3 py-2 text-[12.5px] text-warn-fg"
+          className="m-0 rounded-xl border border-warn-line bg-warn-soft px-3 py-2 text-[13px] text-warn-fg"
         >
           Your earlier attempt of {inr(Number(maybeRecorded.amount.trim()))} may have gone through.
           Check the balance before recording a different payment.

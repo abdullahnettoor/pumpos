@@ -86,7 +86,7 @@ export const TanksStep: React.FC<{ visit: Visit; showErrors: boolean }> = ({
       return (
         <div key={i} className="flex flex-col gap-2.5 rounded-xl border border-line p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-bold text-text-high">
+            <span className="text-[13px] font-bold text-text-high">
               {tank ? `${tank.name} · ${tank.productName}` : `Tank ${i + 1}`}
             </span>
             {v.values.lines.length > 1 && (
@@ -182,7 +182,7 @@ export const ChambersStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
       v.values.chambers.map((c, i) => (
         <div key={i} className="flex flex-col gap-2 rounded-xl border border-line p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-bold text-text-high">Chamber {i + 1}</span>
+            <span className="text-[13px] font-bold text-text-high">Chamber {i + 1}</span>
             <label className="flex items-center gap-1.5 text-[12px] text-text-muted">
               <input
                 type="checkbox"

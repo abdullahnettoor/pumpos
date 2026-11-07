@@ -50,9 +50,7 @@ export const ListRow: React.FC<Props> = ({
         )}
       </div>
       {end && (
-        <div className="flex-shrink-0 text-right text-[13.5px] font-semibold text-text-high">
-          {end}
-        </div>
+        <div className="flex-shrink-0 text-right text-sm font-semibold text-text-high">{end}</div>
       )}
       {onPress && chevron && (
         <span className="flex-shrink-0 text-text-faint">

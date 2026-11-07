@@ -26,7 +26,7 @@ export const VehicleSpend: React.FC<{ vehicles: readonly CustomerVehicleSpend[] 
               <span className="rounded-md border border-line bg-card-alt px-2 py-0.5 text-xs font-semibold text-text-muted">
                 {v.type}
               </span>
-              <span className="num min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text-high">
+              <span className="num min-w-0 flex-1 truncate text-[13px] font-semibold text-text-high">
                 {v.registration}
               </span>
               <span className="num text-[13px] font-semibold text-text-high">

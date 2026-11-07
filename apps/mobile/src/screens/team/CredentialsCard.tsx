@@ -34,13 +34,11 @@ export const CredentialsCard: React.FC<Props> = ({ title, name, login, password,
       <dl className="m-0 overflow-hidden rounded-[14px] border border-line bg-card [&>div+div]:border-t [&>div+div]:border-line">
         <div className="flex items-baseline justify-between gap-3 px-3 py-2.5">
           <dt className="text-[12px] text-text-muted">Sign in with</dt>
-          <dd className="num m-0 min-w-0 truncate text-[13.5px] font-semibold text-text-high">
-            {login}
-          </dd>
+          <dd className="num m-0 min-w-0 truncate text-sm font-semibold text-text-high">{login}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-3 px-3 py-2.5">
           <dt className="text-[12px] text-text-muted">Password</dt>
-          <dd className="num m-0 text-[13.5px] font-semibold text-text-high">{password}</dd>
+          <dd className="num m-0 text-sm font-semibold text-text-high">{password}</dd>
         </div>
       </dl>
       <p className="m-0 text-xs text-text-muted">
@@ -50,14 +48,14 @@ export const CredentialsCard: React.FC<Props> = ({ title, name, login, password,
         <button
           type="button"
           onClick={() => void copy()}
-          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
+          className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-sm font-bold text-text-high"
         >
           Copy
         </button>
         <button
           type="button"
           onClick={onDone}
-          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-[13.5px] font-bold text-on-accent"
+          className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-sm font-bold text-on-accent"
         >
           Done
         </button>

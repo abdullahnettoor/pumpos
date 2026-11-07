@@ -11,7 +11,7 @@ export const SeeAllButton: React.FC<{
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-11 w-full rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high disabled:opacity-60"
+      className="h-11 w-full rounded-[13px] border border-line bg-card text-sm font-bold text-text-high disabled:opacity-60"
     >
       {children}
     </button>

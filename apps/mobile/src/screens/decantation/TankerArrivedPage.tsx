@@ -34,7 +34,7 @@ export const TankerArrivedPage: React.FC<{ station: Station }> = ({ station }) =
           type="button"
           disabled={saving}
           onClick={() => void save(true)}
-          className={`flex h-11 flex-1 items-center justify-center rounded-[13px] text-[13.5px] font-bold text-on-accent disabled:opacity-60 ${flagged ? 'bg-bad' : 'bg-accent'}`}
+          className={`flex h-11 flex-1 items-center justify-center rounded-[13px] text-sm font-bold text-on-accent disabled:opacity-60 ${flagged ? 'bg-bad' : 'bg-accent'}`}
         >
           {saving
             ? 'Saving…'

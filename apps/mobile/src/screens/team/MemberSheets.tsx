@@ -161,7 +161,7 @@ const ResetForm: React.FC<{
         <button
           type="button"
           onClick={() => setValue('password', generatePassword())}
-          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
+          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[13px] font-bold text-accent"
         >
           Generate a new one
         </button>
@@ -296,7 +296,7 @@ const GiveAccessForm: React.FC<{
         <button
           type="button"
           onClick={() => setValue('password', generatePassword())}
-          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[12.5px] font-bold text-accent"
+          className="hit-44 self-start rounded-lg px-1 py-1.5 text-[13px] font-bold text-accent"
         >
           Generate a new one
         </button>

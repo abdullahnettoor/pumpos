@@ -109,6 +109,20 @@ export const TYPOGRAPHY_SOURCES = {
     { file: KPI, match: "lg: '[&_.kpi-value]" },
     { file: KPI, match: "'kpi-value " },
   ],
+  // Mobile-only (`mobile-` prefix, kept out of the desktop scale). `variants`:
+  // every listed place must match the token on its own.
+  'mobile-hero-figure': {
+    variants: [
+      [{ file: 'apps/mobile/src/screens/home/SalesHeadline.tsx', match: '"num mt-1 ' }],
+      [{ file: 'apps/mobile/src/screens/money/HeroCard.tsx', match: '"num mt-1 ' }],
+      [{ file: 'apps/mobile/src/ui/StatTile.tsx', match: 'const WIDE_FIGURE' }],
+    ],
+  },
+  // The shared h1 supplies `leading-tight`; the mobile overrides sit on top.
+  'mobile-page-title': [
+    { file: 'packages/ui/src/pump-ds/page-header/PageHeader.tsx', match: '<h1 ' },
+    { file: 'apps/mobile/src/ui/PageHeader.tsx', match: '[&_h1]:truncate' },
+  ],
 };
 
 /** Spacing keys checked against index.css; other keys are component sizes. */
@@ -213,18 +227,19 @@ function declsFor(rules, selector, media = null) {
   return out;
 }
 
-const WEIGHTS = { normal: 400, medium: 500, semibold: 600, bold: 700 };
+const WEIGHTS = { normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800 };
 const LEADING = { none: 1, tight: 1.25, snug: 1.375, normal: 1.5, relaxed: 1.625 };
 const TRACKING = { tight: '-0.025em', normal: '0em', wide: '0.025em', wider: '0.05em' };
 
 /** Typography read off Tailwind classes; variant prefixes are dropped. */
 export function classTypography(line) {
   const props = {};
+  let num = false;
   for (const token of line.match(/[^\s'"`{}(),]+/g) ?? []) {
     const cls = token.replace(/^(?:\[[^\]]*\]:|[a-z-]+:)+/, '');
     let m;
     if ((m = /^text-\[(\d+(?:\.\d+)?)px\]$/.exec(cls))) props.fontSize = Number(m[1]);
-    else if ((m = /^font-(normal|medium|semibold|bold)$/.exec(cls)))
+    else if ((m = /^font-(normal|medium|semibold|bold|extrabold)$/.exec(cls)))
       props.fontWeight = WEIGHTS[m[1]];
     else if (cls === 'font-mono') props.family = 'mono';
     else if (cls === 'font-sans') props.family = 'sans';
@@ -234,7 +249,14 @@ export function classTypography(line) {
       props.letterSpacing = TRACKING[m[1]];
     else if ((m = /^tracking-\[([^\]]+)\]$/.exec(cls))) props.letterSpacing = m[1];
     else if (cls === 'tabular-nums') props.tnum = true;
+    else if (cls === 'num') {
+      props.family = 'mono';
+      props.tnum = true;
+      num = true;
+    }
   }
+  // `.num` sets -0.02em tracking unless a tracking class overrides it.
+  if (num && props.letterSpacing === undefined) props.letterSpacing = '-0.02em';
   return props;
 }
 
@@ -329,11 +351,16 @@ export function checkDesignTokens({ design, css, tailwind, readSource }) {
   }
   const body = cssTypography(declsFor(rules, 'body'));
   for (const [name, doc] of Object.entries(typography)) {
-    const sources = TYPOGRAPHY_SOURCES[name];
-    if (!sources) {
+    const entry = TYPOGRAPHY_SOURCES[name];
+    if (!entry) {
       errors.push(`typography.${name}: no source in TYPOGRAPHY_SOURCES`);
       continue;
     }
+    for (const sources of Array.isArray(entry) ? [entry] : entry.variants)
+      checkTypography(name, doc, sources);
+  }
+
+  function checkTypography(name, doc, sources) {
     const actual = { family: 'sans', fontWeight: 400 };
     let missing = false;
     for (const src of sources) {
@@ -354,7 +381,7 @@ export function checkDesignTokens({ design, css, tailwind, readSource }) {
         } else Object.assign(actual, classTypography(line));
       }
     }
-    if (missing) continue;
+    if (missing) return;
     const where = sources.map((s) => s.css ?? s.file).join(' + ');
     const fail = (what, docValue, codeValue) =>
       errors.push(`typography.${name}.${what} is ${docValue} but ${where} has ${codeValue}`);

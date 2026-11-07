@@ -39,7 +39,7 @@ export const HeroCard: React.FC<Props> = ({
     <div className="flex items-start justify-between gap-2">
       <div>
         <p className="text-xs font-medium text-text-muted">{label}</p>
-        <p className="num mt-1 text-[30px] font-semibold tracking-[-0.03em] text-text-high">
+        <p className="num mt-1 text-[30px] font-medium tracking-[-0.03em] text-text-high">
           {value}
         </p>
       </div>

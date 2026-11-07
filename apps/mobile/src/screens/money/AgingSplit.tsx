@@ -49,7 +49,7 @@ export const AgingSplit: React.FC<Props> = ({
         {segments.map((s) => (
           <li key={s.key} data-bucket={s.key}>
             <b
-              className={`num block text-[12.5px] font-semibold ${
+              className={`num block text-[13px] font-semibold ${
                 s.tone === 'bad' && s.amount > 0 ? 'text-bad-fg' : 'text-text-high'
               }`}
             >
