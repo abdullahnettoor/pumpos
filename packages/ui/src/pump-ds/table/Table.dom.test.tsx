@@ -97,6 +97,16 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
     expect(foot.className).toContain('font-semibold');
   });
 
+  it('a total-row figure is mono at 500 while the row stays semibold (#701)', () => {
+    renderTable();
+    const foot = screen.getByRole('table').querySelector('tfoot tr') as HTMLElement;
+    const figure = [...foot.querySelectorAll('td')].find((td) =>
+      td.className.includes('font-mono'),
+    );
+    expect(figure?.className).toContain('font-medium');
+    expect(figure?.className).not.toContain('font-semibold');
+  });
+
   it('a date reads in the sans face, as the Dashboard prints its times', () => {
     renderTable();
     const date = screen.getByText('9 Jul 2026');

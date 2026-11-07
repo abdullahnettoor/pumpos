@@ -109,7 +109,7 @@ one thing it decides, so a page never decides it again.
   `StatementTable` (screen and print).
 - **Money and qty cells** are right-aligned mono with tabular digits, at
   regular weight. Only the total row is semibold, so it stands out from the
-  figures above it. Don't set `emphasis` on a column that has a total row.
+  figures above it; its mono figures stay at 500, since no 600 face ships. Don't set `emphasis` on a column that has a total row.
 - **Dates** are sans with tabular digits.
 - **Quantities** take their unit's decimals (2 for litres). Only meter
   readings take 3 (`decimals: 3`), and they set `total: false`.

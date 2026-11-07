@@ -396,7 +396,7 @@ Rules:
 - Use the scale above; a size outside it needs a reason.
 - **Mono for figures, sans for words.** Money, litres, meter readings,
   variance and counts are mono with tabular digits, right-aligned in tables at
-  regular weight. Only a total row is semibold. Dates are sans with tabular digits.
+  regular weight. Only a total row is semibold, and its mono figures stay at 500 (no 600 face ships). Dates are sans with tabular digits.
 - Sentence case for labels, buttons, tabs, chips and navigation. Uppercase
   only for section labels, table headers and tiny metadata.
 - Format through `@pump/ui` `utils/format.ts`, never a local helper or bare

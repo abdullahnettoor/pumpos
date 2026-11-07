@@ -596,18 +596,22 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
   // class strings it can produce. A mismatch already counted on one of the
   // literals it read is not counted again.
   const consts = constInitializers(sf);
+  /** Mismatches across a root's variants, minus those a single literal already counted. */
+  const splitFindings = (
+    variants: string[],
+    touched: Set<ts.Node>,
+    find: (classString: string) => string[],
+  ): string[] => {
+    const combined = new Set(variants.flatMap(find));
+    for (const lit of touched)
+      for (const m of find(fullText(knownLiteral(lit)))) combined.delete(m);
+    return [...combined];
+  };
   for (const root of classRoots) {
     const touched = new Set<ts.Node>();
-    const combined = new Set(
-      classVariants(root, consts, touched).flatMap((v) => findFillTextMismatches(v)),
-    );
-    for (const lit of touched)
-      for (const m of findFillTextMismatches(fullText(knownLiteral(lit)))) combined.delete(m);
-    findings['fill-text-pair'].push(...combined);
-    const mono = new Set(classVariants(root, consts, new Set()).flatMap(findMonoWeightMismatches));
-    for (const lit of touched)
-      for (const m of findMonoWeightMismatches(fullText(knownLiteral(lit)))) mono.delete(m);
-    findings['mono-weight'].push(...mono);
+    const variants = classVariants(root, consts, touched);
+    findings['fill-text-pair'].push(...splitFindings(variants, touched, findFillTextMismatches));
+    findings['mono-weight'].push(...splitFindings(variants, touched, findMonoWeightMismatches));
   }
 
   // Raw colours anywhere else: style values, constants, ternaries, SVG
