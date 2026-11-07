@@ -102,7 +102,7 @@ export const BalanceCard: React.FC<{
               <button
                 type="button"
                 {...limit.buttonProps(limitAction.onPress)}
-                className="hit-44 ml-auto min-h-[36px] rounded-lg px-2 text-[12.5px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                className="hit-44 ml-auto min-h-[36px] rounded-lg px-2 text-[13px] font-bold text-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
                 {hasLimit ? 'Edit limit' : 'Set limit'}
               </button>

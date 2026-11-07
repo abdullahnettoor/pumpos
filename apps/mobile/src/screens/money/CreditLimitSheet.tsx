@@ -81,7 +81,7 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
         <p className="m-0 mt-0.5 truncate text-xs text-text-muted">{customer.name}</p>
       </div>
 
-      <p className="m-0 flex items-baseline justify-between text-[12.5px] text-text-muted">
+      <p className="m-0 flex items-baseline justify-between text-[13px] text-text-muted">
         <span>Current limit</span>
         <span className="num font-semibold text-text-high">
           {current === null ? 'None' : inr(current)}
@@ -133,7 +133,7 @@ const Form: React.FC<Omit<Props, 'open'>> = ({ customer, onClose }) => {
       {refusal && (
         <p
           role="alert"
-          className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[12.5px] text-bad-fg"
+          className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[13px] text-bad-fg"
         >
           {refusal}
         </p>

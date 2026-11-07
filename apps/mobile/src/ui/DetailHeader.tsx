@@ -21,7 +21,7 @@ export const DetailHeader: React.FC<Props> = ({ title, subtitle, right }) => {
           <BackIcon size={18} strokeWidth={2.2} />
         </IconButton>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[17px] font-extrabold tracking-[-0.02em] text-text-high">
+          <h1 className="truncate text-lg font-extrabold tracking-[-0.02em] text-text-high">
             {title}
           </h1>
           {subtitle && <p className="mt-px truncate text-xs text-text-muted">{subtitle}</p>}

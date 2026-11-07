@@ -7,6 +7,12 @@
  * `font-size` or Tailwind `--text-*` size token under 12px. Use `text-xs`
  * (12px) for the smallest text.
  *
+ * Type scale (#707): an arbitrary `text-[Npx]` must also be a DESIGN.md
+ * typography `fontSize` (read from its front matter by the same
+ * `readTypeScale` the console's `off-scale-text` guard uses), so a size like
+ * 13.5px or 22px fails. Prefer the scale classes (`text-xs` 12, `text-sm` 14,
+ * `text-lg` 18, `text-xl` 20).
+ *
  * Exception: non-essential decoration where 12px cannot fit (a badge count in
  * a 16px dot). Mark it with `min-text exception: <reason>` in a comment on the
  * same line or the line above.
@@ -15,19 +21,25 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vite-plus/test';
+import { readTypeScale } from '../../../packages/ui/src/pump-ds/class-guard/scan.ts';
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 const MIN_TEXT_PX = 12;
+const TYPE_SCALE_PX = readTypeScale(readFileSync(path.join(SRC, '../../../DESIGN.md'), 'utf8'));
 const EXCEPTION = /min-text exception:\s*[^\s*/}]/;
 
 const toPx = (n: string, unit: string) => Number(n) * (unit === 'rem' ? 16 : 1);
 
 /** Every sub-12px text size on one line, as written. */
-function smallTextOn(line: string, kind: 'source' | 'css'): string[] {
+function smallTextOn(
+  line: string,
+  kind: 'source' | 'css',
+  scale: ReadonlySet<number> = TYPE_SCALE_PX,
+): string[] {
   const out: string[] = [];
   if (kind === 'source') {
     for (const m of line.matchAll(/(?<![\w-])text-\[(\d*\.?\d+)(px|rem)\]/g))
-      if (toPx(m[1]!, m[2]!) < MIN_TEXT_PX) out.push(m[0]);
+      if (toPx(m[1]!, m[2]!) < MIN_TEXT_PX || !scale.has(toPx(m[1]!, m[2]!))) out.push(m[0]);
     for (const m of line.matchAll(/(?<![\w-])text-2xs(?![\w-])/g)) out.push(m[0]);
     for (const m of line.matchAll(
       /fontSize\s*:\s*(?:(\d*\.?\d+)(?![\w.])|['"`](\d*\.?\d+)(px|rem)['"`])/g,
@@ -49,12 +61,16 @@ function smallTextOn(line: string, kind: 'source' | 'css'): string[] {
 }
 
 /** Violations in one file's text, skipping lines marked (or preceded) by an exception comment. */
-function scanText(text: string, kind: 'source' | 'css'): string[] {
+function scanText(
+  text: string,
+  kind: 'source' | 'css',
+  scale: ReadonlySet<number> = TYPE_SCALE_PX,
+): string[] {
   const lines = text.split('\n');
   const out: string[] = [];
   lines.forEach((line, i) => {
     if (EXCEPTION.test(line) || (i > 0 && EXCEPTION.test(lines[i - 1]!))) return;
-    for (const hit of smallTextOn(line, kind)) out.push(`${i + 1}: ${hit}`);
+    for (const hit of smallTextOn(line, kind, scale)) out.push(`${i + 1}: ${hit}`);
   });
   return out;
 }
@@ -78,7 +94,10 @@ describe('mobile text floor (12px)', () => {
       if (!kind) continue;
       for (const hit of scanText(readFileSync(abs, 'utf8'), kind)) problems.push(`${rel}:${hit}`);
     }
-    expect(problems, 'use text-xs (12px), or mark a `min-text exception: <reason>`').toEqual([]);
+    expect(
+      problems,
+      'use a DESIGN.md type-scale size (text-xs/sm/lg/xl), or mark a `min-text exception: <reason>`',
+    ).toEqual([]);
   });
 });
 
@@ -86,7 +105,7 @@ describe('mobile text floor rules', () => {
   it('flags arbitrary sizes under 12px, text-2xs and small fontSize; keeps 12px and up', () => {
     const src = [
       '<p className="text-[11px] text-[10.5px] text-[0.65rem] text-2xs" />',
-      '<p className="text-[12px] text-xs text-[13px] text-[0.75rem]" />',
+      '<p className="text-[12px] text-xs text-[13px] text-[0.75rem] text-sm" />',
       'const s = { fontSize: 11, b: { fontSize: "10px" }, c: { fontSize: 12 } };',
     ].join('\n');
     expect(scanText(src, 'source')).toEqual([
@@ -118,5 +137,42 @@ describe('mobile text floor rules', () => {
       '<span className="text-[11px]" />',
     ].join('\n');
     expect(scanText(src, 'source')).toEqual(['5: text-[10px]', '6: text-[11px]']);
+  });
+});
+
+describe('mobile type scale', () => {
+  const scale = new Set([12, 13, 14]);
+
+  it('flags arbitrary sizes off the scale, keeps on-scale and rem sizes', () => {
+    const src =
+      '<p className="text-[13.5px] text-[22px] text-[13px] text-[0.875rem] text-[0.8rem]" />';
+    expect(scanText(src, 'source', scale)).toEqual([
+      '1: text-[13.5px]',
+      '1: text-[22px]',
+      '1: text-[0.8rem]',
+    ]);
+  });
+
+  it('honours the exception comment for an off-scale size', () => {
+    const src = [
+      '/* min-text exception: matches the PDF export */',
+      '<p className="text-[22px]" />',
+      '<p className="text-[30px]" />',
+    ].join('\n');
+    expect(scanText(src, 'source', scale)).toEqual(['3: text-[30px]']);
+  });
+
+  it('reads the real DESIGN.md scale', () => {
+    expect([...TYPE_SCALE_PX].sort((a, b) => a - b)).toEqual([10, 12, 13, 14, 15, 18, 20]);
+  });
+
+  it('takes the scale from front matter only, ignoring body examples', () => {
+    const md = '---\ntypography:\n  a:\n    fontSize: 14px\n---\n\n    fontSize: 99px\n';
+    expect([...readTypeScale(md)]).toEqual([14]);
+  });
+
+  it('fails on an empty scale rather than letting every size through', () => {
+    expect(() => readTypeScale('---\ntypography:\n---\n')).toThrow(/no typography fontSize/);
+    expect(() => readTypeScale('# no front matter')).toThrow(/no typography fontSize/);
   });
 });

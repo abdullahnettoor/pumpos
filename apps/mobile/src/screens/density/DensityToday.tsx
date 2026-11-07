@@ -74,7 +74,7 @@ const TodayProductCard: React.FC<{
         </StatusBadge>
       </div>
       <div className="flex items-end justify-between gap-2">
-        <p className="num text-[25px] font-bold leading-none text-text-high">
+        <p className="num text-xl font-bold leading-none text-text-high">
           {latest ? latest.density15.toFixed(2) : '—'}
           <span className="ml-1 text-xs font-medium text-text-muted">kg/m³</span>
         </p>

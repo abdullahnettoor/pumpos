@@ -64,7 +64,7 @@ export const TeamPage: React.FC = () => {
       <button
         type="button"
         {...gate.buttonProps(() => setAdding(true))}
-        className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-[13.5px] font-bold text-on-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+        className="flex h-11 items-center justify-center rounded-[13px] bg-accent text-sm font-bold text-on-accent aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
       >
         Add member
       </button>

@@ -8,7 +8,7 @@ import React, { useId } from 'react';
  */
 
 const INPUT_BASE =
-  'num min-w-0 w-full rounded-xl border bg-card-alt px-3 text-[17px] font-semibold text-text-high ' +
+  'num min-w-0 w-full rounded-xl border bg-card-alt px-3 text-lg font-semibold text-text-high ' +
   'placeholder:font-normal placeholder:text-text-faint focus:outline-none focus:ring-[3px]';
 
 const inputTone = (error: boolean) =>
@@ -132,7 +132,7 @@ export const AddButton: React.FC<{
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong text-[12.5px] font-bold text-accent disabled:opacity-50"
+    className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong text-[13px] font-bold text-accent disabled:opacity-50"
   >
     {children}
   </button>

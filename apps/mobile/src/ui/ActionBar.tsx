@@ -19,7 +19,7 @@ interface Props {
 }
 
 const BASE =
-  'flex h-11 items-center justify-center gap-2 rounded-[13px] text-[13.5px] font-bold disabled:opacity-60';
+  'flex h-11 items-center justify-center gap-2 rounded-[13px] text-sm font-bold disabled:opacity-60';
 
 const Slot: React.FC<{
   slot: ActionSlot;

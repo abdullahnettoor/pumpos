@@ -137,7 +137,7 @@ export const StationChecks: React.FC<{
                 onChange={() => toggle(s.id)}
                 className="h-[18px] w-[18px] accent-[var(--accent)]"
               />
-              <span className="text-[13.5px] font-semibold text-text-high">{s.name}</span>
+              <span className="text-sm font-semibold text-text-high">{s.name}</span>
             </label>
           ))}
         </div>
@@ -162,7 +162,7 @@ export const SwitchField: React.FC<{
   return (
     <div className="flex items-start justify-between gap-3 rounded-[14px] border border-line bg-card px-3 py-2.5">
       <div className="min-w-0">
-        <label htmlFor={id} className="block text-[13.5px] font-semibold text-text-high">
+        <label htmlFor={id} className="block text-sm font-semibold text-text-high">
           {label}
         </label>
         {hint && <p className="m-0 mt-0.5 text-xs text-text-muted">{hint}</p>}
@@ -183,7 +183,7 @@ export const SwitchField: React.FC<{
 export const FormRefusal: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p
     role="alert"
-    className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[12.5px] text-bad-fg"
+    className="m-0 rounded-xl border border-bad-line bg-bad-soft px-3 py-2 text-[13px] text-bad-fg"
   >
     {children}
   </p>

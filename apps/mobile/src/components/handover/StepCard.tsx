@@ -63,7 +63,7 @@ export const StepCard: React.FC<{
         >
           <Badge index={index} status={status} />
           <span className="min-w-0 flex-1">
-            <span id={titleId} className="block text-[13.5px] font-bold text-text-high">
+            <span id={titleId} className="block text-sm font-bold text-text-high">
               {title}
               <span className="sr-only"> — {STATUS_LABEL[status]}</span>
             </span>

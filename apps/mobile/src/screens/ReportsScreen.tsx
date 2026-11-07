@@ -43,9 +43,7 @@ const DayRow: React.FC<{
         <div className="text-xs font-bold uppercase tracking-[0.06em] text-text-faint">
           {v.weekday}
         </div>
-        <div className="text-[19px] font-extrabold leading-[1.1] text-text-high">
-          {v.dayOfMonth}
-        </div>
+        <div className="text-lg font-extrabold leading-[1.1] text-text-high">{v.dayOfMonth}</div>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">

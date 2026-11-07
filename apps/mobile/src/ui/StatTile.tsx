@@ -48,7 +48,7 @@ export const StatTile: React.FC<Props> = ({
     <div className="min-w-0">
       <p className="text-xs font-medium text-text-muted">{label}</p>
       <p
-        className={`num mt-1 font-semibold ${wide ? 'text-[30px] tracking-[-0.03em]' : 'text-xl'} ${TONE_TEXT[tone]}`}
+        className={`num mt-1 text-xl font-semibold ${wide ? 'tracking-[-0.03em]' : ''} ${TONE_TEXT[tone]}`}
       >
         {value}
       </p>

@@ -38,7 +38,7 @@ export const AfterDipStep: React.FC<{ visit: Visit }> = ({ visit: v }) => (
       const name = tank ? `${tank.name} · ${tank.productName}` : `Tank ${i + 1}`;
       return (
         <div key={l.id ?? i} className="flex flex-col gap-2.5 rounded-xl border border-line p-3">
-          <span className="text-[12.5px] font-bold text-text-high">{name}</span>
+          <span className="text-[13px] font-bold text-text-high">{name}</span>
           <p className="num text-[12px] text-text-muted">
             Before dip {formatQuantity(Number(l.beforeDip), 'L')}
           </p>
@@ -93,7 +93,7 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
           className="flex items-center justify-between rounded-xl border border-line p-3"
         >
           <span className="min-w-0">
-            <span className="block text-[12.5px] font-bold text-text-high">
+            <span className="block text-[13px] font-bold text-text-high">
               {productName(x.productId)} invoice
             </span>
             <span className="num block text-[12px] text-text-muted">
@@ -113,13 +113,13 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
           key={l.index}
           className="flex items-center justify-between rounded-xl border border-line p-3"
         >
-          <span className="text-[12.5px] font-bold text-text-high">
+          <span className="text-[13px] font-bold text-text-high">
             {v.tanks.find((t) => t.id === l.tankId)?.name ?? `Tank ${l.index + 1}`}
           </span>
           {l.received == null ? (
             <StatusBadge tone="info">Pending measurement</StatusBadge>
           ) : (
-            <span className="num text-[12.5px] font-semibold text-text-high">
+            <span className="num text-[13px] font-semibold text-text-high">
               +{formatQuantity(l.received, 'L')} received
             </span>
           )}

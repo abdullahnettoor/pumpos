@@ -17,7 +17,7 @@ export const SearchField: React.FC<Props> = ({ value, onChange, placeholder }) =
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       aria-label={placeholder}
-      className="min-w-0 flex-1 bg-transparent text-[13.5px] text-text-high placeholder:text-text-faint focus:outline-none"
+      className="min-w-0 flex-1 bg-transparent text-sm text-text-high placeholder:text-text-faint focus:outline-none"
     />
   </label>
 );

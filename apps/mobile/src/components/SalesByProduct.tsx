@@ -69,7 +69,7 @@ const Row: React.FC<{
     <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-[3px] ${swatch}`} />
     <div className="min-w-0 truncate text-[13px] font-semibold text-text-high">{name}</div>
     <span className="num text-right text-xs text-text-muted">{quantity}</span>
-    <span className="num min-w-[78px] text-right text-[13.5px] font-semibold text-text-high">
+    <span className="num min-w-[78px] text-right text-sm font-semibold text-text-high">
       {rupees(value)}
     </span>
   </div>
@@ -114,7 +114,7 @@ export const SalesByProduct: React.FC<Props> = ({
       <div className="px-3 pb-2.5 pt-3">
         <div className="flex items-baseline justify-between">
           <span className="text-xs font-medium text-text-muted">Total sales</span>
-          <span className="num text-[17px] font-semibold text-text-high">{rupees(total)}</span>
+          <span className="num text-lg font-semibold text-text-high">{rupees(total)}</span>
         </div>
         {segments.length > 0 && (
           <div
@@ -167,7 +167,7 @@ export const SalesByProduct: React.FC<Props> = ({
           <span className="num text-right text-xs text-text-muted">
             {units > 0 ? unitsLabel(units) : ''}
           </span>
-          <span className="num min-w-[78px] text-right text-[13.5px] font-semibold text-text-high">
+          <span className="num min-w-[78px] text-right text-sm font-semibold text-text-high">
             {rupees(productSum)}
           </span>
         </div>

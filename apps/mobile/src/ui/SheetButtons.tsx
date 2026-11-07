@@ -17,14 +17,14 @@ export const SheetButtons: React.FC<{
     <button
       type="button"
       onClick={onCancel}
-      className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-[13.5px] font-bold text-text-high"
+      className="flex h-11 items-center justify-center rounded-[13px] border border-line bg-card text-sm font-bold text-text-high"
     >
       Cancel
     </button>
     <button
       type="submit"
       disabled={busy || disabled}
-      className={`flex h-11 items-center justify-center rounded-[13px] text-[13.5px] font-bold disabled:opacity-60 ${
+      className={`flex h-11 items-center justify-center rounded-[13px] text-sm font-bold disabled:opacity-60 ${
         tone === 'danger' ? 'bg-bad text-on-bad' : 'bg-accent text-on-accent'
       }`}
     >
