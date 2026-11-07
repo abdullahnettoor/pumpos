@@ -122,18 +122,18 @@ typography:
   kpi-figure:
     fontFamily: Geist Mono
     fontSize: 20px
-    fontWeight: 600
+    fontWeight: 500
     lineHeight: 1.25
     letterSpacing: -0.01em
   amount-input:
     fontFamily: Geist Mono
     fontSize: 20px
-    fontWeight: 600
+    fontWeight: 500
     fontFeature: '"tnum" 1'
   kpi-figure-lg:
     fontFamily: Geist Mono
     fontSize: 24px
-    fontWeight: 600
+    fontWeight: 500
     lineHeight: 1.25
     letterSpacing: -0.01em
 rounded:
@@ -381,9 +381,9 @@ semantic tokens and the swap happens in `index.css`.
 | `table-header`  | 10 / 500, uppercase         | Table column headers, faint ink                               |
 | `data-md`       | mono 13 / 400, tnum         | Money and quantity cells in `InteractiveTable`/`GroupedTable` |
 | `data-dense`    | mono 12 / 400, tnum         | `StatementTable` (screen and print)                           |
-| `kpi-figure`    | mono 20 / 600 (18/24 sm/lg) | `KpiTile` value                                               |
-| `amount-input`  | mono 20 / 600, tnum         | The ₹ amount of an Office Record drawer                       |
-| `kpi-figure-lg` | mono 24 / 600               | `KpiTile` value at `size="lg"`                                |
+| `kpi-figure`    | mono 20 / 500 (18/24 sm/lg) | `KpiTile` value                                               |
+| `amount-input`  | mono 20 / 500, tnum         | The ₹ amount of an Office Record drawer                       |
+| `kpi-figure-lg` | mono 24 / 500               | `KpiTile` value at `size="lg"`                                |
 
 Rules:
 
@@ -396,7 +396,7 @@ Rules:
 - Use the scale above; a size outside it needs a reason.
 - **Mono for figures, sans for words.** Money, litres, meter readings,
   variance and counts are mono with tabular digits, right-aligned in tables at
-  regular weight. Only a total row is semibold. Dates are sans with tabular digits.
+  regular weight. Only a total row is semibold, and its mono figures stay at 500 (no 600 face ships). Dates are sans with tabular digits.
 - Sentence case for labels, buttons, tabs, chips and navigation. Uppercase
   only for section labels, table headers and tiny metadata.
 - Format through `@pump/ui` `utils/format.ts`, never a local helper or bare

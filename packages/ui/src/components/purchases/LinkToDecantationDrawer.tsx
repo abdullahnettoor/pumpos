@@ -96,7 +96,7 @@ export const LinkToDecantationDrawer: React.FC<LinkToDecantationDrawerProps> = (
                           className="flex items-center justify-between gap-3 rounded-input border border-border-soft px-2.5 py-2"
                         >
                           <div className="flex flex-col gap-0.5">
-                            <span className="font-mono font-semibold text-ink-strong">
+                            <span className="font-mono font-medium text-ink-strong">
                               {d.documentNumber}
                             </span>
                             <span className="text-[12px] text-ink-muted">

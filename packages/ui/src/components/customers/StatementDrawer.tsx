@@ -120,7 +120,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
 const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="flex flex-col gap-0.5">
     <dt className="text-ink-muted">{label}</dt>
-    <dd className="font-mono font-semibold text-ink-strong">{children}</dd>
+    <dd className="font-mono font-medium text-ink-strong">{children}</dd>
   </div>
 );
 
@@ -152,7 +152,7 @@ const SummaryCard: React.FC<{ customer: any; standing: CustomerStanding }> = ({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[12px] text-ink-muted">{advance ? 'Advance held' : 'Owes you'}</div>
-          <div className="font-mono text-[18px] font-semibold text-ink-strong">
+          <div className="font-mono text-[18px] font-medium text-ink-strong">
             {formatMoney(advance ? standing.advance : standing.receivable)}
           </div>
         </div>

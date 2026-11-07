@@ -48,7 +48,7 @@ export interface PurchaseEntryFormProps extends Partial<
 
 const LABEL = 'text-[12px] font-semibold text-ink-muted';
 const ERROR = 'text-[12px] text-danger-fg';
-const FIGURE = 'font-mono tabular-nums';
+const FIGURE = 'font-mono font-medium tabular-nums';
 
 const emptyLine = () => ({
   productId: '',

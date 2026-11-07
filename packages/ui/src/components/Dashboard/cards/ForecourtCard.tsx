@@ -72,7 +72,7 @@ const Live: React.FC<{ m: LiveForecourt }> = ({ m }) => (
       </div>
       <div className="mt-1.5 flex flex-wrap gap-x-3.5 text-[12px] text-ink-muted">
         <span>
-          Floats <b className="font-mono tabular-nums text-ink">{inr(m.floats)}</b>
+          Floats <b className="font-mono font-medium tabular-nums text-ink">{inr(m.floats)}</b>
         </span>
         {m.open > 0 && (
           <span className={`ml-auto ${m.pastEnd ? 'text-warning-fg' : ''}`}>

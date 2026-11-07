@@ -75,7 +75,7 @@ export const ShiftRatesPanel: React.FC<{
                 ) : row.price == null ? (
                   <span className="text-[13px] text-ink-faint">Not set</span>
                 ) : (
-                  <span className="font-mono text-[13px] font-semibold tabular-nums text-ink-strong">
+                  <span className="font-mono text-[13px] font-medium tabular-nums text-ink-strong">
                     {formatMoney(row.price)}/{row.unit}
                   </span>
                 )}

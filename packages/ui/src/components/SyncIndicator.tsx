@@ -55,7 +55,7 @@ export const SyncIndicator: React.FC<SyncIndicatorProps> = ({ status, pendingCou
         backgroundColor: props.bg,
         padding: '4px 10px',
         borderRadius: 'var(--radius-chip)',
-        fontWeight: 600,
+        fontWeight: 500,
         fontFamily: 'var(--font-mono)',
         border: '1px solid currentColor',
       }}

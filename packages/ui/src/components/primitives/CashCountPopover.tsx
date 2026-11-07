@@ -261,7 +261,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '14px',
-            fontWeight: 700,
+            fontWeight: 500,
             color: 'var(--text-strong)',
           }}
         >

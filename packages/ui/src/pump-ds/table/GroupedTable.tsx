@@ -4,6 +4,7 @@ import {
   columnClass,
   headerClass,
   kindClass,
+  totalCellClass,
   renderCell,
   totalCells,
   type TableColumn,
@@ -116,7 +117,7 @@ export function GroupedTable<T>({
                 {totals[0]}
               </th>
               {columns.slice(labelSpan).map((col, i) => (
-                <td key={col.id} className={cn(CELL, kindClass(col))}>
+                <td key={col.id} className={cn(CELL, totalCellClass(kindClass(col)))}>
                   {totals[i + labelSpan]}
                 </td>
               ))}

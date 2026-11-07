@@ -193,7 +193,9 @@ export const TimelineCard: React.FC = () => {
                   {lastClosed.total != null && (
                     <>
                       {' · '}
-                      <b className="font-mono text-ink-strong">{money(lastClosed.total)}</b>
+                      <b className="font-mono font-medium text-ink-strong">
+                        {money(lastClosed.total)}
+                      </b>
                     </>
                   )}
                 </span>

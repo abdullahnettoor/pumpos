@@ -95,7 +95,7 @@ export const KpiTile = forwardRef<HTMLDivElement, KpiTileProps>(function KpiTile
       </div>
       <div
         className={cn(
-          'kpi-value truncate font-mono font-semibold leading-tight tracking-[-0.01em]',
+          'kpi-value truncate font-mono font-medium leading-tight tracking-[-0.01em]',
           alert ? ALERT_TEXT[alert] : 'text-ink-strong',
         )}
       >
