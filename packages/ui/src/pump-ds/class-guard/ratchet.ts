@@ -63,9 +63,12 @@ export function lowerAllowList(actual: Counts, allowed: Counts): Counts {
  * may raise entries and add files. Only for a one-off rebaseline (e.g. after
  * a wave of merged PRs moved code between files); a normal PR lowers entries
  * with `lowerAllowList` and fixes anything new. Same sorting as
- * `lowerAllowList`, zero entries dropped.
+ * `lowerAllowList`, zero entries dropped. Inline style objects are never
+ * rebaselined: even this reset can only lower their previously recorded ceiling.
  */
-export function baselineAllowList(actual: Counts): Counts {
-  // The actual counts as their own ceiling: every count is kept.
-  return lowerAllowList(actual, actual);
+export function baselineAllowList(actual: Counts, allowed: Counts = {}): Counts {
+  return lowerAllowList(actual, {
+    ...actual,
+    'inline-style': allowed['inline-style'] ?? {},
+  });
 }

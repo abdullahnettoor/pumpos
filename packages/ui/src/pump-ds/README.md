@@ -170,6 +170,7 @@ excluded) and counts, per file:
 | `raw-color`         | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                                                               |
 | `palette-class`     | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)                                                     |
 | `untokenized-depth` | Default radii (`rounded-sm/md/lg/xl`), pixel radii (`rounded-[6px]`), default shadows (`shadow-sm/md/lg`), including variants |
+| `inline-style`      | JSX `style={{…}}` objects, including runtime coordinates and sizes; per-file counts may only decrease                         |
 | `fill-text-pair`    | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too)                                          |
 | `off-scale-text`    | an arbitrary `text-[Npx]` not on the DESIGN.md type scale (see below)                                                         |
 
@@ -178,10 +179,21 @@ argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string
 (a class map like `TONE = { warn: '…' }`, a `labelClassName="…"` prop) counts
 when every token is class-shaped (no capitals or trailing punctuation outside
 `[…]`) and at least one token has a utility prefix: a colour utility
-(`bg-`, `text-`, `border-`, …), a palette class, or a Tailwind variant
+(`bg-`, `text-`, `border-`, …), a `rounded-` or `shadow-` prefix, a palette class, or a Tailwind variant
 (`hover:`, `md:`, `data-[…]:`). Whether the tokens compile does not matter, so
 a map of dead tokens is still checked. Copy (`'Shift closed: text-only'`) and
 storage keys (`'pumpos:pending-stock-count'`) are not class strings.
+
+**Untokenized depth.** Default and pixel radii and default shadows are rejected,
+even in class maps or variant-prefixed strings. Use `rounded-button`,
+`rounded-input`, `rounded-card`, `rounded-drawer`, `rounded-chip` or
+`rounded-tooltip`, and the `shadow-(--shadow-*)` token for the floating layer.
+
+**Inline styles.** Every JSX style object literal counts, including computed
+positions/sizes and PDF objects; forwarded `style={style}` props do not. The
+recorded counts are a migration ceiling, not approval for static looks. Both
+`test:classes:update` and `test:classes:baseline` can only lower this rule: neither
+can raise an existing file's count or add a new file. New objects must be removed.
 
 **Raw colours.** A hex, `rgb()`/`rgba()` or `hsl()`/`hsla()` in any string
 literal in a `.ts`/`.tsx` source counts: classes, style props, constants
@@ -238,7 +250,7 @@ re-run the command on the merged branch.
 
 **Rebaselining (one-off only).** `npm run test:classes:baseline -w @pump/ui`
 rewrites `allowlist.json` from the current counts, so it can raise entries and
-add files. It exists for a deliberate one-off reset (as after the wave-1 merge
+add files, **except `inline-style`, which can only decrease**. It exists for a deliberate one-off reset (as after the wave-1 merge
 in #517), reviewed file by file in its PR. Normal PRs never run it: they fix
 new violations and use the lower-only `test:classes:update`.
 

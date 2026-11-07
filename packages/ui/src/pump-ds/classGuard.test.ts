@@ -190,7 +190,7 @@ describe('style check: packages/ui/src stays within the design system', () => {
     const actual = countsOf(tree);
     let allowed = readAllowList();
     if (BASELINE || UPDATE) {
-      allowed = BASELINE ? baselineAllowList(actual) : lowerAllowList(actual, allowed);
+      allowed = BASELINE ? baselineAllowList(actual, allowed) : lowerAllowList(actual, allowed);
       writeFileSync(ALLOW_LIST, `${JSON.stringify(allowed, null, 2)}\n`);
     }
     const problems = compareToAllowList(actual, allowed).map((p) =>
@@ -240,6 +240,7 @@ describe('style check rules', () => {
       'rounded-card',
       'rounded-drawer',
       'rounded-chip',
+      'rounded-tooltip',
       'shadow-(--shadow-popover)',
       'shadow-(--shadow-dialog)',
       'shadow-(--shadow-tooltip)',
@@ -564,6 +565,20 @@ describe('style check: strings outside className', () => {
 });
 
 describe('style check ratchet', () => {
+  it('baseline never raises or adds inline-style entries, but can lower them while rebaselining other rules', () => {
+    const allowed: Counts = { 'inline-style': { 'popover.tsx': 1, 'removed.tsx': 2 } };
+    const actual: Counts = {
+      'inline-style': { 'popover.tsx': 2, 'new.tsx': 1, 'removed.tsx': 1 },
+      'dead-class': { 'other.tsx': 3 },
+    };
+    expect(baselineAllowList(actual, allowed)).toEqual({
+      'dead-class': { 'other.tsx': 3 },
+      'inline-style': { 'popover.tsx': 1, 'removed.tsx': 1 },
+    });
+    expect(baselineAllowList(actual)).toEqual({ 'dead-class': { 'other.tsx': 3 } });
+    expect(baselineAllowList({ 'inline-style': {} }, allowed)).toEqual({});
+  });
+
   it('inline-style: rejects growth and new files, and its update can only lower the recorded count', () => {
     const ceiling: Counts = { 'inline-style': { 'popover.tsx': 1 } };
     const grown: Counts = { 'inline-style': { 'popover.tsx': 2, 'new.tsx': 1 } };
