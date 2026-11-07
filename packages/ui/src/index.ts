@@ -239,6 +239,7 @@ export {
 export { bookStock } from './components/inventory/decantation/bookStock.js';
 export { STATUS_BAR_HEIGHT_PX } from './pump-ds/shell/index.js';
 export * from './pump-ds/button/index.js';
+export { EmptyState } from './pump-ds/empty-state/index.js';
 // Shared with the mobile Control Room primitives (apps/mobile/src/ui).
 export { Chip, StatusChip, VarianceChip } from './pump-ds/chip/index.js';
 export type {
