@@ -82,21 +82,28 @@ export function isSmallTextUtility(utility: string): boolean {
   if (!m) return false;
   return lengthPx(m[1], m[2]) < MIN_TEXT_PX;
 }
-/** A `Npx` / `Nrem` length as px, or null (`'11px'`, `'0.6rem'`). */
+/** A length's number and unit (`'11'`, `'px'` / `'0.6'`, `'rem'`) as px. */
 function lengthPx(num: string, unit: string): number {
   return Number(num) * (unit === 'rem' ? 16 : 1);
 }
 
-/** Every `fontSize` in DESIGN.md's frontmatter typography block (px), so the scale cannot drift. */
-function readTypeScale(): Set<number> {
-  const md = readFileSync(
-    fileURLToPath(new URL('../../../../../DESIGN.md', import.meta.url)),
-    'utf8',
+/**
+ * Every `fontSize` (px) under `typography:` in DESIGN.md's front matter, so the
+ * scale cannot drift. Examples in the document body are ignored; a missing or
+ * empty block throws rather than letting every size through.
+ */
+export function readTypeScale(markdown: string): Set<number> {
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(markdown)?.[1];
+  const block = front && /^typography:\n((?:[ \t]+.*\n?)*)/m.exec(front)?.[1];
+  const sizes = [...(block ?? '').matchAll(/^\s+fontSize:\s*(\d*\.?\d+)px\s*$/gm)].map((m) =>
+    Number(m[1]),
   );
-  const sizes = [...md.matchAll(/^\s+fontSize:\s*(\d*\.?\d+)px\s*$/gm)].map((m) => Number(m[1]));
+  if (sizes.length === 0) throw new Error('DESIGN.md front matter has no typography fontSize');
   return new Set(sizes);
 }
-const TYPE_SCALE_PX = readTypeScale();
+const TYPE_SCALE_PX = readTypeScale(
+  readFileSync(fileURLToPath(new URL('../../../../../DESIGN.md', import.meta.url)), 'utf8'),
+);
 
 /**
  * `text-[Npx]` at or above the 12px floor whose size is not a DESIGN.md

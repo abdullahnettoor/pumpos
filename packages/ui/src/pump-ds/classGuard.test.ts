@@ -67,6 +67,7 @@ import {
   RULES,
   cssDefinitions,
   findFillTextMismatches,
+  readTypeScale,
   scanCss,
   scanCssSmallText,
   scanSource,
@@ -346,6 +347,27 @@ describe('style check rules', () => {
 
 describe('style check: off-scale-text (#700)', () => {
   const off = (src: string) => scanSource(src, 'x.tsx', fake([]))['off-scale-text'];
+
+  it('reads the scale only from the front-matter typography block', () => {
+    const md = [
+      '---',
+      'name: x',
+      'typography:',
+      '  body:',
+      '    fontSize: 14px',
+      '  caption:',
+      '    fontSize: 12px',
+      'rounded:',
+      '  card: 16px',
+      '---',
+      '',
+      '```yaml',
+      '  fontSize: 16px',
+      '```',
+    ].join('\n');
+    expect([...readTypeScale(md)].sort()).toEqual([12, 14]);
+    expect(() => readTypeScale('# no front matter\n  fontSize: 16px\n')).toThrow();
+  });
 
   it('flags arbitrary sizes off the type scale, with variants', () => {
     expect(
