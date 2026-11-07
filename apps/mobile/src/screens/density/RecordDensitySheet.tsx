@@ -154,7 +154,7 @@ const RecordDensityForm: React.FC<RecordDensitySheetProps> = (props) => {
             />
             <p className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-xs text-text-muted">
               Density at 15 °C{' '}
-              <strong className="num text-sm text-text-high">
+              <strong className="num text-sm font-medium text-text-high">
                 {density15 == null ? '—' : `${density15.toFixed(2)} kg/m³`}
               </strong>
             </p>

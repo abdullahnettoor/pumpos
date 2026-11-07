@@ -55,7 +55,7 @@ export const StatementList: React.FC<{
                   {e.detail && <p className="truncate text-xs text-text-muted">{e.detail}</p>}
                 </div>
                 <div className="flex-shrink-0 text-right">
-                  <p className={`num text-sm font-semibold ${tone.amount}`}>
+                  <p className={`num text-sm font-medium ${tone.amount}`}>
                     {reduces ? '−' : '+'}
                     {inr(Math.abs(e.delta))}
                   </p>

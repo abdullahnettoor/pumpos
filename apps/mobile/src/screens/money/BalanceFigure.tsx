@@ -22,7 +22,7 @@ export const BalanceFigure: React.FC<Props> = ({ balance, over = false, caption 
   const tone = over ? 'text-bad-fg' : kind === 'advance' ? 'text-good' : 'text-text-high';
   return (
     <span className="block flex-shrink-0 text-right">
-      <span className={`num block text-sm font-semibold ${tone}`}>
+      <span className={`num block text-sm font-medium ${tone}`}>
         {kind === 'advance' ? inr(-balance) : inr(kind === 'settled' ? 0 : balance)}
       </span>
       {kind === 'owes' && caption && (

@@ -79,7 +79,7 @@ export const BalanceCard: React.FC<{
           <div className="mt-1.5 flex justify-between text-xs text-text-muted">
             <span className="num">Limit {inr(s.limit)}</span>
             {s.state === 'over' ? (
-              <span className="num font-semibold text-bad-fg">
+              <span className="num font-medium text-bad-fg">
                 +{inr(s.overBy)} over · {s.usedPct}%
               </span>
             ) : (

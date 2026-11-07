@@ -45,6 +45,8 @@ export interface ScanContext {
   plainClasses?: ReadonlySet<string>;
   /** Every `--name` defined anywhere (CSS files, `@theme`, inline `'--x':` props). */
   definedVars?: ReadonlySet<string>;
+  /** Classes that set the mono family for `mono-weight` (default `font-mono`; mobile adds `num`). */
+  monoClasses?: readonly string[];
 }
 
 /** Classes that intentionally generate no CSS. */
@@ -220,10 +222,14 @@ export function scanCssSmallText(text: string): string[] {
  * browser-faked bold (#701). One entry per offending class string.
  */
 const HEAVY_WEIGHT = /^font-(semibold|bold|extrabold|black)$/;
-export function findMonoWeightMismatches(classString: string): string[] {
+export function findMonoWeightMismatches(
+  classString: string,
+  monoClasses: readonly string[] = ['font-mono'],
+): string[] {
   const utilities = plainTokens(classString).map((t) => utilityOf(t).utility);
   const heavy = utilities.find((u) => HEAVY_WEIGHT.test(u));
-  return utilities.includes('font-mono') && heavy ? [`font-mono + ${heavy}`] : [];
+  const mono = monoClasses.find((c) => utilities.includes(c));
+  return mono && heavy ? [`${mono} + ${heavy}`] : [];
 }
 
 const unwrap = (e: ts.Expression): ts.Expression =>
@@ -682,7 +688,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
       if (!ctx.generates(token)) findings['dead-class'].push(token);
     }
     findings['fill-text-pair'].push(...findFillTextMismatches(fullText(lit)));
-    findings['mono-weight'].push(...findMonoWeightMismatches(fullText(lit)));
+    findings['mono-weight'].push(...findMonoWeightMismatches(fullText(lit), ctx.monoClasses));
   }
 
   // Pairs split across strings (`${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`,
@@ -714,7 +720,9 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     const touched = new Set<ts.Node>();
     const variants = classVariants(root, consts, touched);
     findings['fill-text-pair'].push(...splitFindings(variants, touched, findFillTextMismatches));
-    findings['mono-weight'].push(...splitFindings(variants, touched, findMonoWeightMismatches));
+    findings['mono-weight'].push(
+      ...splitFindings(variants, touched, (c) => findMonoWeightMismatches(c, ctx.monoClasses)),
+    );
   }
 
   // Raw colours anywhere else: style values, constants, ternaries, SVG

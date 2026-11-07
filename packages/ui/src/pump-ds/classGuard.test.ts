@@ -717,6 +717,14 @@ describe('class guard: border and interpolation pitfalls (dashboard / pump-ds / 
 describe('style check: mono-weight (#701)', () => {
   const mono = (src: string) => scanSource(src, 'x.tsx', fake([]))['mono-weight'];
 
+  it('counts extra mono classes passed in the scan context (mobile `num`)', () => {
+    const ctx = { ...fake([]), monoClasses: ['font-mono', 'num'] };
+    expect(scanSource("<i className='num font-bold' />", 'x.tsx', ctx)['mono-weight']).toEqual([
+      'num + font-bold',
+    ]);
+    expect(mono("<i className='num font-bold' />")).toEqual([]);
+  });
+
   it('flags font-mono with font-semibold/font-bold, also split across cn() args', () => {
     expect(mono("<i className='font-mono text-sm font-semibold' />")).toEqual([
       'font-mono + font-semibold',

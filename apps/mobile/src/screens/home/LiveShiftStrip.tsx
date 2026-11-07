@@ -38,7 +38,7 @@ export const LiveShiftStrip: React.FC<Props> = ({ shift, loading }) => {
         <p className="truncate text-xs text-text-muted">{shift.detail}</p>
       </div>
       <div className="ml-auto flex-shrink-0 text-right">
-        <p className="num text-lg font-semibold text-accent">{shift.elapsed}</p>
+        <p className="num text-lg font-medium text-accent">{shift.elapsed}</p>
         <p className="text-xs uppercase tracking-[0.08em] text-text-muted">open</p>
       </div>
     </section>

@@ -47,7 +47,7 @@ const DayRow: React.FC<{
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="num text-sm font-semibold text-text-high">{v.headline}</span>
+          <span className="num text-sm font-medium text-text-high">{v.headline}</span>
           <StatusBadge tone={v.tone}>{v.statusLabel}</StatusBadge>
         </div>
         {v.bar !== 'none' && (

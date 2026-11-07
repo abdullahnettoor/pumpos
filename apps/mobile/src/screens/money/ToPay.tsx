@@ -62,13 +62,13 @@ export const ToPay: React.FC<Props> = ({ stationId, query, onOpenSupplier }) => 
           <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-2.5 text-xs text-text-muted">
             <div>
               <dt>Paid this month</dt>
-              <dd className="num text-[13px] font-semibold text-text-high">
+              <dd className="num text-[13px] font-medium text-text-high">
                 {rupees(payables.summary.month.paid)}
               </dd>
             </div>
             <div>
               <dt>Purchased this month</dt>
-              <dd className="num text-[13px] font-semibold text-text-high">
+              <dd className="num text-[13px] font-medium text-text-high">
                 {rupees(payables.summary.month.purchased)}
               </dd>
             </div>

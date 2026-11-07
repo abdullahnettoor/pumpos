@@ -16,7 +16,7 @@ const Bar: React.FC<{ label: string; amount: number; width: number; fill: string
   <>
     <div className="flex justify-between text-xs text-text-muted">
       <span>{label}</span>
-      <b className="num font-semibold text-text-high">{rupees(amount)}</b>
+      <b className="num font-medium text-text-high">{rupees(amount)}</b>
     </div>
     <div aria-hidden="true" className="mb-2.5 mt-1.5 h-2 overflow-hidden rounded-full bg-track">
       <i className={`block h-full rounded-full ${fill}`} style={{ width: `${width}%` }} />
@@ -34,12 +34,12 @@ const Summary: React.FC<{ d: InsightsCreditHealth; days: number }> = ({ d, days 
     {d.receivablesChange > 0 ? (
       <>
         Credit given exceeded collections by{' '}
-        <b className="num font-semibold text-warn-fg">{rupees(d.receivablesChange)}</b>
+        <b className="num font-medium text-warn-fg">{rupees(d.receivablesChange)}</b>
       </>
     ) : d.receivablesChange < 0 ? (
       <>
         Collections exceeded credit given by{' '}
-        <b className="num font-semibold text-good">{rupees(-d.receivablesChange)}</b>
+        <b className="num font-medium text-good">{rupees(-d.receivablesChange)}</b>
       </>
     ) : (
       <>Credit given and collected were equal</>
@@ -49,7 +49,7 @@ const Summary: React.FC<{ d: InsightsCreditHealth; days: number }> = ({ d, days 
       <>
         {' '}
         · credit is{' '}
-        <b className="num font-semibold text-text-high">{percent(d.creditShareOfSales)}</b> of sales
+        <b className="num font-medium text-text-high">{percent(d.creditShareOfSales)}</b> of sales
       </>
     )}
   </p>

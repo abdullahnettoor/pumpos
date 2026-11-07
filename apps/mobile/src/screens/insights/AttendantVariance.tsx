@@ -50,7 +50,7 @@ const Block: React.FC<{ stationId: string; days: InsightsRangeDays }> = ({ stati
                   />
                 )}
               </div>
-              <span className={`num text-right text-[13px] font-semibold ${TONE_TEXT[view.tone]}`}>
+              <span className={`num text-right text-[13px] font-medium ${TONE_TEXT[view.tone]}`}>
                 {view.text}
               </span>
             </div>

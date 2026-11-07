@@ -47,7 +47,7 @@ const CarriedForward: React.FC<{ period: StatementWindow }> = ({ period }) => {
           : `Balance brought forward from before ${fullDayLabel(period.from)}`}
       </p>
       {!settled && (
-        <p className="num flex-shrink-0 text-[13px] font-semibold text-text-high">
+        <p className="num flex-shrink-0 text-[13px] font-medium text-text-high">
           {period.openingBalance < 0
             ? signedMoney(period.openingBalance)
             : inr(period.openingBalance)}

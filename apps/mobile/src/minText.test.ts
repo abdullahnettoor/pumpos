@@ -18,11 +18,12 @@
  * a 16px dot). Mark it with `min-text exception: <reason>` in a comment on the
  * same line or the line above.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vite-plus/test';
 import { readTypeScale } from '@pump/ui/src/pump-ds/class-guard/scan.ts';
+import { sourceFiles } from './test/sourceFiles.ts';
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 const MIN_TEXT_PX = 12;
@@ -82,25 +83,11 @@ function scanText(
   return out;
 }
 
-function walk(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const abs = path.join(dir, name);
-    return statSync(abs).isDirectory() ? walk(abs) : [abs];
-  });
-}
-
-const isTest = (f: string) => /\.test\.tsx?$/.test(f);
-
 describe('mobile text floor (12px) and type scale', () => {
   it('no text below 12px or off the type scale in apps/mobile/src, outside marked exceptions', () => {
     const problems: string[] = [];
-    for (const abs of walk(SRC)) {
-      const rel = path.relative(SRC, abs).split(path.sep).join('/');
-      const kind =
-        /\.tsx?$/.test(rel) && !isTest(rel) ? 'source' : rel.endsWith('.css') ? 'css' : null;
-      if (!kind) continue;
-      for (const hit of scanText(readFileSync(abs, 'utf8'), kind)) problems.push(`${rel}:${hit}`);
-    }
+    for (const { rel, kind, text } of sourceFiles(SRC))
+      for (const hit of scanText(text(), kind)) problems.push(`${rel}:${hit}`);
     expect(
       problems,
       'use a DESIGN.md type-scale size (text-xs/sm/lg/xl), or mark a `min-text exception: <reason>`',

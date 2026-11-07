@@ -177,7 +177,7 @@ export const CustomerSaleForm: React.FC<{
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.08em] text-text-faint">
           <span>{label}</span>
-          <span className="num text-text-high">
+          <span className="num font-medium text-text-high">
             {inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}
           </span>
         </div>
@@ -208,7 +208,7 @@ export const CustomerSaleForm: React.FC<{
                     .join(' · ')}
                 </p>
               </div>
-              <b className="num text-[13px] text-text-high">{inr(l.amount)}</b>
+              <b className="num text-[13px] font-medium text-text-high">{inr(l.amount)}</b>
               {l.id && (
                 <button
                   type="button"

@@ -33,7 +33,7 @@ export const NozzleTable: React.FC<{ nozzles: readonly NozzleLine[] }> = ({ nozz
         </span>
         <span className="num text-text-muted">{reading(n.opening)}</span>
         <span className="num text-text-muted">{reading(n.closing)}</span>
-        <span className="num font-semibold text-text-high">
+        <span className="num font-medium text-text-high">
           {reading(n.litres)}
           {n.testing > 0 && (
             <span className="block text-xs font-normal text-text-muted">

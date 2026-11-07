@@ -119,7 +119,7 @@ export const ReviewStep: React.FC<{ visit: Visit }> = ({ visit: v }) => {
           {l.received == null ? (
             <StatusBadge tone="info">Pending measurement</StatusBadge>
           ) : (
-            <span className="num text-[13px] font-semibold text-text-high">
+            <span className="num text-[13px] font-medium text-text-high">
               +{formatQuantity(l.received, 'L')} received
             </span>
           )}

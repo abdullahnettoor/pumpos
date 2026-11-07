@@ -41,8 +41,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
                   className="mr-1.5 inline-block h-2 w-2 rounded-[3px]"
                   style={{ background: colour(i) }}
                 />
-                {p.productCode}{' '}
-                <b className="num font-semibold text-text-high">{percent(p.share)}</b>
+                {p.productCode} <b className="num font-medium text-text-high">{percent(p.share)}</b>
               </li>
             ))}
           </ul>
@@ -58,7 +57,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
             <span key={`${f.productCode}-${f.unit}`}>
               {i > 0 && ', '}
               {f.productCode}{' '}
-              <b className="num font-semibold text-text-high">
+              <b className="num font-medium text-text-high">
                 {kg(f.quantity)} {f.unit}
               </b>
             </span>
@@ -71,7 +70,7 @@ export const ProductMix: React.FC<{ data: InsightsSales; days: number }> = ({ da
         >
           <div>
             <p className="text-xs font-medium text-text-muted">Lubes &amp; others</p>
-            <p className="num mt-0.5 text-base font-semibold text-text-high">
+            <p className="num mt-0.5 text-base font-medium text-text-high">
               {compactRupees(o.total)}
             </p>
           </div>

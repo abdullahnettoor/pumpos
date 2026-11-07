@@ -9,7 +9,7 @@ import { StatusBadge } from '../../ui/index.js';
 const Figure: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="min-w-0 border-l border-line px-2.5 first:border-l-0">
     <p className="text-xs font-medium text-text-muted">{label}</p>
-    <p className="num mt-0.5 text-base font-semibold text-text-high">{value}</p>
+    <p className="num mt-0.5 text-base font-medium text-text-high">{value}</p>
   </div>
 );
 
@@ -49,7 +49,7 @@ export const LiveShiftCard: React.FC<{ shift: LiveCard }> = ({ shift }) => (
         </p>
       </div>
       <div className="ml-auto flex-shrink-0 text-right">
-        <p className="num text-xl font-semibold text-accent">{shift.elapsed}</p>
+        <p className="num text-xl font-medium text-accent">{shift.elapsed}</p>
         <p className="text-xs uppercase tracking-[0.08em] text-text-muted">open</p>
       </div>
     </div>

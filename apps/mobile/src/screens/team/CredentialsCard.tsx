@@ -34,11 +34,11 @@ export const CredentialsCard: React.FC<Props> = ({ title, name, login, password,
       <dl className="m-0 overflow-hidden rounded-[14px] border border-line bg-card [&>div+div]:border-t [&>div+div]:border-line">
         <div className="flex items-baseline justify-between gap-3 px-3 py-2.5">
           <dt className="text-[12px] text-text-muted">Sign in with</dt>
-          <dd className="num m-0 min-w-0 truncate text-sm font-semibold text-text-high">{login}</dd>
+          <dd className="num m-0 min-w-0 truncate text-sm font-medium text-text-high">{login}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-3 px-3 py-2.5">
           <dt className="text-[12px] text-text-muted">Password</dt>
-          <dd className="num m-0 text-sm font-semibold text-text-high">{password}</dd>
+          <dd className="num m-0 text-sm font-medium text-text-high">{password}</dd>
         </div>
       </dl>
       <p className="m-0 text-xs text-text-muted">

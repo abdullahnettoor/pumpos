@@ -173,6 +173,7 @@ excluded) and counts, per file:
 | `inline-style`      | JSX `style={{…}}` objects, including runtime coordinates and sizes; per-file counts may only decrease                         |
 | `fill-text-pair`    | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too)                                          |
 | `off-scale-text`    | an arbitrary `text-[Npx]` not on the DESIGN.md type scale (see below)                                                         |
+| `mono-weight`       | a mono figure at 600+ (only Geist Mono 400/500 ship; see below)                                                               |
 
 **What counts as a class string.** `className` / `class` values and every
 argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string
@@ -188,6 +189,16 @@ storage keys (`'pumpos:pending-stock-count'`) are not class strings.
 even in class maps or variant-prefixed strings. Use `rounded-button`,
 `rounded-input`, `rounded-card`, `rounded-drawer`, `rounded-chip` or
 `rounded-tooltip`, and the `shadow-(--shadow-*)` token for the floating layer.
+
+**Mono weight.** Only Geist Mono 400/500 ship, so mono at 600+ is a faked
+bold. The rule flags `font-mono` with `font-semibold`/`font-bold`/`font-extrabold`/`font-black`
+on one element (also across `cn()` arguments and variants), CSS rules that set
+the mono family with a weight of 600 or more, and style objects whose effective
+`fontFamily` is mono and `fontWeight` 600+ (last property wins; same-file
+spreads resolve recursively; an unresolvable spread stays quiet). react-pdf
+files are exempt (own fonts). `ScanContext.monoClasses` lists the classes that
+count as mono: default `['font-mono']`; mobile passes `['font-mono', 'num']`.
+A list you pass replaces the default, so include `font-mono`.
 
 **Inline styles.** Every JSX style object literal counts, including computed
 positions/sizes and PDF objects; forwarded `style={style}` props do not. The

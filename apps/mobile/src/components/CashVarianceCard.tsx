@@ -28,7 +28,7 @@ export const CashVarianceCard: React.FC<{ variance: CashVariance; wide?: boolean
     </p>
     {v.levels.length === 0 ? (
       <>
-        <p className="num mt-1 text-xl font-semibold text-text-high">—</p>
+        <p className="num mt-1 text-xl font-medium text-text-high">—</p>
         {v.empty && <p className="mt-0.5 text-xs text-text-muted">{v.empty}</p>}
       </>
     ) : (
@@ -38,7 +38,7 @@ export const CashVarianceCard: React.FC<{ variance: CashVariance; wide?: boolean
             <dl>
               <div className="flex items-baseline justify-between gap-2">
                 <dt className="text-xs font-medium text-text-muted">{l.label}</dt>
-                <dd className={`num text-base font-semibold ${TONE_TEXT[l.tone]}`}>{l.text}</dd>
+                <dd className={`num text-base font-medium ${TONE_TEXT[l.tone]}`}>{l.text}</dd>
               </div>
             </dl>
             <p className="text-xs text-text-faint">{l.note}</p>

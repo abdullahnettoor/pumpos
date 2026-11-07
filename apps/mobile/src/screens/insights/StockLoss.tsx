@@ -37,7 +37,7 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
                 <span className="block max-w-full truncate">{t.productCode}</span>
               </span>
               <div className="min-w-0">
-                <p className={`num truncate text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
+                <p className={`num truncate text-[13px] font-medium ${TONE_TEXT[line.tone]}`}>
                   {line.litres}
                   <span className="ml-1.5 font-sans text-xs font-medium text-text-muted">
                     {t.tankName}
@@ -46,7 +46,7 @@ export const StockLoss: React.FC<{ stationId: string; days: InsightsRangeDays }>
                 <p className="truncate text-xs text-text-muted">{line.note}</p>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className={`num text-[13px] font-semibold ${TONE_TEXT[line.tone]}`}>
+                <span className={`num text-[13px] font-medium ${TONE_TEXT[line.tone]}`}>
                   {t.valueAtCost === null ? '—' : signedRupees(t.valueAtCost, { plus: true })}
                 </span>
                 {line.outside && (
