@@ -178,7 +178,7 @@ const FuelPriceCard: React.FC<{
           <span className="text-[20px] font-semibold text-ink-faint">Not set</span>
         ) : (
           <span className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
+            <span className="font-mono text-[20px] font-medium tabular-nums text-ink-strong">
               {formatMoney(row.price)}/{row.unit}
             </span>
             {/* "now" only beside a change still ahead (#619). */}

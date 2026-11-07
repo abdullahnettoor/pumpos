@@ -19,6 +19,7 @@ export const RULES = [
   'fill-text-pair',
   'small-text',
   'off-scale-text',
+  'mono-weight',
 ] as const;
 export type Rule = (typeof RULES)[number];
 export type Findings = Record<Rule, string[]>;
@@ -195,6 +196,34 @@ export function scanCssSmallText(text: string): string[] {
   for (const m of body.matchAll(/(--text-[\w-]+)\s*:\s*([^;}!]+)/g))
     if (!/--(line-height|letter-spacing|font-weight)$/.test(m[1]) && smallLength(m[2]) !== null)
       out.push(`${m[1]}: ${m[2].trim()}`);
+  return out;
+}
+
+/**
+ * Only Geist Mono 400/500 ship, so `font-mono` with a 600+ weight gets a
+ * browser-faked bold (#701). One entry per offending class string.
+ */
+const HEAVY_WEIGHT = /^font-(semibold|bold|extrabold|black)$/;
+export function findMonoWeightMismatches(classString: string): string[] {
+  const utilities = plainTokens(classString).map((t) => utilityOf(t).utility);
+  const heavy = utilities.find((u) => HEAVY_WEIGHT.test(u));
+  return utilities.includes('font-mono') && heavy ? [`font-mono + ${heavy}`] : [];
+}
+
+/**
+ * CSS rules that set the mono family and a weight of 600 or more
+ * (`font-family: var(--font-mono)` with `font-weight: 600`).
+ */
+export function scanCssMonoWeight(text: string): string[] {
+  const body = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const out: string[] = [];
+  for (const m of body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const decls = m[2];
+    if (!/font-family\s*:[^;]*mono/i.test(decls)) continue;
+    const w = /(?<![\w-])font-weight\s*:\s*(\d+|bold|bolder)\b/.exec(decls);
+    if (w && (/^\D/.test(w[1]) || Number(w[1]) >= 600))
+      out.push(`${m[1].trim()}: font-weight ${w[1]}`);
+  }
   return out;
 }
 
@@ -462,6 +491,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     'fill-text-pair': [],
     'small-text': [],
     'off-scale-text': [],
+    'mono-weight': [],
     'side-only-dash': [],
     'quoted-interpolation': [],
   };
@@ -558,6 +588,7 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
       if (!ctx.generates(token)) findings['dead-class'].push(token);
     }
     findings['fill-text-pair'].push(...findFillTextMismatches(fullText(lit)));
+    findings['mono-weight'].push(...findMonoWeightMismatches(fullText(lit)));
   }
 
   // Pairs split across strings (`${ok ? 'bg-brand' : 'bg-danger-fg'} text-on-brand`,
@@ -573,6 +604,10 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
     for (const lit of touched)
       for (const m of findFillTextMismatches(fullText(knownLiteral(lit)))) combined.delete(m);
     findings['fill-text-pair'].push(...combined);
+    const mono = new Set(classVariants(root, consts, new Set()).flatMap(findMonoWeightMismatches));
+    for (const lit of touched)
+      for (const m of findMonoWeightMismatches(fullText(knownLiteral(lit)))) mono.delete(m);
+    findings['mono-weight'].push(...mono);
   }
 
   // Raw colours anywhere else: style values, constants, ternaries, SVG

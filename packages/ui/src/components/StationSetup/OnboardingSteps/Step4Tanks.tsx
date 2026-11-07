@@ -94,7 +94,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                     <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
                       Capacity
                     </span>
-                    <p className="mt-0.5 font-mono text-[18px] font-semibold text-ink-strong">
+                    <p className="mt-0.5 font-mono text-[18px] font-medium text-ink-strong">
                       {formatQuantity(tank.capacity, product?.unit || 'L', { decimals: 0 })}
                     </p>
                   </div>

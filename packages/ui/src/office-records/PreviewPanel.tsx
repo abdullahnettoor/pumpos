@@ -83,7 +83,7 @@ export const PreviewCards: React.FC<PreviewViewProps> = ({
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="truncate text-[13px] text-ink-muted">{what ?? `${def.label}?`}</span>
-          <span className="font-mono text-[20px] font-semibold tabular-nums text-ink-strong">
+          <span className="font-mono text-[20px] font-medium tabular-nums text-ink-strong">
             {amount ? inr(amount) : '₹—'}
           </span>
         </div>
@@ -185,7 +185,7 @@ export const PreviewStrip: React.FC<
           )}
         </span>
         <FlagChip flag={preview.flag} />
-        <span className="font-mono text-[15px] font-semibold tabular-nums text-ink-strong">
+        <span className="font-mono text-[15px] font-medium tabular-nums text-ink-strong">
           {amount ? inr(amount) : '₹—'}
         </span>
         <span className={cn('text-ink-muted transition-transform', expanded && 'rotate-180')}>

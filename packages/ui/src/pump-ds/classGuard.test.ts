@@ -24,6 +24,10 @@
  *                    `StyleSheet.create` argument or the `style` prop of a
  *                    react-pdf element: print points, not screen px).
  *
+ * - `mono-weight`   `font-mono` with `font-semibold`/`font-bold` on one element, or
+ *                    a CSS rule with the mono family and weight 600+ (#701): only
+ *                    Geist Mono 400/500 ship, so the browser fakes the bold.
+ *
  * Class strings are `className` / `cn()` values, plus any other string whose
  * tokens are all class-shaped with at least one utility prefix (class maps).
  *
@@ -66,7 +70,9 @@ import {
   findFillTextMismatches,
   readTypeScale,
   scanCss,
+  scanCssMonoWeight,
   scanCssSmallText,
+  findMonoWeightMismatches,
   scanSource,
   sourceDefinitions,
   type Findings,
@@ -148,8 +154,14 @@ async function scanTree(): Promise<Map<string, Findings>> {
   for (const file of CSS_FILES) {
     const undef = scanCss(read(file), ctx.definedVars);
     const small = scanCssSmallText(read(file));
-    if (undef.length || small.length)
-      out.set(file, { ...emptyFindings(), 'undefined-var': undef, 'small-text': small });
+    const mono = scanCssMonoWeight(read(file));
+    if (undef.length || small.length || mono.length)
+      out.set(file, {
+        ...emptyFindings(),
+        'undefined-var': undef,
+        'small-text': small,
+        'mono-weight': mono,
+      });
   }
   return out;
 }
@@ -593,5 +605,33 @@ describe('class guard: border and interpolation pitfalls (dashboard / pump-ds / 
     expect(bad).toEqual([]);
     expect(pitfalls('<i className="size-2 ${SW[i]}" />')['quoted-interpolation']).toHaveLength(1);
     expect(pitfalls('<i className={`size-2 ${SW[i]}`} />')['quoted-interpolation']).toHaveLength(0);
+  });
+});
+
+describe('style check: mono-weight (#701)', () => {
+  const mono = (src: string) => scanSource(src, 'x.tsx', fake([]))['mono-weight'];
+
+  it('flags font-mono with font-semibold/font-bold, also split across cn() args', () => {
+    expect(mono("<i className='font-mono text-sm font-semibold' />")).toEqual([
+      'font-mono + font-semibold',
+    ]);
+    expect(mono("<i className={cn('font-mono', ok && 'font-bold')} />")).toEqual([
+      'font-mono + font-bold',
+    ]);
+    expect(findMonoWeightMismatches('font-mono hover:font-bold')).toEqual([
+      'font-mono + font-bold',
+    ]);
+  });
+
+  it('passes font-mono at 400/500 and font-semibold without mono', () => {
+    expect(mono("<i className='font-mono font-medium' /><b className='font-semibold' />")).toEqual(
+      [],
+    );
+  });
+
+  it('CSS: mono family with weight 600+', () => {
+    const css =
+      '.a { font-family: var(--font-mono); font-weight: 600; }\n.b { font-family: var(--font-mono); font-weight: 500; }\n.c { font-weight: 700; }';
+    expect(scanCssMonoWeight(css)).toEqual(['.a: font-weight 600']);
   });
 });

@@ -1302,7 +1302,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                             placeholder="0"
                             name="ccAmount"
                             aria-label="Customer sale amount"
-                            className="text-right font-mono font-semibold"
+                            className="text-right font-mono font-medium"
                             value={ccAmount}
                             onChange={(e) => handleCcAmountChange(e.target.value)}
                             disabled={ccBusy}
@@ -1614,7 +1614,7 @@ const SaleLines: React.FC<{
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="font-mono text-[13px] font-semibold text-ink-strong">
+            <span className="font-mono text-[13px] font-medium text-ink-strong">
               {formatMoney(l.amount)}
             </span>
             <Button

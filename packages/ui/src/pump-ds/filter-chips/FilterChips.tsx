@@ -115,7 +115,7 @@ export function FilterChips<T extends string>({
               <span
                 data-tone={tone}
                 className={cn(
-                  'font-mono text-[12px] font-semibold',
+                  'font-mono text-[12px] font-medium',
                   checked && tone === 'neutral' ? 'text-brand' : COUNT_TONE[tone],
                 )}
               >

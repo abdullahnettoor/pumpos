@@ -126,7 +126,7 @@ export const FuelBlock: React.FC<FuelBlockProps> = (p) => {
           <span className="text-[12px] text-ink-muted">{p.code}</span>
         </div>
         <div className="text-right">
-          <div className="font-mono text-[15px] font-semibold tabular-nums text-ink">
+          <div className="font-mono text-[15px] font-medium tabular-nums text-ink">
             {p.price > 0 ? (
               <>
                 {formatMoney(p.price)}

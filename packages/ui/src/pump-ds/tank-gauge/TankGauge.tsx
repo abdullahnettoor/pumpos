@@ -107,7 +107,7 @@ export const TankGauge: React.FC<TankGaugeProps> = ({
   const pct = (
     <span
       className={cn(
-        'whitespace-nowrap font-mono font-semibold tabular-nums',
+        'whitespace-nowrap font-mono font-medium tabular-nums',
         t.pct,
         TONE_TEXT[level.tone],
       )}

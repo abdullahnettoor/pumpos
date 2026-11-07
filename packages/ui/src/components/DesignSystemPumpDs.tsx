@@ -681,7 +681,7 @@ const DashboardBlocks: React.FC = () => (
         <Panel
           title="Collections today"
           action={
-            <span className="font-mono text-[12px] font-semibold text-ink-strong">₹3,68,540</span>
+            <span className="font-mono text-[12px] font-medium text-ink-strong">₹3,68,540</span>
           }
           footer={
             <span className="text-[12px] text-ink-muted">Cash reconciled at shift close.</span>
