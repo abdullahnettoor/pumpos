@@ -39,7 +39,7 @@ export const StatusBadge: React.FC<Props> = (props) => {
   return (
     <Chip
       tone={tone}
-      className={`text-xs font-medium ${props.num ? 'num' : ''} ${p?.struck ? 'line-through' : ''}`}
+      className={`text-xs ${props.num ? 'num font-medium' : 'font-bold'} ${p?.struck ? 'line-through' : ''}`}
     >
       {p ? p.label : props.children}
     </Chip>

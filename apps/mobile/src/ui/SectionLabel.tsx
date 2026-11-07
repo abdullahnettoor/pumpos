@@ -11,7 +11,9 @@ export const SectionLabel: React.FC<Props> = ({ children, right }) => (
   <div className="flex items-baseline justify-between px-4 pb-2 pt-[18px]">
     <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-text-muted">{children}</h2>
     {right && (
-      <span className="text-xs font-semibold text-accent [&_button]:text-inherit">{right}</span>
+      <span className="text-xs font-semibold text-accent [&_.font-mono]:font-medium [&_.num]:font-medium [&_button]:text-inherit">
+        {right}
+      </span>
     )}
   </div>
 );
