@@ -46,17 +46,17 @@ function mobileUrl(): string | null {
 
 export const MobileBlock: React.FC = () => {
   const mUrl = mobileUrl();
-  const go = (href: string) => () => window.location.assign(href);
+  const navigateTo = (href: string) => () => window.location.assign(href);
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas font-sans text-ink-strong">
       <EmptyState
         icon={<Icon name="monitor" />}
-        title="PumpOS Console is desktop-only"
+        title={<h1>PumpOS Console is desktop-only</h1>}
         description="The full operations console is built for a desktop browser. On your phone, use the PumpOS mobile app for owner reports and live data."
         action={
           <div className="flex flex-col items-center gap-2">
-            {mUrl && <Button onClick={go(mUrl)}>Open PumpOS mobile</Button>}
-            <Button variant="ghost" size="sm" onClick={go('?desktop=1')}>
+            {mUrl && <Button onClick={navigateTo(mUrl)}>Open PumpOS mobile</Button>}
+            <Button variant="ghost" size="sm" onClick={navigateTo('?desktop=1')}>
               Continue to desktop version anyway
             </Button>
           </div>
