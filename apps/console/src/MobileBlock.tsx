@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, EmptyState, Icon } from '@pump/ui';
+import { buttonClass, EmptyState, Icon } from '@pump/ui';
 
 /**
  * Client-side fallback for the edge mobile gate (see `worker/index.ts`).
@@ -46,7 +46,6 @@ function mobileUrl(): string | null {
 
 export const MobileBlock: React.FC = () => {
   const mUrl = mobileUrl();
-  const navigateTo = (href: string) => () => window.location.assign(href);
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas font-sans text-ink-strong">
       <EmptyState
@@ -55,10 +54,14 @@ export const MobileBlock: React.FC = () => {
         description="The full operations console is built for a desktop browser. On your phone, use the PumpOS mobile app for owner reports and live data."
         action={
           <div className="flex flex-col items-center gap-2">
-            {mUrl && <Button onClick={navigateTo(mUrl)}>Open PumpOS mobile</Button>}
-            <Button variant="ghost" size="sm" onClick={navigateTo('?desktop=1')}>
+            {mUrl && (
+              <a href={mUrl} className={buttonClass()}>
+                Open PumpOS mobile
+              </a>
+            )}
+            <a href="?desktop=1" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
               Continue to desktop version anyway
-            </Button>
+            </a>
           </div>
         }
       />
