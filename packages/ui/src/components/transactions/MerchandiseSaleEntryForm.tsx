@@ -388,7 +388,9 @@ const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
           )}
         >
           <span className="text-[12px] font-semibold text-ink-muted">Sale total</span>
-          <strong className="font-mono text-[15px] text-ink-strong">{inr(grossTotal)}</strong>
+          <strong className="font-mono text-[15px] font-medium text-ink-strong">
+            {inr(grossTotal)}
+          </strong>
         </div>
       </div>
 

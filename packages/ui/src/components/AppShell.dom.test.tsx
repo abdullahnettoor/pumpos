@@ -464,6 +464,7 @@ describe('AppShell overlay sidebar below 1200px (#657)', () => {
     shell();
     const aside = screen.getByRole('complementary');
     expect(aside.className.split(' ')).toContain('w-15');
+    expect(aside.className.split(' ')).toContain('motion-reduce:transition-none');
     expand();
     expect(aside.className.split(' ')).toContain('w-15');
     expect(screen.getByTestId('sidebar-panel').className.split(' ')).toContain('w-55');

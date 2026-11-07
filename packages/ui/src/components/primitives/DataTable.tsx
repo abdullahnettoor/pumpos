@@ -179,7 +179,7 @@ export function DataTable<T>({
                   aria-current={isSelected ? 'true' : undefined}
                   data-flash={isFlashing ? 'true' : undefined}
                   className={cn(
-                    'border-b border-border-soft transition-colors duration-[400ms] ease-[ease]',
+                    'border-b border-border-soft transition-colors duration-150 ease-[ease] motion-reduce:transition-none',
                     onRowClick ? 'cursor-pointer' : 'cursor-default',
                     onRowClick &&
                       rowLabel &&

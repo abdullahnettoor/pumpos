@@ -92,6 +92,12 @@ describe('DESIGN.md token guard', () => {
   });
 
   it('checks radii and spacing', () => {
+    expect(withDesign('  tooltip: 6px', '  tooltip: 8px')).toEqual([
+      'rounded.tooltip is 8px but index.css --radius-tooltip is 6px',
+    ]);
+    expect(withDesign('  timeline-popover: 224px', '  timeline-popover: 240px')).toEqual([
+      'spacing.timeline-popover is 240px but index.css --timeline-popover-width is 224px',
+    ]);
     expect(withDesign('  card: 10px', '  card: 12px')).toEqual([
       'rounded.card is 12px but index.css --radius-card is 10px',
     ]);
@@ -107,6 +113,12 @@ describe('DESIGN.md token guard', () => {
   });
 
   it('reports a tailwind.css radius that no longer mirrors index.css', () => {
+    expect(
+      checkDesignTokens({
+        ...repo,
+        tailwind: repo.tailwind.replace('--radius-tooltip: 6px;', '--radius-tooltip: 8px;'),
+      }),
+    ).toEqual(['tailwind.css @theme --radius-tooltip is 8px but index.css has 6px']);
     const tailwind = repo.tailwind.replace('--radius-card: 10px;', '--radius-card: 6px;');
     expect(checkDesignTokens({ ...repo, tailwind })).toEqual([
       'tailwind.css @theme --radius-card is 6px but index.css has 10px',

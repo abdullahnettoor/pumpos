@@ -185,10 +185,10 @@ export const DensityCalculatorPopover: React.FC<DensityCalculatorPopoverProps> =
       role="dialog"
       aria-label="Density calculator"
       className={cn(
-        'fixed z-[1100] box-border flex w-74 flex-col gap-2 rounded-card border border-border-strong bg-surface p-3 shadow-(--shadow-popover)',
+        'fixed z-[1100] box-border flex flex-col gap-2 rounded-card border border-border-strong bg-surface p-3 shadow-(--shadow-popover)',
         pos.placement === 'top' && '-translate-y-full',
       )}
-      style={{ top: pos.top, left: pos.left }}
+      style={{ top: pos.top, left: pos.left, width: PANEL_W }}
     >
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-bold uppercase tracking-[0.04em] text-ink-muted">

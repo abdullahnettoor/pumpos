@@ -92,6 +92,8 @@
   --radius-button: 8px;
   --radius-chip: 999px;
   --radius-drawer: 12px;
+  --radius-tooltip: 6px;
+  --timeline-popover-width: 224px;
 
   /* Spacing Grid (4px based) */
   --space-1: 4px;

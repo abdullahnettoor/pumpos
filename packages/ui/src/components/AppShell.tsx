@@ -383,7 +383,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         <aside
           // A narrow shell always reserves the 60px rail; the overlay floats over it.
           className={cn(
-            'no-print relative shrink-0 transition-[width] duration-150 ease-in-out',
+            'no-print relative shrink-0 transition-[width] duration-150 ease-in-out motion-reduce:transition-none',
             narrow || collapsed ? 'w-15' : 'w-55',
           )}
         >

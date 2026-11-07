@@ -142,6 +142,7 @@ rounded:
   card: 10px
   drawer: 12px
   chip: 999px
+  tooltip: 6px
 spacing:
   space-1: 4px
   space-2: 8px
@@ -160,6 +161,7 @@ spacing:
   drawer-wide: 620px
   drawer-xwide: 920px
   dialog: 420px
+  timeline-popover: 224px
 components:
   app-canvas:
     backgroundColor: '{colors.neutral}'
@@ -263,7 +265,7 @@ components:
   tooltip:
     backgroundColor: '{colors.on-surface}'
     textColor: '{colors.on-neutral}'
-    rounded: 6px
+    rounded: '{rounded.tooltip}'
 ---
 
 # PumpOS Design System
@@ -470,6 +472,7 @@ Compact and controlled, never toy-like. Radii are tokens (`rounded-*`):
 - Command palette: 12px (`rounded-drawer`). Drawers themselves dock to the
   window edge with square corners.
 - Chips, counts and pills: fully round (`rounded-chip`).
+- Tooltips: 6px (`rounded-tooltip`).
 
 Nothing softer than 12px on a container, and no mixing of sharp and rounded
 containers in one view.
