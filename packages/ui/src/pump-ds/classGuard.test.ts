@@ -13,7 +13,7 @@
  *                    fallbacks like `var(--text-on-brand, #fff)`.
  * - `palette-class`  Tailwind's default palette (`text-gray-500`, `text-white`).
  * - `off-scale-text` an arbitrary `text-[Npx]` size not on the DESIGN.md type
- *                    scale (12/13/14/15/16/18/20/24/28), e.g. `text-[12.5px]` (#700).
+ *                    scale (the `fontSize` values in DESIGN.md's frontmatter), e.g. `text-[12.5px]` (#700).
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
@@ -41,6 +41,9 @@
  * - `small-text` (#602), table headers only (10px uppercase, the one exception
  *   to the 12px floor): `pump-ds/table/columns.tsx` 1 (`HEADER`), which
  *   `components/primitives/DataTable.tsx` reuses.
+ * - `off-scale-text` (#700) `pump-ds/kpi/KpiTile.tsx` 1: the `lg` KPI figure is 24px,
+ *   documented in DESIGN.md's type table (`kpi-figure` 18/24 sm/lg) but not a
+ *   frontmatter `fontSize`.
  * - `small-text` `components/Shifts/OpenShiftForm.tsx` 1: temporary, swept once
  *   #619 (which rewrites that form) merges. Remove the entry then.
  *
@@ -347,15 +350,22 @@ describe('style check: off-scale-text (#700)', () => {
   it('flags arbitrary sizes off the type scale, with variants', () => {
     expect(
       off(
-        "<i className='text-[12.5px] hover:text-[17px] text-[13.5px] text-[19px] text-[0.8125rem]' />",
+        "<i className='text-[12.5px] hover:text-[17px] text-[13.5px] text-[19px] text-[16px] text-[28px] text-[0.8125rem]' />",
       ),
-    ).toEqual(['text-[12.5px]', 'hover:text-[17px]', 'text-[13.5px]', 'text-[19px]']);
+    ).toEqual([
+      'text-[12.5px]',
+      'hover:text-[17px]',
+      'text-[13.5px]',
+      'text-[19px]',
+      'text-[16px]',
+      'text-[28px]',
+    ]);
   });
 
   it('passes scale sizes and non-size text utilities', () => {
     expect(
       off(
-        "<i className='text-[12px] text-[13px] text-[14px] text-[15px] text-[18px] text-[20px] text-[24px] text-ink-muted text-sm' />",
+        "<i className='text-[12px] text-[13px] text-[14px] text-[15px] text-[18px] text-[20px] text-ink-muted text-sm' />",
       ),
     ).toEqual([]);
   });

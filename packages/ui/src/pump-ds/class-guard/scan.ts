@@ -7,6 +7,8 @@
  * the rules can be tested on fixtures. The ratchet that compares the counts to
  * the committed allow-list lives in `ratchet.ts`.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 export const RULES = [
@@ -78,23 +80,40 @@ export function isSmallTextUtility(utility: string): boolean {
   if (utility === 'text-2xs') return true;
   const m = ARBITRARY_SIZE.exec(utility);
   if (!m) return false;
-  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
-  return px < MIN_TEXT_PX;
+  return lengthPx(m[1], m[2]) < MIN_TEXT_PX;
 }
-/** DESIGN.md type scale (px), 12 and up; the 10px table header is allow-listed under `small-text`. */
-const TYPE_SCALE_PX = new Set([12, 13, 14, 15, 16, 18, 20, 24, 28]);
-/** `text-[Npx]` at or above the 12px floor whose size is not on the DESIGN.md type scale (#700). */
+/** A `Npx` / `Nrem` length as px, or null (`'11px'`, `'0.6rem'`). */
+function lengthPx(num: string, unit: string): number {
+  return Number(num) * (unit === 'rem' ? 16 : 1);
+}
+
+/** Every `fontSize` in DESIGN.md's frontmatter typography block (px), so the scale cannot drift. */
+function readTypeScale(): Set<number> {
+  const md = readFileSync(
+    fileURLToPath(new URL('../../../../../DESIGN.md', import.meta.url)),
+    'utf8',
+  );
+  const sizes = [...md.matchAll(/^\s+fontSize:\s*(\d*\.?\d+)px\s*$/gm)].map((m) => Number(m[1]));
+  return new Set(sizes);
+}
+const TYPE_SCALE_PX = readTypeScale();
+
+/**
+ * `text-[Npx]` at or above the 12px floor whose size is not a DESIGN.md
+ * typography `fontSize` (#700). The 10px table header is a `small-text`
+ * allow-list entry, not handled here.
+ */
 export function isOffScaleTextUtility(utility: string): boolean {
   const m = ARBITRARY_SIZE.exec(utility);
   if (!m) return false;
-  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  const px = lengthPx(m[1], m[2]);
   return px >= MIN_TEXT_PX && !TYPE_SCALE_PX.has(px);
 }
 /** A px/rem length under 12px, as px, or null (`'11px'`, `'0.6rem'`). */
 function smallLength(value: string): number | null {
   const m = /^(\d*\.?\d+)(px|rem)$/.exec(value.trim());
   if (!m) return null;
-  const px = Number(m[1]) * (m[2] === 'rem' ? 16 : 1);
+  const px = lengthPx(m[1], m[2]);
   return px < MIN_TEXT_PX ? px : null;
 }
 

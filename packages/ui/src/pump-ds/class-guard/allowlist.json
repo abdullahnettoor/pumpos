@@ -1,4 +1,7 @@
 {
+  "off-scale-text": {
+    "pump-ds/kpi/KpiTile.tsx": 1
+  },
   "raw-color": {
     "theme/config.ts": 2
   },
