@@ -521,6 +521,19 @@ npx tsc -b               type check (also builds packages/*/dist)
   package.json script.
 - The pre-commit hook runs `vp staged` (`vp check --fix` on staged files).
 - `apps/marketing` is a standalone install with its own `vite.config.ts`.
+- Workspace names: `apps/*` are `apps-<dir>` (`-w apps-api`, `-w apps-desktop`);
+  `packages/*` are `@pump/<dir>` (`-w @pump/ui`).
+- In a fresh worktree run `npm ci` (not a `node_modules` symlink) and then
+  `npx tsc -b` before any per-package type check or test; packages import each
+  other's built `dist`.
+- Wait for CI with one `gh pr checks <n> --watch --fail-fast` call, not
+  `sleep` loops.
+
+## Git & PR flow
+
+- Branch from the latest `origin/dev` with a descriptive name; open the PR to
+  `dev`. `main` receives only `dev → main` release merges (`RELEASING.md`).
+- Work is done when the PR's checks are green, not when local checks pass.
 
 ---
 
@@ -665,29 +678,9 @@ Duplicate events must be safe to replay.
 
 # Code Quality Standards
 
-## Prefer
-
-Small functions.
-
-Single responsibility.
-
-Strong typing.
-
-Reusable components.
-
-Composition over inheritance.
-
----
-
-## Avoid
-
-Massive files.
-
-Business logic inside React components.
-
-Duplicated validation.
-
-Direct database access from UI.
+Review rules (layering, shared helpers, tenancy, tests, UI states) live in
+[`CODING_STANDARDS.md`](CODING_STANDARDS.md); the mechanical ones are enforced
+by `npm run lint`.
 
 ---
 
