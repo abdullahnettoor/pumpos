@@ -105,6 +105,10 @@ export const TYPOGRAPHY_SOURCES = {
     { file: KPI, match: "'kpi-value " },
   ],
   'amount-input': [{ css: '.input.record-amount-input' }],
+  'kpi-figure-lg': [
+    { file: KPI, match: "lg: '[&_.kpi-value]" },
+    { file: KPI, match: "'kpi-value " },
+  ],
 };
 
 /** Spacing keys checked against index.css; other keys are component sizes. */

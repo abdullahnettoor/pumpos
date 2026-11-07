@@ -130,6 +130,12 @@ typography:
     fontSize: 20px
     fontWeight: 600
     fontFeature: '"tnum" 1'
+  kpi-figure-lg:
+    fontFamily: Geist Mono
+    fontSize: 24px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.01em
 rounded:
   input: 8px
   button: 8px
@@ -377,6 +383,7 @@ semantic tokens and the swap happens in `index.css`.
 | `data-dense`    | mono 12 / 400, tnum         | `StatementTable` (screen and print)                           |
 | `kpi-figure`    | mono 20 / 600 (18/24 sm/lg) | `KpiTile` value                                               |
 | `amount-input`  | mono 20 / 600, tnum         | The ₹ amount of an Office Record drawer                       |
+| `kpi-figure-lg` | mono 24 / 600               | `KpiTile` value at `size="lg"`                                |
 
 Rules:
 
