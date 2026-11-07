@@ -221,10 +221,8 @@ The list holds documented exceptions and nothing else:
 because the pre-paint script sets `<meta name="theme-color">` before any CSS
 loads; `theme/tokens.test.ts` keeps it equal to `--bg-canvas`. Under
 `small-text`, the shared 10px table-header constant (`table/columns.tsx`
-`HEADER`, also used by `DataTable`) is the only lasting entry. Under
-`off-scale-text`, the `lg` KPI figure (`kpi/KpiTile.tsx`, 24px) is the one
-entry: DESIGN.md's type table lists it (`kpi-figure` 18/24) but the front
-matter has no 24px `fontSize`. The fill/text pair rule has no entries. Any new entry needs the same: a reason in
+`HEADER`, also used by `DataTable`) is the only lasting entry. The
+off-scale-text and fill/text pair rules have no entries. Any new entry needs the same: a reason in
 `classGuard.test.ts` and a test that keeps the literal in step.
 
 **Lowering an entry.** After fixing violations, run `test:classes:update` and
