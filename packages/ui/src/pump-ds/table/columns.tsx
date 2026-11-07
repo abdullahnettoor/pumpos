@@ -20,7 +20,8 @@ interface ColumnBase<T> {
    */
   text?: (row: T) => string;
   /**
-   * The figure the row is about, set in semibold. Not for a column with a
+   * The figure the row is about, set in semibold; a mono (money, qty) column
+   * stays at 500, the heaviest mono face that ships. Not for a column with a
    * total row: money cells are regular weight so the total stands out.
    */
   emphasis?: boolean;

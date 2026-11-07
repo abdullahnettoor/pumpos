@@ -211,6 +211,68 @@ export function findMonoWeightMismatches(classString: string): string[] {
 }
 
 /**
+ * A style object that sets the mono family and a weight of 600+ (`fontFamily:
+ * 'var(--font-mono)', fontWeight: 700`). A spread of a same-file const object
+ * counts as its properties. Returns the weight when it offends.
+ */
+function inlineMonoHeavyWeight(
+  obj: ts.ObjectLiteralExpression,
+  consts: ReadonlyMap<string, ts.Expression>,
+  depth = 0,
+): string | null {
+  let mono = false;
+  let weight: string | null = null;
+  for (const p of obj.properties) {
+    if (ts.isSpreadAssignment(p) && depth < 3 && ts.isIdentifier(p.expression)) {
+      const init = consts.get(p.expression.text);
+      const inner = init && ts.isObjectLiteralExpression(init) ? init : undefined;
+      if (inner) {
+        mono ||= objectSetsMono(inner, consts, depth + 1);
+        weight ??= heavyWeightOf(inner);
+      }
+    } else if (ts.isPropertyAssignment(p)) {
+      const name = propertyName(p.name);
+      if (name === 'fontFamily' && /mono/i.test(p.initializer.getText())) mono = true;
+      if (name === 'fontWeight') weight = heavyWeight(p.initializer) ?? null;
+    }
+  }
+  return mono ? weight : null;
+}
+function objectSetsMono(
+  obj: ts.ObjectLiteralExpression,
+  consts: ReadonlyMap<string, ts.Expression>,
+  depth: number,
+): boolean {
+  return obj.properties.some(
+    (p) =>
+      (ts.isPropertyAssignment(p) &&
+        propertyName(p.name) === 'fontFamily' &&
+        /mono/i.test(p.initializer.getText())) ||
+      (ts.isSpreadAssignment(p) &&
+        depth < 3 &&
+        ts.isIdentifier(p.expression) &&
+        (() => {
+          const init = consts.get(p.expression.text);
+          return (
+            !!init && ts.isObjectLiteralExpression(init) && objectSetsMono(init, consts, depth + 1)
+          );
+        })()),
+  );
+}
+function heavyWeight(node: ts.Expression): string | undefined {
+  const text = node.getText();
+  const n = Number(text.replace(/['"]/g, ''));
+  if (Number.isFinite(n) ? n >= 600 : /^['"](bold|bolder)['"]$/.test(text)) return text;
+  return undefined;
+}
+function heavyWeightOf(obj: ts.ObjectLiteralExpression): string | null {
+  for (const p of obj.properties)
+    if (ts.isPropertyAssignment(p) && propertyName(p.name) === 'fontWeight')
+      return heavyWeight(p.initializer) ?? null;
+  return null;
+}
+
+/**
  * CSS rules that set the mono family and a weight of 600 or more
  * (`font-family: var(--font-mono)` with `font-weight: 600`).
  */
@@ -596,6 +658,15 @@ export function scanSource(text: string, fileName: string, ctx: ScanContext): Sc
   // class strings it can produce. A mismatch already counted on one of the
   // literals it read is not counted again.
   const consts = constInitializers(sf);
+  const inlineMono = (node: ts.Node) => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const w = inlineMonoHeavyWeight(node, consts);
+      if (w) findings['mono-weight'].push(`style: fontFamily mono + fontWeight ${w}`);
+    }
+    ts.forEachChild(node, inlineMono);
+  };
+  // react-pdf has its own font files (Courier), not the Geist faces.
+  if (!pdfNames.size) inlineMono(sf);
   /** Mismatches across a root's variants, minus those a single literal already counted. */
   const splitFindings = (
     variants: string[],

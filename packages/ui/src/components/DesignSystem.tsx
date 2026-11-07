@@ -249,7 +249,7 @@ const DEMO_COLUMNS: ColumnDef<DemoRow, any>[] = [
     accessorKey: 'amount',
     header: 'Amount',
     cell: (c) => (
-      <span style={{ ...monoRight, fontWeight: 600 }}>{inr(c.getValue() as number)}</span>
+      <span style={{ ...monoRight, fontWeight: 500 }}>{inr(c.getValue() as number)}</span>
     ),
   },
 ];
@@ -957,7 +957,13 @@ const FeedbackPanel: React.FC = () => {
             </Button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Last result:{' '}
-              <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+              <strong
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 500,
+                  color: 'var(--text-strong)',
+                }}
+              >
                 {lastResult}
               </strong>
             </span>
@@ -1044,7 +1050,7 @@ const DataMoneyPanel: React.FC = () => {
                       padding: '6px 8px',
                       textAlign: 'right',
                       fontFamily: 'var(--font-mono)',
-                      fontWeight: 600,
+                      fontWeight: 500,
                       color: 'var(--text-strong)',
                     }}
                   >
@@ -1145,7 +1151,7 @@ const DataMoneyPanel: React.FC = () => {
                       padding: '8px 12px',
                       textAlign: 'right',
                       fontFamily: 'var(--font-mono)',
-                      fontWeight: 600,
+                      fontWeight: 500,
                       color: 'var(--text-strong)',
                     }}
                   >

@@ -196,7 +196,7 @@ const ReconLine: React.FC<{
     )}
   >
     <dt className="flex items-center gap-1.5">{label}</dt>
-    <dd className="font-mono tabular-nums">{value}</dd>
+    <dd className="font-mono font-medium tabular-nums">{value}</dd>
   </div>
 );
 
@@ -1594,7 +1594,7 @@ const SaleLines: React.FC<{
   <div className="flex flex-col gap-1.5">
     <div className="flex items-baseline justify-between px-0.5 text-[12px] font-semibold text-ink-muted">
       <span>{title}</span>
-      <span className="font-mono text-ink-strong">{formatMoney(total)}</span>
+      <span className="font-mono font-medium text-ink-strong">{formatMoney(total)}</span>
     </div>
     <ul className="flex flex-col overflow-hidden rounded-input border border-border-soft bg-surface">
       {lines.map((l, idx) => (

@@ -86,7 +86,7 @@ const Line: React.FC<{
     <dd
       className={
         typeof value === 'string' || typeof value === 'number'
-          ? 'font-mono tabular-nums'
+          ? 'font-mono font-medium tabular-nums'
           : undefined
       }
     >

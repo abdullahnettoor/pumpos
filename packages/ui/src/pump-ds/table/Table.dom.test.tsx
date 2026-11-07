@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { renderWithProviders as render } from '../../test/renderWithProviders.js';
 import { InteractiveTable } from './InteractiveTable.js';
+import { GroupedTable } from './GroupedTable.js';
 import { StatementTable } from '../statement-table/StatementTable.js';
 import { cellText, totalTexts, type TableColumn } from './columns.js';
 
@@ -97,14 +98,17 @@ describe.each(Object.entries(adapters))('%s table: shared column kinds', (_name,
     expect(foot.className).toContain('font-semibold');
   });
 
-  it('a total-row figure is mono at 500 while the row stays semibold (#701)', () => {
+  it('every mono total-row figure is 500 while the row stays semibold (#701)', () => {
     renderTable();
     const foot = screen.getByRole('table').querySelector('tfoot tr') as HTMLElement;
-    const figure = [...foot.querySelectorAll('td')].find((td) =>
+    const figures = [...foot.querySelectorAll('td')].filter((td) =>
       td.className.includes('font-mono'),
     );
-    expect(figure?.className).toContain('font-medium');
-    expect(figure?.className).not.toContain('font-semibold');
+    expect(figures.length).toBeGreaterThanOrEqual(3);
+    for (const td of figures) {
+      expect(td.className).toContain('font-medium');
+      expect(td.className).not.toContain('font-semibold');
+    }
   });
 
   it('a date reads in the sans face, as the Dashboard prints its times', () => {
@@ -460,5 +464,39 @@ describe('a stored total row (derive: false)', () => {
         derive: false,
       })?.cells[2],
     ).toBe('12.50 kg');
+  });
+});
+
+describe('mono weight in totals and emphasis (#701)', () => {
+  it('GroupedTable: every mono total-row figure is 500', () => {
+    render(
+      <GroupedTable
+        columns={columns}
+        groups={[{ key: 'g', header: 'DU1', rows }]}
+        rowKey={(r) => r.id}
+        totalRow
+      />,
+    );
+    const foot = screen.getByRole('table').querySelector('tfoot tr') as HTMLElement;
+    const figures = [...foot.querySelectorAll('td')].filter((td) =>
+      td.className.includes('font-mono'),
+    );
+    expect(figures.length).toBeGreaterThanOrEqual(3);
+    for (const td of figures) {
+      expect(td.className).toContain('font-medium');
+      expect(td.className).not.toContain('font-semibold');
+    }
+  });
+
+  it('an emphasised mono column is 500, an emphasised sans column stays semibold', () => {
+    const emphasised: TableColumn<Sale>[] = [
+      { id: 'product', header: 'Product', kind: 'text', emphasis: true, value: (r) => r.product },
+      { id: 'amount', header: 'Amount', kind: 'money', emphasis: true, value: (r) => r.amount },
+    ];
+    render(<InteractiveTable columns={emphasised} rows={rows} rowKey={(r) => r.id} />);
+    expect(screen.getByText('Diesel').className).toContain('font-semibold');
+    const money = screen.getByText('₹1,14,700.00');
+    expect(money.className).toContain('font-medium');
+    expect(money.className).not.toContain('font-semibold');
   });
 });

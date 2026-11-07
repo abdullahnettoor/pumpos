@@ -141,7 +141,7 @@ const TaxLine: React.FC<{ label: string; value: number; strong?: boolean }> = ({
     }
   >
     <span className="font-sans">{label}</span>
-    <span className="font-mono tabular-nums">{formatMoney(value)}</span>
+    <span className="font-mono font-medium tabular-nums">{formatMoney(value)}</span>
   </div>
 );
 

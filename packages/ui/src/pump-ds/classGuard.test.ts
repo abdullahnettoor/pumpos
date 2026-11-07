@@ -25,7 +25,7 @@
  *                    react-pdf element: print points, not screen px).
  *
  * - `mono-weight`   `font-mono` with `font-semibold`/`font-bold` on one element, or
- *                    a CSS rule with the mono family and weight 600+ (#701): only
+ *                    an inline style or CSS rule with the mono family and weight 600+ (#701): only
  *                    Geist Mono 400/500 ship, so the browser fakes the bold.
  *
  * Class strings are `className` / `cn()` values, plus any other string whose
@@ -627,6 +627,17 @@ describe('style check: mono-weight (#701)', () => {
     expect(mono("<i className='font-mono font-medium' /><b className='font-semibold' />")).toEqual(
       [],
     );
+  });
+
+  it('inline style: mono family with fontWeight 600+, also via a spread const', () => {
+    expect(mono("<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }} />")).toEqual([
+      'style: fontFamily mono + fontWeight 700',
+    ]);
+    const spread =
+      "const M = { fontFamily: 'var(--font-mono)' };\n<i style={{ ...M, fontWeight: 600 }} />";
+    expect(mono(spread)).toEqual(['style: fontFamily mono + fontWeight 600']);
+    expect(mono("<i style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }} />")).toEqual([]);
+    expect(mono("<i style={{ fontFamily: 'var(--font-sans)', fontWeight: 600 }} />")).toEqual([]);
   });
 
   it('CSS: mono family with weight 600+', () => {
