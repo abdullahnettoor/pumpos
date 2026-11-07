@@ -329,7 +329,7 @@ export const DatePickerButton = forwardRef<HTMLButtonElement, DatePickerButtonPr
                             aria-label={formatPickerDate(d)}
                             onClick={() => pick(d)}
                             className={cn(
-                              'h-8 w-full rounded-md font-mono text-[12px] tabular-nums outline-none transition-colors',
+                              'h-8 w-full rounded-button font-mono text-[12px] tabular-nums outline-none transition-colors',
                               'focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:text-ink-faint',
                               d === value
                                 ? 'bg-brand font-medium text-on-brand'

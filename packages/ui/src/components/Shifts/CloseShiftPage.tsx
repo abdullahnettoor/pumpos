@@ -247,7 +247,7 @@ export const CloseShiftPage: React.FC<CloseShiftPageProps> = (props) => {
           )}
           <footer
             aria-label="Close shift"
-            className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3 shadow-sm"
+            className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-card border border-border-soft bg-surface px-4 py-3"
           >
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
               <div className="flex items-baseline gap-2">

@@ -68,7 +68,7 @@ const PinPopover: React.FC<{
       ref={listRef}
       role="list"
       data-testid="timeline-pin-list"
-      className="fixed z-50 m-0 list-none rounded-input border border-border-soft bg-surface p-1 shadow-lg"
+      className="fixed z-50 m-0 list-none rounded-card border border-border-soft bg-surface p-1 shadow-(--shadow-popover)"
       style={{ left: pos.left, top: pos.top, width: POPOVER_W }}
     >
       {events.map((ev) => (
@@ -204,7 +204,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
   const chipOf = new Map(chips.map((c) => [c.id, c]));
   return (
     <div className="relative mt-1 h-[70px] select-none" data-testid="timeline-strip">
-      <div className="absolute inset-x-0 top-[26px] h-6 rounded-[7px] bg-surface-alt" />
+      <div className="absolute inset-x-0 top-[26px] h-6 rounded-input bg-surface-alt" />
       {bars.map((b) => {
         const chip = chipOf.get(b.id);
         return (
@@ -212,7 +212,7 @@ export const TimelineStrip: React.FC<TimelineStripProps> = ({
             key={b.id}
             data-testid={`timeline-bar-${b.kind}`}
             title={b.times ? `${b.text} · ${b.times}` : b.text}
-            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[7px] px-2 text-[12px] ${
+            className={`absolute top-[26px] flex h-6 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-input px-2 text-[12px] ${
               b.late ? 'border-warning-fg' : b.kind === 'running' ? 'border-brand' : ''
             } ${BAR_CLASS[b.kind]}`}
             style={{

@@ -33,7 +33,7 @@ export const TooltipProvider: React.FC<{ children: React.ReactNode }> = ({ child
  * shifts along the edge rather than running off-screen).
  */
 export const TOOLTIP_BUBBLE =
-  'z-[1100] rounded-[6px] bg-ink-strong text-on-neutral shadow-(--shadow-tooltip)';
+  'z-[1100] rounded-input bg-ink-strong text-on-neutral shadow-(--shadow-tooltip)';
 
 const prevent = (event: React.SyntheticEvent) => event.preventDefault();
 

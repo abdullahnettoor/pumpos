@@ -454,7 +454,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   >
                     <span
                       className={cn(
-                        'mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5',
+                        'mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-button [&_svg]:size-3.5',
                         n.tone === 'danger'
                           ? 'bg-danger-bg text-danger-fg'
                           : n.tone === 'warning'

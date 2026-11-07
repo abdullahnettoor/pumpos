@@ -25,7 +25,8 @@ function formatBand(band: { minKgM3?: number; maxKgM3?: number }): string {
   return band.minKgM3 != null ? `≥ ${band.minKgM3}` : `≤ ${band.maxKgM3}`;
 }
 
-const BANNER = 'flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-[13px]';
+const BANNER =
+  'flex items-center justify-between gap-3 rounded-card border px-4 py-2.5 text-[13px]';
 
 /** The banner's call to action names the product the banner names first. */
 const productLabel = (p: { productName?: string | null; productCode?: string | null }) =>

@@ -522,7 +522,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
             </div>
 
             {result && (
-              <div className="rounded-md bg-surface-alt px-3 py-2.5 text-[12px]">
+              <div className="rounded-card bg-surface-alt px-3 py-2.5 text-[12px]">
                 <div className="font-semibold text-ink-strong">
                   Imported {result.createdCount} of {rows.length} rows.
                 </div>

@@ -14,6 +14,7 @@
  * - `palette-class`  Tailwind's default palette (`text-gray-500`, `text-white`).
  * - `off-scale-text` an arbitrary `text-[Npx]` size not on the DESIGN.md type
  *                    scale (the `fontSize` values in DESIGN.md's frontmatter), e.g. `text-[12.5px]` (#700).
+ * - `untokenized-depth` default radii, pixel radii and default shadows (#699).
  * - `fill-text-pair` a solid tone fill with a `text-on-*` that is not its pair
  *                    (`bg-danger-fg text-on-brand`, `hover:` states too),
  *                    also when split across ternary branches or `cn()` args.
@@ -194,13 +195,52 @@ describe('style check: packages/ui/src stays within the design system', () => {
         : `${p.file} [${p.rule}] ${p.actual} < allowed ${p.allowed}: lower the entry with \`npm run test:classes:update -w @pump/ui\``,
     );
     expect(problems, 'style-check ratchet (class-guard/allowlist.json)').toEqual([]);
-  });
+  }, 60000);
 });
 
 /** A compiler that knows only `ok`. */
 const fake = (ok: string[]) => ({ generates: (t: string) => ok.includes(t) });
 
 describe('style check rules', () => {
+  it('untokenized-depth: rejects default and pixel radii and default shadows, including variants and maps', () => {
+    const fixture =
+      "<i className='rounded-sm rounded-md hover:rounded-lg rounded-xl rounded-[6px] rounded-[7.5px] shadow-sm md:shadow-md shadow-lg' />; const T = 'rounded-[8px]';";
+    expect(scanSource(fixture, 'x.tsx', { generates: () => true })['untokenized-depth']).toEqual([
+      'rounded-sm',
+      'rounded-md',
+      'hover:rounded-lg',
+      'rounded-xl',
+      'rounded-[6px]',
+      'rounded-[7.5px]',
+      'shadow-sm',
+      'md:shadow-md',
+      'shadow-lg',
+      'rounded-[8px]',
+    ]);
+  });
+
+  it('untokenized-depth: radius and layer tokens compile and pass', async () => {
+    const generates = await makeBuilder();
+    const tokens = [
+      'rounded-button',
+      'rounded-input',
+      'rounded-card',
+      'rounded-drawer',
+      'rounded-chip',
+      'shadow-(--shadow-popover)',
+      'shadow-(--shadow-dialog)',
+      'shadow-(--shadow-tooltip)',
+      'shadow-(--shadow-drawer)',
+      'shadow-(--shadow-control)',
+    ];
+    for (const token of tokens) expect(generates(token), token).toBe(true);
+    expect(
+      scanSource(`<i className='${tokens.join(' ')}' />`, 'x.tsx', { generates })[
+        'untokenized-depth'
+      ],
+    ).toEqual([]);
+  });
+
   it('dead-class: a class that compiles to nothing, in className and in .ts class maps', async () => {
     const generates = await makeBuilder();
     const fixture =

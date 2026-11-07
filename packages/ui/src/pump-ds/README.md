@@ -159,14 +159,15 @@ with that Drawer's status and button in the header.
 `classGuard.test.ts` scans every source file in `packages/ui/src` (tests
 excluded) and counts, per file:
 
-| Rule             | Flags                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| `dead-class`     | Tailwind classes that generate no CSS (`bg-line`, `text-accent`)                     |
-| `undefined-var`  | `var(--x)` where `--x` is defined nowhere                                            |
-| `raw-color`      | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                      |
-| `palette-class`  | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)            |
-| `fill-text-pair` | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too) |
-| `off-scale-text` | an arbitrary `text-[Npx]` not on the DESIGN.md type scale (see below)                |
+| Rule                | Flags                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `dead-class`        | Tailwind classes that generate no CSS (`bg-line`, `text-accent`)                                                              |
+| `undefined-var`     | `var(--x)` where `--x` is defined nowhere                                                                                     |
+| `raw-color`         | hex / `rgb(a)` / `hsl(a)` in **any** string literal (see below)                                                               |
+| `palette-class`     | Tailwind's default palette (`text-gray-500`, `bg-blue-600`, `text-white`)                                                     |
+| `untokenized-depth` | Default radii (`rounded-sm/md/lg/xl`), pixel radii (`rounded-[6px]`), default shadows (`shadow-sm/md/lg`), including variants |
+| `fill-text-pair`    | a solid fill with the wrong `text-on-*` (`bg-danger-fg text-on-brand`, `hover:` too)                                          |
+| `off-scale-text`    | an arbitrary `text-[Npx]` not on the DESIGN.md type scale (see below)                                                         |
 
 **What counts as a class string.** `className` / `class` values and every
 argument of `cn()`, `clsx()`, `twMerge()`, `cva()`, `cx()`. Any other string

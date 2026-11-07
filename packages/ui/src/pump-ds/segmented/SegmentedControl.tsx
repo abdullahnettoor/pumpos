@@ -126,12 +126,12 @@ export function SegmentedControl<T extends string>({
             disabled={disabled}
             onClick={() => !active && onChange(opt.value)}
             className={cn(
-              'rounded-[6px] px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed',
+              'rounded-button px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed',
               vertical ? 'min-h-11 w-full text-left' : 'h-full',
               active
                 ? activeStyle === 'brand'
                   ? 'bg-brand text-on-brand'
-                  : 'bg-surface text-ink-strong shadow-sm ring-1 ring-border-soft'
+                  : 'bg-surface text-ink-strong ring-1 ring-border-soft'
                 : 'text-ink-muted hover:text-ink-strong',
             )}
           >

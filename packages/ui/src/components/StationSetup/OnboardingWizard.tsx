@@ -1235,7 +1235,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       {provisioning.isOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-strong/25 p-6">
           {provisioning.completed && !provisioning.failedMessage ? (
-            <div className="flex w-full max-w-[520px] animate-fade-in flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-7 shadow-lg">
+            <div className="flex w-full max-w-[520px] animate-fade-in flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-7">
               <div className="flex flex-col items-center gap-2.5 text-center">
                 <div className="flex size-12 items-center justify-center rounded-full bg-success-bg text-success-fg">
                   <Check size={26} />
@@ -1296,7 +1296,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </Button>
             </div>
           ) : (
-            <div className="flex w-full max-w-[520px] flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-6 shadow-lg">
+            <div className="flex w-full max-w-[520px] flex-col gap-[18px] rounded-card border border-border-soft bg-surface p-6">
               <div>
                 <h3 className="text-[18px] font-semibold text-ink-strong">
                   {provisioning.completed ? 'Station provisioned' : 'Provisioning station…'}

@@ -76,7 +76,7 @@ export const ReportDocPreview: React.FC<ReportDocPreviewProps> = ({
     return (
       <div
         aria-hidden
-        className={cn('h-44 overflow-hidden rounded-[6px] bg-surface-alt px-8 pt-3', className)}
+        className={cn('h-44 overflow-hidden rounded-card bg-surface-alt px-8 pt-3', className)}
       >
         <PdfPreview query={query} title={name} alt={name} placeholderHeight={160} />
       </div>
