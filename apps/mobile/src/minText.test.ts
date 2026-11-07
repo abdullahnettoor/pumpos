@@ -166,7 +166,7 @@ describe('mobile type scale', () => {
   });
 
   it('reads the real DESIGN.md scale', () => {
-    expect([...TYPE_SCALE_PX].sort((a, b) => a - b)).toEqual([10, 12, 13, 14, 15, 18, 20]);
+    expect([...TYPE_SCALE_PX].sort((a, b) => a - b)).toEqual([10, 12, 13, 14, 15, 18, 20, 24]);
   });
 
   it('takes the scale from front matter only, ignoring body examples', () => {
