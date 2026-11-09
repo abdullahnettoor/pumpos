@@ -241,6 +241,10 @@ export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolici
         'Onboarding a Station is growth, which is exactly what Restricted Access stops.',
       ],
       ['PUT /setup/stations/:id', 'Station configuration is a setup change.'],
+      [
+        'PUT /setup/stations/:id/tank-levels',
+        'Tank-level thresholds and the tank variance limit are Station configuration, a setup change (#690).',
+      ],
       ['POST /setup/onboarding/finalize', 'Provisioning a new Station is growth.'],
       ['POST /setup/onboarding/complete', 'Completing onboarding finalises new-Station setup.'],
       ['POST /setup/tanks', 'Infrastructure setup.'],

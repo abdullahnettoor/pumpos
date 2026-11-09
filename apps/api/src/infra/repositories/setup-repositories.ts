@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient, type DbExecutor } from '@pump/db';
 import type { Role } from '@pump/shared';
 import { fuelPricesNewestFirst } from './fuel-price-queries.js';
@@ -14,6 +14,7 @@ import type {
   ShiftTemplateRepository,
   Station,
   StationRepository,
+  StationSettingsPatchRepository,
   User,
   UserWithAssignments,
   UserRepository,
@@ -310,7 +311,7 @@ export class DrizzleShiftTemplateRepository implements ShiftTemplateRepository {
 }
 
 // ---------------- Stations ----------------
-export class DrizzleStationRepository implements StationRepository {
+export class DrizzleStationRepository implements StationRepository, StationSettingsPatchRepository {
   constructor(private readonly db: DbExecutor) {}
   private toEntity(r: typeof schema.stations.$inferSelect): Station {
     return {
@@ -364,6 +365,22 @@ export class DrizzleStationRepository implements StationRepository {
           updatedAt: new Date(s.updatedAt),
         },
       });
+  }
+  async patchSettings(
+    id: string,
+    organizationId: string,
+    patch: Record<string, unknown>,
+    updatedAt: string,
+  ): Promise<Station | null> {
+    const [r] = await this.db
+      .update(schema.stations)
+      .set({
+        settings: sql`coalesce(${schema.stations.settings}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: new Date(updatedAt),
+      })
+      .where(and(eq(schema.stations.id, id), eq(schema.stations.organizationId, organizationId)))
+      .returning();
+    return r ? this.toEntity(r) : null;
   }
   async listByOrganization(organizationId: string): Promise<Station[]> {
     const rows = await this.db

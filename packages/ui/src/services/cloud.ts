@@ -50,6 +50,7 @@ import {
   type RoleChangePreview,
   type UserPermissionsView,
   type HeadNature,
+  type TankRulesSettings,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -368,6 +369,22 @@ export class CloudStationService implements IStationService {
     return request<Station>(
       `/setup/stations/${id}`,
       { method: 'PUT', body: JSON.stringify(data) },
+      { idempotencyKey: opts?.idempotencyKey },
+    );
+  }
+
+  /**
+   * Tank-level thresholds and tank variance limit (#690): authorized by
+   * `station.tankLevels`, writes only these settings keys.
+   */
+  async updateStationTankRules(
+    id: string,
+    settings: TankRulesSettings,
+    opts?: { idempotencyKey?: string },
+  ): Promise<Station> {
+    return request<Station>(
+      `/setup/stations/${id}/tank-levels`,
+      { method: 'PUT', body: JSON.stringify(settings) },
       { idempotencyKey: opts?.idempotencyKey },
     );
   }

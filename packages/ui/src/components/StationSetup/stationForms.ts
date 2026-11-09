@@ -7,6 +7,7 @@ import {
   STOCK_VARIANCE_TOLERANCE_KEY,
   type DecantationSettings,
   type Station,
+  type TankRulesSettings,
 } from '@pump/shared';
 import { letterheadFromStation, type Letterhead } from '../../services/reports/letterhead.js';
 import { queryKeys } from '../../query/hooks.js';
@@ -38,10 +39,9 @@ export type StationGeneralValues = z.input<typeof stationGeneralSchema>;
 export const tankVarianceLimitSchema = z.object({ tolerancePct: stockVarianceTolerancePctSchema });
 export type TankVarianceLimitValues = z.input<typeof tankVarianceLimitSchema>;
 
-export function tankVarianceLimitBody(station: Station, tolerancePct: number) {
-  return {
-    settings: { ...station.settings, [STOCK_VARIANCE_TOLERANCE_KEY]: tolerancePct },
-  };
+/** The tank-rules body (#690): only the limit, never the rest of the settings. */
+export function tankVarianceLimitBody(tolerancePct: number): TankRulesSettings {
+  return { [STOCK_VARIANCE_TOLERANCE_KEY]: tolerancePct };
 }
 
 /**

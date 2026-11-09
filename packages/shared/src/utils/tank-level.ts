@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { STOCK_VARIANCE_TOLERANCE_KEY, stockVarianceTolerancePctSchema } from './stock-variance.js';
 
 /**
  * Tank level: one answer to "is this tank fine, low or critical?" (#520).
@@ -42,6 +43,22 @@ export const tankLevelSettingsSchema = z
     message: 'Critical must be below low',
     path: ['criticalBelowPct'],
   });
+
+/**
+ * The only settings `station.tankLevels` may save (#690): the thresholds and
+ * the tank variance limit, under their `stations.settings` keys. Strict, so
+ * any other key is refused rather than ignored.
+ */
+export const tankRulesSettingsSchema = z
+  .object({
+    [TANK_LEVEL_SETTINGS_KEY]: tankLevelSettingsSchema.optional(),
+    [STOCK_VARIANCE_TOLERANCE_KEY]: stockVarianceTolerancePctSchema.optional(),
+  })
+  .strict()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'Send tank levels or the tank variance limit',
+  });
+export type TankRulesSettings = z.infer<typeof tankRulesSettingsSchema>;
 
 /** Station thresholds from the station settings JSONB; defaults when unset or invalid. */
 export function resolveTankLevelSettings(stationSettings: unknown): TankLevelSettings {

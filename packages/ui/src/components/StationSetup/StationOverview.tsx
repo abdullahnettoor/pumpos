@@ -11,6 +11,7 @@ import {
   Station,
   TANK_LEVEL_SETTINGS_KEY,
   type TankLevelSettings,
+  type TankRulesSettings,
 } from '@pump/shared';
 import { principalFor } from '../../access/effectivePrincipal.js';
 import { ProductsCatalog } from './ProductsCatalog.js';
@@ -116,6 +117,10 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     sendKeyed(sessions.current.get(form) ?? openSession(form), body, (idempotencyKey) =>
       stationService.updateStation(id, body, { idempotencyKey }),
     );
+  const updateTankRules = (form: string, id: string, body: TankRulesSettings) =>
+    sendKeyed(sessions.current.get(form) ?? openSession(form), body, (idempotencyKey) =>
+      stationService.updateStationTankRules(id, body, { idempotencyKey }),
+    );
 
   // Selecting a default station is a genuine side effect on the parent, not
   // local state being synced, so it stays an effect — but it is now honest
@@ -143,14 +148,13 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     // refetched) must not replace it.
     latestStation.current = newerStation(latestStation.current, selectedStation);
   }, [selectedStation]);
-  const saveForm = async (
-    form: string,
-    build: (saved: Station) => unknown,
+  const saveWith = async (
+    send: (saved: Station) => Promise<Station>,
     saved: string,
   ): Promise<Station> => {
     const base = latestStation.current;
     if (!base) throw new Error('Select a station first.');
-    const updated = await updateStation(form, base.id, build(base));
+    const updated = await send(base);
     // The next section in the same Save builds on this one (#604 review).
     latestStation.current = updated;
     patchQueryData<Station[]>(
@@ -163,6 +167,8 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
     toast.success(saved);
     return updated;
   };
+  const saveForm = (form: string, build: (saved: Station) => unknown, saved: string) =>
+    saveWith((base) => updateStation(form, base.id, build(base)), saved);
 
   /**
    * Tank levels colour every tank on every screen (#520). The server refuses
@@ -170,19 +176,16 @@ const StationOverviewBody: React.FC<StationOverviewProps> = ({
    * awaited) so the Dashboard, alerts and Inventory pick the change up.
    */
   const handleSaveTankLevels = async (tankLevels: TankLevelSettings) => {
-    await saveForm(
-      'tank-levels',
-      (saved) => ({
-        settings: { ...saved.settings, [TANK_LEVEL_SETTINGS_KEY]: tankLevels },
-      }),
+    await saveWith(
+      (saved) =>
+        updateTankRules('tank-levels', saved.id, { [TANK_LEVEL_SETTINGS_KEY]: tankLevels }),
       'Tank levels saved.',
     );
   };
 
   const handleSaveTankVarianceLimit = async (value: number) => {
-    const updated = await saveForm(
-      'stock-variance',
-      (saved) => tankVarianceLimitBody(saved, value),
+    const updated = await saveWith(
+      (saved) => updateTankRules('stock-variance', saved.id, tankVarianceLimitBody(value)),
       'Tank variance limit saved.',
     );
     runTask(

@@ -21,6 +21,7 @@ import {
   stationSchema,
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelsChanged,
+  tankRulesSettingsSchema,
   userSchema,
   userUpdateSchema,
 } from '@pump/shared';
@@ -36,6 +37,7 @@ import {
   ok,
   validationError,
   UpdateStation,
+  UpdateStationTankRules,
   CreateUser,
   UpdateUser,
   GetUserPermissions,
@@ -313,6 +315,43 @@ stationSetupRouter.put(
         repository: new DrizzleStationRepository(tx),
         events,
       }).execute({ ...body, id: stationId }, buildContext(user)),
+    );
+    return sendResult(c, result);
+  },
+);
+
+// PUT /api/setup/stations/:id/tank-levels
+// Tank-level thresholds and the tank variance limit (#690): authorized by
+// `station.tankLevels` + Station assignment, not `station.manage`, and writes
+// only those two settings keys.
+stationSetupRouter.put(
+  '/stations/:id/tank-levels',
+  writePolicyGuard('PUT /setup/stations/:id/tank-levels'),
+  validateJson(tankRulesSettingsSchema),
+  async (c) => {
+    const user = c.var.user;
+    const stationId = c.req.param('id');
+    if (
+      !can(user, 'station.tankLevels') ||
+      !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Insufficient permissions to change tank levels at this station',
+          },
+        },
+        403,
+      );
+    }
+    const body = c.req.valid('json');
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new UpdateStationTankRules({
+        repository: new DrizzleStationRepository(tx),
+        events,
+      }).execute({ id: stationId, settings: body }, buildContext(user)),
     );
     return sendResult(c, result);
   },

@@ -4,6 +4,9 @@ import {
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelsChanged,
   tankLevelSettingsSchema,
+  tankRulesSettingsSchema,
+  resolveTankLevelSettings,
+  type TankRulesSettings,
   STOCK_VARIANCE_TOLERANCE_KEY,
   stockVarianceToleranceChanged,
   stockVarianceTolerancePctSchema,
@@ -47,6 +50,21 @@ export interface Station {
 
 export interface StationRepository extends Repository<Station> {
   listByOrganization(organizationId: string): Promise<Station[]>;
+}
+
+/**
+ * Narrow write port for the tank rules (#690): merges only the given keys into
+ * the stored settings in one statement, so no other key is read back or
+ * rewritten. Null when the Station is not in the Organization.
+ */
+export interface StationSettingsPatchRepository {
+  findById(id: string): Promise<Station | null>;
+  patchSettings(
+    id: string,
+    organizationId: string,
+    patch: Record<string, unknown>,
+    updatedAt: string,
+  ): Promise<Station | null>;
 }
 
 export interface CreateStationCommand {
@@ -247,6 +265,99 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
         stationId: updated.id,
         payload: {
           stationId: updated.id,
+          ...(varianceChanged
+            ? {
+                stockVarianceTolerancePct: {
+                  before: resolveStockVarianceTolerance(existing.settings),
+                  after: resolveStockVarianceTolerance(updated.settings),
+                },
+              }
+            : {}),
+        },
+      }),
+    ]);
+    return ok(updated);
+  }
+}
+
+export interface UpdateStationTankRulesCommand {
+  id: string;
+  /** Only `tankLevels` and `stock_variance_tolerance_pct`; anything else is refused. */
+  settings: TankRulesSettings;
+}
+
+export interface UpdateStationTankRulesDeps {
+  repository: StationSettingsPatchRepository;
+  events: EventPublisher;
+}
+
+/**
+ * Saves the tank-level thresholds and tank variance limit under
+ * `station.tankLevels` alone (#690), so a user holding it needs no
+ * `station.manage`. Writes only the submitted keys; the caller's Station
+ * assignment is checked at the route.
+ */
+export class UpdateStationTankRules implements UseCase<UpdateStationTankRulesCommand, Station> {
+  constructor(private readonly deps: UpdateStationTankRulesDeps) {}
+  async execute(
+    input: UpdateStationTankRulesCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<Station>> {
+    const settings = tankRulesSettingsSchema.safeParse(input.settings);
+    if (!input.id || !settings.success)
+      return err(
+        validationError('Invalid tank rules', {
+          issues: settings.success ? undefined : settings.error.flatten(),
+        }),
+      );
+    if (!mayChangeTankLevels(ctx))
+      return err(forbiddenError('Only a user with tank-level permission can change these rules'));
+    const existing = await this.deps.repository.findById(input.id);
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('Station', input.id));
+
+    const submitted = settings.data;
+    const levelsChanged =
+      submitted[TANK_LEVEL_SETTINGS_KEY] !== undefined &&
+      tankLevelsChanged(
+        existing.settings[TANK_LEVEL_SETTINGS_KEY],
+        submitted[TANK_LEVEL_SETTINGS_KEY],
+      );
+    const varianceChanged =
+      submitted[STOCK_VARIANCE_TOLERANCE_KEY] !== undefined &&
+      stockVarianceToleranceChanged(
+        existing.settings[STOCK_VARIANCE_TOLERANCE_KEY],
+        submitted[STOCK_VARIANCE_TOLERANCE_KEY],
+      );
+    if (!levelsChanged && !varianceChanged) return ok(existing);
+
+    const patch: Record<string, unknown> = {};
+    if (levelsChanged) patch[TANK_LEVEL_SETTINGS_KEY] = submitted[TANK_LEVEL_SETTINGS_KEY];
+    if (varianceChanged)
+      patch[STOCK_VARIANCE_TOLERANCE_KEY] = submitted[STOCK_VARIANCE_TOLERANCE_KEY];
+    const updated = await this.deps.repository.patchSettings(
+      existing.id,
+      ctx.organizationId,
+      patch,
+      ctx.clock.now().toISOString(),
+    );
+    if (!updated) return err(notFoundError('Station', input.id));
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.STATION_UPDATED,
+        aggregateType: 'Station',
+        aggregateId: updated.id,
+        stationId: updated.id,
+        payload: {
+          stationId: updated.id,
+          ...(levelsChanged
+            ? {
+                tankLevels: {
+                  before: resolveTankLevelSettings(existing.settings),
+                  after: resolveTankLevelSettings(updated.settings),
+                },
+              }
+            : {}),
           ...(varianceChanged
             ? {
                 stockVarianceTolerancePct: {
