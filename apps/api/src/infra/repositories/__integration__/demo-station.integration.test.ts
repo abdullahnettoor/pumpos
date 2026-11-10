@@ -388,7 +388,13 @@ describe.skipIf(!CONNECTION)('demo stations against real Postgres', () => {
         expect(config.gst_rate).toBe(18);
       }
       const items = await db
-        .select({ item: schema.purchaseItems, purchase: schema.purchases })
+        .select({
+          item: schema.purchaseItems,
+          purchase: {
+            entryDate: schema.purchases.entryDate,
+            businessDayId: schema.purchases.businessDayId,
+          },
+        })
         .from(schema.purchaseItems)
         .innerJoin(schema.purchases, eq(schema.purchases.id, schema.purchaseItems.purchaseId))
         .where(eq(schema.purchases.organizationId, demo.organizationId));

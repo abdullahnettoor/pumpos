@@ -576,7 +576,6 @@ export interface Collection {
 export interface Purchase {
   id: string;
   documentNumber: string;
-  shiftId: string;
   supplierId: string;
   invoiceNumber?: string | null;
   amount: number;
@@ -641,7 +640,6 @@ export interface ExpensePayload {
 }
 
 export interface PurchasePayload {
-  shiftId: string;
   supplierId: string;
   productId: string;
   quantity: number;
