@@ -83,11 +83,19 @@ beforeEach(() => {
       // A station PUT behaves like the server: the body over the saved
       // station, with a newer updatedAt.
       if (init?.method === 'PUT' && path.startsWith('/setup/stations/')) {
-        saved = {
-          ...saved,
-          ...JSON.parse(String(init.body)),
-          updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
-        };
+        const body = JSON.parse(String(init.body));
+        // The tank-rules endpoint merges its keys into the saved settings only.
+        saved = path.endsWith('/tank-levels')
+          ? {
+              ...saved,
+              settings: { ...(saved.settings as object), ...body },
+              updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
+            }
+          : {
+              ...saved,
+              ...body,
+              updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
+            };
       }
       const route =
         init?.method === 'PUT' && path.startsWith('/setup/stations/')
@@ -194,6 +202,9 @@ describe('Station page', () => {
     const puts = () => calls.filter((c) => c.init?.method === 'PUT');
     await waitFor(() => expect(puts()).toHaveLength(2));
     const bodies = puts().map((c) => JSON.parse(String(c.init!.body)));
+    // The thresholds go to their own endpoint, carrying only their key (#690).
+    expect(puts()[0].url).toContain('/setup/stations/st-1/tank-levels');
+    expect(bodies[0]).toEqual({ tankLevels: { criticalBelowPct: 15, lowBelowPct: 40 } });
     // The decantation body carries the tank levels just saved, not the stale prop's.
     expect(bodies[1].settings).toMatchObject({
       tankLevels: { criticalBelowPct: 15 },
@@ -209,6 +220,22 @@ describe('Station page', () => {
     // Keys: one per section.
     const keys = puts().map((c) => header(c.init, 'Idempotency-Key'));
     expect(new Set(keys).size).toBe(2);
+  });
+
+  it('the tank variance limit saves through the tank-rules endpoint, sending only that key (#690)', async () => {
+    renderWithProviders(
+      <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
+    );
+    fireEvent.click(await screen.findByRole('tab', { name: 'Rules' }));
+    fireEvent.change(await screen.findByLabelText(/Tank variance limit \(%/), {
+      target: { value: '1.25' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.init?.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.init?.method === 'PUT')!;
+    expect(put.url).toContain('/setup/stations/st-1/tank-levels');
+    expect(JSON.parse(String(put.init!.body))).toEqual({ stock_variance_tolerance_pct: 1.25 });
+    expect(header(put.init, 'Idempotency-Key')).toBeTruthy();
   });
 
   it('a grace period of 0 survives a save (#604 review)', async () => {
