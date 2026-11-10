@@ -199,6 +199,21 @@ describe.skipIf(!CONNECTION)('purchases list with both anchors against Postgres'
     await sql.end();
   });
 
+  it('provisions purchases without a shift column or foreign key', async () => {
+    const columns = await sql<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = ${TEST_SCHEMA} and table_name = 'purchases'
+        and column_name = 'shift_id'
+    `;
+    expect(columns).toEqual([]);
+    const constraints = await sql<{ conname: string }[]>`
+      select conname from pg_constraint
+      where conrelid = ${`${TEST_SCHEMA}.purchases`}::regclass
+        and conname = 'purchases_shift_id_shifts_id_fk'
+    `;
+    expect(constraints).toEqual([]);
+  });
+
   it('lists Entry Date fuel and Business Date product purchases and flags unlinked fuel', async () => {
     const res = await appFor(db).request(`/transactions/purchases?stationId=${STATION}`);
     const body = (await res.json()) as any;
