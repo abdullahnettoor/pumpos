@@ -14,6 +14,7 @@ import {
   invariantViolation,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
 import type {
   DomainEvent,
@@ -21,6 +22,7 @@ import type {
   ExecutionContext,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
@@ -102,6 +104,7 @@ export interface FuelNameReader {
 }
 
 export interface OpenShiftDeps {
+  references: TenantReferenceReader;
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
   nozzles: NozzleRepository;
@@ -134,6 +137,35 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     if (!p.success)
       return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
+
+    for (const [kind, id] of [
+      ['Station', cmd.stationId],
+      ['Shift Template', cmd.shiftTemplateId],
+    ] as const) {
+      const check = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        kind,
+        id,
+      );
+      if (!check.success) return check;
+    }
+    // Templates are Organization-wide; Terminals and DUs belong to this Station.
+    for (const link of cmd.terminalLinks ?? []) {
+      for (const [kind, id] of [
+        ['Payment Terminal', link.terminalId],
+        ['Dispenser', link.duId],
+      ] as const) {
+        const check = await requireTenantReference(
+          this.deps.references,
+          ctx.organizationId,
+          kind,
+          id,
+          { stationId: cmd.stationId },
+        );
+        if (!check.success) return check;
+      }
+    }
 
     await this.deps.businessDays.lockStation(ctx.organizationId, cmd.stationId);
     const existingOpen = await this.deps.shifts.findOpenByStation(

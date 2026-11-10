@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { DrizzleTenantReferenceReader } from '../tenant-reference-reader.js';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
 import postgres from 'postgres';
@@ -128,6 +129,7 @@ suite('Density register integration (Postgres)', () => {
     const recordResult = await runInTransaction(db, async (tx, events) => {
       const repo = new DrizzleDensityReadingRepository(tx);
       const useCase = new RecordDensityReading({
+        references: new DrizzleTenantReferenceReader(tx),
         densityReadings: repo,
         events,
       });

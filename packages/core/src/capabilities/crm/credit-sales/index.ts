@@ -66,6 +66,50 @@ export interface RecordCreditSaleDeps extends ShiftWriteDeps {
   events: EventPublisher;
 }
 
+/** Read-only preflight: resolveFinancialAnchor may lazily INSERT a Business Day. */
+async function validateSaleReferences(
+  deps: Pick<RecordCreditSaleDeps, 'references' | 'shiftWriteGate'>,
+  ctx: ExecutionContext,
+  cmd: {
+    shiftId?: string;
+    stationId?: string;
+    customerId?: string | null;
+    productId?: string | null;
+    vehicleId?: string | null;
+    attendantId?: string | null;
+    duId?: string | null;
+  },
+): Promise<Result<void>> {
+  let stationId = cmd.stationId ?? ctx.stationId ?? undefined;
+  if (cmd.shiftId) {
+    const source = await deps.shiftWriteGate.discover(cmd.shiftId);
+    if (
+      !source.shift ||
+      source.shift.organizationId !== ctx.organizationId ||
+      !source.businessDay ||
+      source.businessDay.organizationId !== ctx.organizationId ||
+      (stationId && source.shift.stationId !== stationId)
+    )
+      return err(notFoundError('Shift', cmd.shiftId));
+    stationId = source.shift.stationId;
+  }
+  if (!stationId) return err(validationError('Either shiftId or stationId is required'));
+  for (const [kind, id] of [
+    ['Station', stationId],
+    ['Product', cmd.productId],
+    ['Vehicle', cmd.vehicleId],
+    ['Attendant', cmd.attendantId ?? ctx.actorId],
+    ['Dispenser', cmd.duId],
+  ] as const) {
+    const check = await requireTenantReference(deps.references, ctx.organizationId, kind, id, {
+      stationId,
+      customerId: cmd.customerId,
+    });
+    if (!check.success) return check;
+  }
+  return ok(undefined);
+}
+
 /**
  * Record a credit sale as a customer receivable (a debit on the customer ledger).
  * A credit sale never adds to the cash drawer, so it never affects drawer
@@ -96,25 +140,11 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
 
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
+    const references = await validateSaleReferences(this.deps, ctx, cmd);
+    if (!references.success) return references;
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
     const { businessDayId, shiftId, stationId } = anchor.data;
-
-    for (const [kind, id] of [
-      ['Product', cmd.productId],
-      ['Vehicle', cmd.vehicleId],
-      ['Attendant', cmd.attendantId ?? ctx.actorId],
-      ['Dispenser', cmd.duId],
-    ] as const) {
-      const check = await requireTenantReference(
-        this.deps.references,
-        ctx.organizationId,
-        kind,
-        id,
-        { stationId, customerId: cmd.customerId },
-      );
-      if (!check.success) return check;
-    }
 
     const now = ctx.clock.now().toISOString();
     // Attendant attribution applies only to shift-anchored credit sales; a
@@ -312,27 +342,14 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
 
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
+    const references = await validateSaleReferences(this.deps, ctx, cmd);
+    if (!references.success) return references;
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
     const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
-    for (const [kind, id] of [
-      ['Product', cmd.productId],
-      ['Vehicle', cmd.vehicleId],
-      ['Attendant', attendantId],
-      ['Dispenser', shiftId ? cmd.duId : null],
-    ] as const) {
-      const check = await requireTenantReference(
-        this.deps.references,
-        ctx.organizationId,
-        kind,
-        id,
-        { stationId, customerId },
-      );
-      if (!check.success) return check;
-    }
     const entry: CustomerLedgerEntry = {
       id: ctx.ids.newId(),
       shiftId,

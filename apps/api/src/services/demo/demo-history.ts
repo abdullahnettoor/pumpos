@@ -321,6 +321,7 @@ export async function seedDemoHistory(
   const openShift = async (date: string, templateId: string, at: Date) =>
     must(
       await new OpenShift({
+        references: new DrizzleTenantReferenceReader(tx),
         shifts,
         businessDays,
         nozzles: new DrizzleNozzleRepository(tx),

@@ -319,6 +319,7 @@ export class DrizzleFinancialAccountReader {
       )
       .limit(1);
     if (!accRows[0]) return null;
+    const accountStationId = accRows[0].stationId;
 
     let periodOpeningBalance = '0';
     if (from) {
@@ -330,19 +331,25 @@ export class DrizzleFinancialAccountReader {
         .where(
           and(
             eq(schema.ledgerEntries.accountId, accountId),
+            eq(schema.ledgerEntries.organizationId, organizationId),
+            accountStationId ? eq(schema.ledgerEntries.stationId, accountStationId) : undefined,
             sql`${schema.ledgerEntries.entryDate} < ${from}`,
           ),
         );
       periodOpeningBalance = String(openRow?.bal ?? '0');
     }
 
-    const rangeConds = [eq(schema.ledgerEntries.accountId, accountId)];
+    const rangeConds = [
+      eq(schema.ledgerEntries.accountId, accountId),
+      eq(schema.ledgerEntries.organizationId, organizationId),
+    ];
+    if (accountStationId) rangeConds.push(eq(schema.ledgerEntries.stationId, accountStationId));
     if (from) rangeConds.push(gte(schema.ledgerEntries.entryDate, from));
     if (to) rangeConds.push(lte(schema.ledgerEntries.entryDate, to));
     // Enrich each entry with its originating OMC sale (when sourceType is
     // SALE_OMC, sourceId → customer_transactions.id) so the statement can show
-    // which customer / vehicle / fuel each CMS receipt came from. Non-OMC rows
-    // don't match (UUIDs are globally unique) and simply carry nulls.
+    // which customer / vehicle / fuel each CMS receipt came from. Scope the
+    // source BEFORE enrichment: even quantity/notes belong to its Organization.
     const entryRows = await this.db
       .select({
         e: schema.ledgerEntries,
@@ -355,7 +362,14 @@ export class DrizzleFinancialAccountReader {
       .from(schema.ledgerEntries)
       .leftJoin(
         schema.customerTransactions,
-        eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId),
+        and(
+          eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId),
+          eq(schema.ledgerEntries.sourceType, 'SALE_OMC'),
+          sql`exists (select 1 from business_days source_day
+            where source_day.id = ${schema.customerTransactions.businessDayId}
+              and source_day.organization_id = ${organizationId}
+              and source_day.station_id = ${schema.ledgerEntries.stationId})`,
+        ),
       )
       .leftJoin(
         schema.customers,

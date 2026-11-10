@@ -1,5 +1,10 @@
 import { Hono, type Context } from 'hono';
 import { DrizzleTenantReferenceReader } from '../infra/repositories/tenant-reference-reader.js';
+import {
+  DrizzlePurchaseStationLegalReader,
+  readInvoiceCustomer,
+  readStationLegal,
+} from '../infra/transaction-reference-sql.js';
 import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
@@ -26,6 +31,7 @@ import {
   suppliersAtStation,
   err,
   validationError,
+  notFoundError,
   AddVehicle,
   UpdateVehicle,
   CreateHead,
@@ -89,10 +95,7 @@ import {
   DrizzleDocumentSequenceRepository,
 } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import {
-  DrizzleStationRepository,
-  DrizzleTankRepository,
-} from '../infra/repositories/setup-repositories.js';
+import { DrizzleTankRepository } from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import {
   DrizzleFinancialAccountRepository,
@@ -367,11 +370,10 @@ transactionsRouter.post(
     // The record itself is anchored to body.stationId even when there is no
     // opening balance, so any caller-supplied station must resolve inside the
     // organization (#235), not just the opening-balance one.
-    if (
-      openingStationId &&
-      !(await stationExistsInOrg(c.var.db, user.organizationId, openingStationId))
-    ) {
-      return stationNotFound(c);
+    for (const stationId of new Set([body?.stationId, openingStationId])) {
+      if (stationId == null) continue;
+      if (!stationId || !(await stationExistsInOrg(c.var.db, user.organizationId, stationId)))
+        return stationNotFound(c);
     }
     const clock = await loadStationClock(
       c.var.db,
@@ -606,11 +608,10 @@ transactionsRouter.post(
     // The record itself is anchored to body.stationId even when there is no
     // opening balance, so any caller-supplied station must resolve inside the
     // organization (#235), not just the opening-balance one.
-    if (
-      openingStationId &&
-      !(await stationExistsInOrg(c.var.db, user.organizationId, openingStationId))
-    ) {
-      return stationNotFound(c);
+    for (const stationId of new Set([body?.stationId, openingStationId])) {
+      if (stationId == null) continue;
+      if (!stationId || !(await stationExistsInOrg(c.var.db, user.organizationId, stationId)))
+        return stationNotFound(c);
     }
     const clock = await loadStationClock(
       c.var.db,
@@ -1586,13 +1587,14 @@ transactionsRouter.post(
         ...clock,
       });
       const r = await new RecordPurchase({
+        references: new DrizzleTenantReferenceReader(tx),
         purchases: new DrizzlePurchaseRepository(tx),
         purchaseItems: new DrizzlePurchaseItemRepository(tx),
         stock: new DrizzleStockMovementRepository(tx),
         supplierTxns: new DrizzleSupplierTransactionRepository(tx),
         suppliers: new DrizzleSupplierRepository(tx),
         products: new DrizzleProductRepository(tx),
-        stations: new DrizzleStationRepository(tx),
+        stationLegal: new DrizzlePurchaseStationLegalReader(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
@@ -1742,12 +1744,6 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       const stateCode =
         (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
       if (saveAsCustomer) {
-        const references = await saleUseCase.validateReferences(
-          body,
-          buildContext(user, { stationId: shiftStation.stationId }),
-          shiftStation.stationId!,
-        );
-        if (!references.success) return references;
         const custRepo = new DrizzleCustomerRepository(tx);
         const digits = (v: string | null) => (v ? v.replace(/\D/g, '') : '');
         const existing = (await custRepo.listByOrganization(user.organizationId, false)).find(
@@ -1759,6 +1755,16 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
             return x.name.trim().toLowerCase() === name.toLowerCase();
           },
         );
+        // An existing Vehicle cannot belong to a Customer that has not been
+        // created yet. For a deduplicated buyer, check against THAT Customer
+        // before any Customer or event write, not just against the Organization.
+        if (!existing && body.vehicleId) return err(notFoundError('Vehicle', body.vehicleId));
+        const references = await saleUseCase.validateReferences(
+          { ...body, customerId: existing?.id ?? null },
+          buildContext(user, { stationId: shiftStation.stationId }),
+          shiftStation.stationId!,
+        );
+        if (!references.success) return references;
         if (existing) {
           customerId = existing.id;
         } else {
@@ -2637,8 +2643,8 @@ transactionsRouter.post(
       stateCode: null,
     };
     if (sale.customerId) {
-      const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
-      if (!cust || cust.organizationId !== user.organizationId)
+      const cust = await readInvoiceCustomer(db, user.organizationId, sale.customerId);
+      if (!cust)
         return c.json(
           { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
           404,
@@ -2660,8 +2666,8 @@ transactionsRouter.post(
         stateCode: bd.stateCode ?? null,
       };
     }
-    const station = await new DrizzleStationRepository(db).findById(sale.stationId);
-    if (!station || station.organizationId !== user.organizationId) return stationNotFound(c);
+    const station = await readStationLegal(db, user.organizationId, sale.stationId);
+    if (!station) return stationNotFound(c);
     const legal = (station?.settings as any)?.legal || {};
 
     const lines = items.map((it) => {

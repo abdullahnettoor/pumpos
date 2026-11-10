@@ -10,6 +10,7 @@ import { schema, type DbClient } from '@pump/db';
 import {
   CreateSale,
   FixedClock,
+  OpenShift,
   RecordCreditSale,
   RecordOmcCardSale,
   RecordExpense,
@@ -40,6 +41,9 @@ import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
   DrizzleShiftWriteGateReader,
+  DrizzleNozzleReadingRepository,
+  DrizzleStaffDirectory,
+  DrizzleFuelNameReader,
 } from '../station-ops-repositories.js';
 import { DrizzleExpenseRepository, DrizzleIncomeRepository } from '../finance-repositories.js';
 import {
@@ -51,7 +55,14 @@ import {
   DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../purchasing-repositories.js';
-import { DrizzleStationRepository } from '../setup-repositories.js';
+import {
+  DrizzleDispenserRepository,
+  DrizzleNozzleRepository,
+  DrizzleFuelPriceRepository,
+  DrizzleStationRepository,
+} from '../setup-repositories.js';
+import { DrizzlePurchaseStationLegalReader } from '../../transaction-reference-sql.js';
+import { densityRouter } from '../../../routes/density.js';
 import { DrizzleDssrDataReader } from '../reporting-repositories.js';
 import {
   DrizzleCustomerLedgerReader,
@@ -82,9 +93,12 @@ const ids = () => ({
   account: randomUUID(),
   expenseHead: randomUUID(),
   incomeHead: randomUUID(),
+  terminal: randomUUID(),
 });
 const A = ids();
 const B = ids();
+const C = ids();
+const OTHER_TEMPLATE = randomUUID();
 const DAY = randomUUID();
 const SHIFT = randomUUID();
 const TEMPLATE = randomUUID();
@@ -126,6 +140,7 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
   let client: postgres.Sql;
   let db: DbClient;
   let writes: string[] = [];
+  let queries: { query: string; params: unknown[] }[] = [];
   let app: Hono<{ Variables: { db: DbClient; user: AuthenticatedPrincipal } }>;
 
   beforeAll(async () => {
@@ -145,7 +160,8 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
     db = drizzle(client, {
       schema,
       logger: {
-        logQuery(query) {
+        logQuery(query, params) {
+          queries.push({ query, params });
           if (/^(insert|update|delete)\b/i.test(query)) writes.push(query);
         },
       },
@@ -164,6 +180,7 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
       await next();
     });
     router.route('/transactions', transactionsRouter);
+    router.route('/transactions', densityRouter);
     router.route('/shifts', shiftsRouter);
     app = router;
   }, 60_000);
@@ -255,6 +272,13 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
       await db
         .insert(schema.incomeCategories)
         .values({ id: t.incomeHead, organizationId: t.org, name });
+      await db.insert(schema.paymentTerminals).values({
+        id: t.terminal,
+        organizationId: t.org,
+        stationId: t.station,
+        label: name,
+        supportsCard: true,
+      });
     }
     await db.insert(schema.businessDays).values({
       id: DAY,
@@ -279,6 +303,13 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
       shiftTemplateId: TEMPLATE,
       openedBy: A.user,
       openedAt: NOW,
+    });
+    await db.insert(schema.shiftTemplates).values({
+      id: OTHER_TEMPLATE,
+      organizationId: B.org,
+      name: SECRET,
+      startTime: '06:00',
+      endTime: '18:00',
     });
     await db
       .insert(schema.shiftStaffAssignments)
@@ -307,7 +338,16 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
       purchases: new DrizzlePurchaseRepository(tx),
       purchaseItems: new DrizzlePurchaseItemRepository(tx),
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+      stationLegal: new DrizzlePurchaseStationLegalReader(tx),
+      // Keep the baseline dependency wired for counterfactual runs; the fixed
+      // Purchase use-case reads only the scoped stationLegal adapter above.
       stations: new DrizzleStationRepository(tx),
+      nozzles: new DrizzleNozzleRepository(tx),
+      nozzleReadings: new DrizzleNozzleReadingRepository(tx),
+      fuelPrices: new DrizzleFuelPriceRepository(tx),
+      dispensers: new DrizzleDispenserRepository(tx),
+      staff: new DrizzleStaffDirectory(tx),
+      fuels: new DrizzleFuelNameReader(tx),
     };
   }
   const counts = async () =>
@@ -324,7 +364,12 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
     (select count(*)::int from supplier_transactions) as supplier_transactions,
     (select count(*)::int from stock_variances) as stock_variances,
     (select count(*)::int from expenses) as expenses,
-    (select count(*)::int from other_income) as other_income`)
+    (select count(*)::int from other_income) as other_income,
+    (select count(*)::int from business_days) as business_days,
+    (select count(*)::int from customers) as customers,
+    (select count(*)::int from suppliers) as suppliers,
+    (select count(*)::int from shifts) as shifts,
+    (select count(*)::int from density_readings) as density_readings`)
     )[0];
   const line = (productId = A.product) => ({ productId, quantity: 1, unitPrice: 118 });
   const post = (url: string, body: unknown) =>
@@ -502,7 +547,7 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
     },
   );
 
-  it('refuses Tank allocations on a Product Purchase', async () => {
+  it('refuses foreign Tank allocations on a Product Purchase', async () => {
     const before = await counts();
     const result = await runInTransaction(db, (tx, events) =>
       new RecordPurchase(deps(tx, events)).execute(
@@ -515,7 +560,7 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
         ctx(),
       ),
     );
-    expect(result).toMatchObject({ success: false, error: { code: 'VALIDATION_ERROR' } });
+    expect(result).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
     expect(await counts()).toEqual(before);
   });
 
@@ -870,6 +915,7 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
       DATE,
     );
     expect(result?.entries).toHaveLength(1);
+    expect(result?.entries).toMatchObject([{ omcQuantity: 1, omcNotes: null }]);
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
 
@@ -959,5 +1005,542 @@ describe.skipIf(!CONNECTION)('Organization boundaries against real Postgres (#71
     expect(result.creditSales).toHaveLength(1);
     expect(result.nozzleReadings).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain(SECRET);
+  });
+
+  async function absentDay() {
+    await db
+      .delete(schema.shiftStaffAssignments)
+      .where(eq(schema.shiftStaffAssignments.shiftId, SHIFT));
+    await db.delete(schema.shifts).where(eq(schema.shifts.id, SHIFT));
+    await db.delete(schema.businessDays).where(eq(schema.businessDays.id, DAY));
+  }
+
+  async function otherStation() {
+    await db
+      .insert(schema.stations)
+      .values({ id: C.station, organizationId: A.org, name: 'Other local Station', code: 'OTHER' });
+    await db.insert(schema.tanks).values({
+      id: C.tank,
+      organizationId: A.org,
+      stationId: C.station,
+      name: 'Other Tank',
+      productId: A.product,
+      capacity: '10000',
+    });
+    await db.insert(schema.dispenserUnits).values({
+      id: C.du,
+      organizationId: A.org,
+      stationId: C.station,
+      name: 'Other DU',
+      code: 'OTHER',
+    });
+    await db.insert(schema.nozzles).values({
+      id: C.nozzle,
+      organizationId: A.org,
+      stationId: C.station,
+      duId: C.du,
+      tankId: C.tank,
+      productId: A.product,
+      name: 'Other Nozzle',
+      currentReading: '100',
+    });
+    await db.insert(schema.paymentTerminals).values({
+      id: C.terminal,
+      organizationId: A.org,
+      stationId: C.station,
+      label: 'Other Terminal',
+    });
+  }
+
+  describe('follow-up: remaining reference boundaries', () => {
+    it('retail rejects an empty Customer reference before any DML', async () => {
+      writes = [];
+      const res = await post('/transactions/sales', {
+        stationId: A.station,
+        shiftId: SHIFT,
+        paymentMethod: 'Cash',
+        customerId: '',
+        lines: [line()],
+      });
+      expect(writes).toEqual([]);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({
+        success: false,
+        error: { code: 'VALIDATION_ERROR' },
+      });
+    });
+    it.each([
+      { kind: 'foreign Product', bad: { productId: B.product } },
+      { kind: 'missing Product', bad: { productId: randomUUID() } },
+      { kind: 'foreign Tank', bad: { tankId: B.tank } },
+      { kind: 'missing Tank', bad: { tankId: randomUUID() } },
+      { kind: 'empty Tank', bad: { tankId: '' } },
+      { kind: 'foreign Nozzle', bad: { nozzleId: B.nozzle } },
+      { kind: 'missing Nozzle', bad: { nozzleId: randomUUID() } },
+      { kind: 'empty Nozzle', bad: { nozzleId: '' } },
+      { kind: 'other-Station Tank', bad: { tankId: C.tank } },
+      { kind: 'other-Station Nozzle', bad: { nozzleId: C.nozzle } },
+    ])('density rejects $kind without DML', async ({ bad }) => {
+      await otherStation();
+      const before = await counts();
+      writes = [];
+      const res = await post('/transactions/density/readings', {
+        stationId: A.station,
+        productId: A.product,
+        kind: 'ADHOC',
+        entryMethod: 'DIRECT_15',
+        density15: 750,
+        sampledFrom: 'NOZZLE',
+        ...bad,
+      });
+      expect(writes).toEqual([]);
+      expect(res.status).toBe(404);
+      expect(await counts()).toEqual(before);
+    });
+
+    it.each(['Tank', 'Nozzle'] as const)(
+      'density rejects a local %s for another Product without DML',
+      async (kind) => {
+        await db.insert(schema.products).values({
+          id: C.product,
+          organizationId: A.org,
+          name: 'Other local Product',
+          code: 'OTHER',
+          productType: 'FUEL',
+          unit: 'L',
+        });
+        if (kind === 'Tank')
+          await db
+            .update(schema.tanks)
+            .set({ productId: C.product })
+            .where(eq(schema.tanks.id, A.tank));
+        else
+          await db
+            .update(schema.nozzles)
+            .set({ productId: C.product })
+            .where(eq(schema.nozzles.id, A.nozzle));
+        writes = [];
+        const res = await post('/transactions/density/readings', {
+          stationId: A.station,
+          productId: A.product,
+          kind: 'ADHOC',
+          entryMethod: 'DIRECT_15',
+          density15: 750,
+          ...(kind === 'Tank' ? { tankId: A.tank } : { nozzleId: A.nozzle }),
+        });
+        expect(writes).toEqual([]);
+        expect(res.status).toBe(404);
+      },
+    );
+
+    it('density rejects a local Nozzle/Tank mismatch without DML', async () => {
+      await db.insert(schema.tanks).values({
+        id: C.tank,
+        organizationId: A.org,
+        stationId: A.station,
+        name: 'Second Tank',
+        productId: A.product,
+        capacity: '10000',
+      });
+      writes = [];
+      const res = await post('/transactions/density/readings', {
+        stationId: A.station,
+        productId: A.product,
+        kind: 'ADHOC',
+        entryMethod: 'DIRECT_15',
+        density15: 750,
+        tankId: C.tank,
+        nozzleId: A.nozzle,
+      });
+      expect(writes).toEqual([]);
+      expect(res.status).toBe(404);
+    });
+
+    it('density accepts compatible local references', async () => {
+      const res = await post('/transactions/density/readings', {
+        stationId: A.station,
+        productId: A.product,
+        kind: 'ADHOC',
+        entryMethod: 'DIRECT_15',
+        density15: 750,
+        tankId: A.tank,
+        nozzleId: A.nozzle,
+      });
+      expect(res.status).toBe(200);
+      expect(await db.select().from(schema.densityReadings)).toMatchObject([
+        {
+          productId: A.product,
+          tankId: A.tank,
+          nozzleId: A.nozzle,
+          organizationId: A.org,
+          stationId: A.station,
+        },
+      ]);
+    });
+
+    it.each([
+      { kind: 'foreign Station', bad: { stationId: B.station, staffAssignments: [] } },
+      { kind: 'missing Station', bad: { stationId: randomUUID(), staffAssignments: [] } },
+      { kind: 'foreign Template', bad: { shiftTemplateId: OTHER_TEMPLATE } },
+      { kind: 'missing Template', bad: { shiftTemplateId: randomUUID() } },
+      { kind: 'foreign Terminal', bad: { terminalLinks: [{ terminalId: B.terminal }] } },
+      { kind: 'missing Terminal', bad: { terminalLinks: [{ terminalId: randomUUID() }] } },
+      { kind: 'other-Station Terminal', bad: { terminalLinks: [{ terminalId: C.terminal }] } },
+      {
+        kind: 'foreign Terminal DU',
+        bad: { terminalLinks: [{ terminalId: A.terminal, duId: B.du }] },
+      },
+      {
+        kind: 'missing Terminal DU',
+        bad: { terminalLinks: [{ terminalId: A.terminal, duId: randomUUID() }] },
+      },
+      { kind: 'empty Terminal DU', bad: { terminalLinks: [{ terminalId: A.terminal, duId: '' }] } },
+      {
+        kind: 'other-Station Terminal DU',
+        bad: { terminalLinks: [{ terminalId: A.terminal, duId: C.du }] },
+      },
+    ])('Shift open rejects $kind before any lazy-day DML', async ({ bad }) => {
+      await absentDay();
+      await otherStation();
+      await db.insert(schema.fuelPrices).values({
+        organizationId: A.org,
+        stationId: A.station,
+        productId: A.product,
+        price: '118',
+        effectiveFrom: NOW,
+      });
+      const before = await counts();
+      writes = [];
+      const result = await runInTransaction(db, (tx, events) =>
+        new OpenShift(deps(tx, events)).execute(
+          {
+            stationId: A.station,
+            shiftTemplateId: TEMPLATE,
+            businessDate: DATE,
+            staffAssignments: [{ userId: A.user, duId: A.du }],
+            ...bad,
+          },
+          ctx(),
+        ),
+      );
+      expect(writes).toEqual([]);
+      expect(result).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+      expect(await counts()).toEqual(before);
+    });
+
+    it('Shift open accepts compatible local Terminal links', async () => {
+      await absentDay();
+      await db.insert(schema.fuelPrices).values({
+        organizationId: A.org,
+        stationId: A.station,
+        productId: A.product,
+        price: '118',
+        effectiveFrom: NOW,
+      });
+      const result = await runInTransaction(db, (tx, events) =>
+        new OpenShift(deps(tx, events)).execute(
+          {
+            stationId: A.station,
+            shiftTemplateId: TEMPLATE,
+            businessDate: DATE,
+            staffAssignments: [{ userId: A.user, duId: A.du }],
+            terminalLinks: [{ terminalId: A.terminal, duId: A.du }],
+          },
+          ctx(),
+        ),
+      );
+      expect(result.success).toBe(true);
+      expect(await db.select().from(schema.shiftTerminalLinks)).toMatchObject([
+        { terminalId: A.terminal, duId: A.du },
+      ]);
+    });
+
+    it.each(
+      ['customers', 'suppliers'].flatMap((party) =>
+        [0, 10].flatMap((openingDue) =>
+          ['foreign', 'missing', 'empty'].map((kind) => ({ party, openingDue, kind })),
+        ),
+      ),
+    )(
+      '$party refuses a $kind record Station masked by a local opening Station ($openingDue)',
+      async ({ party, openingDue, kind }) => {
+        const before = await counts();
+        writes = [];
+        const res = await post(`/transactions/${party}`, {
+          name: 'New party',
+          customerType: 'Credit',
+          stationId: kind === 'foreign' ? B.station : kind === 'missing' ? randomUUID() : '',
+          openingStationId: A.station,
+          openingDue,
+          openingAsOf: DATE,
+        });
+        expect(writes).toEqual([]);
+        expect(res.status).toBe(404);
+        expect(await counts()).toEqual(before);
+      },
+    );
+
+    it.each(
+      ['Credit', 'OMC'].flatMap((type) =>
+        [
+          { kind: 'Product', bad: { productId: B.product } },
+          { kind: 'Vehicle', bad: { vehicleId: B.vehicle } },
+        ].map((reference) => ({ type, ...reference })),
+      ),
+    )('$type refuses foreign $kind before absent-day DML', async ({ type, bad }) => {
+      await absentDay();
+      const before = await counts();
+      writes = [];
+      const result = await runInTransaction(db, (tx, events) => {
+        const uc =
+          type === 'Credit'
+            ? new RecordCreditSale(deps(tx, events))
+            : new RecordOmcCardSale(deps(tx, events));
+        return uc.execute(
+          {
+            stationId: A.station,
+            transactionDate: DATE,
+            customerId: A.customer,
+            amount: 118,
+            ...bad,
+          },
+          ctx(),
+        );
+      });
+      expect(writes).toEqual([]);
+      expect(result).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+      expect(await counts()).toEqual(before);
+    });
+
+    it.each(['foreign', 'other-Station', 'incompatible', 'sum'] as const)(
+      'Purchase rejects %s allocations before absent-day DML',
+      async (kind) => {
+        await absentDay();
+        await otherStation();
+        if (kind === 'incompatible') {
+          await db.insert(schema.products).values({
+            id: C.product,
+            organizationId: A.org,
+            name: 'Other local Product',
+            code: 'OTHER',
+            productType: 'LUBRICANT',
+            unit: 'PCS',
+          });
+          await db
+            .update(schema.tanks)
+            .set({ productId: C.product })
+            .where(eq(schema.tanks.id, A.tank));
+        }
+        const before = await counts();
+        writes = [];
+        const result = await runInTransaction(db, (tx, events) =>
+          new RecordPurchase(deps(tx, events)).execute(
+            {
+              stationId: A.station,
+              supplierId: A.supplier,
+              transactionDate: DATE,
+              lines: [
+                {
+                  ...line(),
+                  tankAllocations: [
+                    {
+                      tankId:
+                        kind === 'foreign' ? B.tank : kind === 'other-Station' ? C.tank : A.tank,
+                      quantity: kind === 'sum' ? 2 : 1,
+                    },
+                  ],
+                },
+              ],
+            },
+            ctx(),
+          ),
+        );
+        expect(writes).toEqual([]);
+        expect(result).toMatchObject({
+          success: false,
+          error: {
+            code: kind === 'sum' ? 'INVARIANT_VIOLATION' : 'NOT_FOUND',
+          },
+        });
+        expect(await counts()).toEqual(before);
+      },
+    );
+
+    it('Purchase preserves compatible Product Tank allocations', async () => {
+      const result = await runInTransaction(db, (tx, events) =>
+        new RecordPurchase(deps(tx, events)).execute(
+          {
+            stationId: A.station,
+            supplierId: A.supplier,
+            transactionDate: DATE,
+            lines: [{ ...line(), tankAllocations: [{ tankId: A.tank, quantity: 1 }] }],
+          },
+          ctx(),
+        ),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error('compatible allocation refused');
+      expect(result.data.items[0].tankAllocations).toEqual([{ tankId: A.tank, quantity: 1 }]);
+      expect(result.data.movements).toMatchObject([
+        { tankId: A.tank, productId: A.product, quantity: '1' },
+      ]);
+    });
+
+    it.each(['new', 'deduplicated'] as const)(
+      'save-as-Customer checks Vehicle membership before %s buyer DML',
+      async (kind) => {
+        if (kind === 'deduplicated')
+          await db
+            .update(schema.customers)
+            .set({ name: 'Walk-in' })
+            .where(eq(schema.customers.id, A.customer));
+        const otherCustomer = randomUUID();
+        await db.insert(schema.customers).values({
+          id: otherCustomer,
+          organizationId: A.org,
+          name: 'Different local buyer',
+          customerType: 'Regular',
+        });
+        await db
+          .update(schema.customerVehicles)
+          .set({ customerId: otherCustomer })
+          .where(eq(schema.customerVehicles.id, A.vehicle));
+        const before = await counts();
+        writes = [];
+        const res = await post('/transactions/sales', {
+          stationId: A.station,
+          shiftId: SHIFT,
+          paymentMethod: 'Cash',
+          vehicleId: A.vehicle,
+          lines: [line()],
+          buyer: { name: 'Walk-in' },
+          saveAsCustomer: true,
+        });
+        expect(writes).toEqual([]);
+        expect(res.status).toBe(404);
+        expect(await counts()).toEqual(before);
+      },
+    );
+
+    it.each(['Organization', 'Station'] as const)(
+      'Financial Account statement rejects a foreign %s source quantity and notes in SQL',
+      async (kind) => {
+        const otherDay = randomUUID();
+        const otherSource = randomUUID();
+        if (kind === 'Station') await otherStation();
+        await db.insert(schema.businessDays).values({
+          id: otherDay,
+          organizationId: kind === 'Station' ? A.org : B.org,
+          stationId: kind === 'Station' ? C.station : B.station,
+          businessDate: DATE,
+          status: 'OPEN',
+          openedBy: kind === 'Station' ? A.user : B.user,
+        });
+        await db.insert(schema.customerTransactions).values({
+          id: otherSource,
+          businessDayId: otherDay,
+          transactionType: 'OMC Sale',
+          referenceType: 'OMC_CARD_SALE',
+          amount: '118',
+          quantity: '987.654',
+          notes: SECRET,
+        });
+        await db.insert(schema.ledgerEntries).values({
+          organizationId: A.org,
+          stationId: A.station,
+          accountId: A.account,
+          direction: 'in',
+          amount: '118',
+          entryDate: DATE,
+          sourceType: 'SALE_OMC',
+          sourceId: otherSource,
+        });
+        const result = await new DrizzleFinancialAccountReader(db).accountLedger(
+          A.org,
+          A.account,
+          DATE,
+          DATE,
+        );
+        expect(result?.entries).toMatchObject([{ omcQuantity: null, omcNotes: null }]);
+        expect(JSON.stringify(result)).not.toContain(SECRET);
+      },
+    );
+
+    it('invoice Customer and Station reads constrain Organization in SQL', async () => {
+      await seedSale(A.product, A.customer);
+      queries = [];
+      const res = await post(`/transactions/sales/${SALE}/invoice`, {});
+      expect(res.status).toBe(200);
+      for (const table of ['customers', 'stations']) {
+        // Exclude the write-policy usage COUNT; inspect the actual reference read.
+        const reads = queries.filter(
+          ({ query }) => query.includes(`from "${table}"`) && !query.includes('count(*)'),
+        );
+        expect(reads).toHaveLength(1);
+        for (const read of reads) {
+          expect(read.query).toContain(`"${table}"."organization_id" =`);
+          expect(read.params).toContain(A.org);
+        }
+      }
+    });
+
+    it.each(
+      ['range', 'opening'].flatMap((kind) =>
+        ['Organization', 'Station'].map((boundary) => ({ kind, boundary })),
+      ),
+    )(
+      'Financial Account $kind excludes foreign $boundary ledger rows referencing a local Account',
+      async ({ kind, boundary }) => {
+        if (boundary === 'Station') await otherStation();
+        await db.insert(schema.ledgerEntries).values({
+          organizationId: boundary === 'Station' ? A.org : B.org,
+          stationId: boundary === 'Station' ? C.station : B.station,
+          accountId: A.account,
+          direction: 'in',
+          amount: '118',
+          entryDate: DATE,
+          sourceType: 'EXPENSE',
+          sourceId: randomUUID(),
+          notes: SECRET,
+        });
+        const result = await new DrizzleFinancialAccountReader(db).accountLedger(
+          A.org,
+          A.account,
+          kind === 'opening' ? '2026-10-10' : DATE,
+          '2026-10-10',
+        );
+        expect(result?.entries).toEqual([]);
+        expect(result?.periodOpeningBalance).toBe('0');
+      },
+    );
+
+    it('Financial Account does not enrich non-OMC rows from a Customer transaction', async () => {
+      await db.insert(schema.customerTransactions).values({
+        id: CREDIT,
+        businessDayId: DAY,
+        transactionType: 'OMC Sale',
+        referenceType: 'OMC_CARD_SALE',
+        amount: '118',
+        quantity: '2',
+        notes: 'Local note',
+      });
+      await db.insert(schema.ledgerEntries).values({
+        organizationId: A.org,
+        stationId: A.station,
+        accountId: A.account,
+        direction: 'in',
+        amount: '118',
+        entryDate: DATE,
+        sourceType: 'EXPENSE',
+        sourceId: CREDIT,
+      });
+      const result = await new DrizzleFinancialAccountReader(db).accountLedger(
+        A.org,
+        A.account,
+        DATE,
+        DATE,
+      );
+      expect(result?.entries).toMatchObject([{ omcQuantity: null, omcNotes: null }]);
+    });
   });
 });

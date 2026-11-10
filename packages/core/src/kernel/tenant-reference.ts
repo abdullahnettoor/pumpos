@@ -3,6 +3,10 @@ import { err, ok, type Result } from './result.js';
 
 /** Request-supplied foreign keys must resolve inside the acting Organization. */
 export type TenantReferenceKind =
+  | 'Station'
+  | 'Shift Template'
+  | 'Payment Terminal'
+  | 'Nozzle'
   | 'Product'
   | 'Tank'
   | 'Vehicle'
@@ -16,8 +20,15 @@ export interface TenantReferenceReader {
     organizationId: string,
     kind: TenantReferenceKind,
     id: string,
-    scope?: { stationId?: string; customerId?: string | null; productId?: string },
+    scope?: TenantReferenceScope,
   ): Promise<boolean>;
+}
+
+export interface TenantReferenceScope {
+  stationId?: string;
+  customerId?: string | null;
+  productId?: string;
+  tankId?: string | null;
 }
 
 export async function requireTenantReference(
@@ -25,9 +36,9 @@ export async function requireTenantReference(
   organizationId: string,
   kind: TenantReferenceKind,
   id: string | null | undefined,
-  scope?: { stationId?: string; customerId?: string | null; productId?: string },
+  scope?: TenantReferenceScope,
 ): Promise<Result<void>> {
-  if (id && !(await reader.exists(organizationId, kind, id, scope)))
+  if (id != null && (id.length === 0 || !(await reader.exists(organizationId, kind, id, scope))))
     return err(notFoundError(kind, id));
   return ok(undefined);
 }

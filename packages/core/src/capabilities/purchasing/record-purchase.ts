@@ -8,6 +8,7 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../kernel/index.js';
 import type {
   DocumentNumberGenerator,
@@ -16,12 +17,12 @@ import type {
   ExecutionContext,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import { resolveFinancialAnchor, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
-import type { StationRepository } from '../station-setup/stations/index.js';
 import { computeLineTax, isInterState } from '../finance/tax/index.js';
 import type {
   Purchase,
@@ -99,15 +100,24 @@ const schema = z
   );
 
 export interface RecordPurchaseDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   purchases: PurchaseRepository;
   purchaseItems: PurchaseItemRepository;
   stock: StockMovementRepository;
   supplierTxns: SupplierTransactionRepository;
   suppliers: SupplierRepository;
   products: ProductRepository;
-  stations: StationRepository;
+  stationLegal: PurchaseStationLegalReader;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
+}
+
+/** Purpose-specific, scoped read; independent of the Station setup repository. */
+export interface PurchaseStationLegalReader {
+  findStateCode(
+    organizationId: string,
+    stationId: string,
+  ): Promise<{ stateCode: string | null } | null>;
 }
 
 export interface RecordPurchaseResult {
@@ -170,6 +180,42 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
     if (!requestedStationId) return err(validationError('stationId is required'));
+    const station = await this.deps.stationLegal.findStateCode(
+      ctx.organizationId,
+      requestedStationId,
+    );
+    if (!station || (ctx.stationId && ctx.stationId !== requestedStationId))
+      return err(notFoundError('Station', requestedStationId));
+
+    // Validate every retained allocation (and its sum) BEFORE resolving a day:
+    // the anchor can write a lazily opened Business Day, even on a later refusal.
+    const lineAllocations = rawLines.map((line) =>
+      (fuelPurchase ? [] : (line.tankAllocations ?? []))
+        .map((a) => ({ tankId: a.tankId, quantity: Number(a.quantity) }))
+        .filter((a) => a.quantity > 0),
+    );
+    for (const [i, allocations] of lineAllocations.entries()) {
+      const line = rawLines[i];
+      for (const allocation of allocations) {
+        const tank = await requireTenantReference(
+          this.deps.references,
+          ctx.organizationId,
+          'Tank',
+          allocation.tankId,
+          { stationId: requestedStationId, productId: line.productId },
+        );
+        if (!tank.success) return tank;
+      }
+      const allocatedTotal = allocations.reduce((sum, a) => sum + a.quantity, 0);
+      if (allocations.length > 0 && Math.abs(allocatedTotal - Number(line.quantity)) > 0.001)
+        return err(
+          invariantViolation('Tank allocations must sum to the line quantity', {
+            productId: line.productId,
+            quantity: Number(line.quantity),
+            allocatedTotal,
+          }),
+        );
+    }
     // Purchases never carry a Shift (ADR 0005, #308): fuel is an Office Record
     // on the Entry Date, products resolve the business day by station + date.
     let businessDayId: string | null = null;
@@ -200,12 +246,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = supplier.metadata?.stateCode as string | undefined;
-    let buyerStateCode: string | undefined;
-    if (stationId) {
-      const station = await this.deps.stations.findById(stationId);
-      const legal = (station?.settings as any)?.legal;
-      buyerStateCode = legal?.stateCode ?? undefined;
-    }
+    const buyerStateCode = station.stateCode ?? undefined;
     const interState = isInterState({ supplierStateCode, buyerStateCode });
 
     const now = ctx.clock.now().toISOString();
@@ -222,10 +263,6 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     for (const [lineIndex, line] of rawLines.entries()) {
       const product = lineProducts[lineIndex]!;
-      // Tanks hold fuel only, and fuel stock enters through Decantation (ADR 0007).
-      // Do not retain arbitrary Tank UUIDs on a non-fuel purchase.
-      if (!fuelPurchase && line.tankAllocations?.length)
-        return err(validationError('Product Purchases cannot allocate stock to Tanks'));
       productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);
@@ -270,20 +307,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
               total: taxableAmount,
             };
 
-      // Fuel lines: validate tank allocations sum to the line quantity.
-      const allocations = (fuelPurchase ? [] : (line.tankAllocations ?? []))
-        .map((a) => ({ tankId: a.tankId, quantity: Number(a.quantity) }))
-        .filter((a) => a.quantity > 0);
-      const allocatedTotal = allocations.reduce((acc, a) => acc + a.quantity, 0);
-      if (allocations.length > 0 && Math.abs(allocatedTotal - quantity) > 0.001) {
-        return err(
-          invariantViolation('Tank allocations must sum to the line quantity', {
-            productId: line.productId,
-            quantity,
-            allocatedTotal,
-          }),
-        );
-      }
+      const allocations = lineAllocations[lineIndex];
 
       items.push({
         id: ctx.ids.newId(),

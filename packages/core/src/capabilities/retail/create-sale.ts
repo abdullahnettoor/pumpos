@@ -71,7 +71,7 @@ const schema = z.object({
   shiftId: z.string().min(1, 'shiftId is required'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']),
   lines: z.array(lineSchema).min(1, 'at least one line is required'),
-  customerId: z.string().nullish(),
+  customerId: z.string().min(1).nullish(),
   vehicleId: z.string().nullish(),
   attendantId: z.string().nullish(),
   buyerDetails: z

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { DrizzleTenantReferenceReader } from '../infra/repositories/tenant-reference-reader.js';
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
@@ -1538,6 +1539,7 @@ shiftsRouter.post(
     const result = await runInTransaction(db, async (tx, events) => {
       await lockStationInventory(tx, user.organizationId, body?.stationId);
       return new OpenShift({
+        references: new DrizzleTenantReferenceReader(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         nozzles: new DrizzleNozzleRepository(tx),

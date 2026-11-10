@@ -15,6 +15,8 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
+  type TenantReferenceReader,
   type EventPublisher,
   type ExecutionContext,
   type Result,
@@ -59,6 +61,7 @@ export const recordDensityReadingSchema = z
 export type RecordDensityReadingCommand = z.infer<typeof recordDensityReadingSchema>;
 
 export interface RecordDensityReadingDeps {
+  references: TenantReferenceReader;
   densityReadings: DensityReadingRepository;
   events: EventPublisher;
   ids?: { generate(): string };
@@ -92,6 +95,22 @@ export class RecordDensityReading implements UseCase<RecordDensityReadingCommand
     const cmd = p.data;
     if (ctx.stationId && ctx.stationId !== cmd.stationId) {
       return err(notFoundError('Station', cmd.stationId));
+    }
+
+    for (const [kind, id] of [
+      ['Station', cmd.stationId],
+      ['Product', cmd.productId],
+      ['Tank', cmd.tankId],
+      ['Nozzle', cmd.nozzleId],
+    ] as const) {
+      const check = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        kind,
+        id,
+        { stationId: cmd.stationId, productId: cmd.productId, tankId: cmd.tankId },
+      );
+      if (!check.success) return check;
     }
 
     const recordedAtIso = cmd.recordedAt ?? ctx.clock.now().toISOString();
