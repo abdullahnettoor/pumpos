@@ -4,7 +4,9 @@ import { transactionsRouter } from './transactions.js';
 
 /**
  * GET /transactions/purchases is an explicit contract (#312): exactly these
- * fields, no `shiftId` (purchases are business-day anchored, never shift).
+ * fields, no `shiftId`. A purchase never belongs to a shift: a Product
+ * Purchase is anchored to its Business Day, a Fuel Purchase (an Office Record)
+ * to its Entry Date.
  */
 const EXPECTED_KEYS = [
   'amount',
