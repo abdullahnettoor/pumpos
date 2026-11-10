@@ -1811,7 +1811,23 @@ transactionsRouter.get('/purchases', async (c) => {
     );
   const rows = await db
     .select({
-      purchase: schema.purchases,
+      id: schema.purchases.id,
+      documentNumber: schema.purchases.documentNumber,
+      businessDayId: schema.purchases.businessDayId,
+      organizationId: schema.purchases.organizationId,
+      stationId: schema.purchases.stationId,
+      entryDate: schema.purchases.entryDate,
+      supplierId: schema.purchases.supplierId,
+      invoiceNumber: schema.purchases.invoiceNumber,
+      amount: schema.purchases.amount,
+      taxableAmount: schema.purchases.taxableAmount,
+      cgstTotal: schema.purchases.cgstTotal,
+      sgstTotal: schema.purchases.sgstTotal,
+      igstTotal: schema.purchases.igstTotal,
+      vatTotal: schema.purchases.vatTotal,
+      cessTotal: schema.purchases.cessTotal,
+      notes: schema.purchases.notes,
+      createdAt: schema.purchases.createdAt,
       businessDate: schema.businessDays.businessDate,
       awaitingDecantation: sql<boolean>`(
         ${schema.purchases.businessDayId} IS NULL
@@ -1850,11 +1866,9 @@ transactionsRouter.get('/purchases', async (c) => {
     data: rows.map((r) =>
       redactPurchaseCosts(
         {
-          ...r.purchase,
-          businessDate: r.businessDate,
+          ...r,
           awaitingDecantation: Boolean(r.awaitingDecantation),
           supplierName: r.supplierName ?? 'Unknown Supplier',
-          itemsSummary: r.itemsSummary,
           itemCount: Number(r.itemCount || 0),
         },
         user,
