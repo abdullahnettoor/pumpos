@@ -290,25 +290,6 @@ export const shiftExpenseSchema = z.object({
   description: z.string().max(255).optional().nullable(),
 });
 
-export const shiftPurchaseSchema = z.object({
-  shiftId: z.string().uuid('Invalid shift ID'),
-  supplierId: z.string().uuid('Invalid supplier ID'),
-  productId: z.string().uuid('Invalid product ID'),
-  quantity: z.number().positive('Quantity must be positive'),
-  unitPrice: z.number().positive('Price must be positive'),
-  invoiceNumber: z.string().max(100).optional().nullable(),
-  notes: z.string().max(500).optional().nullable(),
-  tankAllocations: z
-    .array(
-      z.object({
-        tankId: z.string().uuid('Invalid tank ID'),
-        quantity: z.number().nonnegative('Allocation quantity must be non-negative'),
-      }),
-    )
-    .optional()
-    .nullable(),
-});
-
 export const shiftCollectionSchema = z.object({
   shiftId: z.string().uuid('Invalid shift ID'),
   customerId: z.string().uuid('Invalid customer ID').optional().nullable(),

@@ -134,6 +134,13 @@
       "when": 1793585161892,
       "tag": "0018_head_nature_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794267298340,
+      "tag": "0019_lowly_true_believers",
+      "breakpoints": true
     }
   ]
 }
