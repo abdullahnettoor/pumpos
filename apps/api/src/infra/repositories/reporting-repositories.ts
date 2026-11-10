@@ -144,7 +144,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         amount: schema.customerTransactions.amount,
       })
       .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customers.id, schema.customerTransactions.customerId),
+          sql`${schema.customers.organizationId} = ${organizationId}`,
+        ),
+      )
       .where(
         and(
           eq(schema.customerTransactions.businessDayId, businessDayId),
@@ -178,8 +184,20 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         reason: schema.stockVariances.reason,
       })
       .from(schema.stockVariances)
-      .leftJoin(schema.tanks, eq(schema.tanks.id, schema.stockVariances.tankId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.stockVariances.productId))
+      .leftJoin(
+        schema.tanks,
+        and(
+          eq(schema.tanks.id, schema.stockVariances.tankId),
+          sql`${schema.tanks.organizationId} = ${organizationId}`,
+        ),
+      )
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.stockVariances.productId),
+          sql`${schema.products.organizationId} = ${organizationId}`,
+        ),
+      )
       .where(eq(schema.stockVariances.businessDayId, businessDayId));
 
     // Each dipped tank's litres over the day, from stock_movements (#395).

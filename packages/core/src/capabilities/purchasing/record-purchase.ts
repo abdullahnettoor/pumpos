@@ -222,6 +222,10 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     for (const [lineIndex, line] of rawLines.entries()) {
       const product = lineProducts[lineIndex]!;
+      // Tanks hold fuel only, and fuel stock enters through Decantation (ADR 0007).
+      // Do not retain arbitrary Tank UUIDs on a non-fuel purchase.
+      if (!fuelPurchase && line.tankAllocations?.length)
+        return err(validationError('Product Purchases cannot allocate stock to Tanks'));
       productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);

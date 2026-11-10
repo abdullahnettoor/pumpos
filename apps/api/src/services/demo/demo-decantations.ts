@@ -1,3 +1,4 @@
+import { DrizzleTenantReferenceReader } from '../../infra/repositories/tenant-reference-reader.js';
 import {
   RecordDecantation,
   RecordPurchase,
@@ -217,6 +218,7 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
   const routineDip = async (tankId: string, actualQuantity: number, at: Date, reason: string) =>
     must(
       await new RecordStockCount({
+        references: new DrizzleTenantReferenceReader(tx),
         movements: stockMovements,
         variances: new DrizzleStockVarianceRepository(tx),
         tanks: new DrizzleTankRepository(tx),

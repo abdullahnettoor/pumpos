@@ -739,7 +739,13 @@ export class DrizzleDensityReadingRepository implements DensityReadingRepository
         code: schema.products.code,
       })
       .from(schema.tanks)
-      .innerJoin(schema.products, eq(schema.tanks.productId, schema.products.id))
+      .innerJoin(
+        schema.products,
+        and(
+          eq(schema.tanks.productId, schema.products.id),
+          eq(schema.products.organizationId, organizationId),
+        ),
+      )
       .where(
         and(
           eq(schema.tanks.organizationId, organizationId),
@@ -1003,7 +1009,7 @@ export class DrizzleDecantationLinkRepository implements DecantationLinkReposito
           WHERE dp.purchase_id = p.id AND dp.organization_id = p.organization_id) AS linked_count
       FROM purchases p
       JOIN purchase_items pi ON pi.purchase_id = p.id AND pi.product_id = ${productId}
-      LEFT JOIN suppliers s ON s.id = p.supplier_id
+      LEFT JOIN suppliers s ON s.id = p.supplier_id AND s.organization_id = ${organizationId}
       WHERE p.organization_id = ${organizationId} AND p.station_id = ${stationId}
         AND p.business_day_id IS NULL
         AND NOT EXISTS (

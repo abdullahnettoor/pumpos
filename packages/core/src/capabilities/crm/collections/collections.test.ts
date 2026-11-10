@@ -61,6 +61,7 @@ function run(input: Record<string, unknown>, terminals?: TerminalLookup, now?: s
   const collections = new CollRepo();
   const { store, events } = eventBus();
   const result = new RecordCollection({
+    references: { exists: async () => true },
     collections,
     customers: new CustomerRepo([customer()]),
     accounts: new AccountRepo(),

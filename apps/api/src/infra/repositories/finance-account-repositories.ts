@@ -357,12 +357,27 @@ export class DrizzleFinancialAccountReader {
         schema.customerTransactions,
         eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId),
       )
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customers.id, schema.customerTransactions.customerId),
+          eq(schema.customers.organizationId, organizationId),
+        ),
+      )
       .leftJoin(
         schema.customerVehicles,
-        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+        and(
+          eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+          eq(schema.customerVehicles.organizationId, organizationId),
+        ),
       )
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.customerTransactions.productId),
+          eq(schema.products.organizationId, organizationId),
+        ),
+      )
       .where(and(...rangeConds))
       .orderBy(asc(schema.ledgerEntries.entryDate), asc(schema.ledgerEntries.createdAt));
 

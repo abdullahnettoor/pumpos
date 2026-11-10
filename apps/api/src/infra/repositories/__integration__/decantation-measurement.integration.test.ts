@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { DrizzleTenantReferenceReader } from '../tenant-reference-reader.js';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vite-plus/test';
 import postgres from 'postgres';
@@ -185,6 +186,7 @@ describe.skipIf(!CONNECTION)('Decantation measurement against real Postgres (#46
   const dip = (tankId: string, actualQuantity: number, c = ctx(ORG, STATION)) =>
     runInTransaction(db, (tx, events) =>
       new RecordStockCount({
+        references: new DrizzleTenantReferenceReader(tx),
         movements: new DrizzleStockMovementRepository(tx),
         variances: new DrizzleStockVarianceRepository(tx),
         tanks: new DrizzleTankRepository(tx),

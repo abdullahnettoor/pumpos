@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { DrizzleTenantReferenceReader } from '../infra/repositories/tenant-reference-reader.js';
 import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
@@ -823,7 +824,13 @@ transactionsRouter.get('/customers/:id/vehicles', async (c) => {
       defaultProductCode: schema.products.code,
     })
     .from(schema.customerVehicles)
-    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.customerVehicles.defaultProductId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.customerVehicles.customerId, customerId),
@@ -859,8 +866,20 @@ transactionsRouter.get('/vehicles', async (c) => {
       updatedAt: schema.customerVehicles.updatedAt,
     })
     .from(schema.customerVehicles)
-    .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
-    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .innerJoin(
+      schema.customers,
+      and(
+        eq(schema.customerVehicles.customerId, schema.customers.id),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.customerVehicles.defaultProductId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.customerVehicles.organizationId, user.organizationId),
@@ -885,6 +904,7 @@ transactionsRouter.post(
     const body = await c.req.json().catch(() => ({}));
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new AddVehicle({
+        references: new DrizzleTenantReferenceReader(tx),
         repository: new DrizzleVehicleRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         events,
@@ -908,6 +928,7 @@ transactionsRouter.put(
     const body = await c.req.json().catch(() => ({}));
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new UpdateVehicle({
+        references: new DrizzleTenantReferenceReader(tx),
         repository: new DrizzleVehicleRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         events,
@@ -930,6 +951,7 @@ transactionsRouter.delete(
     }
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new UpdateVehicle({
+        references: new DrizzleTenantReferenceReader(tx),
         repository: new DrizzleVehicleRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         events,
@@ -961,8 +983,20 @@ transactionsRouter.get('/vehicles/search', async (c) => {
       defaultProductUnit: schema.products.unit,
     })
     .from(schema.customerVehicles)
-    .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
-    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .innerJoin(
+      schema.customers,
+      and(
+        eq(schema.customerVehicles.customerId, schema.customers.id),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.customerVehicles.defaultProductId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.customerVehicles.organizationId, user.organizationId),
@@ -1142,6 +1176,7 @@ transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income')
   );
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const r = await new RecordIncome({
+      references: new DrizzleTenantReferenceReader(tx),
       income: new DrizzleIncomeRepository(tx),
       accounts: new DrizzleFinancialAccountRepository(tx),
       terminals: new DrizzlePaymentTerminalLookup(tx),
@@ -1310,6 +1345,7 @@ transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expens
   if (!office.ok) return office.response;
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const r = await new RecordExpense({
+      references: new DrizzleTenantReferenceReader(tx),
       expenses: new DrizzleExpenseRepository(tx),
       accounts: new DrizzleFinancialAccountRepository(tx),
       events,
@@ -1394,6 +1430,7 @@ transactionsRouter.post(
     if (body?.paymentMethod === 'Credit') {
       const result = await runInTransaction(c.var.db, async (tx, events) => {
         const r = await new RecordCreditSale({
+          references: new DrizzleTenantReferenceReader(tx),
           ledger: new DrizzleCustomerLedgerRepository(tx),
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
@@ -1412,6 +1449,7 @@ transactionsRouter.post(
     if (body?.paymentMethod === 'OMC') {
       const result = await runInTransaction(c.var.db, async (tx, events) => {
         const r = await new RecordOmcCardSale({
+          references: new DrizzleTenantReferenceReader(tx),
           ledger: new DrizzleCustomerLedgerRepository(tx),
           customers: new DrizzleCustomerRepository(tx),
           shifts: new DrizzleShiftRepository(tx),
@@ -1433,6 +1471,7 @@ transactionsRouter.post(
     if (!office.ok) return office.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new RecordCollection({
+        references: new DrizzleTenantReferenceReader(tx),
         collections: new DrizzleCollectionRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         accounts: new DrizzleFinancialAccountRepository(tx),
@@ -1680,6 +1719,20 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       stateCode: string | null;
     } | null = null;
 
+    const saleUseCase = new CreateSale({
+      references: new DrizzleTenantReferenceReader(tx),
+      sales: new DrizzleSaleRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
+      products: new DrizzleProductRepository(tx),
+      docNumbers,
+      events,
+    });
+
     // Ad-hoc walk-in buyer (no saved customer selected). Either save/dedup them
     // into the customer registry (link customerId) or stash bill-to on the sale.
     if (!customerId && rawBuyer && typeof rawBuyer.name === 'string' && rawBuyer.name.trim()) {
@@ -1689,6 +1742,12 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       const stateCode =
         (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
       if (saveAsCustomer) {
+        const references = await saleUseCase.validateReferences(
+          body,
+          buildContext(user, { stationId: shiftStation.stationId }),
+          shiftStation.stationId!,
+        );
+        if (!references.success) return references;
         const custRepo = new DrizzleCustomerRepository(tx);
         const digits = (v: string | null) => (v ? v.replace(/\D/g, '') : '');
         const existing = (await custRepo.listByOrganization(user.organizationId, false)).find(
@@ -1720,18 +1779,7 @@ transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), 
       }
     }
 
-    return new CreateSale({
-      sales: new DrizzleSaleRepository(tx),
-      stock: new DrizzleStockMovementRepository(tx),
-      ledger: new DrizzleCustomerLedgerRepository(tx),
-      customers: new DrizzleCustomerRepository(tx),
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
-      shiftWriteGate: new DrizzleShiftWriteGateReader(tx),
-      products: new DrizzleProductRepository(tx),
-      docNumbers,
-      events,
-    }).execute(
+    return saleUseCase.execute(
       { ...body, customerId, buyerDetails, supplierStateCode },
       buildContext(user, {
         // The resolved station, so the core's own station clause engages
@@ -1833,7 +1881,7 @@ transactionsRouter.get('/purchases', async (c) => {
         ${schema.purchases.businessDayId} IS NULL
         AND EXISTS (
           SELECT 1 FROM purchase_items pi
-          JOIN products pr ON pr.id = pi.product_id
+          JOIN products pr ON pr.id = pi.product_id AND pr.organization_id = ${user.organizationId}
           WHERE pi.purchase_id = ${schema.purchases.id} AND pr.product_type = 'FUEL'
         )
         AND NOT EXISTS (SELECT 1 FROM decantation_purchases dp JOIN decantations dd ON dd.id = dp.decantation_id WHERE dp.purchase_id = ${schema.purchases.id} AND dd.status <> 'DISCARDED')
@@ -1844,7 +1892,7 @@ transactionsRouter.get('/purchases', async (c) => {
       itemsSummary: sql<string | null>`(
         SELECT string_agg(DISTINCT pr.name, ', ')
         FROM purchase_items pi
-        LEFT JOIN products pr ON pr.id = pi.product_id
+        LEFT JOIN products pr ON pr.id = pi.product_id AND pr.organization_id = ${user.organizationId}
         WHERE pi.purchase_id = ${schema.purchases.id}
       )`,
       itemCount: sql<number>`(
@@ -1853,7 +1901,13 @@ transactionsRouter.get('/purchases', async (c) => {
     })
     .from(schema.purchases)
     .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
+    .leftJoin(
+      schema.suppliers,
+      and(
+        eq(schema.purchases.supplierId, schema.suppliers.id),
+        eq(schema.suppliers.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.purchases.organizationId, user.organizationId),
@@ -1914,7 +1968,13 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
     .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.purchaseItems.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.purchaseItems.purchaseId, purchaseId),
@@ -1990,8 +2050,20 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
     .from(schema.saleItems)
     .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
     .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
-    .leftJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.sales.customerId, schema.customers.id),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.saleItems.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(and(...conds))
     .orderBy(desc(schema.businessDays.businessDate));
   const data = rows.map((r) => ({
@@ -2056,8 +2128,20 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
     .from(schema.purchaseItems)
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
     .leftJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
-    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .leftJoin(
+      schema.suppliers,
+      and(
+        eq(schema.purchases.supplierId, schema.suppliers.id),
+        eq(schema.suppliers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.purchaseItems.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(and(...conds))
     .orderBy(
       desc(sql`COALESCE(${schema.businessDays.businessDate}, ${schema.purchases.entryDate})`),
@@ -2128,7 +2212,13 @@ transactionsRouter.get('/supplier-payments', async (c) => {
       accountType: schema.financialAccounts.accountType,
     })
     .from(t)
-    .leftJoin(schema.suppliers, eq(schema.suppliers.id, t.supplierId))
+    .leftJoin(
+      schema.suppliers,
+      and(
+        eq(schema.suppliers.id, t.supplierId),
+        eq(schema.suppliers.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(schema.financialAccounts, eq(schema.financialAccounts.id, t.fundingAccountId))
     .where(
       and(
@@ -2156,7 +2246,13 @@ transactionsRouter.get('/collections', async (c) => {
       accountName: schema.financialAccounts.name,
     })
     .from(schema.collections)
-    .leftJoin(schema.customers, eq(schema.collections.customerId, schema.customers.id))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.collections.customerId, schema.customers.id),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(
       schema.financialAccounts,
       eq(schema.financialAccounts.id, schema.collections.fundingAccountId),
@@ -2201,11 +2297,26 @@ transactionsRouter.get('/credit-sales', async (c) => {
       schema.businessDays,
       eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
     )
-    .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
-    .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.customerTransactions.customerId, schema.customers.id),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.customerTransactions.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(
       schema.customerVehicles,
-      eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+      and(
+        eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+      ),
     )
     .where(
       and(
@@ -2277,7 +2388,13 @@ transactionsRouter.get('/money-movements', async (c) => {
         schema.financialAccounts,
         eq(schema.financialAccounts.id, schema.collections.fundingAccountId),
       )
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customers.id, schema.collections.customerId),
+          eq(schema.customers.organizationId, user.organizationId),
+        ),
+      )
       .where(and(...officeConds(schema.collections))),
     db
       .select({
@@ -2314,7 +2431,13 @@ transactionsRouter.get('/money-movements', async (c) => {
         schema.financialAccounts,
         eq(schema.financialAccounts.id, schema.supplierTransactions.fundingAccountId),
       )
-      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
+      .leftJoin(
+        schema.suppliers,
+        and(
+          eq(schema.suppliers.id, schema.supplierTransactions.supplierId),
+          eq(schema.suppliers.organizationId, user.organizationId),
+        ),
+      )
       .where(
         and(
           eq(schema.supplierTransactions.transactionType, 'Payment'),
@@ -2442,7 +2565,13 @@ transactionsRouter.post(
         organizationId: schema.businessDays.organizationId,
       })
       .from(schema.sales)
-      .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        and(
+          eq(schema.sales.businessDayId, schema.businessDays.id),
+          eq(schema.businessDays.organizationId, user.organizationId),
+        ),
+      )
       .where(eq(schema.sales.id, saleId))
       .limit(1);
     const sale = saleRows[0];
@@ -2475,13 +2604,22 @@ transactionsRouter.post(
         taxConfig: schema.products.taxConfig,
       })
       .from(schema.saleItems)
-      .innerJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.saleItems.productId),
+          eq(schema.products.organizationId, user.organizationId),
+        ),
+      )
       .where(eq(schema.saleItems.saleId, saleId));
-    if (items.length === 0) {
+    if (items.length === 0 || items.some((item) => item.name === null)) {
       return c.json(
         {
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Sale has no line items to invoice' },
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Sale has no line items or contains an unavailable Product',
+          },
         },
         400,
       );
@@ -2500,6 +2638,11 @@ transactionsRouter.post(
     };
     if (sale.customerId) {
       const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
+      if (!cust || cust.organizationId !== user.organizationId)
+        return c.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+          404,
+        );
       const md = (cust?.metadata as Record<string, any>) || {};
       buyer = {
         customerId: sale.customerId,
@@ -2518,6 +2661,7 @@ transactionsRouter.post(
       };
     }
     const station = await new DrizzleStationRepository(db).findById(sale.stationId);
+    if (!station || station.organizationId !== user.organizationId) return stationNotFound(c);
     const legal = (station?.settings as any)?.legal || {};
 
     const lines = items.map((it) => {
@@ -2527,7 +2671,7 @@ transactionsRouter.post(
       const inclusive = it.taxCategory === 'GST' ? tc.price_inclusive !== false : false;
       return {
         productId: it.productId,
-        name: it.name,
+        name: it.name!,
         hsnCode: tc.hsn_code ?? null,
         taxCategory: it.taxCategory as any,
         gstRate: tc.gst_rate ?? null,
@@ -2675,7 +2819,13 @@ transactionsRouter.get('/sales', async (c) => {
     })
     .from(schema.sales)
     .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.customers.id, schema.sales.customerId),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(schema.invoices, eq(schema.invoices.saleId, schema.sales.id))
     .where(
       and(
@@ -2747,6 +2897,7 @@ transactionsRouter.post(
 
     const result = await runInTransaction(db, (tx, events) =>
       new RecordMerchandiseHandover({
+        references: new DrizzleTenantReferenceReader(tx),
         sales: new DrizzleSaleRepository(tx),
         handovers: new DrizzleMerchandiseHandoverRepository(tx),
         stock: new DrizzleStockMovementRepository(tx),
@@ -2812,7 +2963,13 @@ transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
         lineTotal: schema.saleItems.lineTotal,
       })
       .from(schema.saleItems)
-      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.saleItems.productId),
+          eq(schema.products.organizationId, user.organizationId),
+        ),
+      )
       .where(inArray(schema.saleItems.saleId, saleIds));
     itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
       (acc[it.saleId] ||= []).push(it);
@@ -2850,7 +3007,13 @@ transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
     })
     .from(schema.sales)
     .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.customers.id, schema.sales.customerId),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
     .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
     .where(
       and(
@@ -2873,7 +3036,13 @@ transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
         lineTotal: schema.saleItems.lineTotal,
       })
       .from(schema.saleItems)
-      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.saleItems.productId),
+          eq(schema.products.organizationId, user.organizationId),
+        ),
+      )
       .where(inArray(schema.saleItems.saleId, saleIds));
     itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
       (acc[it.saleId] ||= []).push(it);
@@ -3003,11 +3172,26 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       vehicleNumber: schema.customerVehicles.registrationNumber,
     })
     .from(schema.customerTransactions)
-    .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-    .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+    .leftJoin(
+      schema.customers,
+      and(
+        eq(schema.customers.id, schema.customerTransactions.customerId),
+        eq(schema.customers.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.products.id, schema.customerTransactions.productId),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(
       schema.customerVehicles,
-      eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+      and(
+        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+      ),
     )
     .where(
       and(
@@ -3074,7 +3258,13 @@ transactionsRouter.get('/inventory/status', async (c) => {
       )`,
     })
     .from(schema.tanks)
-    .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.products.id, schema.tanks.productId),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
     .where(
       and(
@@ -3195,6 +3385,7 @@ transactionsRouter.post(
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       await lockStationInventory(tx, user.organizationId, body?.stationId);
       return new RecordStockCount({
+        references: new DrizzleTenantReferenceReader(tx),
         movements: new DrizzleStockMovementRepository(tx),
         variances: new DrizzleStockVarianceRepository(tx),
         tanks: new DrizzleTankRepository(tx),
@@ -3235,8 +3426,20 @@ transactionsRouter.get('/inventory/movements', async (c) => {
     })
     .from(schema.stockMovements)
     .innerJoin(schema.businessDays, eq(schema.stockMovements.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.tanks, eq(schema.stockMovements.tankId, schema.tanks.id))
-    .leftJoin(schema.products, eq(schema.stockMovements.productId, schema.products.id))
+    .leftJoin(
+      schema.tanks,
+      and(
+        eq(schema.stockMovements.tankId, schema.tanks.id),
+        eq(schema.tanks.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.stockMovements.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.businessDays.stationId, stationId),
@@ -3284,8 +3487,20 @@ transactionsRouter.get('/inventory/variances', async (c) => {
     })
     .from(schema.stockVariances)
     .innerJoin(schema.businessDays, eq(schema.stockVariances.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.tanks, eq(schema.stockVariances.tankId, schema.tanks.id))
-    .leftJoin(schema.products, eq(schema.stockVariances.productId, schema.products.id))
+    .leftJoin(
+      schema.tanks,
+      and(
+        eq(schema.stockVariances.tankId, schema.tanks.id),
+        eq(schema.tanks.organizationId, user.organizationId),
+      ),
+    )
+    .leftJoin(
+      schema.products,
+      and(
+        eq(schema.stockVariances.productId, schema.products.id),
+        eq(schema.products.organizationId, user.organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.businessDays.stationId, stationId),

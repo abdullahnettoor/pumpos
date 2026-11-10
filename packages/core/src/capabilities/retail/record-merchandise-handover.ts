@@ -8,6 +8,7 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../kernel/index.js';
 import type {
   EventPublisher,
@@ -15,6 +16,7 @@ import type {
   DocumentNumberGenerator,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../kernel/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
@@ -39,6 +41,7 @@ export interface RecordMerchandiseHandoverCommand {
 }
 
 export interface RecordMerchandiseHandoverDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   sales: SaleRepository;
   handovers: MerchandiseHandoverRepository;
   stock: StockMovementRepository;
@@ -87,6 +90,13 @@ export class RecordMerchandiseHandover implements UseCase<
         validationError('Invalid RecordMerchandiseHandover command', { issues: p.error.flatten() }),
       );
     const cmd = p.data;
+    const attendant = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Attendant',
+      cmd.attendantId,
+    );
+    if (!attendant.success) return attendant;
 
     const eligibility = await resolveShiftBusinessDayWrite(
       this.deps.shiftWriteGate,
@@ -100,10 +110,6 @@ export class RecordMerchandiseHandover implements UseCase<
       return err(
         invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
       );
-
-    // Replace any prior handover for this employee (pre-close edit).
-    const existingId = await this.deps.handovers.findHandoverSaleId(cmd.shiftId, cmd.attendantId);
-    if (existingId) await this.deps.handovers.deleteHandoverSale(existingId);
 
     const now = ctx.clock.now().toISOString();
     const saleId = ctx.ids.newId();
@@ -202,6 +208,9 @@ export class RecordMerchandiseHandover implements UseCase<
       updatedAt: now,
     };
 
+    // Validate every line before replacing the prior Handover Product Sale.
+    const existingId = await this.deps.handovers.findHandoverSaleId(cmd.shiftId, cmd.attendantId);
+    if (existingId) await this.deps.handovers.deleteHandoverSale(existingId);
     await this.deps.sales.save(sale, lines);
     await this.deps.stock.saveMany(movements);
 

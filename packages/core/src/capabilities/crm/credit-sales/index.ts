@@ -7,8 +7,15 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+  TenantReferenceReader,
+} from '../../../kernel/index.js';
 import {
   resolveFinancialAnchor,
   type ShiftRepository,
@@ -53,6 +60,7 @@ const schema = z.object({
 });
 
 export interface RecordCreditSaleDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   events: EventPublisher;
@@ -91,6 +99,22 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
     const { businessDayId, shiftId, stationId } = anchor.data;
+
+    for (const [kind, id] of [
+      ['Product', cmd.productId],
+      ['Vehicle', cmd.vehicleId],
+      ['Attendant', cmd.attendantId ?? ctx.actorId],
+      ['Dispenser', cmd.duId],
+    ] as const) {
+      const check = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        kind,
+        id,
+        { stationId, customerId: cmd.customerId },
+      );
+      if (!check.success) return check;
+    }
 
     const now = ctx.clock.now().toISOString();
     // Attendant attribution applies only to shift-anchored credit sales; a
@@ -249,6 +273,7 @@ const omcSchema = z.object({
 });
 
 export interface RecordOmcCardSaleDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   events: EventPublisher;
@@ -293,6 +318,21 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
 
     const now = ctx.clock.now().toISOString();
     const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
+    for (const [kind, id] of [
+      ['Product', cmd.productId],
+      ['Vehicle', cmd.vehicleId],
+      ['Attendant', attendantId],
+      ['Dispenser', shiftId ? cmd.duId : null],
+    ] as const) {
+      const check = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        kind,
+        id,
+        { stationId, customerId },
+      );
+      if (!check.success) return check;
+    }
     const entry: CustomerLedgerEntry = {
       id: ctx.ids.newId(),
       shiftId,

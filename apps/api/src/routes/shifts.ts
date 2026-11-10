@@ -580,8 +580,8 @@ shiftsRouter.get('/status', async (c) => {
           ) ORDER BY nr.created_at, nr.id)
           FROM nozzle_readings nr
           LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
-          LEFT JOIN products prod ON prod.id = nz.product_id
-          LEFT JOIN tanks tnk ON tnk.id = nz.tank_id
+          LEFT JOIN products prod ON prod.id = nz.product_id AND prod.organization_id = ${user.organizationId}
+          LEFT JOIN tanks tnk ON tnk.id = nz.tank_id AND tnk.organization_id = ${user.organizationId}
           LEFT JOIN dispenser_units du ON du.id = nz.du_id
           WHERE nr.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS nozzle_readings,
         COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -605,8 +605,8 @@ shiftsRouter.get('/status', async (c) => {
             'productCode', prod.code
           ) ORDER BY ct.created_at, ct.id)
           FROM customer_transactions ct
-          LEFT JOIN customers cust ON cust.id = ct.customer_id
-          LEFT JOIN products prod ON prod.id = ct.product_id
+          LEFT JOIN customers cust ON cust.id = ct.customer_id AND cust.organization_id = ${user.organizationId}
+          LEFT JOIN products prod ON prod.id = ct.product_id AND prod.organization_id = ${user.organizationId}
           WHERE ct.shift_id = ${dbActiveShift.id}
             AND ct.transaction_type = 'Credit Sale'
             AND ct.reference_type = 'CREDIT_SALE'), '[]'::jsonb) AS credit_lines,
@@ -618,8 +618,8 @@ shiftsRouter.get('/status', async (c) => {
             'productCode', prod.code
           ) ORDER BY ct.created_at, ct.id)
           FROM customer_transactions ct
-          LEFT JOIN customers cust ON cust.id = ct.customer_id
-          LEFT JOIN products prod ON prod.id = ct.product_id
+          LEFT JOIN customers cust ON cust.id = ct.customer_id AND cust.organization_id = ${user.organizationId}
+          LEFT JOIN products prod ON prod.id = ct.product_id AND prod.organization_id = ${user.organizationId}
           WHERE ct.shift_id = ${dbActiveShift.id}
             AND ct.transaction_type = 'OMC Sale'
             AND ct.reference_type = 'OMC_CARD_SALE'), '[]'::jsonb) AS omc_lines,
@@ -673,7 +673,7 @@ shiftsRouter.get('/status', async (c) => {
           ) ORDER BY s.created_at DESC)
           FROM sales s
           LEFT JOIN users u ON u.id = s.attendant_id
-          LEFT JOIN customers c2 ON c2.id = s.customer_id
+          LEFT JOIN customers c2 ON c2.id = s.customer_id AND c2.organization_id = ${user.organizationId}
           WHERE s.shift_id = ${dbActiveShift.id}
             AND s.sale_type <> 'Fuel'
             AND s.capture_mechanism <> 'MERCH_HANDOVER'), '[]'::jsonb) AS merch_sales,
@@ -689,7 +689,7 @@ shiftsRouter.get('/status', async (c) => {
           JOIN sales s ON s.id = si.sale_id
             AND s.shift_id = ${dbActiveShift.id}
             AND s.capture_mechanism = 'MERCH_HANDOVER'
-          LEFT JOIN products p ON p.id = si.product_id), '[]'::jsonb) AS merch_items,
+          LEFT JOIN products p ON p.id = si.product_id AND p.organization_id = ${user.organizationId}), '[]'::jsonb) AS merch_items,
         ${reconTotalsJson(dbActiveShift.id)} AS recon
     `)) as unknown as [Record<string, any>];
 
@@ -1008,8 +1008,8 @@ shiftsRouter.get('/status', async (c) => {
         ))
         FROM nozzles nz
         JOIN dispenser_units nzdu ON nzdu.id = nz.du_id
-        LEFT JOIN products prod ON prod.id = nz.product_id
-        LEFT JOIN tanks tnk ON tnk.id = nz.tank_id
+        LEFT JOIN products prod ON prod.id = nz.product_id AND prod.organization_id = ${user.organizationId}
+        LEFT JOIN tanks tnk ON tnk.id = nz.tank_id AND tnk.organization_id = ${user.organizationId}
         WHERE nz.station_id = ${stationId} AND nz.organization_id = ${orgId}
           AND nzdu.status = 'ACTIVE'), '[]'::jsonb) AS nozzles,
       COALESCE((SELECT jsonb_agg(${rowJson(schema.users, 'u')})
@@ -1108,8 +1108,20 @@ shiftsRouter.get('/my-assignment', async (c) => {
           })
           .from(schema.nozzleReadings)
           .innerJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-          .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-          .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
+          .leftJoin(
+            schema.products,
+            and(
+              eq(schema.products.id, schema.nozzles.productId),
+              eq(schema.products.organizationId, user.organizationId),
+            ),
+          )
+          .leftJoin(
+            schema.tanks,
+            and(
+              eq(schema.tanks.id, schema.nozzles.tankId),
+              eq(schema.tanks.organizationId, user.organizationId),
+            ),
+          )
           .where(
             and(eq(schema.nozzleReadings.shiftId, shift.id), inArray(schema.nozzles.duId, duIds)),
           )
@@ -1142,8 +1154,20 @@ shiftsRouter.get('/my-assignment', async (c) => {
         productName: schema.products.name,
       })
       .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customers.id, schema.customerTransactions.customerId),
+          eq(schema.customers.organizationId, user.organizationId),
+        ),
+      )
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.customerTransactions.productId),
+          eq(schema.products.organizationId, user.organizationId),
+        ),
+      )
       .where(
         and(
           eq(schema.customerTransactions.shiftId, shift.id),
@@ -1159,8 +1183,20 @@ shiftsRouter.get('/my-assignment', async (c) => {
         productName: schema.products.name,
       })
       .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customers.id, schema.customerTransactions.customerId),
+          eq(schema.customers.organizationId, user.organizationId),
+        ),
+      )
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.products.id, schema.customerTransactions.productId),
+          eq(schema.products.organizationId, user.organizationId),
+        ),
+      )
       .where(
         and(
           eq(schema.customerTransactions.shiftId, shift.id),

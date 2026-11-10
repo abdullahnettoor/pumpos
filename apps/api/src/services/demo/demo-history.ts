@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { DrizzleTenantReferenceReader } from '../../infra/repositories/tenant-reference-reader.js';
 import { schema, type DbClient } from '@pump/db';
 import {
   CloseBusinessDayAndGenerateDssr,
@@ -398,6 +399,7 @@ export async function seedDemoHistory(
   ) =>
     must(
       await new RecordCreditSale({
+        references: new DrizzleTenantReferenceReader(tx),
         ledger: new DrizzleCustomerLedgerRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         shifts,
@@ -764,6 +766,7 @@ export async function seedDemoHistory(
     if (age === 5) {
       const expense = must(
         await new RecordExpense({
+          references: new DrizzleTenantReferenceReader(tx),
           expenses: new DrizzleExpenseRepository(tx),
           accounts: new DrizzleFinancialAccountRepository(tx),
           events,
@@ -869,6 +872,7 @@ export async function seedDemoHistory(
   // Exactly one bank collection from Malabar Transports today.
   const collection = must(
     await new RecordCollection({
+      references: new DrizzleTenantReferenceReader(tx),
       collections: new DrizzleCollectionRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
       accounts: new DrizzleFinancialAccountRepository(tx),

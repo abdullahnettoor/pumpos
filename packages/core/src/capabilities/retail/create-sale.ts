@@ -7,6 +7,7 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../kernel/index.js';
 import type {
   DomainEvent,
@@ -15,6 +16,7 @@ import type {
   DocumentNumberGenerator,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../kernel/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
@@ -89,6 +91,7 @@ export interface CreateSaleDeps extends ShiftWriteDeps {
   stock: StockMovementRepository;
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
+  references: TenantReferenceReader;
   /** Optional (T5): resolves each line's tax category + rates to freeze the split. */
   products?: ProductRepository;
   docNumbers: DocumentNumberGenerator;
@@ -109,6 +112,49 @@ export interface CreateSaleResult {
  */
 export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> {
   constructor(private readonly deps: CreateSaleDeps) {}
+
+  /** Also used before the route's optional Customer creation in this transaction. */
+  async validateReferences(
+    input: CreateSaleCommand,
+    ctx: ExecutionContext,
+    stationId: string,
+  ): Promise<Result<void>> {
+    const parsed = schema.safeParse(input);
+    if (!parsed.success)
+      return err(validationError('Invalid CreateSale command', { issues: parsed.error.flatten() }));
+    const cmd = parsed.data;
+    for (const line of cmd.lines) {
+      const product = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        'Product',
+        line.productId,
+      );
+      if (!product.success) return product;
+      const tank = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        'Tank',
+        line.tankId,
+        { stationId, productId: line.productId },
+      );
+      if (!tank.success) return tank;
+    }
+    for (const [kind, id] of [
+      ['Vehicle', cmd.vehicleId],
+      ['Attendant', cmd.attendantId ?? ctx.actorId],
+    ] as const) {
+      const check = await requireTenantReference(
+        this.deps.references,
+        ctx.organizationId,
+        kind,
+        id,
+        { customerId: cmd.customerId },
+      );
+      if (!check.success) return check;
+    }
+    return ok(undefined);
+  }
 
   async execute(
     input: CreateSaleCommand,
@@ -146,6 +192,9 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
         null;
     }
 
+    const references = await this.validateReferences(cmd, ctx, shift.stationId);
+    if (!references.success) return references;
+
     const now = ctx.clock.now().toISOString();
     const saleId = ctx.ids.newId();
 
@@ -177,11 +226,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       // The gross is what the customer pays for this line; the split is
       // extracted from it, so the line total is never altered by taxing.
       const product = this.deps.products ? await this.deps.products.findById(line.productId) : null;
-      const split = splitSaleLineTax(
-        lineTotal,
-        product && product.organizationId === ctx.organizationId ? product : null,
-        interState,
-      );
+      const split = splitSaleLineTax(lineTotal, product, interState);
 
       lines.push({
         id: ctx.ids.newId(),
