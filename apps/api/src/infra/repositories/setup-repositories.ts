@@ -366,6 +366,15 @@ export class DrizzleStationRepository implements StationRepository, StationSetti
         },
       });
   }
+  async lockForUpdate(id: string, organizationId: string): Promise<Station | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.stations)
+      .where(and(eq(schema.stations.id, id), eq(schema.stations.organizationId, organizationId)))
+      .limit(1)
+      .for('update');
+    return r ? this.toEntity(r) : null;
+  }
   async patchSettings(
     id: string,
     organizationId: string,

@@ -58,7 +58,12 @@ export interface StationRepository extends Repository<Station> {
  * rewritten. Null when the Station is not in the Organization.
  */
 export interface StationSettingsPatchRepository {
-  findById(id: string): Promise<Station | null>;
+  /**
+   * Reads the Station for update: scoped to the Organization and row-locked
+   * until the transaction ends, so concurrent saves queue and each sees the
+   * last one's result. Null when the Station is not in the Organization.
+   */
+  lockForUpdate(id: string, organizationId: string): Promise<Station | null>;
   patchSettings(
     id: string,
     organizationId: string,
@@ -312,9 +317,8 @@ export class UpdateStationTankRules implements UseCase<UpdateStationTankRulesCom
       );
     if (!mayChangeTankLevels(ctx))
       return err(forbiddenError('Only a user with tank-level permission can change these rules'));
-    const existing = await this.deps.repository.findById(input.id);
-    if (!existing || existing.organizationId !== ctx.organizationId)
-      return err(notFoundError('Station', input.id));
+    const existing = await this.deps.repository.lockForUpdate(input.id, ctx.organizationId);
+    if (!existing) return err(notFoundError('Station', input.id));
 
     const submitted = settings.data;
     const levelsChanged =

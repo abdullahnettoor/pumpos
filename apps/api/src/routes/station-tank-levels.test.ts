@@ -9,6 +9,9 @@ import { stationSetupRouter } from './station-setup.js';
  * never `station.manage`, and writes only its two settings keys.
  */
 
+const STATION = '7c1b2a40-5e0d-4f6a-9b1e-3a2d4c5e6f70';
+const OTHER_STATION = '9d2c3b51-6f1e-4a7b-8c2f-4b3e5d6f7a81';
+
 const STORED = {
   shift_grace_minutes: 15,
   report_config: { paper: 'A4' },
@@ -30,7 +33,7 @@ function fakeDb() {
   ];
   let accessIndex = 0;
   const stationRow = {
-    id: 'st-1',
+    id: STATION,
     organizationId: 'org-1',
     name: 'Station',
     code: 'ST1',
@@ -92,7 +95,7 @@ function appAs(user: Record<string, unknown>) {
       fullName: 'User',
       organizationId: 'org-1',
       role: 'Manager',
-      assignedStationIds: ['st-1'],
+      assignedStationIds: [STATION],
       ...user,
     });
     await next();
@@ -101,7 +104,7 @@ function appAs(user: Record<string, unknown>) {
   return { app, writes };
 }
 
-const put = (app: Hono<any>, body: unknown, id = 'st-1') =>
+const put = (app: Hono<any>, body: unknown, id: string = STATION) =>
   app.request(`/setup/stations/${id}/tank-levels`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -153,8 +156,16 @@ describe('PUT /setup/stations/:id/tank-levels (#690)', () => {
     expect(settingsWrites(writes)).toHaveLength(0);
   });
 
+  it('answers a malformed id with VALIDATION_ERROR before any query', async () => {
+    const { app, writes } = appAs({ permissions: TANK_ONLY });
+    const res = await put(app, CHANGE, 'not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as any).error.code).toBe('VALIDATION_ERROR');
+    expect(writes).toHaveLength(0);
+  });
+
   it('refuses a Station the user is not assigned to', async () => {
-    const { app, writes } = appAs({ permissions: TANK_ONLY, assignedStationIds: ['st-2'] });
+    const { app, writes } = appAs({ permissions: TANK_ONLY, assignedStationIds: [OTHER_STATION] });
     const res = await put(app, CHANGE);
     expect(res.status).toBe(403);
     expect(settingsWrites(writes)).toHaveLength(0);
@@ -180,7 +191,7 @@ describe('PUT /setup/stations/:id/tank-levels (#690)', () => {
 
 describe('PUT /setup/stations/:id keeps its station.manage rule (#690)', () => {
   const putStation = (app: Hono<any>, body: unknown) =>
-    app.request('/setup/stations/st-1', {
+    app.request(`/setup/stations/${STATION}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

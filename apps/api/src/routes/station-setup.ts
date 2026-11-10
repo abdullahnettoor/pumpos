@@ -26,7 +26,7 @@ import {
   userUpdateSchema,
 } from '@pump/shared';
 import { z } from 'zod';
-import { validateJson } from '../utils/validator.js';
+import { validateJson, validateParams } from '../utils/validator.js';
 import {
   CreateStation,
   ensureLoginCapacity,
@@ -327,10 +327,11 @@ stationSetupRouter.put(
 stationSetupRouter.put(
   '/stations/:id/tank-levels',
   writePolicyGuard('PUT /setup/stations/:id/tank-levels'),
+  validateParams(z.object({ id: z.string().uuid() })),
   validateJson(tankRulesSettingsSchema),
   async (c) => {
     const user = c.var.user;
-    const stationId = c.req.param('id');
+    const { id: stationId } = c.req.valid('param');
     if (
       !can(user, 'station.tankLevels') ||
       !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })

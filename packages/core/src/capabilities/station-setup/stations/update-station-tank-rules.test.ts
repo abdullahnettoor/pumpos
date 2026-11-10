@@ -31,8 +31,8 @@ class Repo {
     createdAt: '',
     updatedAt: '',
   };
-  async findById(id: string) {
-    return id === this.row.id ? this.row : null;
+  async lockForUpdate(id: string, organizationId: string) {
+    return id === this.row.id && organizationId === this.row.organizationId ? this.row : null;
   }
   async patchSettings(_id: string, _org: string, patch: Record<string, unknown>) {
     this.patches.push(patch);
