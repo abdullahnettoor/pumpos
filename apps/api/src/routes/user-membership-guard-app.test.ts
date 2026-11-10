@@ -15,12 +15,13 @@ const ENV = {
   SUPABASE_JWT_SECRET: SECRET,
   SUPABASE_DIRECT_URL: 'postgres://fake',
 };
-const ME = 'user-1';
+const ME = '00000000-0000-4000-8000-000000000001';
+const OTHER = '00000000-0000-4000-8000-000000000002';
 
 type Member = { id: string; role: string; status: string };
 const state = {
   members: [] as Member[],
-  targetId: 'user-2',
+  targetId: OTHER,
   userWrites: [] as Array<Record<string, any>>,
   adminCalls: [] as string[],
 };
@@ -159,11 +160,11 @@ function setup(target: Member, others: Member[] = []) {
 }
 
 beforeEach(() => {
-  Object.assign(state, { members: [], targetId: 'user-2', userWrites: [], adminCalls: [] });
+  Object.assign(state, { members: [], targetId: OTHER, userWrites: [], adminCalls: [] });
 });
 
 describe('self-targeted changes (#443)', () => {
-  beforeEach(() => setup(me(), [{ id: 'user-2', role: 'Owner', status: 'ACTIVE' }]));
+  beforeEach(() => setup(me(), [{ id: OTHER, role: 'Owner', status: 'ACTIVE' }]));
 
   it('refuses deactivating yourself', async () => {
     const res = await call('POST', `/${ME}/deactivate`);
@@ -197,41 +198,41 @@ describe('self-targeted changes (#443)', () => {
 });
 
 describe('last active Owner (#443)', () => {
-  const second = { id: 'user-2', role: 'Owner', status: 'ACTIVE' };
+  const second = { id: OTHER, role: 'Owner', status: 'ACTIVE' };
 
   it('cannot be deactivated or demoted by another Owner', async () => {
     // The acting Owner is inactive in the data, so user-2 is the only active one.
-    state.targetId = 'user-2';
+    state.targetId = OTHER;
     state.members = [{ ...me(), status: 'INACTIVE' }, second];
-    const off = await call('POST', '/user-2/deactivate');
+    const off = await call('POST', `/${OTHER}/deactivate`);
     expect(off.status).toBe(409);
     expect(off.body.error).toMatchObject({
       code: 'CONFLICT',
       message: 'An Organization needs at least one active Owner.',
     });
-    expect((await call('PUT', '/user-2', { status: 'INACTIVE' })).status).toBe(409);
-    expect((await call('PUT', '/user-2', { role: 'Manager' })).status).toBe(409);
+    expect((await call('PUT', `/${OTHER}`, { status: 'INACTIVE' })).status).toBe(409);
+    expect((await call('PUT', `/${OTHER}`, { role: 'Manager' })).status).toBe(409);
     expect(state.adminCalls).toEqual([]);
     expect(state.userWrites).toEqual([]);
   });
 
   it('can be deactivated and demoted while another active Owner exists', async () => {
     setup(second);
-    expect((await call('POST', '/user-2/deactivate')).status).toBe(200);
+    expect((await call('POST', `/${OTHER}/deactivate`)).status).toBe(200);
     expect(state.adminCalls).toEqual(['banUser']);
-    expect((await call('PUT', '/user-2', { role: 'Manager' })).status).toBe(200);
+    expect((await call('PUT', `/${OTHER}`, { role: 'Manager' })).status).toBe(200);
   });
 });
 
 describe('other members are unaffected (#443)', () => {
   it('deactivates, reactivates, edits and resets a Manager', async () => {
-    setup({ id: 'user-2', role: 'Manager', status: 'ACTIVE' });
-    expect((await call('POST', '/user-2/deactivate')).status).toBe(200);
-    expect((await call('PUT', '/user-2', { role: 'Staff' })).status).toBe(200);
+    setup({ id: OTHER, role: 'Manager', status: 'ACTIVE' });
+    expect((await call('POST', `/${OTHER}/deactivate`)).status).toBe(200);
+    expect((await call('PUT', `/${OTHER}`, { role: 'Staff' })).status).toBe(200);
     expect(
-      (await call('POST', '/user-2/reset-password', { password: 'correct-horse' })).status,
+      (await call('POST', `/${OTHER}/reset-password`, { password: 'correct-horse' })).status,
     ).toBe(200);
-    setup({ id: 'user-2', role: 'Manager', status: 'INACTIVE' });
-    expect((await call('POST', '/user-2/reactivate')).status).toBe(200);
+    setup({ id: OTHER, role: 'Manager', status: 'INACTIVE' });
+    expect((await call('POST', `/${OTHER}/reactivate`)).status).toBe(200);
   });
 });

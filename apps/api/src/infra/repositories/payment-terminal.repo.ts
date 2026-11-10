@@ -24,11 +24,16 @@ function toEntity(row: Row): PaymentTerminal {
 export class DrizzlePaymentTerminalRepository implements PaymentTerminalRepository {
   constructor(private readonly db: DbClient) {}
 
-  async findById(id: string): Promise<PaymentTerminal | null> {
+  async findById(id: string, organizationId: string): Promise<PaymentTerminal | null> {
     const [row] = await this.db
       .select()
       .from(schema.paymentTerminals)
-      .where(eq(schema.paymentTerminals.id, id))
+      .where(
+        and(
+          eq(schema.paymentTerminals.id, id),
+          eq(schema.paymentTerminals.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     return row ? toEntity(row) : null;
   }
@@ -51,6 +56,7 @@ export class DrizzlePaymentTerminalRepository implements PaymentTerminalReposito
       })
       .onConflictDoUpdate({
         target: schema.paymentTerminals.id,
+        setWhere: eq(schema.paymentTerminals.organizationId, t.organizationId),
         set: {
           label: t.label,
           provider: t.provider,

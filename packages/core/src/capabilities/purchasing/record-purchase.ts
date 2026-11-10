@@ -166,7 +166,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           ];
 
     const lineProducts = await Promise.all(
-      rawLines.map((line) => this.deps.products.findById(line.productId)),
+      rawLines.map((line) => this.deps.products.findById(line.productId, ctx.organizationId)),
     );
     for (let i = 0; i < rawLines.length; i += 1) {
       const product = lineProducts[i];
@@ -408,7 +408,11 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       const baseQty = Math.max(onHand, 0);
       const newQty = baseQty + agg.qty;
       const newCost = newQty > 0 ? (baseQty * agg.oldCost + agg.value) / newQty : agg.oldCost;
-      await this.deps.products.updateCostBasis(productId, String(round4(newCost)));
+      await this.deps.products.updateCostBasis(
+        productId,
+        String(round4(newCost)),
+        ctx.organizationId,
+      );
     }
 
     if (movements.length > 0) await this.deps.stock.saveMany(movements);

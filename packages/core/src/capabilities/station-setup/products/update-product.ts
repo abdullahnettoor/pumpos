@@ -27,7 +27,7 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
     if (!validated.success) return validated;
     const cmd = validated.data;
 
-    const existing = await this.deps.repository.findById(cmd.id);
+    const existing = await this.deps.repository.findById(cmd.id, ctx.organizationId);
     if (!existing) return err(notFoundError('Product', cmd.id));
     if (existing.organizationId !== ctx.organizationId) {
       return err(forbiddenError('Product belongs to another organization'));

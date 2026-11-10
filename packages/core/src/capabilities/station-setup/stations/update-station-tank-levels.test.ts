@@ -100,8 +100,11 @@ describe('UpdateStation tank variance limit (#684)', () => {
 class Repo {
   saved: Station[] = [];
   constructor(readonly row: Station) {}
-  async findById(id: string) {
-    return id === this.row.id ? this.row : null;
+  async findById(id: string, organizationId: string) {
+    return id === this.row.id && organizationId === this.row.organizationId ? this.row : null;
+  }
+  async lockForUpdate(id: string, organizationId: string) {
+    return this.findById(id, organizationId);
   }
   async save(s: Station) {
     this.saved.push(s);

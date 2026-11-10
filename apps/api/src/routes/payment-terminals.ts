@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
+import { validateParams } from '../utils/validator.js';
 import type { DbClient } from '@pump/db';
 import { canWriteStationSetup, normalizeProvider } from '@pump/shared';
 import { RegisterPaymentTerminal, UpdatePaymentTerminal } from '@pump/core';
@@ -96,12 +98,13 @@ paymentTerminalsRouter.post(
 paymentTerminalsRouter.put(
   '/payment-terminals/:id',
   writePolicyGuard('PUT /setup/payment-terminals/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
     const db = c.var.db;
     const repo = new DrizzlePaymentTerminalRepository(db);
-    const existing = await repo.findById(id);
+    const existing = await repo.findById(id, c.var.user.organizationId);
     if (!existing || existing.organizationId !== c.var.user.organizationId) {
       return c.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } },
@@ -146,11 +149,12 @@ paymentTerminalsRouter.put(
 paymentTerminalsRouter.delete(
   '/payment-terminals/:id',
   writePolicyGuard('DELETE /setup/payment-terminals/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     const id = c.req.param('id');
     const db = c.var.db;
     const repo = new DrizzlePaymentTerminalRepository(db);
-    const existing = await repo.findById(id);
+    const existing = await repo.findById(id, c.var.user.organizationId);
     if (!existing || existing.organizationId !== c.var.user.organizationId) {
       return c.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } },

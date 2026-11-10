@@ -13,8 +13,8 @@ import type { Product, ProductRepository } from './ports.js';
 
 class InMemoryProductRepo implements ProductRepository {
   readonly rows: Product[] = [];
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
   async save(p: Product) {
     const idx = this.rows.findIndex((r) => r.id === p.id);
@@ -38,8 +38,8 @@ class InMemoryProductRepo implements ProductRepository {
     }
     return Array.from(set).sort();
   }
-  async updateCostBasis(productId: string, costBasis: string) {
-    const r = this.rows.find((x) => x.id === productId);
+  async updateCostBasis(productId: string, costBasis: string, organizationId: string) {
+    const r = this.rows.find((x) => x.id === productId && x.organizationId === organizationId);
     if (r) r.costBasis = costBasis;
   }
 }

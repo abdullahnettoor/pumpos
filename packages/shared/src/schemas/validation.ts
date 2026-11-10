@@ -164,6 +164,11 @@ export const stationSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+/** Updates carry only submitted settings; creation defaults would overwrite concurrent edits. */
+export const stationUpdateSchema = stationSchema.partial().extend({
+  settings: stationSchema.shape.settings.removeDefault().partial().optional(),
+});
+
 /** The rule for any password an Owner or Manager sets for a login (create, reset, app access). */
 export const LOGIN_PASSWORD_MIN_LENGTH = 8;
 export const loginPasswordSchema = z

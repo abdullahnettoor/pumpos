@@ -38,24 +38,28 @@ export class DrizzleTankRepository implements TankRepository {
       updatedAt: r.updatedAt.toISOString(),
     };
   }
-  async findById(id: string): Promise<Tank | null> {
-    const [r] = await this.db.select().from(schema.tanks).where(eq(schema.tanks.id, id)).limit(1);
-    return r ? this.toEntity(r) : null;
-  }
-  async findByIdForUpdate(id: string): Promise<Tank | null> {
+  async findById(id: string, organizationId: string): Promise<Tank | null> {
     const [r] = await this.db
       .select()
       .from(schema.tanks)
-      .where(eq(schema.tanks.id, id))
+      .where(and(eq(schema.tanks.id, id), eq(schema.tanks.organizationId, organizationId)))
+      .limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+  async findByIdForUpdate(id: string, organizationId: string): Promise<Tank | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.tanks)
+      .where(and(eq(schema.tanks.id, id), eq(schema.tanks.organizationId, organizationId)))
       .limit(1)
       .for('update');
     return r ? this.toEntity(r) : null;
   }
-  async hasNozzles(id: string): Promise<boolean> {
+  async hasNozzles(id: string, organizationId: string): Promise<boolean> {
     const [r] = await this.db
       .select({ id: schema.nozzles.id })
       .from(schema.nozzles)
-      .where(eq(schema.nozzles.tankId, id))
+      .where(and(eq(schema.nozzles.tankId, id), eq(schema.nozzles.organizationId, organizationId)))
       .limit(1);
     return Boolean(r);
   }
@@ -75,6 +79,7 @@ export class DrizzleTankRepository implements TankRepository {
       })
       .onConflictDoUpdate({
         target: schema.tanks.id,
+        setWhere: eq(schema.tanks.organizationId, t.organizationId),
         set: {
           name: t.name,
           productId: t.productId,
@@ -84,11 +89,11 @@ export class DrizzleTankRepository implements TankRepository {
         },
       });
   }
-  async deactivateById(id: string): Promise<boolean> {
+  async deactivateById(id: string, organizationId: string): Promise<boolean> {
     const rows = await this.db
       .update(schema.tanks)
       .set({ status: 'INACTIVE', updatedAt: new Date() })
-      .where(eq(schema.tanks.id, id))
+      .where(and(eq(schema.tanks.id, id), eq(schema.tanks.organizationId, organizationId)))
       .returning({ id: schema.tanks.id });
     return rows.length > 0;
   }
@@ -137,11 +142,16 @@ export class DrizzleDispenserRepository implements DispenserRepository, InServic
       updatedAt: r.updatedAt.toISOString(),
     };
   }
-  async findById(id: string): Promise<DispenserUnit | null> {
+  async findById(id: string, organizationId: string): Promise<DispenserUnit | null> {
     const [r] = await this.db
       .select()
       .from(schema.dispenserUnits)
-      .where(eq(schema.dispenserUnits.id, id))
+      .where(
+        and(
+          eq(schema.dispenserUnits.id, id),
+          eq(schema.dispenserUnits.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     return r ? this.toEntity(r) : null;
   }
@@ -160,13 +170,19 @@ export class DrizzleDispenserRepository implements DispenserRepository, InServic
       })
       .onConflictDoUpdate({
         target: schema.dispenserUnits.id,
+        setWhere: eq(schema.dispenserUnits.organizationId, d.organizationId),
         set: { name: d.name, code: d.code, status: d.status, updatedAt: new Date(d.updatedAt) },
       });
   }
-  async deleteById(id: string): Promise<boolean> {
+  async deleteById(id: string, organizationId: string): Promise<boolean> {
     const rows = await this.db
       .delete(schema.dispenserUnits)
-      .where(eq(schema.dispenserUnits.id, id))
+      .where(
+        and(
+          eq(schema.dispenserUnits.id, id),
+          eq(schema.dispenserUnits.organizationId, organizationId),
+        ),
+      )
       .returning({ id: schema.dispenserUnits.id });
     return rows.length > 0;
   }
@@ -201,11 +217,11 @@ export class DrizzleNozzleRepository implements NozzleRepository {
       updatedAt: r.updatedAt.toISOString(),
     };
   }
-  async findById(id: string): Promise<Nozzle | null> {
+  async findById(id: string, organizationId: string): Promise<Nozzle | null> {
     const [r] = await this.db
       .select()
       .from(schema.nozzles)
-      .where(eq(schema.nozzles.id, id))
+      .where(and(eq(schema.nozzles.id, id), eq(schema.nozzles.organizationId, organizationId)))
       .limit(1);
     return r ? this.toEntity(r) : null;
   }
@@ -226,6 +242,7 @@ export class DrizzleNozzleRepository implements NozzleRepository {
       })
       .onConflictDoUpdate({
         target: schema.nozzles.id,
+        setWhere: eq(schema.nozzles.organizationId, n.organizationId),
         set: {
           duId: n.duId,
           tankId: n.tankId,
@@ -236,10 +253,10 @@ export class DrizzleNozzleRepository implements NozzleRepository {
         },
       });
   }
-  async deleteById(id: string): Promise<boolean> {
+  async deleteById(id: string, organizationId: string): Promise<boolean> {
     const rows = await this.db
       .delete(schema.nozzles)
-      .where(eq(schema.nozzles.id, id))
+      .where(and(eq(schema.nozzles.id, id), eq(schema.nozzles.organizationId, organizationId)))
       .returning({ id: schema.nozzles.id });
     return rows.length > 0;
   }
@@ -270,11 +287,16 @@ export class DrizzleShiftTemplateRepository implements ShiftTemplateRepository {
       isActive: r.isActive,
     };
   }
-  async findById(id: string): Promise<ShiftTemplate | null> {
+  async findById(id: string, organizationId: string): Promise<ShiftTemplate | null> {
     const [r] = await this.db
       .select()
       .from(schema.shiftTemplates)
-      .where(eq(schema.shiftTemplates.id, id))
+      .where(
+        and(
+          eq(schema.shiftTemplates.id, id),
+          eq(schema.shiftTemplates.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     return r ? this.toEntity(r) : null;
   }
@@ -291,13 +313,19 @@ export class DrizzleShiftTemplateRepository implements ShiftTemplateRepository {
       })
       .onConflictDoUpdate({
         target: schema.shiftTemplates.id,
+        setWhere: eq(schema.shiftTemplates.organizationId, t.organizationId),
         set: { name: t.name, startTime: t.startTime, endTime: t.endTime, isActive: t.isActive },
       });
   }
-  async deleteById(id: string): Promise<boolean> {
+  async deleteById(id: string, organizationId: string): Promise<boolean> {
     const rows = await this.db
       .delete(schema.shiftTemplates)
-      .where(eq(schema.shiftTemplates.id, id))
+      .where(
+        and(
+          eq(schema.shiftTemplates.id, id),
+          eq(schema.shiftTemplates.organizationId, organizationId),
+        ),
+      )
       .returning({ id: schema.shiftTemplates.id });
     return rows.length > 0;
   }
@@ -328,11 +356,11 @@ export class DrizzleStationRepository implements StationRepository, StationSetti
       updatedAt: r.updatedAt.toISOString(),
     };
   }
-  async findById(id: string): Promise<Station | null> {
+  async findById(id: string, organizationId: string): Promise<Station | null> {
     const [r] = await this.db
       .select()
       .from(schema.stations)
-      .where(eq(schema.stations.id, id))
+      .where(and(eq(schema.stations.id, id), eq(schema.stations.organizationId, organizationId)))
       .limit(1);
     return r ? this.toEntity(r) : null;
   }
@@ -354,6 +382,7 @@ export class DrizzleStationRepository implements StationRepository, StationSetti
       })
       .onConflictDoUpdate({
         target: schema.stations.id,
+        setWhere: eq(schema.stations.organizationId, s.organizationId),
         set: {
           name: s.name,
           code: s.code,
@@ -417,8 +446,12 @@ export class DrizzleUserRepository implements UserRepository {
       updatedAt: r.updatedAt.toISOString(),
     };
   }
-  async findById(id: string): Promise<User | null> {
-    const [r] = await this.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
+  async findById(id: string, organizationId: string): Promise<User | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.users)
+      .where(and(eq(schema.users.id, id), eq(schema.users.organizationId, organizationId)))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(u: User): Promise<void> {
@@ -438,6 +471,7 @@ export class DrizzleUserRepository implements UserRepository {
       })
       .onConflictDoUpdate({
         target: schema.users.id,
+        setWhere: eq(schema.users.organizationId, u.organizationId),
         set: {
           fullName: u.fullName,
           email: u.email,
@@ -448,17 +482,26 @@ export class DrizzleUserRepository implements UserRepository {
         },
       });
   }
-  async linkLogin(userId: string, authUserId: string): Promise<void> {
+  async linkLogin(userId: string, authUserId: string, organizationId: string): Promise<void> {
     await this.db
       .update(schema.users)
       .set({ authUserId })
-      .where(and(eq(schema.users.id, userId), isNull(schema.users.authUserId)));
+      .where(
+        and(
+          eq(schema.users.id, userId),
+          eq(schema.users.organizationId, organizationId),
+          isNull(schema.users.authUserId),
+        ),
+      );
   }
   async setStationAssignments(
     userId: string,
     stationIds: string[],
     organizationId: string,
   ): Promise<void> {
+    if (!(await this.findById(userId, organizationId))) {
+      throw new Error('User does not belong to this organization');
+    }
     // Tenant integrity: every assigned station must belong to the same
     // organization — cross-tenant assignments must be structurally impossible.
     if (stationIds.length > 0) {

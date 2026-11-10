@@ -25,7 +25,7 @@ import {
 import type {
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -48,7 +48,8 @@ export interface Station {
   updatedAt: string;
 }
 
-export interface StationRepository extends Repository<Station> {
+export interface StationRepository extends TenantRepository<Station> {
+  lockForUpdate(id: string, organizationId: string): Promise<Station | null>;
   listByOrganization(organizationId: string): Promise<Station[]>;
 }
 
@@ -223,9 +224,10 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateStation command', { issues: p.error.flatten() }));
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.lockForUpdate(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Station', p.data.id));
+    const settings = { ...existing.settings, ...p.data.settings };
     const tankLevelsError = tankLevelsChangeError(existing.settings ?? {}, p.data.settings, ctx);
     if (tankLevelsError) return err(tankLevelsError);
     const varianceError = stockVarianceToleranceChangeError(
@@ -241,15 +243,6 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
         existing.settings[STOCK_VARIANCE_TOLERANCE_KEY],
         p.data.settings[STOCK_VARIANCE_TOLERANCE_KEY],
       );
-    const settings =
-      p.data.settings &&
-      !(STOCK_VARIANCE_TOLERANCE_KEY in p.data.settings) &&
-      STOCK_VARIANCE_TOLERANCE_KEY in existing.settings
-        ? {
-            ...p.data.settings,
-            [STOCK_VARIANCE_TOLERANCE_KEY]: existing.settings[STOCK_VARIANCE_TOLERANCE_KEY],
-          }
-        : (p.data.settings ?? existing.settings);
     const updated: Station = {
       ...existing,
       name: p.data.name ?? existing.name,

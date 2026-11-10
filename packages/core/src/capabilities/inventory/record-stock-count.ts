@@ -114,7 +114,9 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     if (ctx.stationId && ctx.stationId !== cmd.stationId)
       return err(notFoundError('Station', cmd.stationId));
 
-    const tank = cmd.tankId ? await this.deps.tanks.findByIdForUpdate(cmd.tankId) : null;
+    const tank = cmd.tankId
+      ? await this.deps.tanks.findByIdForUpdate(cmd.tankId, ctx.organizationId)
+      : null;
     if (
       cmd.tankId &&
       (!tank ||

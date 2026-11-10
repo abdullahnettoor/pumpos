@@ -19,6 +19,7 @@ import {
   resolveDecantationSettings,
   Role,
   stationSchema,
+  stationUpdateSchema,
   TANK_LEVEL_SETTINGS_KEY,
   tankLevelsChanged,
   tankRulesSettingsSchema,
@@ -27,6 +28,7 @@ import {
 } from '@pump/shared';
 import { z } from 'zod';
 import { validateJson, validateParams } from '../utils/validator.js';
+import { isUuid } from '../infra/is-uuid.js';
 import {
   CreateStation,
   ensureLoginCapacity,
@@ -164,6 +166,11 @@ stationSetupRouter.get('/stations', async (c) => {
 // GET /api/setup/stations/:id/decantation-settings
 stationSetupRouter.get('/stations/:id/decantation-settings', async (c) => {
   const stationId = c.req.param('id');
+  if (!isUuid(stationId))
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid id' } },
+      400,
+    );
   if (
     !isAuthorizedForStation(c.var.user, { organizationId: c.var.user.organizationId, stationId })
   ) {
@@ -216,7 +223,8 @@ stationSetupRouter.post(
 stationSetupRouter.put(
   '/stations/:id',
   writePolicyGuard('PUT /setup/stations/:id'),
-  validateJson(stationSchema.partial()),
+  validateParams(z.object({ id: z.string().uuid() })),
+  validateJson(stationUpdateSchema),
   async (c) => {
     const user = c.var.user;
     const stationId = c.req.param('id');
@@ -292,7 +300,10 @@ stationSetupRouter.put(
       TANK_LEVEL_SETTINGS_KEY in submittedSettings &&
       !can(user, 'station.tankLevels')
     ) {
-      const existing = await new DrizzleStationRepository(c.var.db).findById(stationId);
+      const existing = await new DrizzleStationRepository(c.var.db).findById(
+        stationId,
+        user.organizationId,
+      );
       const stored =
         existing && existing.organizationId === user.organizationId
           ? existing.settings[TANK_LEVEL_SETTINGS_KEY]
@@ -836,13 +847,14 @@ stationSetupRouter.post(
 stationSetupRouter.put(
   '/users/:id',
   writePolicyGuard('PUT /setup/users/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   validateJson(userUpdateSchema, 'BAD_REQUEST'),
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
     const body = c.req.valid('json');
     const repo = new DrizzleUserRepository(c.var.db);
-    const target = await repo.findById(id);
+    const target = await repo.findById(id, user.organizationId);
     if (!target || target.organizationId !== user.organizationId) {
       return c.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
@@ -866,7 +878,7 @@ stationSetupRouter.put(
       const seat = await claimLoginSeatForActivation(
         new DrizzleStationCapacityPort(tx),
         user.organizationId,
-        () => new DrizzleUserRepository(tx).findById(id),
+        () => new DrizzleUserRepository(tx).findById(id, user.organizationId),
         body.status === 'ACTIVE',
       );
       if (!seat.success) return seat;
@@ -891,6 +903,11 @@ stationSetupRouter.put(
 stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
+  if (!isUuid(id))
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid id' } },
+      400,
+    );
   const role = z
     .enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'])
     .safeParse(c.req.query('role'));
@@ -901,7 +918,7 @@ stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
     );
   }
   const repo = new DrizzleUserRepository(c.var.db);
-  const target = await repo.findById(id);
+  const target = await repo.findById(id, user.organizationId);
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
@@ -921,6 +938,11 @@ stationSetupRouter.get('/users/:id/role-change-preview', async (c) => {
 
 /** A member's Default Permissions, stored changes and effective set (Owner only). */
 stationSetupRouter.get('/users/:id/permissions', async (c) => {
+  if (!isUuid(c.req.param('id')))
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid id' } },
+      400,
+    );
   const result = await new GetUserPermissions({
     users: new DrizzleUserRepository(c.var.db),
     changes: new DrizzleUserPermissionChangesRepository(c.var.db),
@@ -938,6 +960,7 @@ stationSetupRouter.get('/users/:id/permissions', async (c) => {
 stationSetupRouter.put(
   '/users/:id/permissions',
   writePolicyGuard('PUT /setup/users/:id/permissions'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c, next) => {
     if (!canEditMemberPermissions(c.var.user.role)) {
       return c.json(
@@ -973,7 +996,10 @@ stationSetupRouter.put(
       ),
     );
     if (result.success) {
-      const target = await new DrizzleUserRepository(c.var.db).findById(id);
+      const target = await new DrizzleUserRepository(c.var.db).findById(
+        id,
+        c.var.user.organizationId,
+      );
       evictCachedAuthUser(target?.authUserId);
     }
     return sendResult(c, result);
@@ -983,6 +1009,7 @@ stationSetupRouter.put(
 stationSetupRouter.post(
   '/users/:id/reset-password',
   writePolicyGuard('POST /setup/users/:id/reset-password'),
+  validateParams(z.object({ id: z.string().uuid() })),
   rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
   async (c) => {
     const user = c.var.user;
@@ -1000,7 +1027,7 @@ stationSetupRouter.post(
     }
     const db = c.var.db;
     const repo = new DrizzleUserRepository(db);
-    const target = await repo.findById(id);
+    const target = await repo.findById(id, user.organizationId);
     if (!target || target.organizationId !== user.organizationId) {
       return c.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
@@ -1072,6 +1099,7 @@ const appAccessBodySchema = z.object({
 stationSetupRouter.post(
   '/users/:id/app-access',
   writePolicyGuard('POST /setup/users/:id/app-access'),
+  validateParams(z.object({ id: z.string().uuid() })),
   rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
   validateJson(appAccessBodySchema, 'BAD_REQUEST'),
   async (c) => {
@@ -1151,6 +1179,7 @@ stationSetupRouter.post(
 stationSetupRouter.post(
   '/users/:id/deactivate',
   writePolicyGuard('POST /setup/users/:id/deactivate'),
+  validateParams(z.object({ id: z.string().uuid() })),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, false);
@@ -1160,6 +1189,7 @@ stationSetupRouter.post(
 stationSetupRouter.post(
   '/users/:id/reactivate',
   writePolicyGuard('POST /setup/users/:id/reactivate'),
+  validateParams(z.object({ id: z.string().uuid() })),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, true);
@@ -1174,7 +1204,7 @@ async function guardMembershipChange(
   change: { role?: Role; status?: string },
 ) {
   const repo = new DrizzleUserRepository(tx);
-  const target = await repo.findById(targetId);
+  const target = await repo.findById(targetId, actor.organizationId);
   if (!target) return ok(undefined);
   const members = await repo.listWithAssignments(actor.organizationId);
   const otherActiveOwners = members.filter(
@@ -1188,7 +1218,7 @@ async function setUserActive(c: any, active: boolean) {
   const id = c.req.param('id');
   const db = c.var.db;
   const repo = new DrizzleUserRepository(db);
-  const target = await repo.findById(id);
+  const target = await repo.findById(id, user.organizationId);
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
@@ -1205,7 +1235,7 @@ async function setUserActive(c: any, active: boolean) {
     const seat = await claimLoginSeatForActivation(
       new DrizzleStationCapacityPort(tx),
       user.organizationId,
-      () => new DrizzleUserRepository(tx).findById(id),
+      () => new DrizzleUserRepository(tx).findById(id, user.organizationId),
       active,
     );
     if (!seat.success) return seat;
@@ -1273,6 +1303,14 @@ async function authorizeInfrastructure(
   table: typeof schema.tanks | typeof schema.dispenserUnits | typeof schema.nozzles,
   id: string,
 ): Promise<{ error: Response | null; stationId: string | null }> {
+  if (!isUuid(id))
+    return {
+      error: c.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid id' } },
+        400,
+      ),
+      stationId: null,
+    };
   const user = c.var.user;
   if (!can(user, 'station.infrastructure')) {
     return {
@@ -1415,6 +1453,7 @@ stationSetupRouter.delete(
 stationSetupRouter.put(
   '/shift-templates/:id',
   writePolicyGuard('PUT /setup/shift-templates/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
@@ -1441,6 +1480,7 @@ stationSetupRouter.put(
 stationSetupRouter.delete(
   '/shift-templates/:id',
   writePolicyGuard('DELETE /setup/shift-templates/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');

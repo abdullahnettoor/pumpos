@@ -18,8 +18,8 @@ const ENV = {
   SUPABASE_JWT_SECRET: SECRET,
   SUPABASE_DIRECT_URL: 'postgres://fake',
 };
-const TARGET = 'user-2';
-const ACTOR = 'user-1';
+const TARGET = '00000000-0000-4000-8000-000000000002';
+const ACTOR = '00000000-0000-4000-8000-000000000001';
 const PASSWORD = 'correct-horse-battery';
 
 const state = {
