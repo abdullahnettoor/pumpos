@@ -205,6 +205,7 @@ describe('OpenShift', () => {
     const events = new InProcessEventDispatcher({ store });
 
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles,
@@ -257,6 +258,7 @@ describe('OpenShift', () => {
     ]);
     const open = (at: string) =>
       new OpenShift({
+        references: { exists: async () => true },
         shifts: new ShiftRepo(),
         businessDays: new BdRepo(),
         nozzles: new NozzleRepo([nozzle('n1', 'pet', '1000')]),
@@ -291,6 +293,7 @@ describe('OpenShift', () => {
     const shifts = new ShiftRepo();
     const store = new InMemoryEventStore();
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays: new BdRepo(),
       nozzles: new NozzleRepo([]),
@@ -331,6 +334,7 @@ describe('OpenShift', () => {
 
   it('refuses a negative Opening Float', async () => {
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts: new ShiftRepo(),
       businessDays: new BdRepo(),
       nozzles: new NozzleRepo([]),
@@ -369,6 +373,7 @@ describe('OpenShift', () => {
       updatedAt: '',
     });
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles: new NozzleRepo([]),
@@ -421,6 +426,7 @@ describe('OpenShift', () => {
     };
 
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles: new NozzleRepo([]),
@@ -456,6 +462,7 @@ describe('OpenShift', () => {
     });
 
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles: new NozzleRepo([]),
@@ -481,6 +488,7 @@ describe('OpenShift', () => {
     const businessDays = new BdRepo();
 
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles: new NozzleRepo([]),
@@ -520,6 +528,7 @@ describe('OpenShift', () => {
     });
 
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays,
       nozzles: new NozzleRepo([]),
@@ -551,6 +560,7 @@ describe('OpenShift', () => {
 
   it('rejects a future Shift Business Date', async () => {
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts: new ShiftRepo(),
       businessDays: new BdRepo(),
       nozzles: new NozzleRepo([]),
@@ -573,6 +583,7 @@ describe('OpenShift', () => {
 
   it('rejects an invalid calendar date', async () => {
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts: new ShiftRepo(),
       businessDays: new BdRepo(),
       nozzles: new NozzleRepo([]),
@@ -613,6 +624,7 @@ describe('OpenShift', () => {
       updatedAt: '',
     });
     const result = await new OpenShift({
+      references: { exists: async () => true },
       shifts,
       businessDays: new BdRepo(),
       nozzles: new NozzleRepo([]),
@@ -654,6 +666,7 @@ describe('OpenShift attendant requirement', () => {
       shifts,
       run: () =>
         new OpenShift({
+          references: { exists: async () => true },
           shifts,
           businessDays: new BdRepo(),
           nozzles: new NozzleRepo(opts.nozzles ?? []),
@@ -751,6 +764,7 @@ describe('OpenShift assignment validity', () => {
     const shifts = new ShiftRepo();
     const run = () =>
       new OpenShift({
+        references: { exists: async () => true },
         shifts,
         businessDays: new BdRepo(),
         nozzles: new NozzleRepo([]),
@@ -866,6 +880,7 @@ describe('OpenShift rate requirement', () => {
     const inService = opts.inService ?? ['du-1'];
     const run = () =>
       new OpenShift({
+        references: { exists: async () => true },
         shifts,
         businessDays,
         nozzles: new NozzleRepo(opts.nozzles),

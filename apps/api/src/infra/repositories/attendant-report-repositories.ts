@@ -172,7 +172,13 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       })
       .from(schema.nozzleReadings)
       .innerJoin(schema.nozzles, eq(schema.nozzleReadings.nozzleId, schema.nozzles.id))
-      .leftJoin(schema.products, eq(schema.nozzles.productId, schema.products.id))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.nozzles.productId, schema.products.id),
+          eq(schema.products.organizationId, query.organizationId),
+        ),
+      )
       .where(
         and(
           inArray(schema.nozzleReadings.shiftId, shiftIds),
@@ -280,12 +286,27 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       // Left joins throughout: a chit names a customer, but product and vehicle
       // are optional on the ledger row, and a missing one must not drop the
       // chit out of a breakdown that has to sum to the shift total.
-      .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
+      .leftJoin(
+        schema.customers,
+        and(
+          eq(schema.customerTransactions.customerId, schema.customers.id),
+          eq(schema.customers.organizationId, query.organizationId),
+        ),
+      )
       .leftJoin(
         schema.customerVehicles,
-        eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+        and(
+          eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+          eq(schema.customerVehicles.organizationId, query.organizationId),
+        ),
       )
-      .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
+      .leftJoin(
+        schema.products,
+        and(
+          eq(schema.customerTransactions.productId, schema.products.id),
+          eq(schema.products.organizationId, query.organizationId),
+        ),
+      )
       .where(and(...filters));
 
     return rows.map((r) => ({

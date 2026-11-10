@@ -34,7 +34,12 @@ describe('RecordIncome (Office Record, ADR 0005)', () => {
   it('records on the Entry Date into the Funding Account, with no shift or business day', async () => {
     const income = new IncomeRepo();
     const { store, events } = eventBus();
-    const r = await new RecordIncome({ income, accounts: new AccountRepo(), events }).execute(
+    const r = await new RecordIncome({
+      references: { exists: async () => true },
+      income,
+      accounts: new AccountRepo(),
+      events,
+    }).execute(
       { categoryId: 'cat-1', amount: 1500, fundingAccountId: 'hdfc', payer: 'Tanker Co' },
       ctx(),
     );
@@ -57,6 +62,7 @@ describe('RecordIncome (Office Record, ADR 0005)', () => {
     const income = new IncomeRepo();
     const { events } = eventBus();
     const r = await new RecordIncome({
+      references: { exists: async () => true },
       income,
       accounts: new AccountRepo(),
       terminals: new TerminalLookup([terminal('pos-1')]),
@@ -75,6 +81,7 @@ describe('RecordIncome (Office Record, ADR 0005)', () => {
   it('requires Card or UPI for a terminal receipt (#276)', async () => {
     const { events } = eventBus();
     const r = await new RecordIncome({
+      references: { exists: async () => true },
       income: new IncomeRepo(),
       accounts: new AccountRepo(),
       terminals: new TerminalLookup([terminal('pos-1', { supportsUpi: false })]),
@@ -90,6 +97,7 @@ describe('RecordIncome (Office Record, ADR 0005)', () => {
     const income = new IncomeRepo();
     const { events } = eventBus();
     const recorded = await new RecordIncome({
+      references: { exists: async () => true },
       income,
       accounts: new AccountRepo(),
       events,
@@ -166,6 +174,7 @@ describe('RecordIncome tax capture', () => {
   it('freezes the GST split on the entry', async () => {
     const income = new IncomeRepo();
     const result = await new RecordIncome({
+      references: { exists: async () => true },
       income,
       accounts: new AccountRepo(),
       incomeCategories: new CategoryRepo([category({ gst_rate: 18 })]),
@@ -191,6 +200,7 @@ describe('RecordIncome tax capture', () => {
   it('defaults to a zero split when no category repository is wired', async () => {
     const income = new IncomeRepo();
     const result = await new RecordIncome({
+      references: { exists: async () => true },
       income,
       accounts: new AccountRepo(),
       events: eventBus().events,

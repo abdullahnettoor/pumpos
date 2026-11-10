@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import {
+  requireTenantReference,
+  type TenantReferenceReader,
+} from '../../../kernel/tenant-reference.js';
+import {
   BusinessEvents,
   err,
   eventFromContext,
@@ -109,6 +113,7 @@ const schema = z.object({
 });
 
 export interface RecordCollectionDeps {
+  references: TenantReferenceReader;
   collections: CollectionRepository;
   customers: CustomerRepository;
   accounts: FinancialAccountRepository;
@@ -142,6 +147,14 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
     const customer = await this.deps.customers.findById(cmd.customerId);
     if (!customer || customer.organizationId !== ctx.organizationId)
       return err(notFoundError('Customer', cmd.customerId));
+    const vehicle = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Vehicle',
+      cmd.vehicleId,
+      { customerId: cmd.customerId },
+    );
+    if (!vehicle.success) return vehicle;
 
     const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
       allowedAccountTypes: accountTypesForPaymentMethod(cmd.paymentMethod),

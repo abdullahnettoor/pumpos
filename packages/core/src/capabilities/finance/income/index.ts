@@ -9,8 +9,15 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+  TenantReferenceReader,
+} from '../../../kernel/index.js';
 import type { FinancialAccountRepository } from '../accounts/index.js';
 import {
   OFFICE_ACCOUNT_TYPES,
@@ -197,6 +204,7 @@ const schema = z.object({
 });
 
 export interface RecordIncomeDeps {
+  references: TenantReferenceReader;
   income: IncomeRepository;
   accounts: FinancialAccountRepository;
   terminals?: PaymentTerminalLookup;
@@ -218,6 +226,14 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
     if (!p.success)
       return err(validationError('Invalid RecordIncome command', { issues: p.error.flatten() }));
     const cmd = p.data;
+
+    const head = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Income head',
+      cmd.categoryId,
+    );
+    if (!head.success) return head;
 
     // Through a terminal (#276) the money lands in a clearing account and the
     // terminal must support the method; otherwise an ordinary office account.

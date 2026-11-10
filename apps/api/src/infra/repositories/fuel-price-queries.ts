@@ -109,7 +109,13 @@ export async function listFuelPriceHistory(
       createdAt: schema.fuelPrices.createdAt,
     })
     .from(schema.fuelPrices)
-    .innerJoin(schema.products, eq(schema.fuelPrices.productId, schema.products.id))
+    .innerJoin(
+      schema.products,
+      and(
+        eq(schema.fuelPrices.productId, schema.products.id),
+        eq(schema.products.organizationId, organizationId),
+      ),
+    )
     .where(
       and(
         eq(schema.fuelPrices.stationId, stationId),

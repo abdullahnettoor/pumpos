@@ -171,6 +171,7 @@ function deps(
   const store = over.store ?? new InMemoryEventStore();
   return {
     sales: over.sales ?? new SaleRepo(),
+    references: { exists: async () => true },
     stock: over.stock ?? new StockRepo(),
     ledger: over.ledger ?? new LedgerRepo(),
     customers: over.customers ?? new CustomerRepo([customer()]),

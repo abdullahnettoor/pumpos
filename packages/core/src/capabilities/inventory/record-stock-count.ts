@@ -8,6 +8,7 @@ import {
   ok,
   relatedEventFromContext,
   validationError,
+  requireTenantReference,
 } from '../../kernel/index.js';
 import type {
   DomainEvent,
@@ -15,6 +16,7 @@ import type {
   ExecutionContext,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../kernel/index.js';
 import { resolveBusinessDayWrite } from '../station-ops/business-days/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftWriteDeps } from '../station-ops/shifts/index.js';
@@ -63,6 +65,7 @@ const schema = z
   });
 
 export interface RecordStockCountDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   movements: StockMovementRepository;
   variances: StockVarianceRepository;
   tanks: TankRepository;
@@ -122,6 +125,13 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       return err(notFoundError('Tank', cmd.tankId));
     }
     const productId = tank?.productId ?? cmd.productId!;
+    const product = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Product',
+      productId,
+    );
+    if (!product.success) return product;
 
     let attributedDay = null;
     let closedShiftEnd: string | null = null;

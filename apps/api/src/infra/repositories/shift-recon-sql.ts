@@ -188,9 +188,10 @@ export function creditSaleLinesJson(shiftId: string) {
       'vehicleNumber', cv.registration_number
     ) ORDER BY ct.created_at, ct.id)
     FROM customer_transactions ct
-    LEFT JOIN customers cust ON cust.id = ct.customer_id
-    LEFT JOIN products prod ON prod.id = ct.product_id
-    LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
+    JOIN shifts tenant_shift ON tenant_shift.id = ct.shift_id
+    LEFT JOIN customers cust ON cust.id = ct.customer_id AND cust.organization_id = tenant_shift.organization_id
+    LEFT JOIN products prod ON prod.id = ct.product_id AND prod.organization_id = tenant_shift.organization_id
+    LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id AND cv.organization_id = tenant_shift.organization_id
     WHERE ct.shift_id = ${shiftId}
       AND ct.transaction_type = 'Credit Sale'
       AND ct.reference_type = 'CREDIT_SALE'), '[]'::jsonb)

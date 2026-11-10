@@ -7,8 +7,15 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+  TenantReferenceReader,
+} from '../../../kernel/index.js';
 import type { FinancialAccountRepository } from '../accounts/index.js';
 import { OFFICE_ACCOUNT_TYPES, resolveOfficeEntry } from '../office-entry.js';
 
@@ -56,6 +63,7 @@ const schema = z.object({
 });
 
 export interface RecordExpenseDeps {
+  references: TenantReferenceReader;
   expenses: ExpenseRepository;
   accounts: FinancialAccountRepository;
   events: EventPublisher;
@@ -70,6 +78,13 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     if (!p.success)
       return err(validationError('Invalid RecordExpense command', { issues: p.error.flatten() }));
     const cmd = p.data;
+    const head = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Expense head',
+      cmd.categoryId,
+    );
+    if (!head.success) return head;
 
     const entry = await resolveOfficeEntry(this.deps, ctx, cmd, {
       allowedAccountTypes: OFFICE_ACCOUNT_TYPES,

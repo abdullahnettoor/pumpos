@@ -183,6 +183,7 @@ function stockCountDeps(
   const store = new InMemoryEventStore();
   return {
     deps: {
+      references: { exists: async () => true },
       movements,
       variances,
       tanks,
@@ -267,6 +268,7 @@ describe('RecordStockCount', () => {
     const store = new InMemoryEventStore();
     const result = await new RecordStockCount(
       withRepositoryShiftWriteGate({
+        references: { exists: async () => true },
         movements,
         variances,
         tanks: new TankRepo([]),

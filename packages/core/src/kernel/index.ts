@@ -7,3 +7,4 @@ export * from './event-activity.js';
 export * from './event-dispatcher.js';
 export * from './use-case.js';
 export * from './repository.js';
+export * from './tenant-reference.js';

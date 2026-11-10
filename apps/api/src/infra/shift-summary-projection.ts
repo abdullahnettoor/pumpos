@@ -75,6 +75,7 @@ export async function projectShiftSummary(
         LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
         LEFT JOIN dispenser_units du ON du.id = nz.du_id
         LEFT JOIN products prod ON prod.id = nz.product_id
+          AND prod.organization_id = (SELECT organization_id FROM shifts WHERE id = ${shift.id})
         WHERE nr.shift_id = ${shift.id}), '[]'::jsonb) AS nr_rows,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
           'h', ${rowJson(S.attendantHandovers, 'h')},
@@ -111,6 +112,7 @@ export async function projectShiftSummary(
           FROM sales s
           JOIN sale_items si ON si.sale_id = s.id
           LEFT JOIN products p ON p.id = si.product_id
+            AND p.organization_id = (SELECT organization_id FROM shifts WHERE id = ${shift.id})
           WHERE s.shift_id = ${shift.id} AND s.sale_type <> 'Fuel'
           GROUP BY si.product_id, p.name, p.product_type
         ) t), '[]'::jsonb) AS product_rows,

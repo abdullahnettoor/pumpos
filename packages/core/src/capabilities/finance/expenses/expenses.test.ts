@@ -18,7 +18,12 @@ class ExpenseRepo implements ExpenseRepository {
 
 function record(expenses: ExpenseRepo, input: Record<string, unknown>) {
   const { store, events } = eventBus();
-  const result = new RecordExpense({ expenses, accounts: new AccountRepo(), events }).execute(
+  const result = new RecordExpense({
+    references: { exists: async () => true },
+    expenses,
+    accounts: new AccountRepo(),
+    events,
+  }).execute(
     { categoryId: 'cat', amount: 250, fundingAccountId: 'petty', ...input } as any,
     officeCtx(),
   );

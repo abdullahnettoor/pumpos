@@ -91,6 +91,7 @@ describe('RecordDensityReading', () => {
     const repo = new InMemoryDensityRepo();
     const publish = vi.fn().mockResolvedValue(undefined);
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish },
       ids: { generate: () => 'reading-1' },
@@ -140,6 +141,7 @@ describe('RecordDensityReading', () => {
     const repo = new InMemoryDensityRepo();
     const publish = vi.fn().mockResolvedValue(undefined);
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish },
       ids: { generate: () => 'reading-2' },
@@ -191,6 +193,7 @@ describe('RecordDensityReading', () => {
 
     const publish = vi.fn().mockResolvedValue(undefined);
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish },
       settings: { densityToleranceKgM3: 3.0 },
@@ -256,6 +259,7 @@ describe('RecordDensityReading', () => {
         recordedAt: '2026-10-10T06:30:00.000Z',
       });
       const res = await new RecordDensityReading({
+        references: { exists: async () => true },
         densityReadings: repo,
         events: { publish: vi.fn().mockResolvedValue(undefined) },
         settings: { densityToleranceKgM3: 3.0 },
@@ -300,6 +304,7 @@ describe('RecordDensityReading', () => {
 
     const publish = vi.fn().mockResolvedValue(undefined);
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish },
       settings: { densityToleranceKgM3: 3.0 },
@@ -349,6 +354,7 @@ describe('RecordDensityReading', () => {
 
     const publish = vi.fn().mockResolvedValue(undefined);
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish },
       settings: { densityToleranceKgM3: 3.0 },
@@ -375,6 +381,7 @@ describe('RecordDensityReading', () => {
   it('rejects station mismatch', async () => {
     const repo = new InMemoryDensityRepo();
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish: vi.fn() },
     });
@@ -529,6 +536,7 @@ describe('RecordDensityReading jump comparison order', () => {
       mk('d10', '2026-10-10', '2026-10-10T01:00:00.000Z', 760),
     );
     const useCase = new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish: vi.fn() },
       settings: { densityToleranceKgM3: 3 },
@@ -553,6 +561,7 @@ describe('RecordDensityReading jump comparison order', () => {
     const repo = new InMemoryDensityRepo();
     repo.readings.push(mk('p', '2026-10-10', '2026-10-10T01:00:00.000Z', 740));
     await new RecordDensityReading({
+      references: { exists: async () => true },
       densityReadings: repo,
       events: { publish: vi.fn() },
     }).execute(
@@ -574,6 +583,7 @@ describe('RecordDensityReading jump comparison order', () => {
   it('does not feed the jump tolerance into the 15 °C solver', async () => {
     const make = (tol: number) =>
       new RecordDensityReading({
+        references: { exists: async () => true },
         densityReadings: new InMemoryDensityRepo(),
         events: { publish: vi.fn() },
         settings: { densityToleranceKgM3: tol },

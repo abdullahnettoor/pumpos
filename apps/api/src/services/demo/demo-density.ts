@@ -1,4 +1,5 @@
 import { RecordDensityReading } from '@pump/core';
+import { DrizzleTenantReferenceReader } from '../../infra/repositories/tenant-reference-reader.js';
 import { density15FromObserved, resolveDecantationSettings, roundDensity, vcf } from '@pump/shared';
 import { DrizzleDensityReadingRepository } from '../../infra/repositories/decantation-repositories.js';
 import { must, type DemoContext } from './demo-context.js';
@@ -33,6 +34,7 @@ export function createDensityHelpers(ctx: DemoContext) {
   }) =>
     must(
       await new RecordDensityReading({
+        references: new DrizzleTenantReferenceReader(tx),
         densityReadings: new DrizzleDensityReadingRepository(tx),
         events,
         ids: { generate: () => ids.newId() },

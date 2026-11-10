@@ -13,6 +13,7 @@ import {
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { DrizzleDensityReadingRepository } from '../infra/repositories/decantation-repositories.js';
+import { DrizzleTenantReferenceReader } from '../infra/repositories/tenant-reference-reader.js';
 import { sendResult } from '../infra/send-result.js';
 import {
   loadStationClock,
@@ -87,6 +88,7 @@ densityRouter.post(
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       await lockStationInventory(tx, user.organizationId, body.stationId);
       return new RecordDensityReading({
+        references: new DrizzleTenantReferenceReader(tx),
         densityReadings: new DrizzleDensityReadingRepository(tx),
         events,
         ...(settings ? { settings } : {}),

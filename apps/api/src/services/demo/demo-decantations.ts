@@ -1,3 +1,5 @@
+import { DrizzleTenantReferenceReader } from '../../infra/repositories/tenant-reference-reader.js';
+import { DrizzlePurchaseStationLegalReader } from '../../infra/transaction-reference-sql.js';
 import {
   RecordDecantation,
   RecordPurchase,
@@ -18,10 +20,7 @@ import {
 } from '../../infra/repositories/purchasing-repositories.js';
 import { DrizzleSupplierRepository } from '../../infra/repositories/crm-repositories.js';
 import { DrizzleProductRepository } from '../../infra/repositories/product.repo.js';
-import {
-  DrizzleStationRepository,
-  DrizzleTankRepository,
-} from '../../infra/repositories/setup-repositories.js';
+import { DrizzleTankRepository } from '../../infra/repositories/setup-repositories.js';
 import { DrizzleStockVarianceRepository } from '../../infra/repositories/inventory-repositories.js';
 import { must, type DemoContext } from './demo-context.js';
 import type { DensityHelpers } from './demo-density.js';
@@ -88,13 +87,14 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
   }) =>
     must(
       await new RecordPurchase({
+        references: new DrizzleTenantReferenceReader(tx),
         purchases: new DrizzlePurchaseRepository(tx),
         purchaseItems: new DrizzlePurchaseItemRepository(tx),
         stock: stockMovements,
         supplierTxns: new DrizzleSupplierTransactionRepository(tx),
         suppliers: new DrizzleSupplierRepository(tx),
         products: new DrizzleProductRepository(tx),
-        stations: new DrizzleStationRepository(tx),
+        stationLegal: new DrizzlePurchaseStationLegalReader(tx),
         shifts,
         businessDays,
         shiftWriteGate,
@@ -217,6 +217,7 @@ export function createDecantationHelpers(ctx: DemoContext, density: DensityHelpe
   const routineDip = async (tankId: string, actualQuantity: number, at: Date, reason: string) =>
     must(
       await new RecordStockCount({
+        references: new DrizzleTenantReferenceReader(tx),
         movements: stockMovements,
         variances: new DrizzleStockVarianceRepository(tx),
         tanks: new DrizzleTankRepository(tx),

@@ -142,6 +142,7 @@ describe('RecordCreditSale', () => {
     const store = new InMemoryEventStore();
     const result = await new RecordCreditSale(
       withRepositoryShiftWriteGate({
+        references: { exists: async () => true },
         ledger,
         customers: new CustomerRepo([customer()]),
         shifts: new ShiftRepo([shift()]),
@@ -176,6 +177,7 @@ describe('RecordCreditSale', () => {
     const ledger = new LedgerRepo();
     const result = await new RecordCreditSale(
       withRepositoryShiftWriteGate({
+        references: { exists: async () => true },
         ledger,
         customers: new CustomerRepo([customer()]),
         shifts: new ShiftRepo([shift()]),
@@ -207,6 +209,7 @@ describe('RecordCreditSale', () => {
     const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:30:00Z' };
     const result = await new RecordCreditSale(
       withRepositoryShiftWriteGate({
+        references: { exists: async () => true },
         ledger,
         customers: new CustomerRepo([customer()]),
         shifts: new ShiftRepo([closedShift]),
@@ -223,6 +226,7 @@ describe('RecordCreditSale', () => {
   it('rejects an unknown customer', async () => {
     const result = await new RecordCreditSale(
       withRepositoryShiftWriteGate({
+        references: { exists: async () => true },
         ledger: new LedgerRepo(),
         customers: new CustomerRepo([]),
         shifts: new ShiftRepo([shift()]),

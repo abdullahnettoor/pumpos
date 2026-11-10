@@ -7,6 +7,7 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
 import type {
   EventPublisher,
@@ -14,6 +15,7 @@ import type {
   Repository,
   Result,
   UseCase,
+  TenantReferenceReader,
 } from '../../../kernel/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 
@@ -72,6 +74,7 @@ function normalizeReg(reg: string): string {
 }
 
 export interface VehicleDeps {
+  references: TenantReferenceReader;
   repository: VehicleRepository;
   customers: CustomerRepository;
   events: EventPublisher;
@@ -86,6 +89,13 @@ export class AddVehicle implements UseCase<AddVehicleCommand, Vehicle> {
     const customer = await this.deps.customers.findById(p.data.customerId);
     if (!customer || customer.organizationId !== ctx.organizationId)
       return err(notFoundError('Customer', p.data.customerId));
+    const product = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Product',
+      p.data.defaultProductId,
+    );
+    if (!product.success) return product;
     const registrationNumber = normalizeReg(p.data.registrationNumber);
     if (await this.deps.repository.existsByRegistration(ctx.organizationId, registrationNumber)) {
       return err(
@@ -127,6 +137,13 @@ export class UpdateVehicle implements UseCase<UpdateVehicleCommand, Vehicle> {
     if (!existing) return err(notFoundError('Vehicle', p.data.id));
     if (existing.organizationId !== ctx.organizationId)
       return err(forbiddenError('Vehicle belongs to another organization'));
+    const product = await requireTenantReference(
+      this.deps.references,
+      ctx.organizationId,
+      'Product',
+      p.data.defaultProductId,
+    );
+    if (!product.success) return product;
     const registrationNumber =
       p.data.registrationNumber !== undefined
         ? normalizeReg(p.data.registrationNumber)

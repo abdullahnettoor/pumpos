@@ -7,8 +7,15 @@ import {
   notFoundError,
   ok,
   validationError,
+  requireTenantReference,
 } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+  TenantReferenceReader,
+} from '../../../kernel/index.js';
 import {
   resolveFinancialAnchor,
   type ShiftRepository,
@@ -53,9 +60,54 @@ const schema = z.object({
 });
 
 export interface RecordCreditSaleDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   events: EventPublisher;
+}
+
+/** Read-only preflight: resolveFinancialAnchor may lazily INSERT a Business Day. */
+async function validateSaleReferences(
+  deps: Pick<RecordCreditSaleDeps, 'references' | 'shiftWriteGate'>,
+  ctx: ExecutionContext,
+  cmd: {
+    shiftId?: string;
+    stationId?: string;
+    customerId?: string | null;
+    productId?: string | null;
+    vehicleId?: string | null;
+    attendantId?: string | null;
+    duId?: string | null;
+  },
+): Promise<Result<void>> {
+  let stationId = cmd.stationId ?? ctx.stationId ?? undefined;
+  if (cmd.shiftId) {
+    const source = await deps.shiftWriteGate.discover(cmd.shiftId);
+    if (
+      !source.shift ||
+      source.shift.organizationId !== ctx.organizationId ||
+      !source.businessDay ||
+      source.businessDay.organizationId !== ctx.organizationId ||
+      (stationId && source.shift.stationId !== stationId)
+    )
+      return err(notFoundError('Shift', cmd.shiftId));
+    stationId = source.shift.stationId;
+  }
+  if (!stationId) return err(validationError('Either shiftId or stationId is required'));
+  for (const [kind, id] of [
+    ['Station', stationId],
+    ['Product', cmd.productId],
+    ['Vehicle', cmd.vehicleId],
+    ['Attendant', cmd.attendantId ?? ctx.actorId],
+    ['Dispenser', cmd.duId],
+  ] as const) {
+    const check = await requireTenantReference(deps.references, ctx.organizationId, kind, id, {
+      stationId,
+      customerId: cmd.customerId,
+    });
+    if (!check.success) return check;
+  }
+  return ok(undefined);
 }
 
 /**
@@ -88,6 +140,8 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
 
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
+    const references = await validateSaleReferences(this.deps, ctx, cmd);
+    if (!references.success) return references;
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
     const { businessDayId, shiftId, stationId } = anchor.data;
@@ -249,6 +303,7 @@ const omcSchema = z.object({
 });
 
 export interface RecordOmcCardSaleDeps extends ShiftWriteDeps {
+  references: TenantReferenceReader;
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   events: EventPublisher;
@@ -287,6 +342,8 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
 
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
+    const references = await validateSaleReferences(this.deps, ctx, cmd);
+    if (!references.success) return references;
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
     const { businessDayId, shiftId, stationId } = anchor.data;

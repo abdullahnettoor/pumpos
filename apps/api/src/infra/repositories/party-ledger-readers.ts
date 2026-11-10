@@ -95,8 +95,8 @@ export class DrizzleCustomerLedgerReader {
         LEFT JOIN business_days shift_day
           ON shift_day.id = s.business_day_id
          AND shift_day.organization_id = bd.organization_id
-        LEFT JOIN products pr ON pr.id = ct.product_id
-        LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
+        LEFT JOIN products pr ON pr.id = ct.product_id AND pr.organization_id = ${organizationId}
+        LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id AND cv.organization_id = ${organizationId}
         WHERE bd.organization_id = ${organizationId}
           AND ct.customer_id = ${customerId}
           AND ${onCustomerLedger('ct')}
@@ -222,7 +222,7 @@ export class DrizzleSupplierLedgerReader {
                  CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN SUM(pit.quantity)::text ELSE NULL END AS quantity,
                  CASE WHEN COUNT(DISTINCT pr.unit) = 1 THEN MIN(pr.unit) ELSE NULL END AS unit
           FROM purchase_items pit
-          JOIN products pr ON pr.id = pit.product_id
+          JOIN products pr ON pr.id = pit.product_id AND pr.organization_id = ${organizationId}
            WHERE pit.purchase_id = p.id
           HAVING COUNT(*) > 0
         ) pi ON true

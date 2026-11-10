@@ -16,11 +16,12 @@ import type {
   PurchaseRepository,
   SupplierTransaction,
   SupplierTransactionRepository,
+  PurchaseStationLegalReader,
 } from './index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { Supplier, SupplierRepository } from '../crm/suppliers/index.js';
 import type { Product, ProductRepository } from '../station-setup/products/index.js';
-import type { Station, StationRepository } from '../station-setup/stations/index.js';
+import type { Station } from '../station-setup/stations/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
 import type {
   BusinessDay,
@@ -101,14 +102,11 @@ class ProductRepo implements ProductRepository {
     if (r) r.costBasis = costBasis;
   }
 }
-class StationRepo implements StationRepository {
+class StationLegalReader implements PurchaseStationLegalReader {
   constructor(readonly rows: Station[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async save() {}
-  async listByOrganization() {
-    return this.rows;
+  async findStateCode(organizationId: string, id: string) {
+    const station = this.rows.find((r) => r.id === id && r.organizationId === organizationId);
+    return station ? { stateCode: null } : null;
   }
 }
 class ShiftRepo implements ShiftRepository {
@@ -270,7 +268,8 @@ describe('RecordPurchase', () => {
         supplierTxns,
         suppliers: new SupplierRepo([supplier()]),
         products: new ProductRepo([lubeProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([
           { ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' },
@@ -311,7 +310,8 @@ describe('RecordPurchase', () => {
         suppliers: new SupplierRepo([supplier()]),
         purchaseItems: new PurchaseItemRepo(),
         products: new ProductRepo([fuelProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([bday()]),
         docNumbers,
@@ -358,7 +358,8 @@ describe('RecordPurchase', () => {
         supplierTxns: new SupplierTxnRepo(),
         suppliers: new SupplierRepo([supplier()]),
         products: new ProductRepo([fuelProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([bday()]),
         docNumbers,
@@ -404,7 +405,8 @@ describe('RecordPurchase', () => {
         suppliers: new SupplierRepo([supplier()]),
         purchaseItems: new PurchaseItemRepo(),
         products: new ProductRepo([fuelProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([yesterdayShift]),
         businessDays: new BdRepo(twoDays()),
         docNumbers,
@@ -468,7 +470,8 @@ describe('RecordPurchase', () => {
         businessDays: new BdRepo([bday()]),
         purchaseItems: new PurchaseItemRepo(),
         products,
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         docNumbers,
         events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
       }),
@@ -500,7 +503,8 @@ describe('RecordPurchase', () => {
         businessDays: new BdRepo([bday()]),
         purchaseItems: new PurchaseItemRepo(),
         products,
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         docNumbers,
         events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
       }),
@@ -529,7 +533,8 @@ describe('RecordPurchase', () => {
         businessDays: new BdRepo([bday()]),
         purchaseItems: new PurchaseItemRepo(),
         products: new ProductRepo([lubeProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         docNumbers,
         events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
       }),
@@ -561,7 +566,8 @@ describe('RecordPurchase', () => {
         suppliers: new SupplierRepo([supplier()]),
         purchaseItems: items,
         products: new ProductRepo([fuelProduct(), lubeProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([bday()]),
         docNumbers,
@@ -600,7 +606,8 @@ describe('RecordPurchase', () => {
         suppliers: new SupplierRepo([supplier()]),
         purchaseItems: new PurchaseItemRepo(),
         products: new ProductRepo([lubeProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([bday()]),
         docNumbers,
@@ -635,7 +642,8 @@ describe('RecordPurchase', () => {
         suppliers: new SupplierRepo([supplier()]),
         purchaseItems: new PurchaseItemRepo(),
         products: new ProductRepo([lubeProduct()]),
-        stations: new StationRepo([station()]),
+        references: { exists: async () => true },
+        stationLegal: new StationLegalReader([station()]),
         shifts: new ShiftRepo([]),
         businessDays: new BdRepo([bday()]),
         docNumbers,

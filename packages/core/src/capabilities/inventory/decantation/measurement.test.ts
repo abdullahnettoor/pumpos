@@ -153,6 +153,7 @@ function setup(
     findByIdWithoutLock: findShift,
   } as never;
   const count = new RecordStockCount({
+    references: { exists: async () => true },
     movements: movementsRepo,
     variances: { save: async (v) => void variances.push(v), existsForShift: async () => false },
     tanks: { findByIdForUpdate: async () => tank } as never,
