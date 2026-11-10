@@ -66,26 +66,19 @@ export function stationGeneralValues(station: Station | null): StationGeneralVal
 }
 
 /**
- * The update body for General. Settings are merged over the saved ones; the
- * onboarding status is not part of this form (read-only on the page).
+ * General owns only these settings keys. The server merges them under its
+ * Station lock; never echo another form's cached settings. Onboarding is read-only.
  */
-export function stationGeneralBody(
-  station: Station,
-  values: z.output<typeof stationGeneralSchema>,
-) {
+export function stationGeneralBody(values: z.output<typeof stationGeneralSchema>) {
   return {
     name: values.name,
     code: values.code,
     address: values.address,
     phone: values.phone,
     settings: {
-      ...station.settings,
       shift_grace_minutes: values.graceMinutes,
       timezone: values.timezone,
       business_day_starts_at: values.businessDayStartsAt,
-      shift_lock_grace_days: station.settings?.shift_lock_grace_days ?? 3,
-      offline_warning_days: station.settings?.offline_warning_days ?? 3,
-      offline_critical_days: station.settings?.offline_critical_days ?? 7,
     },
   };
 }
@@ -122,14 +115,10 @@ export function stationBrandingValues(station: Station | null): StationBrandingV
   };
 }
 
-/** The update body for Branding: blanks are sent as null. */
-export function stationBrandingBody(
-  station: Station,
-  values: z.output<typeof stationBrandingSchema>,
-) {
+/** Branding owns these three keys; blanks are null, and legal is a whole-value replacement. */
+export function stationBrandingBody(values: z.output<typeof stationBrandingSchema>) {
   return {
     settings: {
-      ...station.settings,
       legal: {
         legalName: values.legalName || null,
         gstin: values.gstin || null,
@@ -172,9 +161,9 @@ export function withDensityBand(
   return next;
 }
 
-/** The update body for Decantation guidance, merged over the saved settings. */
-export function decantationGuidanceBody(station: Station, values: DecantationSettings) {
-  return { settings: { ...station.settings, ...values } };
+/** Only the guidance keys; the server retains every other top-level setting. */
+export function decantationGuidanceBody(values: DecantationSettings) {
+  return { settings: { ...values } };
 }
 
 /**
@@ -194,9 +183,11 @@ export function newerStation(current: Station | null, incoming: Station | null):
  * address when Branding has none, the logo setting from Report templates).
  */
 export function brandingLetterhead(station: Station, values: StationBrandingValues): Letterhead {
-  const body = stationBrandingBody(station, {
+  const body = stationBrandingBody({
     ...values,
     gstin: (values.gstin ?? '').toUpperCase(),
   });
-  return letterheadFromStation({ ...station, settings: body.settings }) ?? {};
+  return (
+    letterheadFromStation({ ...station, settings: { ...station.settings, ...body.settings } }) ?? {}
+  );
 }

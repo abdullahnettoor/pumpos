@@ -26,7 +26,7 @@ import type {
   DomainEvent,
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -48,10 +48,10 @@ export interface UserWithAssignments extends User {
   stationIds: string[];
 }
 
-export interface UserRepository extends Repository<User> {
+export interface UserRepository extends TenantRepository<User> {
   save(user: User): Promise<void>;
   /** Link a member to its login account. `save` never writes `authUserId`. */
-  linkLogin(userId: string, authUserId: string): Promise<void>;
+  linkLogin(userId: string, authUserId: string, organizationId: string): Promise<void>;
   /** Replace the user's station assignments; every station must belong to the organization. */
   setStationAssignments(
     userId: string,
@@ -184,7 +184,7 @@ export class UpdateUser implements UseCase<UpdateUserCommand, UpdatedUser> {
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateUser command', { issues: p.error.flatten() }));
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.findById(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('User', p.data.id));
     const updated: User = {
@@ -268,7 +268,7 @@ export interface ResetUserPasswordCommand {
 export class ResetUserPassword implements UseCase<ResetUserPasswordCommand, User> {
   constructor(private readonly deps: UserDeps) {}
   async execute(input: ResetUserPasswordCommand, ctx: ExecutionContext): Promise<Result<User>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findById(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('User', input.id));
     await this.deps.events.publish([
@@ -293,7 +293,7 @@ export interface SetUserStatusCommand {
 export class SetUserStatus implements UseCase<SetUserStatusCommand, User> {
   constructor(private readonly deps: UserDeps) {}
   async execute(input: SetUserStatusCommand, ctx: ExecutionContext): Promise<Result<User>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findById(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('User', input.id));
     const updated: User = {
@@ -374,7 +374,7 @@ export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, Us
     if (!loginHandle) return err(validationError('A valid email or phone is required'));
 
     await this.deps.capacity.lockOrganization(ctx.organizationId);
-    const target = await this.deps.repository.findById(id.data);
+    const target = await this.deps.repository.findById(id.data, ctx.organizationId);
     if (!target || target.organizationId !== ctx.organizationId)
       return err(notFoundError('User', id.data));
     if (!(await this.deps.authorizer.canGrantTo(target)))
@@ -410,7 +410,7 @@ export class GrantUserAppAccess implements UseCase<GrantUserAppAccessCommand, Us
       updatedAt: ctx.clock.now().toISOString(),
     };
     await this.deps.repository.save(updated);
-    await this.deps.repository.linkLogin(updated.id, authUserId);
+    await this.deps.repository.linkLogin(updated.id, authUserId, ctx.organizationId);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.USER_APP_ACCESS_GRANTED,

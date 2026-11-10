@@ -225,8 +225,14 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
 
       // The gross is what the customer pays for this line; the split is
       // extracted from it, so the line total is never altered by taxing.
-      const product = this.deps.products ? await this.deps.products.findById(line.productId) : null;
-      const split = splitSaleLineTax(lineTotal, product, interState);
+      const product = this.deps.products
+        ? await this.deps.products.findById(line.productId, ctx.organizationId)
+        : null;
+      const split = splitSaleLineTax(
+        lineTotal,
+        product && product.organizationId === ctx.organizationId ? product : null,
+        interState,
+      );
 
       lines.push({
         id: ctx.ids.newId(),

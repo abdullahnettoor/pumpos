@@ -13,8 +13,8 @@ import type { PaymentTerminal, PaymentTerminalRepository } from './ports.js';
 
 class InMemoryTerminalRepo implements PaymentTerminalRepository {
   readonly rows: PaymentTerminal[] = [];
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
   async save(t: PaymentTerminal) {
     const idx = this.rows.findIndex((r) => r.id === t.id);

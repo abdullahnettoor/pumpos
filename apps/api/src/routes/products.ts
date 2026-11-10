@@ -1,4 +1,6 @@
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
+import { validateParams } from '../utils/validator.js';
 import type { DbClient } from '@pump/db';
 import { can, redactProductCosts } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
@@ -127,31 +129,37 @@ productsRouter.post(
 );
 
 // PUT /api/setup/products/:id
-productsRouter.put('/products/:id', writePolicyGuard('PUT /setup/products/:id'), async (c) => {
-  if (!can(c.var.user, 'products.manage')) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' },
-      },
-      403,
-    );
-  }
-  const id = c.req.param('id');
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  const useCase = new UpdateProduct({
-    repository: new DrizzleProductRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ ...body, id }, buildContext(c.var.user));
-  return sendProductResult(c, result);
-});
+productsRouter.put(
+  '/products/:id',
+  writePolicyGuard('PUT /setup/products/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
+  async (c) => {
+    if (!can(c.var.user, 'products.manage')) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' },
+        },
+        403,
+      );
+    }
+    const id = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    const useCase = new UpdateProduct({
+      repository: new DrizzleProductRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ ...body, id }, buildContext(c.var.user));
+    return sendProductResult(c, result);
+  },
+);
 
 // DELETE /api/setup/products/:id  (archive -> isActive=false)
 productsRouter.delete(
   '/products/:id',
   writePolicyGuard('DELETE /setup/products/:id'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     if (!can(c.var.user, 'products.manage')) {
       return c.json(

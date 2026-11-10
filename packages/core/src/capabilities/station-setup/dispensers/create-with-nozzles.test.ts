@@ -24,16 +24,16 @@ const HSD = 'product-hsd';
 
 class Rows<T extends { id: string; organizationId: string; stationId: string }> {
   readonly rows: T[] = [];
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
   async save(row: T) {
     const idx = this.rows.findIndex((r) => r.id === row.id);
     if (idx >= 0) this.rows[idx] = row;
     else this.rows.push(row);
   }
-  async deleteById(id: string) {
-    const idx = this.rows.findIndex((r) => r.id === id);
+  async deleteById(id: string, organizationId: string) {
+    const idx = this.rows.findIndex((r) => r.id === id && r.organizationId === organizationId);
     if (idx >= 0) this.rows.splice(idx, 1);
     return idx >= 0;
   }
@@ -47,8 +47,8 @@ class Rows<T extends { id: string; organizationId: string; stationId: string }> 
 class InMemoryDispensers extends Rows<DispenserUnit> implements DispenserRepository {}
 class InMemoryNozzles extends Rows<Nozzle> implements NozzleRepository {}
 class InMemoryTanks extends Rows<Tank> implements TankRepository {
-  async findByIdForUpdate(id: string) {
-    return this.findById(id);
+  async findByIdForUpdate(id: string, organizationId: string) {
+    return this.findById(id, organizationId);
   }
   async hasNozzles() {
     return false;
@@ -112,8 +112,8 @@ function fuel(id: string, organizationId = 'org-1'): Product {
 
 class InMemoryProducts {
   readonly rows: Product[] = [fuel(MS), fuel(HSD)];
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
 }
 

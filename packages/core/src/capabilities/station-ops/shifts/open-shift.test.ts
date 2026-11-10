@@ -84,8 +84,8 @@ class BdRepo implements BusinessDayWriteRepository {
 
 class NozzleRepo implements NozzleRepository {
   constructor(readonly rows: Nozzle[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
   }
   async save() {}
   async deleteById() {

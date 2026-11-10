@@ -5,6 +5,8 @@ import {
   readInvoiceCustomer,
   readStationLegal,
 } from '../infra/transaction-reference-sql.js';
+import { z } from 'zod';
+import { validateParams } from '../utils/validator.js';
 import { and, desc, eq, gte, ilike, inArray, lte, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
@@ -2549,6 +2551,7 @@ transactionsRouter.get('/money-movements', async (c) => {
 transactionsRouter.post(
   '/sales/:id/invoice',
   writePolicyGuard('POST /transactions/sales/:id/invoice'),
+  validateParams(z.object({ id: z.string().uuid() })),
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;

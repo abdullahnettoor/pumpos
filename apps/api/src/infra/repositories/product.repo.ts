@@ -30,11 +30,11 @@ function toEntity(row: Row): Product {
 export class DrizzleProductRepository implements ProductRepository {
   constructor(private readonly db: DbClient) {}
 
-  async findById(id: string): Promise<Product | null> {
+  async findById(id: string, organizationId: string): Promise<Product | null> {
     const [row] = await this.db
       .select()
       .from(schema.products)
-      .where(eq(schema.products.id, id))
+      .where(and(eq(schema.products.id, id), eq(schema.products.organizationId, organizationId)))
       .limit(1);
     return row ? toEntity(row) : null;
   }
@@ -64,6 +64,7 @@ export class DrizzleProductRepository implements ProductRepository {
       })
       .onConflictDoUpdate({
         target: schema.products.id,
+        setWhere: eq(schema.products.organizationId, p.organizationId),
         set: {
           name: p.name,
           code: p.code,
@@ -119,10 +120,16 @@ export class DrizzleProductRepository implements ProductRepository {
       .filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
   }
 
-  async updateCostBasis(productId: string, costBasis: string): Promise<void> {
+  async updateCostBasis(
+    productId: string,
+    costBasis: string,
+    organizationId: string,
+  ): Promise<void> {
     await this.db
       .update(schema.products)
       .set({ costBasis, updatedAt: new Date() })
-      .where(eq(schema.products.id, productId));
+      .where(
+        and(eq(schema.products.id, productId), eq(schema.products.organizationId, organizationId)),
+      );
   }
 }

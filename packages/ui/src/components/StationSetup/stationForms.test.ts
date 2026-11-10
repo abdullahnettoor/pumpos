@@ -4,6 +4,8 @@ import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import {
   brandingLetterhead,
   decantationGuidanceSchema,
+  decantationGuidanceBody,
+  decantationGuidanceValues,
   newerStation,
   stationBrandingBody,
   stationBrandingSchema,
@@ -41,6 +43,48 @@ const station: Station = {
 };
 
 describe('Station forms (#604)', () => {
+  it('General sends only the top-level settings keys that General edits (#716)', () => {
+    expect(
+      stationGeneralBody(
+        stationGeneralSchema.parse({ ...stationGeneralValues(station), graceMinutes: 30 }),
+      ).settings,
+    ).toEqual({
+      shift_grace_minutes: 30,
+      timezone: 'Asia/Dubai',
+      business_day_starts_at: '05:00',
+    });
+  });
+
+  it('Branding sends only its three top-level settings keys (#716)', () => {
+    expect(
+      stationBrandingBody(
+        stationBrandingSchema.parse({
+          ...stationBrandingValues(station),
+          legalName: 'New letterhead',
+        }),
+      ).settings,
+    ).toEqual({
+      legal: {
+        legalName: 'New letterhead',
+        gstin: '32ABCDE1234F1Z5',
+        stateCode: null,
+        addressLine: null,
+        pincode: null,
+        roCode: null,
+      },
+      fuel_brand: null,
+      logo_data_url: null,
+    });
+  });
+
+  it('Decantation guidance sends only its own top-level keys, replacing a submitted nested value (#716)', () => {
+    const values = {
+      ...decantationGuidanceValues(station),
+      settlingTimeMinutes: 45,
+      densitySpecBands: {},
+    };
+    expect(decantationGuidanceBody(values)).toEqual({ settings: values });
+  });
   it('builds a validated variance-limit save carrying only the limit (#690)', () => {
     expect(tankVarianceLimitSchema.safeParse({ tolerancePct: 0.25 }).success).toBe(true);
     expect(tankVarianceLimitSchema.safeParse({ tolerancePct: 5.01 }).success).toBe(false);
@@ -78,7 +122,7 @@ describe('Station forms (#604)', () => {
   it('keeps a grace period of 0 through a save (#604 review)', () => {
     const zero = { ...station, settings: { ...station.settings, shift_grace_minutes: 0 } };
     expect(stationGeneralValues(zero).graceMinutes).toBe(0);
-    const body = stationGeneralBody(station, { ...stationGeneralValues(station), graceMinutes: 0 });
+    const body = stationGeneralBody({ ...stationGeneralValues(station), graceMinutes: 0 });
     expect(body.settings.shift_grace_minutes).toBe(0);
   });
 
@@ -115,25 +159,23 @@ describe('Station forms (#604)', () => {
     expect(bad({ pincode: '5600' })).toBe(false);
   });
 
-  it('builds the bodies the API already takes, settings merged over the saved ones', () => {
-    const general = stationGeneralBody(station, {
+  it('builds partial settings bodies, leaving the server to preserve other forms', () => {
+    const general = stationGeneralBody({
       ...stationGeneralValues(station),
       graceMinutes: 20,
     });
-    expect(general.settings).toMatchObject({
+    expect(general.settings).toEqual({
       timezone: 'Asia/Dubai',
       shift_grace_minutes: 20,
-      legal: station.settings.legal,
-      shift_lock_grace_days: 3,
+      business_day_starts_at: '05:00',
     });
     // The onboarding status is read-only on this page: never sent from it.
     expect('onboardingStatus' in general).toBe(false);
     const branding = stationBrandingBody(
-      station,
       stationBrandingSchema.parse(stationBrandingValues(station)),
     );
     expect(branding.settings.legal).toMatchObject({ stateCode: null, pincode: null });
-    expect(branding.settings.timezone).toBe('Asia/Dubai');
+    expect(Object.keys(branding.settings).sort()).toEqual(['fuel_brand', 'legal', 'logo_data_url']);
   });
 
   it('keeps density bands tidy and refuses a minimum above the maximum', () => {
@@ -172,7 +214,10 @@ describe('brandingLetterhead (#615 review)', () => {
     expect(brandingLetterhead(station, values)).toEqual(
       letterheadFromStation({
         ...station,
-        settings: stationBrandingBody(station, { ...values, gstin: '32ABCDE1234F1Z9' }).settings,
+        settings: {
+          ...station.settings,
+          ...stationBrandingBody({ ...values, gstin: '32ABCDE1234F1Z9' }).settings,
+        },
       }),
     );
     expect(brandingLetterhead(station, values)).toMatchObject({

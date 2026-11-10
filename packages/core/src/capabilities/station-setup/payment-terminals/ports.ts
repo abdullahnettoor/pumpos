@@ -1,4 +1,4 @@
-import type { Repository } from '../../../kernel/index.js';
+import type { TenantRepository } from '../../../kernel/index.js';
 
 /** A payment terminal (card/UPI machine) — master data, like a dispenser unit. */
 export interface PaymentTerminal {
@@ -17,7 +17,7 @@ export interface PaymentTerminal {
   updatedAt: string;
 }
 
-export interface PaymentTerminalRepository extends Repository<PaymentTerminal> {
+export interface PaymentTerminalRepository extends TenantRepository<PaymentTerminal> {
   existsByLabel(
     organizationId: string,
     stationId: string,

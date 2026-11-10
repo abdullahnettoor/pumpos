@@ -84,7 +84,7 @@ beforeEach(() => {
       // station, with a newer updatedAt.
       if (init?.method === 'PUT' && path.startsWith('/setup/stations/')) {
         const body = JSON.parse(String(init.body));
-        // The tank-rules endpoint merges its keys into the saved settings only.
+        // Both Station PUT endpoints merge only submitted top-level settings keys.
         saved = path.endsWith('/tank-levels')
           ? {
               ...saved,
@@ -94,6 +94,7 @@ beforeEach(() => {
           : {
               ...saved,
               ...body,
+              settings: { ...(saved.settings as object), ...body.settings },
               updatedAt: `2026-10-15T00:00:${String(++version).padStart(2, '0')}Z`,
             };
       }
@@ -126,6 +127,53 @@ const header = (init: RequestInit | undefined, name: string) =>
   (init?.headers as Record<string, string> | undefined)?.[name];
 
 describe('Station page', () => {
+  it.each([
+    [
+      'General',
+      /Shift grace period/,
+      '30',
+      ['business_day_starts_at', 'shift_grace_minutes', 'timezone'],
+    ],
+    ['Branding', /Legal \/ trade name/, 'New letterhead', ['fuel_brand', 'legal', 'logo_data_url']],
+    [
+      'Rules',
+      /Settling time \(minutes\)/,
+      '45',
+      [
+        'densityEntryMethod',
+        'densityMethod',
+        'densitySpecBands',
+        'densityToleranceKgM3',
+        'quantityTolerance',
+        'settlingTimeMinutes',
+      ],
+    ],
+  ] as const)(
+    "%s submits only that form's settings keys, not a cached Station snapshot (#716)",
+    async (tab, label, value, keys) => {
+      const stale = {
+        ...station,
+        settings: {
+          ...station.settings,
+          shift_grace_minutes: 15,
+          legal: { legalName: 'Old letterhead' },
+          report_config: { paper: 'A4' },
+          tankLevels: { criticalBelowPct: 20, lowBelowPct: 40 },
+        },
+      };
+      routes['/setup/stations'] = { data: [stale] };
+      saved = stale;
+      renderWithProviders(
+        <StationOverview selectedStation={stale} userRole="Owner" onStationSelected={() => {}} />,
+      );
+      fireEvent.click(await screen.findByRole('tab', { name: tab }));
+      fireEvent.change(await screen.findByLabelText(label), { target: { value } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() => expect(calls.filter((c) => c.init?.method === 'PUT')).toHaveLength(1));
+      const put = calls.find((c) => c.init?.method === 'PUT')!;
+      expect(Object.keys(JSON.parse(String(put.init!.body)).settings).sort()).toEqual([...keys]);
+    },
+  );
   it('has one Add ▾ primary for Owners and Managers, none for read-only roles', async () => {
     const { unmount } = renderWithProviders(
       <StationOverview selectedStation={station} userRole="Manager" onStationSelected={() => {}} />,
@@ -188,7 +236,7 @@ describe('Station page', () => {
     await waitFor(() => expect(onStationSelected).toHaveBeenCalled());
   });
 
-  it('Rules saves both changed sections, the second built on the first (#604 review)', async () => {
+  it('Rules saves both changed sections without echoing either section into the other (#716)', async () => {
     renderWithProviders(
       <StationOverview selectedStation={station} userRole="Owner" onStationSelected={() => {}} />,
     );
@@ -205,11 +253,11 @@ describe('Station page', () => {
     // The thresholds go to their own endpoint, carrying only their key (#690).
     expect(puts()[0].url).toContain('/setup/stations/st-1/tank-levels');
     expect(bodies[0]).toEqual({ tankLevels: { criticalBelowPct: 15, lowBelowPct: 40 } });
-    // The decantation body carries the tank levels just saved, not the stale prop's.
+    // Guidance never sends the thresholds: the server retains the first save.
     expect(bodies[1].settings).toMatchObject({
-      tankLevels: { criticalBelowPct: 15 },
       settlingTimeMinutes: 45,
     });
+    expect(bodies[1].settings).not.toHaveProperty('tankLevels');
     expect(saved.settings).toMatchObject({
       tankLevels: { criticalBelowPct: 15 },
       settlingTimeMinutes: 45,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vite-plus/test';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import {
   BusinessEvents,
   FixedClock,
@@ -8,7 +8,8 @@ import {
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import type { BusinessDay } from '../../station-ops/business-days/index.js';
-import type { Tank } from '../../station-setup/tanks/index.js';
+import type { Tank, TankRepository } from '../../station-setup/tanks/index.js';
+import type { Product } from '../../station-setup/products/index.js';
 import type { StockMovement } from '../ports.js';
 import { RecordStockCount } from '../record-stock-count.js';
 import { DecantationMeasurementService } from './measurement.js';
@@ -48,7 +49,13 @@ const tank: Tank = {
 };
 
 function setup(
-  opts: { days?: BusinessDay[]; openShift?: boolean; sold?: number; closedShiftAt?: string } = {},
+  opts: {
+    days?: BusinessDay[];
+    openShift?: boolean;
+    sold?: number;
+    closedShiftAt?: string;
+    tankOrganizationId?: string;
+  } = {},
 ) {
   const days = opts.days ?? [mkDay('bd-1', '2026-03-15', 'OPEN')];
   const current = days.find((d) => d.status === 'OPEN') ?? days[0];
@@ -72,6 +79,21 @@ function setup(
   ];
   const links: DecantationPurchaseLink[] = [];
   const product = { id: 'ms', organizationId: 'org-1', costBasis: '90' as string | null };
+  const tankRow = { ...tank, organizationId: opts.tankOrganizationId ?? tank.organizationId };
+  const products = {
+    findById: vi.fn(async (id: string, organizationId: string) =>
+      id === product.id && organizationId === product.organizationId
+        ? partialFake<Product>(product)
+        : null,
+    ),
+    updateCostBasis: vi.fn(async (id: string, c: string, organizationId: string) => {
+      if (id === product.id && organizationId === product.organizationId) product.costBasis = c;
+    }),
+  };
+  const tankLookup = vi.fn(async (id: string, organizationId: string) =>
+    id === tankRow.id && organizationId === tankRow.organizationId ? tankRow : null,
+  );
+  const tanks = { findById: tankLookup, findByIdForUpdate: tankLookup };
   const variances: unknown[] = [];
 
   const decantations = partialFake<DecantationRepository>({
@@ -110,10 +132,7 @@ function setup(
       invoiceLine: async () => ({ quantity: 12000, value: 12000 * 100 }),
     },
     movements: movementsRepo,
-    products: {
-      findById: async () => product as never,
-      updateCostBasis: async (_id, c) => void (product.costBasis = c),
-    },
+    products,
     sales: { litresSoldBetween: async () => opts.sold ?? 0 },
     events,
   });
@@ -129,7 +148,7 @@ function setup(
   const record = new RecordDecantation({
     decantations,
     densityReadings: partialFake<DensityReadingRepository>({ saveMany: async () => {} }),
-    tanks: { findById: async () => tank } as never,
+    tanks: partialFake<TankRepository>(tanks),
     businessDays,
     docNumbers: { next: async () => 'DEC-000001' },
     events,
@@ -156,7 +175,7 @@ function setup(
     references: { exists: async () => true },
     movements: movementsRepo,
     variances: { save: async (v) => void variances.push(v), existsForShift: async () => false },
-    tanks: { findByIdForUpdate: async () => tank } as never,
+    tanks: partialFake<TankRepository>(tanks),
     shifts,
     businessDays,
     shiftWriteGate: repositoryShiftWriteGate({ shifts, businessDays }),
@@ -175,7 +194,21 @@ function setup(
     ids: new SequentialIdGenerator('i'),
   });
   const stock = () => movementsRepo.currentQuantityForTank('t-ms');
-  return { record, count, service, ctx, rows, movements, links, product, store, stock, variances };
+  return {
+    record,
+    count,
+    service,
+    ctx,
+    rows,
+    movements,
+    links,
+    product,
+    products,
+    tanks,
+    store,
+    stock,
+    variances,
+  };
 }
 
 const cmd = (line: Record<string, unknown> = {}) => ({
@@ -185,6 +218,37 @@ const cmd = (line: Record<string, unknown> = {}) => ({
 });
 
 describe('measurement: after dip path', () => {
+  it.each(['Decantation', 'Tank Dip'])(
+    '%s refuses a foreign Tank through the tenant-aware lookup, without recording anything (#716)',
+    async (path) => {
+      const t = setup({ tankOrganizationId: 'org-2' });
+      const before = structuredClone({
+        movements: t.movements,
+        links: t.links,
+        product: t.product,
+        variances: t.variances,
+      });
+      const result =
+        path === 'Decantation'
+          ? await t.record.execute(cmd({ afterDip: 15900 }), t.ctx())
+          : await t.count.execute(
+              { stationId: 'st-1', tankId: 't-ms', actualQuantity: 15900 },
+              t.ctx(),
+            );
+      expect(result).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+      expect(t.tanks.findById).toHaveBeenCalledWith('t-ms', 'org-1');
+      expect(await t.tanks.findById.mock.results[0]!.value).toBeNull();
+      expect({
+        movements: t.movements,
+        links: t.links,
+        product: t.product,
+        variances: t.variances,
+      }).toEqual(before);
+      expect([...t.rows.values()]).toEqual([]);
+      expect(t.store.events).toEqual([]);
+      expect(t.products.updateCostBasis).not.toHaveBeenCalled();
+    },
+  );
   it('posts a Decantation movement on the current day and marks MEASURED', async () => {
     const t = setup();
     const r = await t.record.execute(cmd({ afterDip: 15500, salesDuring: 500 }), t.ctx());
@@ -402,6 +466,33 @@ describe('invoice variance and WAC', () => {
     varianceComputedAt: null,
   });
 
+  it('settlement refuses a foreign Product lookup without a cost write (#716)', async () => {
+    const t = setup();
+    const created = await t.record.execute(cmd({ afterDip: 15900 }), t.ctx());
+    if (!created.success) throw new Error('create');
+    t.links.push(link(created.data.decantation));
+    t.product.organizationId = 'org-2';
+    const before = structuredClone({
+      product: t.product,
+      movements: t.movements,
+      events: t.store.events,
+    });
+    await t.service.settleInvoice(t.ctx(), { purchaseId: 'p-1', productId: 'ms' });
+    expect(t.products.findById).toHaveBeenLastCalledWith('ms', 'org-1');
+    expect(await t.products.findById.mock.results.at(-1)!.value).toBeNull();
+    expect(t.products.updateCostBasis).not.toHaveBeenCalled();
+    expect({ product: t.product, movements: t.movements, events: t.store.events }).toEqual(before);
+  });
+
+  it('the Product cost port refuses a foreign write even when called directly (#716)', async () => {
+    const t = setup();
+    const before = { ...t.product };
+    await t.products.updateCostBasis('ms', '999', 'org-2');
+    expect(t.product).toEqual(before);
+    expect(await t.products.findById('ms', 'org-2')).toBeNull();
+    expect(await t.products.findById('missing', 'org-1')).toBeNull();
+  });
+
   it('shows a short variance and moves WAC once the invoice lines are measured', async () => {
     const t = setup();
     const created = await t.record.execute(cmd(), t.ctx());
@@ -479,6 +570,32 @@ describe('invoice variance and WAC', () => {
         t.links.findIndex((l) => l.id === id),
         1,
       );
+
+    it('reversal refuses a foreign Product lookup without a cost write (#716)', async () => {
+      const { t, a } = await settledFixture();
+      t.product.organizationId = 'org-2';
+      t.products.updateCostBasis.mockClear();
+      const before = structuredClone({
+        product: t.product,
+        movements: t.movements,
+        links: t.links,
+        events: t.store.events,
+      });
+      await t.service.reverseLinkContribution(t.ctx(), {
+        purchaseId: 'p-1',
+        productId: 'ms',
+        decantationId: a.id,
+      });
+      expect(t.products.findById).toHaveBeenLastCalledWith('ms', 'org-1');
+      expect(await t.products.findById.mock.results.at(-1)!.value).toBeNull();
+      expect(t.products.updateCostBasis).not.toHaveBeenCalled();
+      expect({
+        product: t.product,
+        movements: t.movements,
+        links: t.links,
+        events: t.store.events,
+      }).toEqual(before);
+    });
 
     it('unlink then relink the same purchase leaves cost unchanged', async () => {
       const { t, a } = await settledFixture();

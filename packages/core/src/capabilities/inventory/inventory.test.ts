@@ -53,11 +53,11 @@ class VarianceRepo implements StockVarianceRepository {
 }
 class TankRepo implements TankRepository {
   constructor(readonly rows: Tank[]) {}
-  async findById(id: string) {
-    return this.rows.find((row) => row.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((row) => row.id === id && row.organizationId === organizationId) ?? null;
   }
-  async findByIdForUpdate(id: string) {
-    return this.findById(id);
+  async findByIdForUpdate(id: string, organizationId: string) {
+    return this.findById(id, organizationId);
   }
   async hasNozzles() {
     return false;

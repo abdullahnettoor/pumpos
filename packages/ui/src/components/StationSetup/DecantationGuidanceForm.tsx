@@ -76,7 +76,7 @@ export const DecantationGuidanceForm: React.FC<DecantationGuidanceFormProps> = (
     dirty: isDirty,
     submit: () =>
       submitSection(handleSubmit, async (values) => {
-        const updated = await onSave((saved) => decantationGuidanceBody(saved, values));
+        const updated = await onSave(() => decantationGuidanceBody(values));
         reset(decantationGuidanceValues(updated));
       }),
     discard: () => {

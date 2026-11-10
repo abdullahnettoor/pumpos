@@ -14,15 +14,17 @@ import type { LoginProvisioner, User, UserRepository } from './index.js';
 
 class UserRepo implements UserRepository {
   readonly rows = new Map<string, User>();
-  async findById(id: string) {
-    return this.rows.get(id) ?? null;
+  async findById(id: string, organizationId: string) {
+    const row = this.rows.get(id);
+    return row?.organizationId === organizationId ? row : null;
   }
   async save(u: User) {
     this.rows.set(u.id, u);
   }
-  async linkLogin(id: string, authUserId: string) {
+  async linkLogin(id: string, authUserId: string, organizationId: string) {
     const row = this.rows.get(id);
-    if (row && row.authUserId === null) this.rows.set(id, { ...row, authUserId });
+    if (row?.organizationId === organizationId && row.authUserId === null)
+      this.rows.set(id, { ...row, authUserId });
   }
   async setStationAssignments() {}
   async listWithAssignments() {

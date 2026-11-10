@@ -61,7 +61,10 @@ function setup(user: User, opts: { entitled?: boolean } = {}) {
   const changes = new FakeChanges();
   const rows = new Map([[user.id, user]]);
   const users: UserRepository = {
-    findById: async (id: string) => rows.get(id) ?? null,
+    findById: async (id: string, organizationId: string) => {
+      const row = rows.get(id);
+      return row?.organizationId === organizationId ? row : null;
+    },
     save: async (u: User) => void rows.set(u.id, u),
     setStationAssignments: async () => {},
     listWithAssignments: async () => [],

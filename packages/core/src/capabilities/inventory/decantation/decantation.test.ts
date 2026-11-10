@@ -74,7 +74,8 @@ function setup(opts: { day?: BusinessDay; tanks?: Tank[] } = {}) {
       saveMany: async (r) => void readings.push(...r),
     }),
     tanks: {
-      findById: async (id: string) => tanks.find((t) => t.id === id) ?? null,
+      findById: async (id: string, organizationId: string) =>
+        tanks.find((t) => t.id === id && t.organizationId === organizationId) ?? null,
     } as never,
     businessDays: {
       findById: async (id: string) => (id === bd.id ? bd : null),

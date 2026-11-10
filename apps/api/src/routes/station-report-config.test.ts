@@ -26,7 +26,7 @@ function fakeDb(stationSettings: Record<string, unknown> = { report_config: STOR
   ];
   let accessIndex = 0;
   const stationRow = {
-    id: 'st-1',
+    id: '00000000-0000-4000-8000-000000000001',
     organizationId: 'org-1',
     name: 'Station',
     code: 'ST1',
@@ -79,7 +79,7 @@ function fakeDb(stationSettings: Record<string, unknown> = { report_config: STOR
 
 function appAs(
   role: string,
-  assignedStationIds = ['st-1'],
+  assignedStationIds = ['00000000-0000-4000-8000-000000000001'],
   stationSettings?: Record<string, unknown>,
 ) {
   const { db, writes } = fakeDb(stationSettings);
@@ -105,14 +105,15 @@ const changedConfig = {
 };
 
 const put = (app: Hono<any>, body: Record<string, unknown> = changedConfig) =>
-  app.request('/setup/stations/st-1', {
+  app.request('/setup/stations/00000000-0000-4000-8000-000000000001', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 
 const savedSettings = (writes: Array<Record<string, unknown>>) =>
-  writes.find((w) => w.settings !== undefined && w.id === 'st-1')?.settings as any;
+  writes.find((w) => w.settings !== undefined && w.id === '00000000-0000-4000-8000-000000000001')
+    ?.settings as any;
 
 describe('PUT /setup/stations/:id report_config (#332)', () => {
   it.each(['Owner', 'Manager'])('lets %s save report templates', async (role) => {
@@ -135,7 +136,9 @@ describe('PUT /setup/stations/:id report_config (#332)', () => {
 describe('GET /setup/stations/:id/decantation-settings', () => {
   it('returns resolved defaults for an authorized station', async () => {
     const { app } = appAs('Manager');
-    const response = await app.request('/setup/stations/st-1/decantation-settings');
+    const response = await app.request(
+      '/setup/stations/00000000-0000-4000-8000-000000000001/decantation-settings',
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -152,7 +155,9 @@ describe('GET /setup/stations/:id/decantation-settings', () => {
 
   it('does not expose settings for a station the user cannot access', async () => {
     const { app } = appAs('Staff', []);
-    const response = await app.request('/setup/stations/st-1/decantation-settings');
+    const response = await app.request(
+      '/setup/stations/00000000-0000-4000-8000-000000000001/decantation-settings',
+    );
 
     expect(response.status).toBe(403);
   });
@@ -213,7 +218,7 @@ describe('PUT /setup/stations/:id tank levels (#520)', () => {
 
   it('lets a re-save of other settings echo the stored thresholds in JSONB key order', async () => {
     const stored = { tankLevels: { lowBelowPct: 35, criticalBelowPct: 15 } };
-    const { app, writes } = appAs('Manager', ['st-1'], stored);
+    const { app, writes } = appAs('Manager', ['00000000-0000-4000-8000-000000000001'], stored);
     const response = await put(app, {
       name: 'Renamed',
       settings: { shift_grace_minutes: 20, tankLevels: { criticalBelowPct: 15, lowBelowPct: 35 } },
@@ -227,7 +232,7 @@ describe('PUT /setup/stations/:id tank levels (#520)', () => {
     // Accountants are read-only on this route today, so the tank-level edge
     // check never decides their request; the use-case covers a widened role.
     const stored = { tankLevels: { lowBelowPct: 35, criticalBelowPct: 15 } };
-    const { app, writes } = appAs('Accountant', ['st-1'], stored);
+    const { app, writes } = appAs('Accountant', ['00000000-0000-4000-8000-000000000001'], stored);
     const response = await put(app, {
       name: 'Renamed',
       settings: { tankLevels: { criticalBelowPct: 15, lowBelowPct: 35 } },
@@ -271,7 +276,9 @@ describe('PUT /setup/stations/:id tank variance limit (#684)', () => {
     expect(savedSettings(writes)).toBeUndefined();
   });
   it('allows an unchanged limit to be echoed with other settings', async () => {
-    const { app, writes } = appAs('Manager', ['st-1'], { stock_variance_tolerance_pct: 1 });
+    const { app, writes } = appAs('Manager', ['00000000-0000-4000-8000-000000000001'], {
+      stock_variance_tolerance_pct: 1,
+    });
     const response = await put(app, {
       settings: { stock_variance_tolerance_pct: 1, fuel_brand: 'IOCL' },
     });

@@ -32,7 +32,7 @@ export class UpdatePaymentTerminal implements UseCase<
     if (!validated.success) return validated;
     const cmd = validated.data;
 
-    const existing = await this.deps.repository.findById(cmd.id);
+    const existing = await this.deps.repository.findById(cmd.id, ctx.organizationId);
     if (!existing) return err(notFoundError('PaymentTerminal', cmd.id));
     if (existing.organizationId !== ctx.organizationId) {
       return err(forbiddenError('Terminal belongs to another organization'));

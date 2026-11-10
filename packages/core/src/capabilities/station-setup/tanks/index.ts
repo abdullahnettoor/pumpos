@@ -10,7 +10,7 @@ import {
 import type {
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -27,10 +27,10 @@ export interface Tank {
   updatedAt: string;
 }
 
-export interface TankRepository extends Repository<Tank> {
-  findByIdForUpdate(id: string): Promise<Tank | null>;
-  hasNozzles(id: string): Promise<boolean>;
-  deactivateById(id: string): Promise<boolean>;
+export interface TankRepository extends TenantRepository<Tank> {
+  findByIdForUpdate(id: string, organizationId: string): Promise<Tank | null>;
+  hasNozzles(id: string, organizationId: string): Promise<boolean>;
+  deactivateById(id: string, organizationId: string): Promise<boolean>;
   listByStation(organizationId: string, stationId: string): Promise<Tank[]>;
 }
 
@@ -105,7 +105,7 @@ export class UpdateTank implements UseCase<UpdateTankCommand, Tank> {
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateTank command', { issues: p.error.flatten() }));
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.findById(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Tank', p.data.id));
     const updated: Tank = {
@@ -132,17 +132,17 @@ export class UpdateTank implements UseCase<UpdateTankCommand, Tank> {
 export class DeleteTank implements UseCase<{ id: string }, Tank> {
   constructor(private readonly deps: TankDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<Tank>> {
-    const existing = await this.deps.repository.findByIdForUpdate(input.id);
+    const existing = await this.deps.repository.findByIdForUpdate(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Tank', input.id));
-    if (await this.deps.repository.hasNozzles(existing.id)) {
+    if (await this.deps.repository.hasNozzles(existing.id, ctx.organizationId)) {
       return err(
         validationError('Tank cannot be deactivated while Nozzles are assigned to it', {
           tankId: existing.id,
         }),
       );
     }
-    await this.deps.repository.deactivateById(existing.id);
+    await this.deps.repository.deactivateById(existing.id, ctx.organizationId);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.TANK_DELETED,

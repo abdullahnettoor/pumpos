@@ -213,7 +213,7 @@ export class RecordDecantation implements UseCase<
 
     const tankById = new Map<string, { productId: string }>();
     for (const tankId of tankIds) {
-      const tank = await this.deps.tanks.findById(tankId);
+      const tank = await this.deps.tanks.findById(tankId, ctx.organizationId);
       if (
         !tank ||
         tank.organizationId !== ctx.organizationId ||

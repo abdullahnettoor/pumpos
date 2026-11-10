@@ -38,6 +38,7 @@ import type { AccessRegistry } from './registry.js';
 export interface PermissionTargetReader {
   findById(
     id: string,
+    organizationId: string,
   ): Promise<{ id: string; organizationId: string; role: string; fullName: string } | null>;
 }
 
@@ -105,7 +106,7 @@ export class GetUserPermissions implements UseCase<{ userId: string }, UserPermi
   ): Promise<Result<UserPermissionsView>> {
     const denied = ownerOnly(ctx);
     if (denied) return err(denied);
-    const user = await this.deps.users.findById(input.userId);
+    const user = await this.deps.users.findById(input.userId, ctx.organizationId);
     if (!user || user.organizationId !== ctx.organizationId) {
       return err(notFoundError('User', input.userId));
     }
@@ -210,7 +211,7 @@ export class SetUserPermissions implements UseCase<
     if (!parsed.success) {
       return err(validationError(parsed.error.issues[0]?.message || 'Invalid input'));
     }
-    const user = await this.deps.users.findById(parsed.data.userId);
+    const user = await this.deps.users.findById(parsed.data.userId, ctx.organizationId);
     if (!user || user.organizationId !== ctx.organizationId) {
       return err(notFoundError('User', parsed.data.userId));
     }
@@ -278,7 +279,7 @@ export class PreviewUserRoleChange implements UseCase<
     input: { userId: string; role: string },
     ctx: ExecutionContext,
   ): Promise<Result<RoleChangePreview>> {
-    const user = await this.deps.users.findById(input.userId);
+    const user = await this.deps.users.findById(input.userId, ctx.organizationId);
     if (!user || user.organizationId !== ctx.organizationId) {
       return err(notFoundError('User', input.userId));
     }

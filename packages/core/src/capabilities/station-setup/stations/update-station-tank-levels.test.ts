@@ -100,8 +100,11 @@ describe('UpdateStation tank variance limit (#684)', () => {
 class Repo {
   saved: Station[] = [];
   constructor(readonly row: Station) {}
-  async findById(id: string) {
-    return id === this.row.id ? this.row : null;
+  async findById(id: string, organizationId: string) {
+    return id === this.row.id && organizationId === this.row.organizationId ? this.row : null;
+  }
+  async lockForUpdate(id: string, organizationId: string) {
+    return this.findById(id, organizationId);
   }
   async save(s: Station) {
     this.saved.push(s);
@@ -194,9 +197,39 @@ describe('UpdateStation tank-level thresholds (#520)', () => {
 
   it('refuses removing the thresholds without the right', async () => {
     const { useCase } = harness({ tankLevels: thresholds });
-    const result = await useCase.execute({ id: 'st-1', settings: {} }, ctx('Staff'));
+    const result = await useCase.execute(
+      { id: 'st-1', settings: { tankLevels: null } },
+      ctx('Staff'),
+    );
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('FORBIDDEN');
+  });
+
+  it('a partial General save preserves omitted tank rules without requiring their permission (#716)', async () => {
+    const stored = {
+      tankLevels: thresholds,
+      stock_variance_tolerance_pct: 1.5,
+      shift_grace_minutes: 15,
+    };
+    const { repo, useCase } = harness(stored);
+    const result = await useCase.execute(
+      {
+        id: 'st-1',
+        settings: {
+          shift_grace_minutes: 30,
+          timezone: 'Asia/Kolkata',
+          business_day_starts_at: '06:00',
+        },
+      },
+      ctx('Manager', ['station.manage']),
+    );
+    expect(result.success).toBe(true);
+    expect(repo.saved[0]?.settings).toEqual({
+      ...stored,
+      shift_grace_minutes: 30,
+      timezone: 'Asia/Kolkata',
+      business_day_starts_at: '06:00',
+    });
   });
 
   it('rejects thresholds where critical is not below low', async () => {

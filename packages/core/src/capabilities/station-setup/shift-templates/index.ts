@@ -11,7 +11,7 @@ import type {
   DomainEvent,
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -25,8 +25,8 @@ export interface ShiftTemplate {
   isActive: boolean;
 }
 
-export interface ShiftTemplateRepository extends Repository<ShiftTemplate> {
-  deleteById(id: string): Promise<boolean>;
+export interface ShiftTemplateRepository extends TenantRepository<ShiftTemplate> {
+  deleteById(id: string, organizationId: string): Promise<boolean>;
   listByOrganization(organizationId: string): Promise<ShiftTemplate[]>;
 }
 
@@ -151,7 +151,7 @@ export class UpdateShiftTemplate implements UseCase<UpdateShiftTemplateCommand, 
       return err(
         validationError('Invalid UpdateShiftTemplate command', { issues: p.error.flatten() }),
       );
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.findById(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('ShiftTemplate', p.data.id));
     const updated: ShiftTemplate = {
@@ -177,10 +177,10 @@ export class UpdateShiftTemplate implements UseCase<UpdateShiftTemplateCommand, 
 export class DeleteShiftTemplate implements UseCase<{ id: string }, ShiftTemplate> {
   constructor(private readonly deps: ShiftTemplateDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<ShiftTemplate>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findById(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('ShiftTemplate', input.id));
-    await this.deps.repository.deleteById(existing.id);
+    await this.deps.repository.deleteById(existing.id, ctx.organizationId);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.SHIFT_TEMPLATE_DELETED,

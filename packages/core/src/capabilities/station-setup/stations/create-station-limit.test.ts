@@ -41,8 +41,11 @@ class FakeStationRepository {
   async save(station: Station) {
     this.saved.push(station);
   }
-  async findById(id: string) {
-    return this.saved.find((s) => s.id === id) ?? null;
+  async findById(id: string, organizationId: string) {
+    return this.saved.find((s) => s.id === id && s.organizationId === organizationId) ?? null;
+  }
+  async lockForUpdate(id: string, organizationId: string) {
+    return this.findById(id, organizationId);
   }
   async listByOrganization() {
     return this.saved;

@@ -120,7 +120,7 @@ export class RecordMerchandiseHandover implements UseCase<
     const movements: StockMovement[] = [];
 
     for (const line of cmd.lines) {
-      const product = await this.deps.products.findById(line.productId);
+      const product = await this.deps.products.findById(line.productId, ctx.organizationId);
       if (!product || product.organizationId !== ctx.organizationId)
         return err(notFoundError('Product', line.productId));
       if (product.productType === 'FUEL')

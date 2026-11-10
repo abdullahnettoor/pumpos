@@ -1,5 +1,5 @@
 import type { ProductType, InventoryType, TaxCategory } from '@pump/shared';
-import type { Repository } from '../../../kernel/index.js';
+import type { TenantRepository } from '../../../kernel/index.js';
 import type { ProductTaxConfig } from './command.js';
 
 export interface Product {
@@ -24,13 +24,13 @@ export interface Product {
   updatedAt: string;
 }
 
-export interface ProductRepository extends Repository<Product> {
+export interface ProductRepository extends TenantRepository<Product> {
   existsByCode(organizationId: string, code: string, excludeId?: string): Promise<boolean>;
   listByOrganization(organizationId: string): Promise<Product[]>;
   /** Distinct categories for an organization (includes archived products). */
   listCategories(organizationId: string, excludeProductId?: string): Promise<string[]>;
   /** Set the rolling weighted-average cost basis for a product (FB1). */
-  updateCostBasis(productId: string, costBasis: string): Promise<void>;
+  updateCostBasis(productId: string, costBasis: string, organizationId: string): Promise<void>;
 }
 
 /** Default inventory engine for a product type when not explicitly chosen. */

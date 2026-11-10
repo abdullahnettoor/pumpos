@@ -265,7 +265,7 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
       });
 
     if (newLinks.length === 0 || newReceived <= 0) return;
-    const product = await this.deps.products.findById(input.productId);
+    const product = await this.deps.products.findById(input.productId, ctx.organizationId);
     if (!product || product.organizationId !== ctx.organizationId) return;
     const onHand = await this.deps.movements.currentQuantityForProduct(
       ctx.organizationId,
@@ -275,7 +275,11 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     const oldCost = Number(product.costBasis ?? 0);
     const value = firstSettlement ? invoice.value : 0;
     const newCost = (baseQty * oldCost + value) / (baseQty + newReceived);
-    await this.deps.products.updateCostBasis(input.productId, String(round4(newCost)));
+    await this.deps.products.updateCostBasis(
+      input.productId,
+      String(round4(newCost)),
+      ctx.organizationId,
+    );
   }
 
   /**
@@ -338,7 +342,7 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
       input.productId,
     );
     if (!invoice) return;
-    const product = await this.deps.products.findById(input.productId);
+    const product = await this.deps.products.findById(input.productId, ctx.organizationId);
     if (!product || product.organizationId !== ctx.organizationId) return;
     const onHand = await this.deps.movements.currentQuantityForProduct(
       ctx.organizationId,
@@ -348,7 +352,11 @@ export class DecantationMeasurementService implements DecantationMeasurement, Ta
     if (remaining <= 0) return;
     const value = (invoice.value * removedQty) / settledTotal;
     const newCost = Math.max((onHand * Number(product.costBasis ?? 0) - value) / remaining, 0);
-    await this.deps.products.updateCostBasis(input.productId, String(round4(newCost)));
+    await this.deps.products.updateCostBasis(
+      input.productId,
+      String(round4(newCost)),
+      ctx.organizationId,
+    );
   }
 
   private measure(

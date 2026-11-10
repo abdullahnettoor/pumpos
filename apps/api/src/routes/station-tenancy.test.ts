@@ -190,7 +190,7 @@ describe('station-scoped GET tenancy coverage (#235)', () => {
     .map(([op]) => op);
 
   it.each(refusers)('%s refuses a foreign-organization stationId', async (op) => {
-    const path = op.slice('GET '.length);
+    const path = op.slice('GET '.length).replace(':id', '00000000-0000-4000-8000-000000000001');
     const res = await makeApp().request(`${path}?stationId=st-foreign&date=2026-03-10`);
     expect([403, 404]).toContain(res.status);
     const body = (await res.json()) as any;

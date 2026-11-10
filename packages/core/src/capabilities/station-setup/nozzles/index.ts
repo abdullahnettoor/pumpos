@@ -11,7 +11,7 @@ import type {
   DomainEvent,
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -32,8 +32,8 @@ export interface Nozzle {
   updatedAt: string;
 }
 
-export interface NozzleRepository extends Repository<Nozzle> {
-  deleteById(id: string): Promise<boolean>;
+export interface NozzleRepository extends TenantRepository<Nozzle> {
+  deleteById(id: string, organizationId: string): Promise<boolean>;
   listByStation(organizationId: string, stationId: string): Promise<Nozzle[]>;
 }
 
@@ -97,7 +97,7 @@ export async function checkNozzleDispenser(
   nozzle: { stationId: string; duId: string },
   ctx: ExecutionContext,
 ): Promise<Result<void>> {
-  const dispenser = await deps.dispensers.findById(nozzle.duId);
+  const dispenser = await deps.dispensers.findById(nozzle.duId, ctx.organizationId);
   if (
     !dispenser ||
     dispenser.organizationId !== ctx.organizationId ||
@@ -119,7 +119,7 @@ export async function checkNozzleSource(
   nozzle: { stationId: string; tankId: string; productId: string },
   ctx: ExecutionContext,
 ): Promise<Result<void>> {
-  const tank = await deps.tanks.findByIdForUpdate(nozzle.tankId);
+  const tank = await deps.tanks.findByIdForUpdate(nozzle.tankId, ctx.organizationId);
   if (
     !tank ||
     tank.organizationId !== ctx.organizationId ||
@@ -131,7 +131,7 @@ export async function checkNozzleSource(
   if (tank.productId !== nozzle.productId)
     return err(validationError('Nozzle Product must match its Tank Product'));
   // Read after the Tank match, so the id is one the database already holds.
-  const product = await deps.products.findById(nozzle.productId);
+  const product = await deps.products.findById(nozzle.productId, ctx.organizationId);
   if (!product || product.organizationId !== ctx.organizationId)
     return err(notFoundError('Product', nozzle.productId));
   return ok(undefined);
@@ -193,7 +193,7 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateNozzle command', { issues: p.error.flatten() }));
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.findById(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Nozzle', p.data.id));
     const duId = p.data.duId ?? existing.duId;
@@ -242,10 +242,10 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
 export class DeleteNozzle implements UseCase<{ id: string }, Nozzle> {
   constructor(private readonly deps: NozzleDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<Nozzle>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findById(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Nozzle', input.id));
-    await this.deps.repository.deleteById(existing.id);
+    await this.deps.repository.deleteById(existing.id, ctx.organizationId);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.NOZZLE_DELETED,

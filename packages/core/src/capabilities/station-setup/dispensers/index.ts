@@ -11,7 +11,7 @@ import type {
   DomainEvent,
   EventPublisher,
   ExecutionContext,
-  Repository,
+  TenantRepository,
   Result,
   UseCase,
 } from '../../../kernel/index.js';
@@ -29,8 +29,8 @@ export interface DispenserUnit {
   updatedAt: string;
 }
 
-export interface DispenserRepository extends Repository<DispenserUnit> {
-  deleteById(id: string): Promise<boolean>;
+export interface DispenserRepository extends TenantRepository<DispenserUnit> {
+  deleteById(id: string, organizationId: string): Promise<boolean>;
   listByStation(organizationId: string, stationId: string): Promise<DispenserUnit[]>;
 }
 
@@ -118,7 +118,7 @@ export class UpdateDispenser implements UseCase<UpdateDispenserCommand, Dispense
     const p = updateSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid UpdateDispenser command', { issues: p.error.flatten() }));
-    const existing = await this.deps.repository.findById(p.data.id);
+    const existing = await this.deps.repository.findById(p.data.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('DispenserUnit', p.data.id));
     const updated: DispenserUnit = {
@@ -153,10 +153,10 @@ export class UpdateDispenser implements UseCase<UpdateDispenserCommand, Dispense
 export class DeleteDispenser implements UseCase<{ id: string }, DispenserUnit> {
   constructor(private readonly deps: DispenserDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<DispenserUnit>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findById(input.id, ctx.organizationId);
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('DispenserUnit', input.id));
-    await this.deps.repository.deleteById(existing.id);
+    await this.deps.repository.deleteById(existing.id, ctx.organizationId);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.DISPENSER_DELETED,

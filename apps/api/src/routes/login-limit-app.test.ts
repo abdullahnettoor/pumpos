@@ -16,7 +16,7 @@ const ENV = {
   SUPABASE_JWT_SECRET: SECRET,
   SUPABASE_DIRECT_URL: 'postgres://fake',
 };
-const TARGET = 'user-2';
+const TARGET = '00000000-0000-4000-8000-000000000002';
 
 const state = {
   plan: 'CORE',
