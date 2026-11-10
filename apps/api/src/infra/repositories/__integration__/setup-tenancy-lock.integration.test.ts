@@ -238,11 +238,11 @@ describe.skipIf(!CONNECTION)('setup tenancy and Station PUT locking (#716), real
     email: 'owner@example.com',
     assignedStationIds: [],
   };
-  function app(db: DbClient) {
+  function app(db: DbClient, user: AuthenticatedPrincipal = principal) {
     const server = new Hono<{ Variables: { db: DbClient; user: AuthenticatedPrincipal } }>();
     server.use('*', async (c, next) => {
       c.set('db', db);
-      c.set('user', principal);
+      c.set('user', user);
       await next();
     });
     server.route('/setup', stationSetupRouter);
@@ -251,8 +251,14 @@ describe.skipIf(!CONNECTION)('setup tenancy and Station PUT locking (#716), real
     server.route('/transactions', transactionsRouter);
     return server;
   }
-  const request = async (db: DbClient, method: string, url: string, body: unknown) =>
-    app(db).request(
+  const request = async (
+    db: DbClient,
+    method: string,
+    url: string,
+    body: unknown,
+    user: AuthenticatedPrincipal = principal,
+  ) =>
+    app(db, user).request(
       url,
       {
         method,
@@ -407,6 +413,41 @@ describe.skipIf(!CONNECTION)('setup tenancy and Station PUT locking (#716), real
     expect(await snapshot()).toEqual(before);
   });
 
+  it('a Manager General form save retains tank rules without station.tankLevels (#716)', async () => {
+    const initial = {
+      ...STORED,
+      tankLevels: { criticalBelowPct: 20, lowBelowPct: 40 },
+      stock_variance_tolerance_pct: 1.5,
+    };
+    await dbA
+      .update(schema.stations)
+      .set({ settings: initial })
+      .where(eq(schema.stations.id, OWN_STATION));
+    const general = {
+      shift_grace_minutes: 30,
+      timezone: 'Asia/Kolkata',
+      business_day_starts_at: '06:00',
+    };
+    const res = await request(
+      dbA,
+      'PUT',
+      `/setup/stations/${OWN_STATION}`,
+      { settings: general },
+      {
+        ...principal,
+        role: 'Manager',
+        permissions: new Set(['station.manage']),
+        assignedStationIds: [OWN_STATION],
+      },
+    );
+    expect(res.status).toBe(200);
+    const [row] = await dbA
+      .select()
+      .from(schema.stations)
+      .where(eq(schema.stations.id, OWN_STATION));
+    expect(row!.settings).toEqual({ ...initial, ...general });
+  });
+
   async function waitUntilBlocked(pid: number) {
     for (let i = 0; i < 300; i++) {
       const [row] = await probe`select wait_event_type from pg_stat_activity where pid = ${pid}`;
@@ -416,10 +457,14 @@ describe.skipIf(!CONNECTION)('setup tenancy and Station PUT locking (#716), real
     throw new Error(`backend ${pid} never blocked`);
   }
 
-  async function race(a: Record<string, unknown>, b: Record<string, unknown>) {
+  async function race(
+    a: Record<string, unknown>,
+    b: Record<string, unknown>,
+    initial: Record<string, unknown> = STORED,
+  ) {
     await dbA
       .update(schema.stations)
-      .set({ settings: STORED })
+      .set({ settings: initial })
       .where(eq(schema.stations.id, OWN_STATION));
     await dbA.delete(schema.events);
     // An external transaction gates both real HTTP requests. With the fix,
@@ -455,6 +500,39 @@ describe.skipIf(!CONNECTION)('setup tenancy and Station PUT locking (#716), real
       shift_grace_minutes: 30,
       report_config: { paper: 'LETTER' },
     });
+    expect(result.payloads).toEqual([{ stationId: OWN_STATION }, { stationId: OWN_STATION }]);
+  });
+
+  it('concurrent General and Branding form-shaped PUTs preserve both forms and replace nested values (#716)', async () => {
+    // These are the exact settings-key sets asserted from the rendered forms
+    // in StationPages.dom.test.tsx. Both operators start from this same version.
+    const initial = {
+      ...STORED,
+      timezone: 'Asia/Kolkata',
+      business_day_starts_at: '06:00',
+      legal: { legalName: 'Old name', roCode: 'OLD', contact: 'Old contact' },
+      fuel_brand: 'Old brand',
+      logo_data_url: null,
+    };
+    const general = {
+      shift_grace_minutes: 30,
+      timezone: 'Asia/Dubai',
+      business_day_starts_at: '05:00',
+    };
+    const branding = {
+      legal: {
+        legalName: 'New name',
+        gstin: null,
+        stateCode: null,
+        addressLine: null,
+        pincode: null,
+        roCode: null,
+      },
+      fuel_brand: 'New brand',
+      logo_data_url: null,
+    };
+    const result = await race(general, branding, initial);
+    expect(result.settings).toEqual({ ...STORED, ...general, ...branding });
     expect(result.payloads).toEqual([{ stationId: OWN_STATION }, { stationId: OWN_STATION }]);
   });
 

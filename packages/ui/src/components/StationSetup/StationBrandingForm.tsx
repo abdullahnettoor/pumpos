@@ -68,7 +68,7 @@ export const StationBrandingForm: React.FC<StationBrandingFormProps> = ({
     dirty: isDirty,
     submit: () =>
       submitSection(handleSubmit, async (values) => {
-        const updated = await onSave((saved) => stationBrandingBody(saved, values));
+        const updated = await onSave(() => stationBrandingBody(values));
         reset(stationBrandingValues(updated));
       }),
     discard: () => {

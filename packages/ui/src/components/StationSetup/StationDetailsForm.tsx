@@ -64,7 +64,7 @@ export const StationDetailsForm: React.FC<StationDetailsFormProps> = ({
     dirty: isDirty,
     submit: () =>
       submitSection(handleSubmit, async (values) => {
-        const updated = await onSave((saved) => stationGeneralBody(saved, values));
+        const updated = await onSave(() => stationGeneralBody(values));
         // The saved station is the new baseline (the code comes back upper-case).
         reset(stationGeneralValues(updated));
       }),

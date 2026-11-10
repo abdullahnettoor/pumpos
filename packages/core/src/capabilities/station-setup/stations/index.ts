@@ -228,7 +228,7 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
     if (!existing || existing.organizationId !== ctx.organizationId)
       return err(notFoundError('Station', p.data.id));
     const settings = { ...existing.settings, ...p.data.settings };
-    const tankLevelsError = tankLevelsChangeError(existing.settings ?? {}, p.data.settings, ctx);
+    const tankLevelsError = tankLevelsChangeError(existing.settings ?? {}, settings, ctx);
     if (tankLevelsError) return err(tankLevelsError);
     const varianceError = stockVarianceToleranceChangeError(
       existing.settings ?? {},
