@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { invalidTypeError } from './zod-messages.js';
 
 /**
  * Quantities (litres, kg, counted items) are recorded to 3 decimals, so a
@@ -31,7 +32,7 @@ export const STOCK_VARIANCE_TOLERANCE_PCT = 0.5;
 export const STOCK_VARIANCE_TOLERANCE_KEY = 'stock_variance_tolerance_pct';
 
 export const stockVarianceTolerancePctSchema = z
-  .number({ invalid_type_error: 'Enter a number' })
+  .number(invalidTypeError('Enter a number'))
   .finite()
   .min(0, 'Must be 0% or more')
   .max(5, 'Must be 5% or less')

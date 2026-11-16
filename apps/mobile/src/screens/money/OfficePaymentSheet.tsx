@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ZodTypeAny } from 'zod';
+import type { ZodType } from 'zod';
 import {
   accountTypeLabel,
   filterFundingAccounts,
@@ -43,7 +43,7 @@ export interface OfficePaymentSheetProps<F extends OfficePaymentFields> {
   /** Station IANA timezone: the Entry Date defaults to today there. */
   timeZone?: string | null;
   /** The resolver schema; `today` is the station's Entry Date today. */
-  schemaFor: (today: string) => ZodTypeAny;
+  schemaFor: (today: string) => ZodType<unknown, OfficePaymentFields>;
   defaultValues: (today: string) => F;
   /** Present for a Collection: the method picker; `accountTypes` says which accounts suit each. */
   methods?: readonly PaymentMethodOption[];

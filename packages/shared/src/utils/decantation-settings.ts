@@ -40,7 +40,7 @@ export const decantationSettingsSchema = z.object({
   /** Percentage of invoice quantity; 0.2 means a tolerance of 0.2%. */
   quantityTolerance: z.number().finite().min(0).max(100).optional(),
   settlingTimeMinutes: z.number().int().min(0).max(1440).optional(),
-  densitySpecBands: z.record(decantationDensitySpecBandSchema).optional(),
+  densitySpecBands: z.record(z.string(), decantationDensitySpecBandSchema).optional(),
   /** Default entry method in the density drawer. */
   densityEntryMethod: z.enum(DECANTATION_DENSITY_ENTRY_METHODS).optional(),
 });

@@ -4,7 +4,7 @@ import type { Result } from '../../../kernel/index.js';
 import type { RegisterPaymentTerminalCommand, UpdatePaymentTerminalCommand } from './command.js';
 
 const registerSchema = z.object({
-  stationId: z.string().uuid('stationId must be a valid id'),
+  stationId: z.string().guid('stationId must be a valid id'),
   label: z.string().trim().min(1, 'label is required').max(100),
   provider: z.string().trim().max(100).nullish(),
   terminalCode: z.string().trim().max(100).nullish(),

@@ -132,7 +132,7 @@ productsRouter.post(
 productsRouter.put(
   '/products/:id',
   writePolicyGuard('PUT /setup/products/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     if (!can(c.var.user, 'products.manage')) {
       return c.json(
@@ -159,7 +159,7 @@ productsRouter.put(
 productsRouter.delete(
   '/products/:id',
   writePolicyGuard('DELETE /setup/products/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     if (!can(c.var.user, 'products.manage')) {
       return c.json(

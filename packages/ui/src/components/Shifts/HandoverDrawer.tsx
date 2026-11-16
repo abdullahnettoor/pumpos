@@ -77,11 +77,11 @@ const handoverFormSchema = z.object({
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
   nozzleReadings: z.record(
-    z.string().uuid(),
+    z.string().guid(),
     z.coerce.number().nonnegative('Reading must be non-negative'),
   ),
   nozzleTesting: z.record(
-    z.string().uuid(),
+    z.string().guid(),
     z.coerce.number().nonnegative('Testing quantity must be non-negative'),
   ),
   terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),

@@ -208,7 +208,7 @@ export const decantationFormSchema = z.object({
   unloadStart: clock,
   unloadEnd: clock,
   checkChambers: z.boolean(),
-  links: z.record(z.string()),
+  links: z.record(z.string(), z.string()),
   lines: z
     .array(
       z.object({

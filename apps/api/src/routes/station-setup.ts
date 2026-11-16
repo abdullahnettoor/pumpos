@@ -54,6 +54,7 @@ import {
   DeleteTank,
   CreateDispenser,
   CreateDispenserWithNozzles,
+  type CreateDispenserWithNozzlesCommand,
   UpdateDispenser,
   DeleteDispenser,
   CreateNozzle,
@@ -223,7 +224,7 @@ stationSetupRouter.post(
 stationSetupRouter.put(
   '/stations/:id',
   writePolicyGuard('PUT /setup/stations/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   validateJson(stationUpdateSchema),
   async (c) => {
     const user = c.var.user;
@@ -338,7 +339,7 @@ stationSetupRouter.put(
 stationSetupRouter.put(
   '/stations/:id/tank-levels',
   writePolicyGuard('PUT /setup/stations/:id/tank-levels'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   validateJson(tankRulesSettingsSchema),
   async (c) => {
     const user = c.var.user;
@@ -487,9 +488,9 @@ stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'
  */
 const dispenserWithNozzlesIds = z
   .object({
-    stationId: z.string().uuid(),
+    stationId: z.string().guid(),
     nozzles: z
-      .array(z.object({ tankId: z.string().uuid(), productId: z.string().uuid() }).passthrough())
+      .array(z.object({ tankId: z.string().guid(), productId: z.string().guid() }).passthrough())
       .default([]),
   })
   .passthrough();
@@ -522,7 +523,11 @@ stationSetupRouter.post(
         tanks: new DrizzleTankRepository(tx),
         products: new DrizzleProductRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: body.stationId })),
+      }).execute(
+        // Only the ids are checked here; the use-case parses the whole command.
+        body as unknown as CreateDispenserWithNozzlesCommand,
+        buildContext(user, { stationId: body.stationId }),
+      ),
     );
     return sendResult(c, result);
   },
@@ -847,7 +852,7 @@ stationSetupRouter.post(
 stationSetupRouter.put(
   '/users/:id',
   writePolicyGuard('PUT /setup/users/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   validateJson(userUpdateSchema, 'BAD_REQUEST'),
   async (c) => {
     const user = c.var.user;
@@ -865,7 +870,7 @@ stationSetupRouter.put(
     const currentStationIds = await loadTargetStationIds(c.var.db, id);
     const requestedStationIds: string[] = Array.isArray(body.stationIds) ? body.stationIds : [];
     const scope = [...new Set([...currentStationIds, ...requestedStationIds])];
-    if (!canActOnTarget(user, (body.role ?? target.role) as Role, scope)) {
+    if (!canActOnTarget(user, body.role ?? target.role, scope)) {
       return c.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
         403,
@@ -960,7 +965,7 @@ stationSetupRouter.get('/users/:id/permissions', async (c) => {
 stationSetupRouter.put(
   '/users/:id/permissions',
   writePolicyGuard('PUT /setup/users/:id/permissions'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c, next) => {
     if (!canEditMemberPermissions(c.var.user.role)) {
       return c.json(
@@ -1009,7 +1014,7 @@ stationSetupRouter.put(
 stationSetupRouter.post(
   '/users/:id/reset-password',
   writePolicyGuard('POST /setup/users/:id/reset-password'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
   async (c) => {
     const user = c.var.user;
@@ -1099,7 +1104,7 @@ const appAccessBodySchema = z.object({
 stationSetupRouter.post(
   '/users/:id/app-access',
   writePolicyGuard('POST /setup/users/:id/app-access'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
   validateJson(appAccessBodySchema, 'BAD_REQUEST'),
   async (c) => {
@@ -1179,7 +1184,7 @@ stationSetupRouter.post(
 stationSetupRouter.post(
   '/users/:id/deactivate',
   writePolicyGuard('POST /setup/users/:id/deactivate'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, false);
@@ -1189,7 +1194,7 @@ stationSetupRouter.post(
 stationSetupRouter.post(
   '/users/:id/reactivate',
   writePolicyGuard('POST /setup/users/:id/reactivate'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, true);
@@ -1453,7 +1458,7 @@ stationSetupRouter.delete(
 stationSetupRouter.put(
   '/shift-templates/:id',
   writePolicyGuard('PUT /setup/shift-templates/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
@@ -1480,7 +1485,7 @@ stationSetupRouter.put(
 stationSetupRouter.delete(
   '/shift-templates/:id',
   writePolicyGuard('DELETE /setup/shift-templates/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');

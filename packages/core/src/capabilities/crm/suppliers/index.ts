@@ -53,13 +53,13 @@ const createSchema = z.object({
   name: z.string().trim().min(1, 'name is required').max(255),
   stationId: z.string().nullish(),
   phone: z.string().max(50).nullish(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
 });
 const updateSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(255).optional(),
   phone: z.string().max(50).nullish(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
   isActive: z.boolean().optional(),
 });
 

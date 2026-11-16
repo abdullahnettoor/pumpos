@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { stationSchema, stationUpdateSchema } from './validation.js';
+import { stationSchema, stationUpdateSchema, userUpdateSchema } from './validation.js';
 
 describe('Station PUT validation (#716)', () => {
   it('keeps omitted settings omitted, without applying creation defaults', () => {
@@ -20,5 +20,12 @@ describe('Station PUT validation (#716)', () => {
     expect(stationUpdateSchema.safeParse({ settings: { shift_grace_minutes: -1 } }).success).toBe(
       false,
     );
+  });
+});
+
+describe('User PUT validation (#722)', () => {
+  it('keeps an omitted status omitted, so an edit never reactivates a member', () => {
+    expect(userUpdateSchema.parse({ fullName: 'Ravi K' })).toEqual({ fullName: 'Ravi K' });
+    expect(userUpdateSchema.parse({ status: 'INACTIVE' })).toEqual({ status: 'INACTIVE' });
   });
 });

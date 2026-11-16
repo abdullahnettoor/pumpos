@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { invalidTypeError } from './zod-messages.js';
 import { STOCK_VARIANCE_TOLERANCE_KEY, stockVarianceTolerancePctSchema } from './stock-variance.js';
 
 /**
@@ -30,11 +31,11 @@ export const DEFAULT_TANK_LEVEL_SETTINGS: Readonly<TankLevelSettings> = Object.f
 export const tankLevelSettingsSchema = z
   .object({
     criticalBelowPct: z
-      .number({ invalid_type_error: 'Enter a number' })
+      .number(invalidTypeError('Enter a number'))
       .finite()
       .gt(0, 'Must be above 0%'),
     lowBelowPct: z
-      .number({ invalid_type_error: 'Enter a number' })
+      .number(invalidTypeError('Enter a number'))
       .finite()
       .gt(0, 'Must be above 0%')
       .max(100, 'Must be 100% or less'),

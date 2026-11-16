@@ -139,13 +139,13 @@ const createSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD')
     .nullish(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
 });
 
 const updateSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(150).optional(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
   isActive: z.boolean().optional(),
 });
 

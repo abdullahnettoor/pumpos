@@ -41,7 +41,7 @@ function invalidQuery(c: Ctx, error: z.ZodError) {
       error: {
         code: 'VALIDATION_ERROR',
         message:
-          error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
+          error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
           'Invalid query',
       },
     },

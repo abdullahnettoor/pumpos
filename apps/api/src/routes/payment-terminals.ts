@@ -98,7 +98,7 @@ paymentTerminalsRouter.post(
 paymentTerminalsRouter.put(
   '/payment-terminals/:id',
   writePolicyGuard('PUT /setup/payment-terminals/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
@@ -149,7 +149,7 @@ paymentTerminalsRouter.put(
 paymentTerminalsRouter.delete(
   '/payment-terminals/:id',
   writePolicyGuard('DELETE /setup/payment-terminals/:id'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     const id = c.req.param('id');
     const db = c.var.db;
