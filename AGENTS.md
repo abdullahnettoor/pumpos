@@ -200,6 +200,14 @@ npm run typecheck:tests
   only `dev → main` releases (`RELEASING.md`). Schema changes go to `dev` in
   their own small PR, never held on a long-lived branch (ADR 0012).
 - Done = the PR's checks are green, not local checks.
+- Screenshots for a PR or issue go in a `<number>/` folder on the shared
+  `pr-assets` branch (`issue-assets` for issue-only images), linked as
+  `https://github.com/abdullahnettoor/pumpos/blob/pr-assets/<number>/<file>.png?raw=true`.
+  Never create a branch per PR for images, and never delete `pr-assets` or
+  `issue-assets` (old PR and issue bodies load images from them). Add files
+  from a throwaway worktree:
+  `git worktree add --detach /tmp/assets origin/pr-assets`, copy, commit,
+  `git push origin HEAD:pr-assets`, `git worktree remove /tmp/assets`.
 
 # Pointers
 
