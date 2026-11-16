@@ -9,6 +9,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vp test run",
+    "report-proposals": "node scripts/render-report-proposals.mjs",
     "test:classes": "vp test run src/pump-ds/classGuard.test.ts",
     "test:classes:update": "CLASS_GUARD_UPDATE=1 vp test run src/pump-ds/classGuard.test.ts",
     "test:classes:baseline": "CLASS_GUARD_BASELINE=1 vp test run src/pump-ds/classGuard.test.ts"
