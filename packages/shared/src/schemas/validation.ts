@@ -381,11 +381,23 @@ export const supplierCreateSchema = z.object({
     .nullable(),
 });
 
+const isoDateTimeWithSeconds = z.iso.datetime();
+const isoDateTimeToTheMinute = z.iso.datetime({ precision: -1 });
+
+/** Zod 3's `.datetime()`: a UTC (`Z`) timestamp, seconds optional — Zod 4 requires them (#722). */
+const utcDateTimeSchema = z
+  .string()
+  .refine(
+    (v) =>
+      isoDateTimeWithSeconds.safeParse(v).success || isoDateTimeToTheMinute.safeParse(v).success,
+    'Invalid datetime',
+  );
+
 export const fuelPriceSchema = z.object({
   stationId: z.string().guid('Invalid station ID'),
   productId: z.string().guid('Invalid product ID'),
   price: z.number().positive('Price must be positive'),
-  effectiveFrom: z.string().datetime().optional().nullable(),
+  effectiveFrom: utcDateTimeSchema.optional().nullable(),
 });
 
 export const operatingDayScheduleSchema = z.object({

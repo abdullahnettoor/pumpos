@@ -57,6 +57,13 @@ describe('Zod 3 messages under Zod 4 (#722)', () => {
     expect(message(z.literal('FUEL'), 'OIL')).toBe('Invalid literal value, expected "FUEL"');
   });
 
+  it('an enum that is missing or not a string reads as Zod 3 did', () => {
+    expect(message(z.object({ method: z.enum(['CASH', 'CARD']) }), {})).toBe('Required');
+    expect(message(z.enum(['CASH', 'CARD']), null)).toBe("Expected 'CASH' | 'CARD', received null");
+    expect(message(z.enum(['CASH', 'CARD']), 5)).toBe("Expected 'CASH' | 'CARD', received number");
+    expect(message(z.literal('FUEL'), undefined)).toBe('Invalid literal value, expected "FUEL"');
+  });
+
   it('string formats', () => {
     expect(message(z.string().uuid(), 'x')).toBe('Invalid uuid');
     expect(message(z.string().guid(), 'x')).toBe('Invalid uuid');

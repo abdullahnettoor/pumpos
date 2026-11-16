@@ -121,6 +121,19 @@ function invalidFormat(issue: Extract<Issue, { code: 'invalid_format' }>): strin
   }
 }
 
+/**
+ * A literal (one value) or an enum (several). Zod 3 checked an enum's type
+ * first: missing read "Required", a non-string named the type it got.
+ */
+function invalidValue(issue: Extract<Issue, { code: 'invalid_value' }>): string {
+  const { values, input } = issue;
+  if (values.length === 1) return `Invalid literal value, expected ${JSON.stringify(values[0])}`;
+  if (input === undefined) return 'Required';
+  if (typeof input !== 'string')
+    return `Expected ${quoted(values)}, received ${receivedType(input)}`;
+  return `Invalid enum value. Expected ${quoted(values)}, received '${input}'`;
+}
+
 export const zod3Messages: z.core.$ZodErrorMap = (issue) => {
   switch (issue.code) {
     case 'invalid_type':
@@ -133,9 +146,7 @@ export const zod3Messages: z.core.$ZodErrorMap = (issue) => {
     case 'not_multiple_of':
       return `Number must be a multiple of ${String(issue.divisor)}`;
     case 'invalid_value':
-      return issue.values.length === 1
-        ? `Invalid literal value, expected ${JSON.stringify(issue.values[0])}`
-        : `Invalid enum value. Expected ${quoted(issue.values)}, received '${String(issue.input)}'`;
+      return invalidValue(issue);
     case 'unrecognized_keys':
       return `Unrecognized key(s) in object: ${issue.keys.map((k) => `'${k}'`).join(', ')}`;
     case 'invalid_union':
