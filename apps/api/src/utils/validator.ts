@@ -1,5 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import { ZodSchema } from 'zod';
+import type { ZodType } from 'zod';
 /**
  * Validate a JSON request body against a schema, answering in the standard
  * envelope whatever goes wrong.
@@ -11,7 +11,7 @@ import { ZodSchema } from 'zod';
  * `{ success: false, error: { code, message } }`, parseable by the same code
  * that handles every other failure (#205).
  */
-export const validateJson = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') => {
+export const validateJson = <T extends ZodType>(schema: T, errorCode = 'VALIDATION_ERROR') => {
   const validate = zValidator('json', schema, (result, c) => {
     if (!result.success) {
       return c.json(
@@ -20,7 +20,7 @@ export const validateJson = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') 
           error: {
             code: errorCode,
             message:
-              result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
+              result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
               result.error.message,
           },
         },
@@ -52,7 +52,7 @@ export const validateJson = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') 
 };
 
 /** Validate path params at the edge, answering in the standard envelope. */
-export const validateParams = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR') =>
+export const validateParams = <T extends ZodType>(schema: T, errorCode = 'VALIDATION_ERROR') =>
   zValidator('param', schema, (result, c) => {
     if (!result.success)
       return c.json(
@@ -60,7 +60,7 @@ export const validateParams = (schema: ZodSchema, errorCode = 'VALIDATION_ERROR'
           success: false,
           error: {
             code: errorCode,
-            message: result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', '),
+            message: result.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', '),
           },
         },
         400,

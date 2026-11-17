@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vite-plus/test';
 import {
+  fuelPriceSchema,
   stationSchema,
   nozzleReadingSchema,
   supplierPaymentSchema,
@@ -330,5 +331,34 @@ describe('Validation Schemas Tests', () => {
     it('is the rule the Customer form uses', () => {
       expect(customerCreateSchema.shape.creditLimit).toBe(creditLimitSchema);
     });
+  });
+});
+
+describe('fuelPriceSchema effectiveFrom (#722)', () => {
+  const price = (effectiveFrom: unknown) =>
+    fuelPriceSchema.safeParse({
+      stationId: '00000000-0000-0000-0000-0000000000a1',
+      productId: '00000000-0000-0000-0000-0000000000a2',
+      price: 102.5,
+      effectiveFrom,
+    });
+
+  it('accepts a UTC timestamp with or without seconds, as Zod 3 did', () => {
+    for (const at of [
+      '2026-01-01T10:00Z',
+      '2026-01-01T10:00:00Z',
+      '2026-01-01T10:00:00.123Z',
+      null,
+      undefined,
+    ])
+      expect(price(at).success).toBe(true);
+  });
+
+  it('refuses an offset or a malformed timestamp with Invalid datetime', () => {
+    for (const at of ['2026-01-01T10:00:00+05:30', '2026-01-01T10Z', '2026-13-01T10:00Z']) {
+      const result = price(at);
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.message).toBe('Invalid datetime');
+    }
   });
 });

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { invalidTypeError } from '../utils/zod-messages.js';
+import { partialUpdate } from '../utils/partial-update.js';
 import { normalizeIndianMobile, INDIAN_MOBILE_MESSAGE } from '../utils/phone-auth.js';
 import { isValidBusinessDate } from '../utils/business-date.js';
 import { decantationSettingsSchema } from '../utils/decantation-settings.js';
@@ -115,8 +117,8 @@ export const stationSchema = z.object({
       pending_opening_stock_seed: z
         .array(
           z.object({
-            tankId: z.string().uuid('Invalid tank ID'),
-            productId: z.string().uuid('Invalid product ID'),
+            tankId: z.string().guid('Invalid tank ID'),
+            productId: z.string().guid('Invalid product ID'),
             quantity: z.number().nonnegative('Opening quantity must be non-negative'),
           }),
         )
@@ -165,8 +167,8 @@ export const stationSchema = z.object({
 });
 
 /** Updates carry only submitted settings; creation defaults would overwrite concurrent edits. */
-export const stationUpdateSchema = stationSchema.partial().extend({
-  settings: stationSchema.shape.settings.removeDefault().partial().optional(),
+export const stationUpdateSchema = partialUpdate(stationSchema).extend({
+  settings: partialUpdate(stationSchema.shape.settings.removeDefault()).optional(),
 });
 
 /** The rule for any password an Owner or Manager sets for a login (create, reset, app access). */
@@ -216,31 +218,31 @@ export const userSchema = userBaseSchema.superRefine((val, ctx) => {
   }
 });
 
-/** Partial (edit) form — no app-access provisioning cross-field rules. */
-export const userUpdateSchema = userBaseSchema.partial();
+/** Partial (edit) form — no app-access provisioning cross-field rules; an omitted status stays unchanged. */
+export const userUpdateSchema = partialUpdate(userBaseSchema);
 
 export const expenseSchema = z.object({
-  categoryId: z.string().uuid('Invalid category ID'),
+  categoryId: z.string().guid('Invalid category ID'),
   amount: z.number().positive('Expense amount must be positive'),
   description: z.string().max(255).optional().nullable(),
-  parentExpenseId: z.string().uuid().optional().nullable(),
+  parentExpenseId: z.string().guid().optional().nullable(),
   adjustmentReason: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'ADJUSTMENT', 'VOIDED']).default('ACTIVE'),
 });
 
 export const shiftSchema = z.object({
-  shiftTemplateId: z.string().uuid('Invalid shift template ID'),
+  shiftTemplateId: z.string().guid('Invalid shift template ID'),
 });
 
 export const shiftOpenSchema = z.object({
-  stationId: z.string().uuid('Invalid station ID'),
-  shiftTemplateId: z.string().uuid('Invalid shift template ID'),
+  stationId: z.string().guid('Invalid station ID'),
+  shiftTemplateId: z.string().guid('Invalid shift template ID'),
   // The Shift's opening cash is the sum of these Opening Floats (ADR 0005).
   staffAssignments: z
     .array(
       z.object({
-        userId: z.string().uuid('Invalid user ID'),
-        duId: z.string().uuid('Invalid dispenser unit ID'),
+        userId: z.string().guid('Invalid user ID'),
+        duId: z.string().guid('Invalid dispenser unit ID'),
         openingFloat: z.number().nonnegative('Opening float must be non-negative').default(0),
       }),
     )
@@ -248,7 +250,7 @@ export const shiftOpenSchema = z.object({
   initialReadings: z
     .array(
       z.object({
-        nozzleId: z.string().uuid('Invalid nozzle ID'),
+        nozzleId: z.string().guid('Invalid nozzle ID'),
         openingReading: z.number().nonnegative('Opening reading must be non-negative'),
       }),
     )
@@ -260,7 +262,7 @@ export const shiftCloseSchema = z
     closingCash: z.number().nonnegative('Closing cash must be non-negative'),
     nozzleReadings: z.array(
       z.object({
-        nozzleId: z.string().uuid('Invalid nozzle ID'),
+        nozzleId: z.string().guid('Invalid nozzle ID'),
         closingReading: z.number().nonnegative('Closing reading must be non-negative'),
       }),
     ),
@@ -269,7 +271,7 @@ export const shiftCloseSchema = z
 
 export const nozzleReadingSchema = z
   .object({
-    nozzleId: z.string().uuid('Invalid nozzle ID'),
+    nozzleId: z.string().guid('Invalid nozzle ID'),
     openingReading: z.number().nonnegative('Opening reading must be non-negative'),
     closingReading: z.number().nonnegative('Closing reading must be non-negative'),
   })
@@ -279,27 +281,27 @@ export const nozzleReadingSchema = z
   });
 
 export const syncEventSchema = z.object({
-  eventId: z.string().uuid(),
+  eventId: z.string().guid(),
   eventType: z.string(),
   entityType: z.string(),
   entityId: z.string(),
-  payload: z.record(z.any()),
+  payload: z.record(z.string(), z.any()),
   status: z.enum(['PENDING', 'PROCESSING', 'SYNCED', 'FAILED']).default('PENDING'),
   retryCount: z.number().int().nonnegative().default(0),
 });
 
 export const shiftExpenseSchema = z.object({
-  shiftId: z.string().uuid('Invalid shift ID'),
-  categoryId: z.string().uuid('Invalid category ID'),
+  shiftId: z.string().guid('Invalid shift ID'),
+  categoryId: z.string().guid('Invalid category ID'),
   amount: z.number().positive('Expense amount must be positive'),
   description: z.string().max(255).optional().nullable(),
 });
 
 export const shiftCollectionSchema = z.object({
-  shiftId: z.string().uuid('Invalid shift ID'),
-  customerId: z.string().uuid('Invalid customer ID').optional().nullable(),
-  vehicleId: z.string().uuid('Invalid vehicle ID').optional().nullable(),
-  productId: z.string().uuid('Invalid product ID').optional().nullable(),
+  shiftId: z.string().guid('Invalid shift ID'),
+  customerId: z.string().guid('Invalid customer ID').optional().nullable(),
+  vehicleId: z.string().guid('Invalid vehicle ID').optional().nullable(),
+  productId: z.string().guid('Invalid product ID').optional().nullable(),
   quantity: z.number().positive('Quantity must be positive').optional().nullable(),
   unitPrice: z.number().nonnegative('Unit price must be non-negative').optional().nullable(),
   amount: z.number().positive('Amount must be positive'),
@@ -359,7 +361,7 @@ export const customerTopupSchema = z.object({
 export const customerVehicleCreateSchema = z.object({
   registrationNumber: z.string().min(3, 'Registration number is required').max(50),
   vehicleType: z.string().min(2, 'Vehicle type is required').max(50),
-  defaultProductId: z.string().uuid('Invalid product ID').optional().nullable(),
+  defaultProductId: z.string().guid('Invalid product ID').optional().nullable(),
   isActive: z.boolean().default(true),
 });
 
@@ -379,11 +381,23 @@ export const supplierCreateSchema = z.object({
     .nullable(),
 });
 
+const isoDateTimeWithSeconds = z.iso.datetime();
+const isoDateTimeToTheMinute = z.iso.datetime({ precision: -1 });
+
+/** Zod 3's `.datetime()`: a UTC (`Z`) timestamp, seconds optional — Zod 4 requires them (#722). */
+const utcDateTimeSchema = z
+  .string()
+  .refine(
+    (v) =>
+      isoDateTimeWithSeconds.safeParse(v).success || isoDateTimeToTheMinute.safeParse(v).success,
+    'Invalid datetime',
+  );
+
 export const fuelPriceSchema = z.object({
-  stationId: z.string().uuid('Invalid station ID'),
-  productId: z.string().uuid('Invalid product ID'),
+  stationId: z.string().guid('Invalid station ID'),
+  productId: z.string().guid('Invalid product ID'),
   price: z.number().positive('Price must be positive'),
-  effectiveFrom: z.string().datetime().optional().nullable(),
+  effectiveFrom: utcDateTimeSchema.optional().nullable(),
 });
 
 export const operatingDayScheduleSchema = z.object({
@@ -507,9 +521,9 @@ const handoverAmountSchema = z.number().finite().nonnegative();
 
 export const attendantHandoverSchema = z
   .object({
-    shiftId: z.string().uuid('Invalid shift ID'),
-    userId: z.string().uuid('Invalid user ID').optional(),
-    duId: z.string().uuid('Invalid DU ID'),
+    shiftId: z.string().guid('Invalid shift ID'),
+    userId: z.string().guid('Invalid user ID').optional(),
+    duId: z.string().guid('Invalid DU ID'),
     cashHandedOver: handoverAmountSchema,
     /** Cash taken from this Drawer mid-shift (ADR 0005). */
     cashDrops: handoverAmountSchema.optional(),
@@ -518,7 +532,7 @@ export const attendantHandoverSchema = z
     nozzleReadings: z
       .array(
         z.object({
-          nozzleId: z.string().uuid('Invalid nozzle ID'),
+          nozzleId: z.string().guid('Invalid nozzle ID'),
           closingReading: handoverAmountSchema,
           testingVolume: handoverAmountSchema.optional(),
         }),
@@ -527,8 +541,8 @@ export const attendantHandoverSchema = z
     terminalEntries: z
       .array(
         z.object({
-          terminalId: z.string().uuid('Invalid payment terminal ID'),
-          duId: z.string().uuid('Invalid DU ID').nullish(),
+          terminalId: z.string().guid('Invalid payment terminal ID'),
+          duId: z.string().guid('Invalid DU ID').nullish(),
           cardAmount: handoverAmountSchema,
           upiAmount: handoverAmountSchema,
           batchRef: z.string().max(100).nullish(),
@@ -541,8 +555,8 @@ export const attendantHandoverSchema = z
 export type AttendantHandoverInput = z.infer<typeof attendantHandoverSchema>;
 
 export const supplierPaymentSchema = z.object({
-  shiftId: z.string().uuid('Invalid shift ID'),
-  supplierId: z.string().uuid('Invalid supplier ID'),
+  shiftId: z.string().guid('Invalid shift ID'),
+  supplierId: z.string().guid('Invalid supplier ID'),
   amount: z.number().positive('Payment amount must be positive'),
   notes: z.string().max(500).optional().nullable(),
   accountId: z.string().optional().nullable(),
@@ -567,7 +581,7 @@ export const expenseEntryFormSchema = z.object({
   entryDate: entryDateField,
   categoryId: z.string().min(1, 'Category is required'),
   amount: z.coerce
-    .number({ invalid_type_error: 'Amount is required' })
+    .number(invalidTypeError('Amount is required'))
     .positive('Amount must be positive'),
   description: z.string().max(255).optional().default(''),
   /** The money account it is paid from / received into. */
@@ -583,7 +597,7 @@ export const OFFICE_PAYMENT_AMOUNT_MAX = NUMERIC_12_2_MAX;
  * within the column's range and at most 2 decimal places.
  */
 const officePaymentAmountField = z.coerce
-  .number({ invalid_type_error: 'Amount is required' })
+  .number(invalidTypeError('Amount is required'))
   .positive('Amount must be positive')
   .max(OFFICE_PAYMENT_AMOUNT_MAX, 'That is more than a payment can hold.')
   .refine(hasAtMostTwoDecimals, 'Use at most 2 decimal places.');
@@ -636,10 +650,10 @@ export type SupplierPaymentEntryFormValues = z.infer<typeof supplierPaymentEntry
 export const purchaseLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce
-    .number({ invalid_type_error: 'Quantity is required' })
+    .number(invalidTypeError('Quantity is required'))
     .positive('Quantity must be positive'),
   unitPrice: z.coerce
-    .number({ invalid_type_error: 'Rate is required' })
+    .number(invalidTypeError('Rate is required'))
     .positive('Rate must be positive'),
   // Fuel invoice lines may capture the supplier's density at 15 °C.
   invoiceDensity: z.union([z.literal(''), z.coerce.number().positive().max(99999.99)]).optional(),
@@ -709,7 +723,7 @@ export const purchaseWithPayNowFormSchemaFor = (
   purchaseEntryFormSchema
     .extend({
       purchaseType: z.enum(['FUEL', 'PRODUCTS']).default('FUEL'),
-      payment: purchasePayNowFormSchema.default({}),
+      payment: purchasePayNowFormSchema.prefault({}),
     })
     .superRefine((data, ctx) => {
       const message = mixedPurchaseError(data.lines, isFuelProduct);
@@ -752,10 +766,10 @@ export type PurchaseWithPayNowFormValues = z.infer<
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce
-    .number({ invalid_type_error: 'Quantity is required' })
+    .number(invalidTypeError('Quantity is required'))
     .positive('Quantity must be positive'),
   unitPrice: z.coerce
-    .number({ invalid_type_error: 'Unit price is required' })
+    .number(invalidTypeError('Unit price is required'))
     .nonnegative('Unit price must be non-negative'),
 });
 export type MerchandiseSaleLineFormValues = z.infer<typeof merchandiseSaleLineFormSchema>;

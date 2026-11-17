@@ -94,7 +94,7 @@ const createSchema = z.object({
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
   settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
 });
 const updateSchema = z.object({
   id: z.string().min(1),
@@ -105,7 +105,7 @@ const updateSchema = z.object({
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
   settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
-  metadata: z.record(z.any()).nullish(),
+  metadata: z.record(z.string(), z.any()).nullish(),
   isActive: z.boolean().optional(),
   note: z
     .string()

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   decantationSettingsSchema,
+  invalidTypeError,
   resolveDecantationSettings,
   stationSchema,
   stockVarianceTolerancePctSchema,
@@ -27,7 +28,7 @@ export const stationGeneralSchema = z.object({
   address: z.string().max(500, 'Keep the address under 500 characters'),
   phone: z.string().max(50, 'Keep the phone under 50 characters'),
   graceMinutes: z
-    .number({ invalid_type_error: 'Enter the grace period in minutes' })
+    .number(invalidTypeError('Enter the grace period in minutes'))
     .int('Whole minutes only')
     .min(0, 'The grace period cannot be negative')
     .max(1440, 'At most 1440 minutes (a day)'),

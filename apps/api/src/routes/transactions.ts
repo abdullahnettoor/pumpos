@@ -2551,7 +2551,7 @@ transactionsRouter.get('/money-movements', async (c) => {
 transactionsRouter.post(
   '/sales/:id/invoice',
   writePolicyGuard('POST /transactions/sales/:id/invoice'),
-  validateParams(z.object({ id: z.string().uuid() })),
+  validateParams(z.object({ id: z.string().guid() })),
   async (c) => {
     const db = c.var.db;
     const user = c.var.user;

@@ -106,7 +106,7 @@ const createSchema = z.object({
   code: z.string().trim().min(1, 'code is required').max(50),
   address: z.string().max(500).nullish(),
   phone: z.string().max(50).nullish(),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
   onboardingStatus: z.string().max(50).optional(),
   isActive: z.boolean().optional(),
 });
@@ -116,7 +116,7 @@ const updateSchema = z.object({
   code: z.string().trim().min(1).max(50).optional(),
   address: z.string().max(500).nullish(),
   phone: z.string().max(50).nullish(),
-  settings: z.record(z.any()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
   onboardingStatus: z.string().max(50).optional(),
   isActive: z.boolean().optional(),
 });

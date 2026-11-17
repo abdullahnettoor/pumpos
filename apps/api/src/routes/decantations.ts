@@ -43,8 +43,8 @@ import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import { validateJson, validateParams } from '../utils/validator.js';
 import { z } from 'zod';
 
-const idParam = z.object({ id: z.string().uuid() });
-const idProductParams = z.object({ id: z.string().uuid(), productId: z.string().uuid() });
+const idParam = z.object({ id: z.string().guid() });
+const idProductParams = z.object({ id: z.string().guid(), productId: z.string().guid() });
 
 type Variables = { db: DbClient; user: AuthenticatedPrincipal };
 type Ctx = Context<{ Variables: Variables }>;
@@ -156,7 +156,7 @@ decantationsRouter.get('/decantations', async (c) => {
         error: {
           code: 'VALIDATION_ERROR',
           message:
-            query.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
+            query.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ') ||
             'Invalid query',
         },
       },

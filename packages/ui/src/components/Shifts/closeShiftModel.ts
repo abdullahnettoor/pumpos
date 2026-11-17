@@ -70,9 +70,9 @@ export const closeDraftSchema = z.object({
   closingCash: money,
   closeDrops: z.array(z.object({ drawerKey: z.string(), amount: money })),
   recordDip: z.boolean(),
-  dipReadings: z.record(z.union([money, z.literal('')])),
-  dipReasons: z.record(z.string()),
-  cashBreakdown: z.record(z.number().int().nonnegative()),
+  dipReadings: z.record(z.string(), z.union([money, z.literal('')])),
+  dipReasons: z.record(z.string(), z.string()),
+  cashBreakdown: z.record(z.string(), z.number().int().nonnegative()),
 });
 
 const tankDipSchema = z.object({
@@ -309,7 +309,7 @@ const typedCount = z
 export const cashCountSchema = z.object({
   closingCash: typedAmount,
   closeDrops: z.array(z.object({ drawerKey: z.string(), amount: typedAmount })),
-  denominations: z.record(typedCount).optional(),
+  denominations: z.record(z.string(), typedCount).optional(),
 });
 
 /** A denomination count's error through `cashCountSchema`, or null when it is a valid count. */

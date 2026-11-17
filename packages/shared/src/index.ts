@@ -1,3 +1,10 @@
+import { installZod3Messages } from './utils/zod-messages.js';
+
+// Every app and package loads @pump/shared, so Zod 3's wording applies everywhere (#722).
+installZod3Messages();
+
+export * from './utils/zod-messages.js';
+export * from './utils/partial-update.js';
 export * from './types/density.js';
 export * from './types/core.js';
 export * from './types/access.js';
